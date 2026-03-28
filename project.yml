@@ -32,7 +32,21 @@ targets:
     entitlements:
       path: FileFluss/Resources/FileFluss.entitlements
       properties:
-        com.apple.security.app-sandbox: true
+        com.apple.security.app-sandbox: false
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.network.client: true
+
+  FileFlussTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - FileFlussTests
+    dependencies:
+      - target: FileFluss
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rana-gmbh.FileFlussTests
+        GENERATE_INFOPLIST_FILE: true
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/FileFluss.app/Contents/MacOS/FileFluss

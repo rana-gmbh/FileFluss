@@ -13,6 +13,16 @@ struct FileItem: Identifiable, Hashable {
     let isSymlink: Bool
     let contentType: UTType?
 
+    init(url: URL) {
+        let keys: Set<URLResourceKey> = [
+            .nameKey, .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
+            .contentModificationDateKey, .creationDateKey, .isHiddenKey,
+            .isSymbolicLinkKey, .contentTypeKey
+        ]
+        let values = (try? url.resourceValues(forKeys: keys)) ?? URLResourceValues()
+        self.init(url: url, resourceValues: values)
+    }
+
     init(url: URL, resourceValues: URLResourceValues) {
         self.id = url.path()
         self.url = url

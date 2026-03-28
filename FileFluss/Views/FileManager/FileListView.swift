@@ -1,13 +1,70 @@
 import SwiftUI
 
 struct FileListView: View {
+    let panelSide: PanelSide
     @Environment(AppState.self) private var appState
+    @State private var showDropConfirmation: Bool = false
+    @State private var showDeleteConfirmation: Bool = false
+
+    private var fm: FileManagerViewModel {
+        appState.fileManager(for: panelSide)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             pathBar
             Divider()
-            fileTable
+            fileArea
+        }
+        .confirmationDialog(
+            "Move or Copy?",
+            isPresented: $showDropConfirmation,
+            presenting: fm.pendingDrop
+        ) { drop in
+            Button("Move Here") {
+                let items = drop.items
+                let dest = drop.destinationFolder
+                Task {
+                    await fm.performMove(items: items, to: dest)
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button("Copy Here") {
+                let items = drop.items
+                let dest = drop.destinationFolder
+                Task {
+                    await fm.performCopy(items: items, to: dest)
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                fm.pendingDrop = nil
+            }
+        } message: { drop in
+            let count = drop.items.count
+            let name = drop.destinationFolder.lastPathComponent
+            Text(count == 1
+                 ? "What would you like to do with \"\(drop.items[0].name)\" in \"\(name)\"?"
+                 : "What would you like to do with \(count) items in \"\(name)\"?")
+        }
+        .confirmationDialog(
+            "Move to Trash",
+            isPresented: $showDeleteConfirmation
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                Task {
+                    await fm.trashSelectedItems()
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let items = fm.selectedItems
+            if items.count == 1 {
+                Text("Are you sure you want to move \"\(items[0].name)\" to the Trash?")
+            } else {
+                Text("Are you sure you want to move \(items.count) items to the Trash?")
+            }
         }
     }
 
@@ -16,12 +73,12 @@ struct FileListView: View {
             HStack(spacing: 4) {
                 ForEach(pathComponents, id: \.url) { component in
                     Button(component.name) {
-                        Task { await appState.fileManager.navigateTo(component.url) }
+                        Task { await fm.navigateTo(component.url) }
                     }
                     .buttonStyle(.plain)
                     .font(.system(.body, design: .default, weight: .medium))
 
-                    if component.url != appState.fileManager.currentDirectory {
+                    if component.url != fm.currentDirectory {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -34,61 +91,80 @@ struct FileListView: View {
         .background(.bar)
     }
 
-    private var fileTable: some View {
+    private var fileArea: some View {
         Group {
-            if appState.fileManager.isLoading {
+            if fm.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.fileManager.filteredItems.isEmpty {
+            } else if fm.filteredItems.isEmpty {
                 ContentUnavailableView("No Files", systemImage: "folder", description: Text("This folder is empty"))
             } else {
-                Table(appState.fileManager.filteredItems, selection: Bindable(appState.fileManager).selectedItemIDs) {
-                    TableColumn("Name") { item in
-                        FileRowView(item: item)
+                NativeFileList(
+                    items: fm.filteredItems,
+                    currentDirectory: fm.currentDirectory,
+                    panelSide: panelSide,
+                    selectedIDs: Bindable(fm).selectedItemIDs,
+                    onDoubleClick: { item in
+                        Task { await fm.openItem(item) }
+                    },
+                    onDrop: { droppedItems, targetURL in
+                        fm.pendingDrop = FileManagerViewModel.PendingDrop(
+                            items: droppedItems,
+                            destinationFolder: targetURL
+                        )
+                        showDropConfirmation = true
+                    },
+                    onKeySpace: {
+                        fm.toggleQuickLook()
+                    },
+                    onDelete: {
+                        guard !fm.selectedItems.isEmpty else { return }
+                        showDeleteConfirmation = true
+                    },
+                    onCopyToOtherPanel: { items in
+                        let otherFM = appState.fileManager(for: panelSide == .left ? .right : .left)
+                        Task {
+                            await fm.performCopy(items: items, to: otherFM.currentDirectory)
+                            await appState.refreshAllPanels()
+                        }
+                    },
+                    onMoveToOtherPanel: { items in
+                        let otherFM = appState.fileManager(for: panelSide == .left ? .right : .left)
+                        Task {
+                            await fm.performMove(items: items, to: otherFM.currentDirectory)
+                            await appState.refreshAllPanels()
+                        }
+                    },
+                    onCalculateFolderSize: { folder in
+                        appState.calculateFolderSize(for: folder.url, panel: panelSide)
+                    },
+                    onSortChanged: { key, ascending in
+                        switch key {
+                        case "name": fm.sortOrder = .name
+                        case "date": fm.sortOrder = .date
+                        case "size": fm.sortOrder = .size
+                        default: break
+                        }
+                        fm.sortAscending = ascending
+                    },
+                    onBecameActive: {
+                        appState.activePanel = panelSide
                     }
-                    .width(min: 200)
-
-                    TableColumn("Date Modified") { item in
-                        Text(item.formattedDate)
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(min: 120, ideal: 160)
-
-                    TableColumn("Size") { item in
-                        Text(item.formattedSize)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    .width(min: 60, ideal: 80)
+                )
+                .onChange(of: fm.selectedItemIDs) {
+                    fm.updateQuickLookSelection()
                 }
-                .contextMenu(forSelectionType: String.self) { ids in
-                    fileContextMenu(for: ids)
-                } primaryAction: { ids in
-                    guard let id = ids.first,
-                          let item = appState.fileManager.items.first(where: { $0.id == id }) else { return }
-                    Task { await appState.fileManager.openItem(item) }
+                .background {
+                    QuickLookBridge(controller: fm.quickLookController)
+                        .frame(width: 0, height: 0)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func fileContextMenu(for ids: Set<String>) -> some View {
-        Button("Open") {
-            let matchingItems = appState.fileManager.items.filter { ids.contains($0.id) }
-            for item in matchingItems {
-                Task { await appState.fileManager.openItem(item) }
-            }
-        }
-        Divider()
-        Button("Move to Trash", role: .destructive) {
-            Task { await appState.fileManager.deleteSelectedItems() }
         }
     }
 
     private var pathComponents: [(name: String, url: URL)] {
         var components: [(String, URL)] = []
-        var url = appState.fileManager.currentDirectory
+        var url = fm.currentDirectory
         while url.path() != "/" {
             components.insert((url.lastPathComponent, url), at: 0)
             url = url.deletingLastPathComponent()

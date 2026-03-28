@@ -1,7 +1,23 @@
 import SwiftUI
 
+private struct CalculatingLabel: View {
+    @State private var opacity: Double = 1.0
+
+    var body: some View {
+        Text("Calculating…")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    opacity = 0.3
+                }
+            }
+    }
+}
+
 struct SidebarView: View {
-    @Binding var selection: SidebarItem?
+    let panelSide: PanelSide
     @Environment(AppState.self) private var appState
 
     private let favorites: [(String, String, URL)] = {
@@ -17,8 +33,15 @@ struct SidebarView: View {
         ]
     }()
 
+    private var selection: Binding<SidebarItem?> {
+        Binding(
+            get: { appState.sidebarSelection(for: panelSide) },
+            set: { appState.setSidebarSelection($0, for: panelSide) }
+        )
+    }
+
     var body: some View {
-        List(selection: $selection) {
+        List(selection: selection) {
             Section("Favorites") {
                 ForEach(favorites, id: \.2) { name, icon, url in
                     Label(name, systemImage: icon)
@@ -27,42 +50,71 @@ struct SidebarView: View {
             }
 
             Section("Cloud Accounts") {
-                ForEach(appState.syncManager.accounts) { account in
-                    Label {
-                        HStack {
-                            Text(account.displayName)
-                            Spacer()
-                            Circle()
-                                .fill(account.isConnected ? .green : .gray)
-                                .frame(width: 8, height: 8)
+                    ForEach(appState.syncManager.accounts) { account in
+                        Label {
+                            HStack {
+                                Text(account.displayName)
+                                Spacer()
+                                Circle()
+                                    .fill(account.isConnected ? .green : .gray)
+                                    .frame(width: 8, height: 8)
+                            }
+                        } icon: {
+                            Image(systemName: account.providerType.icon)
                         }
-                    } icon: {
-                        Image(systemName: account.providerType.icon)
+                        .tag(SidebarItem.cloudAccount(account))
                     }
-                    .tag(SidebarItem.cloudAccount(account))
-                }
 
-                Button {
-                    appState.syncManager.isAddingAccount = true
-                } label: {
-                    Label("Add Account...", systemImage: "plus.circle")
+                    Button {
+                        appState.syncManager.isAddingAccount = true
+                    } label: {
+                        Label("Add Account...", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-            }
 
             Section("Sync") {
                 Label("Sync Rules", systemImage: "arrow.triangle.2.circlepath")
                     .tag(SidebarItem.syncRules)
                     .badge(appState.syncManager.syncRules.count)
             }
+
+            if !appState.folderSizes(for: panelSide).isEmpty {
+                Section("Folder Sizes") {
+                    ForEach(appState.folderSizes(for: panelSide)) { entry in
+                        HStack {
+                            Image(systemName: "folder.fill")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.name)
+                                    .lineLimit(1)
+                                if entry.isCalculating {
+                                    CalculatingLabel()
+                                } else {
+                                    Text(entry.formattedSize)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Button {
+                                appState.removeFolderSize(at: entry.url, panel: panelSide)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 200)
-        .onChange(of: selection) { _, newValue in
+        .onChange(of: appState.sidebarSelection(for: panelSide)) { _, newValue in
             if case .location(let url) = newValue {
                 Task {
-                    await appState.fileManager.navigateTo(url)
+                    await appState.fileManager(for: panelSide).navigateTo(url)
                 }
             }
         }

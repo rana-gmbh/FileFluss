@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import QuickLookUI
 
 @Observable @MainActor
 final class FileManagerViewModel {
@@ -14,6 +15,18 @@ final class FileManagerViewModel {
     var pathHistory: [URL] = []
     var pathHistoryIndex: Int = -1
     var searchText: String = ""
+
+    // Drag & Drop
+    var draggedItems: [FileItem] = []
+    var pendingDrop: PendingDrop?
+
+    struct PendingDrop {
+        let items: [FileItem]
+        let destinationFolder: URL
+    }
+
+    // Quick Look — controlled directly, no SwiftUI binding
+    let quickLookController = QuickLookController()
 
     enum SortOrder: String, CaseIterable {
         case name, date, size, kind
@@ -123,6 +136,19 @@ final class FileManagerViewModel {
         await loadDirectory()
     }
 
+    func trashSelectedItems() async {
+        for item in selectedItems {
+            do {
+                try await FileSystemService.shared.trashItem(at: item.url)
+            } catch {
+                self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
+                return
+            }
+        }
+        selectedItemIDs.removeAll()
+        await loadDirectory()
+    }
+
     func createNewFolder(named name: String) async {
         let folderURL = currentDirectory.appendingPathComponent(name)
         do {
@@ -136,6 +162,49 @@ final class FileManagerViewModel {
     func refresh() async {
         await loadDirectory()
     }
+
+    // MARK: - Drag & Drop
+
+    func performMove(items: [FileItem], to folder: URL) async {
+        for item in items {
+            let dest = folder.appendingPathComponent(item.name)
+            do {
+                try await FileSystemService.shared.moveItem(from: item.url, to: dest)
+            } catch {
+                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+                return
+            }
+        }
+        await loadDirectory()
+    }
+
+    func performCopy(items: [FileItem], to folder: URL) async {
+        for item in items {
+            let dest = folder.appendingPathComponent(item.name)
+            do {
+                try await FileSystemService.shared.copyItem(from: item.url, to: dest)
+            } catch {
+                self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
+                return
+            }
+        }
+        await loadDirectory()
+    }
+
+    // MARK: - Quick Look
+
+    func toggleQuickLook() {
+        let urls = selectedItems.filter { !$0.isDirectory }.map(\.url)
+        quickLookController.urls = urls
+        quickLookController.toggle()
+    }
+
+    func updateQuickLookSelection() {
+        let urls = selectedItems.filter { !$0.isDirectory }.map(\.url)
+        quickLookController.updateAndReload(urls: urls)
+    }
+
+    // MARK: - Private
 
     private func pushToHistory(_ url: URL) {
         if pathHistoryIndex < pathHistory.count - 1 {

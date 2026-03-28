@@ -12,7 +12,7 @@ struct FileFlussApp: App {
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
-        .defaultSize(width: 1100, height: 700)
+        .defaultSize(width: 1600, height: 800)
 
         Settings {
             SettingsView()

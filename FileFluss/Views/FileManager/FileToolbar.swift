@@ -6,50 +6,50 @@ struct FileToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             Button {
-                Task { await appState.fileManager.navigateBack() }
+                Task { await appState.activeFileManager.navigateBack() }
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .disabled(!appState.fileManager.canGoBack)
+            .disabled(!appState.activeFileManager.canGoBack)
 
             Button {
-                Task { await appState.fileManager.navigateForward() }
+                Task { await appState.activeFileManager.navigateForward() }
             } label: {
                 Image(systemName: "chevron.right")
             }
-            .disabled(!appState.fileManager.canGoForward)
+            .disabled(!appState.activeFileManager.canGoForward)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task { await appState.fileManager.refresh() }
+                Task { await appState.activeFileManager.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .keyboardShortcut("r", modifiers: .command)
 
-            Toggle(isOn: Bindable(appState.fileManager).showHiddenFiles) {
+            Toggle(isOn: Bindable(appState.activeFileManager).showHiddenFiles) {
                 Image(systemName: "eye")
             }
             .help("Show hidden files")
-            .onChange(of: appState.fileManager.showHiddenFiles) { _, _ in
-                Task { await appState.fileManager.refresh() }
+            .onChange(of: appState.activeFileManager.showHiddenFiles) { _, _ in
+                Task { await appState.activeFileManager.refresh() }
             }
 
             Menu {
                 ForEach(FileManagerViewModel.SortOrder.allCases, id: \.self) { order in
                     Button {
-                        if appState.fileManager.sortOrder == order {
-                            appState.fileManager.sortAscending.toggle()
+                        if appState.activeFileManager.sortOrder == order {
+                            appState.activeFileManager.sortAscending.toggle()
                         } else {
-                            appState.fileManager.sortOrder = order
-                            appState.fileManager.sortAscending = true
+                            appState.activeFileManager.sortOrder = order
+                            appState.activeFileManager.sortAscending = true
                         }
                     } label: {
                         HStack {
                             Text(order.label)
-                            if appState.fileManager.sortOrder == order {
-                                Image(systemName: appState.fileManager.sortAscending
+                            if appState.activeFileManager.sortOrder == order {
+                                Image(systemName: appState.activeFileManager.sortAscending
                                     ? "chevron.up" : "chevron.down")
                             }
                         }
