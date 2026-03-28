@@ -16,6 +16,7 @@ struct NativeFileList: NSViewRepresentable {
     var onCopyToOtherPanel: (([FileItem]) -> Void)?
     var onMoveToOtherPanel: (([FileItem]) -> Void)?
     var onCalculateFolderSize: ((FileItem) -> Void)?
+    var onAddToFavorites: ((FileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
 
@@ -121,6 +122,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onCopyToOtherPanel = onCopyToOtherPanel
         coordinator.onMoveToOtherPanel = onMoveToOtherPanel
         coordinator.onCalculateFolderSize = onCalculateFolderSize
+        coordinator.onAddToFavorites = onAddToFavorites
         coordinator.onSortChanged = onSortChanged
         coordinator.onBecameActive = onBecameActive
         coordinator.selectedIDs = _selectedIDs
@@ -198,6 +200,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onCopyToOtherPanel: (([FileItem]) -> Void)?
     var onMoveToOtherPanel: (([FileItem]) -> Void)?
     var onCalculateFolderSize: ((FileItem) -> Void)?
+    var onAddToFavorites: ((FileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
     weak var tableView: FileTableView?
@@ -311,9 +314,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         moveItem.representedObject = contextItems
         menu.addItem(moveItem)
 
-        // Show "Calculate Folder Size" if exactly one folder is right-clicked
+        // Show folder-specific options if exactly one folder is right-clicked
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
             menu.addItem(.separator())
+
+            let favItem = NSMenuItem(title: "Add to Favorites", action: #selector(handleAddToFavorites(_:)), keyEquivalent: "")
+            favItem.target = self
+            favItem.representedObject = folder
+            menu.addItem(favItem)
 
             let calcItem = NSMenuItem(title: "Calculate Folder Size", action: #selector(handleCalculateFolderSize(_:)), keyEquivalent: "")
             calcItem.target = self
@@ -337,6 +345,11 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleMoveToOtherPanel(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [FileItem] else { return }
         onMoveToOtherPanel?(contextItems)
+    }
+
+    @objc func handleAddToFavorites(_ sender: NSMenuItem) {
+        guard let folder = sender.representedObject as? FileItem else { return }
+        onAddToFavorites?(folder)
     }
 
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {

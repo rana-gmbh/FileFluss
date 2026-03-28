@@ -40,12 +40,30 @@ struct SidebarView: View {
         )
     }
 
+    @State private var renamingFavorite: FavoriteFolder?
+    @State private var renameText: String = ""
+
     var body: some View {
         List(selection: selection) {
             Section("Favorites") {
                 ForEach(favorites, id: \.2) { name, icon, url in
                     Label(name, systemImage: icon)
                         .tag(SidebarItem.location(url))
+                }
+
+                ForEach(appState.customFavorites) { fav in
+                    Label(fav.displayName, systemImage: fav.icon)
+                        .tag(SidebarItem.location(fav.url))
+                        .contextMenu {
+                            Button("Rename") {
+                                renameText = fav.displayName
+                                renamingFavorite = fav
+                            }
+                            Divider()
+                            Button("Remove from Favorites", role: .destructive) {
+                                appState.removeFavorite(id: fav.id)
+                            }
+                        }
                 }
             }
 
@@ -120,6 +138,23 @@ struct SidebarView: View {
         }
         .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
             AddCloudAccountView()
+        }
+        .alert("Rename Favorite", isPresented: Binding(
+            get: { renamingFavorite != nil },
+            set: { if !$0 { renamingFavorite = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                if let fav = renamingFavorite, !renameText.isEmpty {
+                    appState.renameFavorite(id: fav.id, to: renameText)
+                }
+                renamingFavorite = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renamingFavorite = nil
+            }
+        } message: {
+            Text("Enter a new name for this favorite.")
         }
     }
 }

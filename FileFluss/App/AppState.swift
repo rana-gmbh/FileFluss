@@ -43,6 +43,24 @@ final class AppState {
         await rightFileManager.refresh()
     }
 
+    // Custom favorites (shared across both panels)
+    var customFavorites: [FavoriteFolder] = []
+
+    func addFavorite(url: URL) {
+        guard !customFavorites.contains(where: { $0.url == url }) else { return }
+        customFavorites.append(FavoriteFolder(url: url, displayName: url.lastPathComponent))
+    }
+
+    func removeFavorite(id: UUID) {
+        customFavorites.removeAll { $0.id == id }
+    }
+
+    func renameFavorite(id: UUID, to newName: String) {
+        if let idx = customFavorites.firstIndex(where: { $0.id == id }) {
+            customFavorites[idx].displayName = newName
+        }
+    }
+
     // Folder size calculations per panel
     var leftFolderSizes: [FolderSizeEntry] = []
     var rightFolderSizes: [FolderSizeEntry] = []
@@ -106,6 +124,13 @@ final class AppState {
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
     }
+}
+
+struct FavoriteFolder: Identifiable {
+    let id = UUID()
+    let url: URL
+    var displayName: String
+    let icon: String = "folder.fill"
 }
 
 struct FolderSizeEntry: Identifiable {

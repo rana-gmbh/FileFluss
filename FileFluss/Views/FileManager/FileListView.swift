@@ -138,6 +138,9 @@ struct FileListView: View {
                     onCalculateFolderSize: { folder in
                         appState.calculateFolderSize(for: folder.url, panel: panelSide)
                     },
+                    onAddToFavorites: { folder in
+                        appState.addFavorite(url: folder.url)
+                    },
                     onSortChanged: { key, ascending in
                         switch key {
                         case "name": fm.sortOrder = .name
