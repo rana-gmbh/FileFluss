@@ -4,31 +4,32 @@ import UniformTypeIdentifiers
 
 // MARK: - NSViewRepresentable Bridge
 
-struct NativeFileList: NSViewRepresentable {
-    let items: [FileItem]
-    let currentDirectory: URL
+struct NativeCloudFileList: NSViewRepresentable {
+    let items: [CloudFileItem]
     let panelSide: PanelSide
     @Binding var selectedIDs: Set<String>
-    var onDoubleClick: (FileItem) -> Void
-    var onDrop: ([FileItem], URL) -> Void
+    var onDoubleClick: (CloudFileItem) -> Void
+    var onDrop: (([URL]) -> Void)?
     var onKeySpace: () -> Void
     var onDelete: (() -> Void)?
-    var onCopyToOtherPanel: (([FileItem]) -> Void)?
-    var onMoveToOtherPanel: (([FileItem]) -> Void)?
-    var onCalculateFolderSize: ((FileItem) -> Void)?
-    var onAddToFavorites: ((FileItem) -> Void)?
+    var onCopyToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onMoveToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onCalculateFolderSize: ((CloudFileItem) -> Void)?
+    var onAddToFavorites: ((CloudFileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
-    var onReceivePromises: ((URL) -> Void)?
+    var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
+    var onDragSessionStarted: (([CloudFileItem]) -> Void)?
+    var onDragSessionEnded: (() -> Void)?
 
-    func makeCoordinator() -> FileTableCoordinator {
-        FileTableCoordinator()
+    func makeCoordinator() -> CloudTableCoordinator {
+        CloudTableCoordinator()
     }
 
     func makeNSView(context: Context) -> NSScrollView {
         let coordinator = context.coordinator
 
-        let tableView = FileTableView()
+        let tableView = CloudTableView()
         tableView.style = .inset
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = true
@@ -38,67 +39,52 @@ struct NativeFileList: NSViewRepresentable {
         tableView.headerView = NSTableHeaderView()
         tableView.gridStyleMask = []
 
-        // Name column
-        let nameCol = NSTableColumn(identifier: .nameColumn)
+        let nameCol = NSTableColumn(identifier: .cloudNameColumn)
         nameCol.title = "Name"
         nameCol.minWidth = 200
         nameCol.sortDescriptorPrototype = NSSortDescriptor(key: "name", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
         tableView.addTableColumn(nameCol)
 
-        // Date column
-        let dateCol = NSTableColumn(identifier: .dateColumn)
+        let dateCol = NSTableColumn(identifier: .cloudDateColumn)
         dateCol.title = "Date Modified"
         dateCol.width = 160
         dateCol.minWidth = 100
         dateCol.sortDescriptorPrototype = NSSortDescriptor(key: "date", ascending: true)
         tableView.addTableColumn(dateCol)
 
-        // Size column
-        let sizeCol = NSTableColumn(identifier: .sizeColumn)
+        let sizeCol = NSTableColumn(identifier: .cloudSizeColumn)
         sizeCol.title = "Size"
         sizeCol.width = 80
         sizeCol.minWidth = 60
         sizeCol.sortDescriptorPrototype = NSSortDescriptor(key: "size", ascending: true)
         tableView.addTableColumn(sizeCol)
 
-        // The Name column stretches to fill
         tableView.sizeLastColumnToFit()
 
-        // Data source & delegate
         tableView.dataSource = coordinator
         tableView.delegate = coordinator
 
-        // Double-click
         tableView.doubleAction = #selector(coordinator.handleDoubleClick(_:))
         tableView.target = coordinator
 
-        // Register for drop (file URLs + file promises from cloud panels)
-        let promiseTypes = NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
-        tableView.registerForDraggedTypes([.fileURL] + promiseTypes)
+        tableView.registerForDraggedTypes([.fileURL])
         tableView.setDraggingSourceOperationMask(.every, forLocal: true)
         tableView.setDraggingSourceOperationMask(.every, forLocal: false)
 
-        // Space key callback
         tableView.onSpaceKey = { [weak coordinator] in
             coordinator?.onKeySpace?()
         }
-
-        // Delete callback (Cmd+Delete)
         tableView.onDelete = { [weak coordinator] in
             coordinator?.onDelete?()
         }
-
-        // Became active callback (first responder)
         tableView.onBecameFirstResponder = { [weak coordinator] in
             coordinator?.onBecameActive?()
         }
 
-        // Context menu
         let menu = NSMenu()
         menu.delegate = coordinator
         tableView.menu = menu
 
-        // Scroll view
         let scrollView = NSScrollView()
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -114,8 +100,6 @@ struct NativeFileList: NSViewRepresentable {
         let coordinator = context.coordinator
         let tableView = coordinator.tableView!
 
-        // Update callbacks
-        coordinator.currentDirectory = currentDirectory
         coordinator.panelSide = panelSide
         coordinator.onDoubleClick = onDoubleClick
         coordinator.onDrop = onDrop
@@ -127,10 +111,11 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onAddToFavorites = onAddToFavorites
         coordinator.onSortChanged = onSortChanged
         coordinator.onBecameActive = onBecameActive
-        coordinator.onReceivePromises = onReceivePromises
+        coordinator.onDownloadToTemp = onDownloadToTemp
+        coordinator.onDragSessionStarted = onDragSessionStarted
+        coordinator.onDragSessionEnded = onDragSessionEnded
         coordinator.selectedIDs = _selectedIDs
 
-        // Update data
         let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
             || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
 
@@ -140,8 +125,10 @@ struct NativeFileList: NSViewRepresentable {
             tableView.reloadData()
         }
 
-        // Sync selection from SwiftUI → NSTableView (only if they differ)
-        let currentNSSelection = Set(tableView.selectedRowIndexes.map { items[$0].id })
+        let currentNSSelection = Set(tableView.selectedRowIndexes.compactMap { idx -> String? in
+            guard idx < items.count else { return nil }
+            return items[idx].id
+        })
         if currentNSSelection != selectedIDs {
             let indexSet = NSMutableIndexSet()
             for (index, item) in items.enumerated() {
@@ -156,9 +143,9 @@ struct NativeFileList: NSViewRepresentable {
     }
 }
 
-// MARK: - Custom NSTableView (handles Space key)
+// MARK: - Custom NSTableView
 
-class FileTableView: NSTableView {
+class CloudTableView: NSTableView {
     var onSpaceKey: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBecameFirstResponder: (() -> Void)?
@@ -167,7 +154,6 @@ class FileTableView: NSTableView {
         if event.charactersIgnoringModifiers == " " {
             onSpaceKey?()
         } else if event.keyCode == 51 && event.modifierFlags.contains(.command) {
-            // Cmd+Delete
             onDelete?()
         } else {
             super.keyDown(with: event)
@@ -176,9 +162,7 @@ class FileTableView: NSTableView {
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
-        if result {
-            onBecameFirstResponder?()
-        }
+        if result { onBecameFirstResponder?() }
         return result
     }
 
@@ -188,30 +172,31 @@ class FileTableView: NSTableView {
     }
 }
 
-// MARK: - Coordinator (DataSource + Delegate)
+// MARK: - Coordinator
 
 @MainActor
-class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
-    var items: [FileItem] = []
+class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
+    var items: [CloudFileItem] = []
     var selectedIDs: Binding<Set<String>>?
-    var currentDirectory: URL?
     var panelSide: PanelSide = .left
-    var onDoubleClick: ((FileItem) -> Void)?
-    var onDrop: (([FileItem], URL) -> Void)?
+    var onDoubleClick: ((CloudFileItem) -> Void)?
+    var onDrop: (([URL]) -> Void)?
     var onKeySpace: (() -> Void)?
     var onDelete: (() -> Void)?
-    var onCopyToOtherPanel: (([FileItem]) -> Void)?
-    var onMoveToOtherPanel: (([FileItem]) -> Void)?
-    var onCalculateFolderSize: ((FileItem) -> Void)?
-    var onAddToFavorites: ((FileItem) -> Void)?
+    var onCopyToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onMoveToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onCalculateFolderSize: ((CloudFileItem) -> Void)?
+    var onAddToFavorites: ((CloudFileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
-    var onReceivePromises: ((URL) -> Void)?
-    weak var tableView: FileTableView?
+    var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
+    var onDragSessionStarted: (([CloudFileItem]) -> Void)?
+    var onDragSessionEnded: (() -> Void)?
+    weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
+    let filePromiseDelegate = CloudFilePromiseDelegate()
 
-    // Resolved items being dragged (set when drag starts)
-    private var currentDragItems: [FileItem] = []
+    private var currentDragItems: [CloudFileItem] = []
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -226,26 +211,26 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         items.count
     }
 
-    // MARK: - Delegate (cell views)
+    // MARK: - Delegate
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard row < items.count, let columnID = tableColumn?.identifier else { return nil }
         let item = items[row]
 
         switch columnID {
-        case .nameColumn:
+        case .cloudNameColumn:
             return makeNameCell(for: item, in: tableView)
-        case .dateColumn:
+        case .cloudDateColumn:
             return makeTextCell(
-                text: Self.dateFormatter.string(from: item.modificationDate),
-                identifier: .dateColumn,
+                text: item.formattedDate,
+                identifier: .cloudDateColumn,
                 in: tableView,
                 color: .secondaryLabelColor
             )
-        case .sizeColumn:
+        case .cloudSizeColumn:
             return makeTextCell(
                 text: item.formattedSize,
-                identifier: .sizeColumn,
+                identifier: .cloudSizeColumn,
                 in: tableView,
                 color: .secondaryLabelColor,
                 alignment: .right,
@@ -294,13 +279,12 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         let clickedRow = tableView.clickedRow
         guard clickedRow >= 0, clickedRow < items.count else { return }
 
-        // If the clicked row is not in the current selection, select only that row
         if !tableView.selectedRowIndexes.contains(clickedRow) {
             tableView.selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
         }
 
         let selectedRows = tableView.selectedRowIndexes
-        let contextItems = selectedRows.compactMap { index -> FileItem? in
+        let contextItems = selectedRows.compactMap { index -> CloudFileItem? in
             guard index < items.count else { return nil }
             return items[index]
         }
@@ -318,7 +302,6 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         moveItem.representedObject = contextItems
         menu.addItem(moveItem)
 
-        // Show folder-specific options if exactly one folder is right-clicked
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
             menu.addItem(.separator())
 
@@ -335,29 +318,29 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         menu.addItem(.separator())
 
-        let deleteItem = NSMenuItem(title: "Move to Trash", action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
+        let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
         deleteItem.target = self
         deleteItem.representedObject = contextItems
         menu.addItem(deleteItem)
     }
 
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
-        guard let contextItems = sender.representedObject as? [FileItem] else { return }
+        guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
         onCopyToOtherPanel?(contextItems)
     }
 
     @objc func handleMoveToOtherPanel(_ sender: NSMenuItem) {
-        guard let contextItems = sender.representedObject as? [FileItem] else { return }
+        guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
         onMoveToOtherPanel?(contextItems)
     }
 
     @objc func handleAddToFavorites(_ sender: NSMenuItem) {
-        guard let folder = sender.representedObject as? FileItem else { return }
+        guard let folder = sender.representedObject as? CloudFileItem else { return }
         onAddToFavorites?(folder)
     }
 
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {
-        guard let folder = sender.representedObject as? FileItem else { return }
+        guard let folder = sender.representedObject as? CloudFileItem else { return }
         onCalculateFolderSize?(folder)
     }
 
@@ -369,110 +352,50 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
         guard row < items.count else { return nil }
-        return items[row].url as NSURL
+        let item = items[row]
+
+        filePromiseDelegate.downloadHandler = onDownloadToTemp
+        let fileType = item.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+        let provider = NSFilePromiseProvider(fileType: fileType, delegate: filePromiseDelegate)
+        provider.userInfo = item
+        return provider
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
-        // Collect all dragged items
         currentDragItems = rowIndexes.compactMap { index in
             guard index < items.count else { return nil }
             return items[index]
         }
+        onDragSessionStarted?(currentDragItems)
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         currentDragItems = []
+        onDragSessionEnded?()
     }
 
-    // MARK: - Drop Destination
+    // MARK: - Drop Destination (accept local files for upload)
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        // Accept file promises from cloud panels
-        let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
-        if hasPromises {
-            tableView.setDropRow(-1, dropOperation: .on)
-            return .copy
+        guard info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else {
+            return []
         }
-
-        if dropOperation == .on {
-            // Dropping ON a specific row — must be a directory
-            guard row >= 0, row < items.count else { return [] }
-            let target = items[row]
-            guard target.isDirectory else { return [] }
-            // Don't drop onto a dragged item itself
-            if currentDragItems.contains(where: { $0.id == target.id }) {
-                return []
-            }
-            return .generic
-        } else {
-            // Dropping between rows or on table background — target is current directory
-            guard currentDirectory != nil else { return [] }
-            // Retarget to the whole table (drop on background)
-            tableView.setDropRow(-1, dropOperation: .on)
-            return .generic
-        }
+        tableView.setDropRow(-1, dropOperation: .on)
+        return .generic
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
-        // Determine target directory
-        let targetURL: URL
-        if row >= 0, row < items.count, dropOperation == .on {
-            let target = items[row]
-            guard target.isDirectory else { return false }
-            targetURL = target.url
-        } else {
-            // Dropped on table background — use current directory
-            guard let dir = currentDirectory else { return false }
-            targetURL = dir
+        guard let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty else {
+            return false
         }
-
-        // Handle file promises from cloud panels — call immediately before drag session ends
-        if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
-            onReceivePromises?(targetURL)
-            return true
-        }
-
-        let droppedItems: [FileItem]
-        if !currentDragItems.isEmpty {
-            // Internal drag
-            droppedItems = currentDragItems
-        } else {
-            // External drag (from Finder or other panel) — resolve URLs
-            guard let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty else {
-                return false
-            }
-            // First try matching against our items
-            let urlPaths = Set(urls.map { $0.standardizedFileURL.path() })
-            let matched = items.filter { urlPaths.contains($0.url.standardizedFileURL.path()) }
-            if !matched.isEmpty {
-                droppedItems = matched
-            } else {
-                // Build FileItems from URLs (cross-panel or external drag)
-                droppedItems = urls.compactMap { url -> FileItem? in
-                    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-                    return FileItem(url: url)
-                }
-                guard !droppedItems.isEmpty else { return false }
-            }
-        }
-
-        // Don't drop a folder into itself
-        guard !droppedItems.contains(where: { $0.url.standardizedFileURL == targetURL.standardizedFileURL }) else { return false }
-
-        // Don't drop into the same directory the items are already in
-        let allInSameDir = droppedItems.allSatisfy {
-            $0.url.deletingLastPathComponent().standardizedFileURL == targetURL.standardizedFileURL
-        }
-        guard !allInSameDir else { return false }
-
-        onDrop?(droppedItems, targetURL)
+        onDrop?(urls)
         return true
     }
 
     // MARK: - Cell Factories
 
-    private func makeNameCell(for item: FileItem, in tableView: NSTableView) -> NSTableCellView {
-        let id = NSUserInterfaceItemIdentifier("NameCell")
+    private func makeNameCell(for item: CloudFileItem, in tableView: NSTableView) -> NSTableCellView {
+        let id = NSUserInterfaceItemIdentifier("CloudNameCell")
         let cell: NSTableCellView
 
         if let reused = tableView.makeView(withIdentifier: id, owner: nil) as? NSTableCellView {
@@ -556,10 +479,30 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 }
 
+// MARK: - File Promise Delegate Helper
+
+class CloudFilePromiseDelegate: NSObject, NSFilePromiseProviderDelegate, @unchecked Sendable {
+    nonisolated(unsafe) var downloadHandler: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
+
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        guard let item = filePromiseProvider.userInfo as? CloudFileItem else { return "unknown" }
+        return item.name
+    }
+
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler handler: @escaping ((any Error)?) -> Void) {
+        // No-op: actual download is triggered by the copy/move dialog on the receiving side
+        handler(nil)
+    }
+
+    nonisolated func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue {
+        .main
+    }
+}
+
 // MARK: - Column Identifiers
 
 private extension NSUserInterfaceItemIdentifier {
-    static let nameColumn = NSUserInterfaceItemIdentifier("NameColumn")
-    static let dateColumn = NSUserInterfaceItemIdentifier("DateColumn")
-    static let sizeColumn = NSUserInterfaceItemIdentifier("SizeColumn")
+    static let cloudNameColumn = NSUserInterfaceItemIdentifier("CloudNameColumn")
+    static let cloudDateColumn = NSUserInterfaceItemIdentifier("CloudDateColumn")
+    static let cloudSizeColumn = NSUserInterfaceItemIdentifier("CloudSizeColumn")
 }

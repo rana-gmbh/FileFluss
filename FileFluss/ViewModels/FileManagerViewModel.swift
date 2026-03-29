@@ -19,10 +19,23 @@ final class FileManagerViewModel {
     // Drag & Drop
     var draggedItems: [FileItem] = []
     var pendingDrop: PendingDrop?
+    var pendingOverwrite: PendingOverwrite?
 
     struct PendingDrop {
         let items: [FileItem]
         let destinationFolder: URL
+    }
+
+    struct PendingOverwrite {
+        let conflicting: [String]  // names that already exist
+        let items: [FileItem]
+        let destinationFolder: URL
+        let operation: OverwriteOperation
+        let progress: TransferProgress?
+    }
+
+    enum OverwriteOperation {
+        case copy, move
     }
 
     // Quick Look — controlled directly, no SwiftUI binding
@@ -136,6 +149,17 @@ final class FileManagerViewModel {
         await loadDirectory()
     }
 
+    func deleteItems(_ items: [FileItem]) async {
+        for item in items {
+            do {
+                try await FileSystemService.shared.deleteItem(at: item.url)
+            } catch {
+                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                return
+            }
+        }
+    }
+
     func trashSelectedItems() async {
         for item in selectedItems {
             do {
@@ -165,29 +189,77 @@ final class FileManagerViewModel {
 
     // MARK: - Drag & Drop
 
-    func performMove(items: [FileItem], to folder: URL) async {
-        for item in items {
-            let dest = folder.appendingPathComponent(item.name)
-            do {
-                try await FileSystemService.shared.moveItem(from: item.url, to: dest)
-            } catch {
-                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+    func performMove(items: [FileItem], to folder: URL, progress: TransferProgress? = nil, overwrite: Bool = false) async {
+        if !overwrite {
+            let conflicts = items.filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path) }
+            if !conflicts.isEmpty {
+                pendingOverwrite = PendingOverwrite(
+                    conflicting: conflicts.map(\.name),
+                    items: items,
+                    destinationFolder: folder,
+                    operation: .move,
+                    progress: progress
+                )
                 return
             }
         }
+        progress?.transferredFileNames = items.map(\.name)
+        for (index, item) in items.enumerated() {
+            let dest = folder.appendingPathComponent(item.name)
+            progress?.currentFileName = item.name
+            do {
+                if overwrite && FileManager.default.fileExists(atPath: dest.path) {
+                    try FileManager.default.removeItem(at: dest)
+                }
+                progress?.totalBytes += item.size
+                try await FileSystemService.shared.moveItem(from: item.url, to: dest)
+                progress?.completedItems = index + 1
+            } catch {
+                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+                progress?.endTime = Date()
+                progress?.isComplete = true
+                return
+            }
+        }
+        progress?.endTime = Date()
+        progress?.isComplete = true
         await loadDirectory()
     }
 
-    func performCopy(items: [FileItem], to folder: URL) async {
-        for item in items {
-            let dest = folder.appendingPathComponent(item.name)
-            do {
-                try await FileSystemService.shared.copyItem(from: item.url, to: dest)
-            } catch {
-                self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
+    func performCopy(items: [FileItem], to folder: URL, progress: TransferProgress? = nil, overwrite: Bool = false) async {
+        if !overwrite {
+            let conflicts = items.filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path) }
+            if !conflicts.isEmpty {
+                pendingOverwrite = PendingOverwrite(
+                    conflicting: conflicts.map(\.name),
+                    items: items,
+                    destinationFolder: folder,
+                    operation: .copy,
+                    progress: progress
+                )
                 return
             }
         }
+        progress?.transferredFileNames = items.map(\.name)
+        for (index, item) in items.enumerated() {
+            let dest = folder.appendingPathComponent(item.name)
+            progress?.currentFileName = item.name
+            do {
+                if overwrite && FileManager.default.fileExists(atPath: dest.path) {
+                    try FileManager.default.removeItem(at: dest)
+                }
+                progress?.totalBytes += item.size
+                try await FileSystemService.shared.copyItem(from: item.url, to: dest)
+                progress?.completedItems = index + 1
+            } catch {
+                self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
+                progress?.endTime = Date()
+                progress?.isComplete = true
+                return
+            }
+        }
+        progress?.endTime = Date()
+        progress?.isComplete = true
         await loadDirectory()
     }
 

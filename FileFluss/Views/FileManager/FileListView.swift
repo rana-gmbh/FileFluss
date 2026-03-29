@@ -5,6 +5,15 @@ struct FileListView: View {
     @Environment(AppState.self) private var appState
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
+    @State private var showOverwriteConfirmation: Bool = false
+    @State private var showCloudDropConfirmation: Bool = false
+    @State private var pendingCloudDrop: PendingCloudDrop?
+
+    struct PendingCloudDrop {
+        let sourceItems: [CloudFileItem]
+        let sourceAccountId: UUID
+        let targetDirectory: URL
+    }
 
     private var fm: FileManagerViewModel {
         appState.fileManager(for: panelSide)
@@ -24,16 +33,20 @@ struct FileListView: View {
             Button("Move Here") {
                 let items = drop.items
                 let dest = drop.destinationFolder
+                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                appState.addTransfer(transfer, panel: panelSide)
                 Task {
-                    await fm.performMove(items: items, to: dest)
+                    await fm.performMove(items: items, to: dest, progress: transfer)
                     await appState.refreshAllPanels()
                 }
             }
             Button("Copy Here") {
                 let items = drop.items
                 let dest = drop.destinationFolder
+                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                appState.addTransfer(transfer, panel: panelSide)
                 Task {
-                    await fm.performCopy(items: items, to: dest)
+                    await fm.performCopy(items: items, to: dest, progress: transfer)
                     await appState.refreshAllPanels()
                 }
             }
@@ -65,6 +78,84 @@ struct FileListView: View {
             } else {
                 Text("Are you sure you want to move \(items.count) items to the Trash?")
             }
+        }
+        .confirmationDialog(
+            "File Already Exists",
+            isPresented: $showOverwriteConfirmation,
+            presenting: fm.pendingOverwrite
+        ) { overwrite in
+            Button("Overwrite", role: .destructive) {
+                let items = overwrite.items
+                let dest = overwrite.destinationFolder
+                let progress = overwrite.progress
+                let op = overwrite.operation
+                fm.pendingOverwrite = nil
+                Task {
+                    switch op {
+                    case .copy:
+                        await fm.performCopy(items: items, to: dest, progress: progress, overwrite: true)
+                    case .move:
+                        await fm.performMove(items: items, to: dest, progress: progress, overwrite: true)
+                    }
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                fm.pendingOverwrite?.progress?.isComplete = true
+                fm.pendingOverwrite = nil
+            }
+        } message: { overwrite in
+            let names = overwrite.conflicting
+            if names.count == 1 {
+                Text("\"\(names[0])\" already exists in the destination. Do you want to overwrite it?")
+            } else {
+                Text("\(names.count) files already exist in the destination. Do you want to overwrite them?")
+            }
+        }
+        .onChange(of: fm.pendingOverwrite != nil) { _, hasOverwrite in
+            if hasOverwrite { showOverwriteConfirmation = true }
+        }
+        .confirmationDialog(
+            "Move or Copy?",
+            isPresented: $showCloudDropConfirmation,
+            presenting: pendingCloudDrop
+        ) { drop in
+            Button("Move Here") {
+                let sourceItems = drop.sourceItems
+                let targetDir = drop.targetDirectory
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudDrop = nil
+                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
+                    await cloudVM.deleteItems(sourceItems)
+                    await fm.refresh()
+                }
+            }
+            Button("Copy Here") {
+                let sourceItems = drop.sourceItems
+                let targetDir = drop.targetDirectory
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudDrop = nil
+                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
+                    await fm.refresh()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingCloudDrop = nil
+            }
+        } message: { drop in
+            let count = drop.sourceItems.count
+            let name = drop.targetDirectory.lastPathComponent
+            Text(count == 1
+                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
+                 : "What would you like to do with \(count) items in \"\(name)\"?")
         }
     }
 
@@ -122,17 +213,39 @@ struct FileListView: View {
                         showDeleteConfirmation = true
                     },
                     onCopyToOtherPanel: { items in
-                        let otherFM = appState.fileManager(for: panelSide == .left ? .right : .left)
-                        Task {
-                            await fm.performCopy(items: items, to: otherFM.currentDirectory)
-                            await appState.refreshAllPanels()
+                        let otherSide: PanelSide = panelSide == .left ? .right : .left
+                        let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        if let cloudId = appState.cloudAccountId(for: otherSide) {
+                            let cloudVM = appState.cloudFileManager(for: cloudId)
+                            Task {
+                                await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
+                            }
+                        } else {
+                            let otherFM = appState.fileManager(for: otherSide)
+                            Task {
+                                await fm.performCopy(items: items, to: otherFM.currentDirectory, progress: transfer)
+                                await appState.refreshAllPanels()
+                            }
                         }
                     },
                     onMoveToOtherPanel: { items in
-                        let otherFM = appState.fileManager(for: panelSide == .left ? .right : .left)
-                        Task {
-                            await fm.performMove(items: items, to: otherFM.currentDirectory)
-                            await appState.refreshAllPanels()
+                        let otherSide: PanelSide = panelSide == .left ? .right : .left
+                        let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        if let cloudId = appState.cloudAccountId(for: otherSide) {
+                            let cloudVM = appState.cloudFileManager(for: cloudId)
+                            Task {
+                                await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
+                                await fm.deleteItems(items)
+                                await fm.refresh()
+                            }
+                        } else {
+                            let otherFM = appState.fileManager(for: otherSide)
+                            Task {
+                                await fm.performMove(items: items, to: otherFM.currentDirectory, progress: transfer)
+                                await appState.refreshAllPanels()
+                            }
                         }
                     },
                     onCalculateFolderSize: { folder in
@@ -152,6 +265,18 @@ struct FileListView: View {
                     },
                     onBecameActive: {
                         appState.activePanel = panelSide
+                    },
+                    onReceivePromises: { targetDir in
+                        if !appState.cloudDragSourceItems.isEmpty,
+                           let sourceAccountId = appState.cloudDragSourceAccountId {
+                            pendingCloudDrop = PendingCloudDrop(
+                                sourceItems: appState.cloudDragSourceItems,
+                                sourceAccountId: sourceAccountId,
+                                targetDirectory: targetDir
+                            )
+                            showCloudDropConfirmation = true
+                        }
+                        Task { await fm.refresh() }
                     }
                 )
                 .onChange(of: fm.selectedItemIDs) {

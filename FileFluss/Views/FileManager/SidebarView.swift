@@ -42,6 +42,8 @@ struct SidebarView: View {
 
     @State private var renamingFavorite: FavoriteFolder?
     @State private var renameText: String = ""
+    @State private var renamingCloudFavorite: CloudFavorite?
+    @State private var renameCloudText: String = ""
 
     var body: some View {
         List(selection: selection) {
@@ -62,6 +64,21 @@ struct SidebarView: View {
                             Divider()
                             Button("Remove from Favorites", role: .destructive) {
                                 appState.removeFavorite(id: fav.id)
+                            }
+                        }
+                }
+
+                ForEach(appState.cloudFavorites) { fav in
+                    Label(fav.displayName, systemImage: fav.icon)
+                        .tag(SidebarItem.cloudFolder(accountId: fav.accountId, path: fav.path))
+                        .contextMenu {
+                            Button("Rename") {
+                                renameCloudText = fav.displayName
+                                renamingCloudFavorite = fav
+                            }
+                            Divider()
+                            Button("Remove from Favorites", role: .destructive) {
+                                appState.removeCloudFavorite(id: fav.id)
                             }
                         }
                 }
@@ -98,6 +115,14 @@ struct SidebarView: View {
                     .badge(appState.syncManager.syncRules.count)
             }
 
+            if !appState.transfers(for: panelSide).isEmpty {
+                Section("Transfers") {
+                    ForEach(appState.transfers(for: panelSide)) { transfer in
+                        TransferRow(transfer: transfer, panelSide: panelSide)
+                    }
+                }
+            }
+
             if !appState.folderSizes(for: panelSide).isEmpty {
                 Section("Folder Sizes") {
                     ForEach(appState.folderSizes(for: panelSide)) { entry in
@@ -117,7 +142,7 @@ struct SidebarView: View {
                             }
                             Spacer()
                             Button {
-                                appState.removeFolderSize(at: entry.url, panel: panelSide)
+                                appState.removeFolderSize(id: entry.id, panel: panelSide)
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.tertiary)
@@ -130,10 +155,18 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .onChange(of: appState.sidebarSelection(for: panelSide)) { _, newValue in
-            if case .location(let url) = newValue {
+            switch newValue {
+            case .location(let url):
                 Task {
                     await appState.fileManager(for: panelSide).navigateTo(url)
                 }
+            case .cloudFolder(let accountId, let path):
+                Task {
+                    let cloudFM = appState.cloudFileManager(for: accountId)
+                    await cloudFM.navigateTo(path)
+                }
+            default:
+                break
             }
         }
         .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
@@ -156,5 +189,116 @@ struct SidebarView: View {
         } message: {
             Text("Enter a new name for this favorite.")
         }
+        .alert("Rename Cloud Favorite", isPresented: Binding(
+            get: { renamingCloudFavorite != nil },
+            set: { if !$0 { renamingCloudFavorite = nil } }
+        )) {
+            TextField("Name", text: $renameCloudText)
+            Button("Rename") {
+                if let fav = renamingCloudFavorite, !renameCloudText.isEmpty {
+                    appState.renameCloudFavorite(id: fav.id, to: renameCloudText)
+                }
+                renamingCloudFavorite = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renamingCloudFavorite = nil
+            }
+        } message: {
+            Text("Enter a new name for this cloud favorite.")
+        }
+    }
+}
+
+// MARK: - Transfer Row
+
+private struct TransferRow: View {
+    let transfer: TransferProgress
+    let panelSide: PanelSide
+    @Environment(AppState.self) private var appState
+    @State private var showDetails = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(transfer.statusText)
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer()
+                if transfer.isComplete {
+                    Button("Details") {
+                        showDetails = true
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    Button {
+                        appState.removeTransfer(id: transfer.id, panel: panelSide)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            ProgressView(value: transfer.fraction)
+                .progressViewStyle(.linear)
+            if !transfer.currentFileName.isEmpty && !transfer.isComplete {
+                Text(transfer.currentFileName)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .popover(isPresented: $showDetails) {
+            TransferDetailsView(transfer: transfer)
+        }
+    }
+}
+
+private struct TransferDetailsView: View {
+    let transfer: TransferProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Transfer Details")
+                .font(.headline)
+
+            Divider()
+
+            LabeledContent("Operation") {
+                Text(transfer.operation)
+            }
+            LabeledContent("Finished") {
+                Text(transfer.formattedEndTime)
+            }
+            if transfer.totalBytes > 0 {
+                LabeledContent("Total Size") {
+                    Text(ByteCountFormatter.string(fromByteCount: transfer.totalBytes, countStyle: .file))
+                }
+                LabeledContent("Avg. Speed") {
+                    Text(transfer.averageSpeed)
+                }
+            }
+
+            Divider()
+
+            Text("Items (\(transfer.transferredFileNames.count))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(transfer.transferredFileNames, id: \.self) { name in
+                        Text(name)
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 150)
+        }
+        .padding()
+        .frame(width: 280)
     }
 }

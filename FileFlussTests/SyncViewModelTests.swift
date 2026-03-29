@@ -59,6 +59,7 @@ struct SyncViewModelTests {
     @Test("Remove account also removes associated sync rules")
     func removeAccountCascades() async {
         let vm = SyncViewModel()
+        vm.accounts.removeAll() // Clear any persisted accounts
         let account = CloudAccount(providerType: .pCloud, isConnected: true)
         vm.accounts.append(account)
 

@@ -42,4 +42,9 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement using NSMetadataQuery
         throw CloudProviderError.notImplemented
     }
+
+    func folderSize(at path: String) async throws -> Int64 {
+        // TODO: Implement using NSMetadataQuery
+        throw CloudProviderError.notImplemented
+    }
 }

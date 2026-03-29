@@ -19,11 +19,11 @@ struct SyncEngineTests {
     func registerProvider() async throws {
         let engine = SyncEngine.shared
         let accountId = UUID()
-        let provider = PCloudProvider()
+        // Use a stub provider that doesn't require authentication
+        let provider = OneDriveProvider()
 
         await engine.registerProvider(for: accountId, provider: provider)
 
-        // Verify it doesn't crash when syncing with a registered provider
         let rule = SyncRule(
             localPath: FileManager.default.temporaryDirectory,
             remotePath: "/test",
@@ -31,7 +31,7 @@ struct SyncEngineTests {
             direction: .upload
         )
 
-        // This should work without throwing notAuthenticated
+        // Stub provider should work without throwing notAuthenticated
         try await engine.sync(rule: rule)
     }
 
@@ -49,10 +49,9 @@ struct SyncEngineTests {
         }
     }
 
-    @Test("Cloud providers conform to protocol and start unauthenticated")
-    func providerInitialState() async {
+    @Test("Stub providers return empty list and start unauthenticated")
+    func stubProviderInitialState() async {
         let providers: [any CloudProvider] = [
-            PCloudProvider(),
             OneDriveProvider(),
             GoogleDriveProvider(),
             NextCloudProvider(),
@@ -60,16 +59,25 @@ struct SyncEngineTests {
         ]
 
         for provider in providers {
-            // All stub providers list empty directories
             let items = try? await provider.listDirectory(at: "/")
             #expect(items?.isEmpty == true, "\(provider.providerType) should return empty list")
         }
     }
 
-    @Test("Provider getFileMetadata throws notImplemented for stubs")
+    @Test("PCloudProvider requires authentication")
+    func pcloudRequiresAuth() async {
+        let provider = PCloudProvider()
+        let isAuth = await provider.isAuthenticated
+        #expect(isAuth == false)
+
+        await #expect(throws: CloudProviderError.self) {
+            _ = try await provider.listDirectory(at: "/")
+        }
+    }
+
+    @Test("Provider getFileMetadata throws for stubs")
     func metadataNotImplemented() async {
         let providers: [any CloudProvider] = [
-            PCloudProvider(),
             OneDriveProvider(),
             GoogleDriveProvider(),
             NextCloudProvider(),

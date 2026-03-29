@@ -44,4 +44,9 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement WebDAV PROPFIND (single file)
         throw CloudProviderError.notImplemented
     }
+
+    func folderSize(at path: String) async throws -> Int64 {
+        // TODO: Implement recursive WebDAV listing
+        throw CloudProviderError.notImplemented
+    }
 }

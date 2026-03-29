@@ -49,10 +49,10 @@ struct ContentView: View {
             switch sidebarItem {
             case .syncRules:
                 SyncRulesView()
-            case .cloudAccount:
-                Text("Cloud account browser coming soon")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .cloudAccount(let account):
+                CloudFileListView(panelSide: side, accountId: account.id)
+            case .cloudFolder(let accountId, _):
+                CloudFileListView(panelSide: side, accountId: accountId)
             default:
                 FileListView(panelSide: side)
             }

@@ -42,4 +42,9 @@ final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement Google Drive API v3 - files.get
         throw CloudProviderError.notImplemented
     }
+
+    func folderSize(at path: String) async throws -> Int64 {
+        // TODO: Implement Google Drive API v3
+        throw CloudProviderError.notImplemented
+    }
 }

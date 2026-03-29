@@ -42,4 +42,9 @@ final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement Microsoft Graph API - get item
         throw CloudProviderError.notImplemented
     }
+
+    func folderSize(at path: String) async throws -> Int64 {
+        // TODO: Implement Microsoft Graph API
+        throw CloudProviderError.notImplemented
+    }
 }

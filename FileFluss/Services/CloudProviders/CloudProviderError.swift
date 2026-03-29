@@ -10,6 +10,7 @@ enum CloudProviderError: LocalizedError {
     case rateLimited
     case serverError(Int)
     case invalidResponse
+    case invalidCredentials
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,7 @@ enum CloudProviderError: LocalizedError {
         case .rateLimited: return "Rate limited. Please try again later."
         case .serverError(let code): return "Server error (HTTP \(code))."
         case .invalidResponse: return "Invalid response from server."
+        case .invalidCredentials: return "Invalid email or password."
         }
     }
 }

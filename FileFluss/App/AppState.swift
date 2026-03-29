@@ -32,6 +32,15 @@ final class AppState {
         panel == .left ? selectedLeftSidebarItem : selectedRightSidebarItem
     }
 
+    /// Returns the cloud account ID if the given panel is showing a cloud view, nil otherwise.
+    func cloudAccountId(for panel: PanelSide) -> UUID? {
+        switch sidebarSelection(for: panel) {
+        case .cloudAccount(let account): return account.id
+        case .cloudFolder(let accountId, _): return accountId
+        default: return nil
+        }
+    }
+
     func setSidebarSelection(_ item: SidebarItem?, for panel: PanelSide) {
         if panel == .left { selectedLeftSidebarItem = item }
         else { selectedRightSidebarItem = item }
@@ -61,6 +70,76 @@ final class AppState {
         }
     }
 
+    // Cloud favorites
+    var cloudFavorites: [CloudFavorite] = []
+
+    func addCloudFavorite(accountId: UUID, path: String, name: String) {
+        guard !cloudFavorites.contains(where: { $0.accountId == accountId && $0.path == path }) else { return }
+        let account = syncManager.accountFor(id: accountId)
+        let providerSuffix = account?.providerType.displayName ?? "Cloud"
+        let displayName = "\(name) (\(providerSuffix))"
+        cloudFavorites.append(CloudFavorite(
+            accountId: accountId,
+            path: path,
+            displayName: displayName,
+            providerType: account?.providerType ?? .pCloud
+        ))
+    }
+
+    func removeCloudFavorite(id: UUID) {
+        cloudFavorites.removeAll { $0.id == id }
+    }
+
+    func renameCloudFavorite(id: UUID, to newName: String) {
+        if let idx = cloudFavorites.firstIndex(where: { $0.id == id }) {
+            cloudFavorites[idx].displayName = newName
+        }
+    }
+
+    // Cloud file managers (cached per account)
+    private var cloudFileManagers: [UUID: CloudFileManagerViewModel] = [:]
+
+    func cloudFileManager(for accountId: UUID) -> CloudFileManagerViewModel {
+        if let existing = cloudFileManagers[accountId] {
+            return existing
+        }
+        let vm = CloudFileManagerViewModel(accountId: accountId)
+        cloudFileManagers[accountId] = vm
+        return vm
+    }
+
+    func removeCloudFileManager(for accountId: UUID) {
+        cloudFileManagers.removeValue(forKey: accountId)
+    }
+
+    // Cloud drag source tracking (for cross-panel drag from cloud to local)
+    var cloudDragSourceItems: [CloudFileItem] = []
+    var cloudDragSourceAccountId: UUID?
+
+    // Transfer progress per panel (shown in the sidebar of the destination panel)
+    var leftTransfers: [TransferProgress] = []
+    var rightTransfers: [TransferProgress] = []
+
+    func transfers(for panel: PanelSide) -> [TransferProgress] {
+        panel == .left ? leftTransfers : rightTransfers
+    }
+
+    func addTransfer(_ transfer: TransferProgress, panel: PanelSide) {
+        if panel == .left {
+            leftTransfers.append(transfer)
+        } else {
+            rightTransfers.append(transfer)
+        }
+    }
+
+    func removeTransfer(id: UUID, panel: PanelSide) {
+        if panel == .left {
+            leftTransfers.removeAll { $0.id == id }
+        } else {
+            rightTransfers.removeAll { $0.id == id }
+        }
+    }
+
     // Folder size calculations per panel
     var leftFolderSizes: [FolderSizeEntry] = []
     var rightFolderSizes: [FolderSizeEntry] = []
@@ -71,10 +150,10 @@ final class AppState {
 
     func calculateFolderSize(for url: URL, panel: PanelSide) {
         let entries = panel == .left ? leftFolderSizes : rightFolderSizes
-        // Don't add duplicate
         guard !entries.contains(where: { $0.url == url }) else { return }
 
         let entry = FolderSizeEntry(url: url)
+        let entryId = entry.id
         if panel == .left {
             leftFolderSizes.append(entry)
         } else {
@@ -84,38 +163,57 @@ final class AppState {
         Task {
             do {
                 let size = try await FileSystemService.shared.directorySize(at: url)
-                if panel == .left {
-                    if let idx = leftFolderSizes.firstIndex(where: { $0.url == url }) {
-                        leftFolderSizes[idx].size = size
-                        leftFolderSizes[idx].isCalculating = false
-                    }
-                } else {
-                    if let idx = rightFolderSizes.firstIndex(where: { $0.url == url }) {
-                        rightFolderSizes[idx].size = size
-                        rightFolderSizes[idx].isCalculating = false
-                    }
-                }
+                updateFolderSizeEntry(id: entryId, panel: panel, size: size)
             } catch {
-                if panel == .left {
-                    if let idx = leftFolderSizes.firstIndex(where: { $0.url == url }) {
-                        leftFolderSizes[idx].size = 0
-                        leftFolderSizes[idx].isCalculating = false
-                    }
-                } else {
-                    if let idx = rightFolderSizes.firstIndex(where: { $0.url == url }) {
-                        rightFolderSizes[idx].size = 0
-                        rightFolderSizes[idx].isCalculating = false
-                    }
-                }
+                updateFolderSizeEntry(id: entryId, panel: panel, size: 0)
             }
         }
     }
 
-    func removeFolderSize(at url: URL, panel: PanelSide) {
+    func calculateCloudFolderSize(path: String, name: String, accountId: UUID, panel: PanelSide) {
+        let entries = panel == .left ? leftFolderSizes : rightFolderSizes
+        guard !entries.contains(where: { $0.cloudPath == path && $0.accountId == accountId }) else { return }
+
+        let entry = FolderSizeEntry(cloudPath: path, accountId: accountId, name: name)
+        let entryId = entry.id
         if panel == .left {
-            leftFolderSizes.removeAll { $0.url == url }
+            leftFolderSizes.append(entry)
         } else {
-            rightFolderSizes.removeAll { $0.url == url }
+            rightFolderSizes.append(entry)
+        }
+
+        Task {
+            do {
+                guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+                    throw CloudProviderError.notAuthenticated
+                }
+                let size = try await provider.folderSize(at: path)
+                updateFolderSizeEntry(id: entryId, panel: panel, size: size)
+            } catch {
+                updateFolderSizeEntry(id: entryId, panel: panel, size: 0)
+            }
+        }
+    }
+
+    private func updateFolderSizeEntry(id: UUID, panel: PanelSide, size: Int64) {
+        if panel == .left {
+            if let idx = leftFolderSizes.firstIndex(where: { $0.id == id }) {
+                leftFolderSizes[idx].size = size
+                leftFolderSizes[idx].isCalculating = false
+            }
+        } else {
+            if let idx = rightFolderSizes.firstIndex(where: { $0.id == id }) {
+                rightFolderSizes[idx].size = size
+                rightFolderSizes[idx].isCalculating = false
+            }
+        }
+    }
+
+    func removeFolderSize(id: UUID, panel: PanelSide) {
+        if panel == .left {
+            leftFolderSizes.removeAll { $0.id == id }
+        } else {
+            rightFolderSizes.removeAll { $0.id == id }
         }
     }
 
@@ -123,6 +221,10 @@ final class AppState {
         self.leftFileManager = FileManagerViewModel()
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
+
+        Task {
+            await syncManager.reconnectSavedAccounts()
+        }
     }
 }
 
@@ -135,15 +237,105 @@ struct FavoriteFolder: Identifiable {
 
 struct FolderSizeEntry: Identifiable {
     let id = UUID()
-    let url: URL
+    let url: URL?
+    let cloudPath: String?
+    let accountId: UUID?
     var size: Int64?
     var isCalculating: Bool = true
 
-    var name: String { url.lastPathComponent }
+    init(url: URL) {
+        self.url = url
+        self.cloudPath = nil
+        self.accountId = nil
+    }
+
+    init(cloudPath: String, accountId: UUID, name: String) {
+        self.url = nil
+        self.cloudPath = cloudPath
+        self.accountId = accountId
+        self._name = name
+    }
+
+    private var _name: String?
+
+    var name: String { _name ?? url?.lastPathComponent ?? "Unknown" }
 
     var formattedSize: String {
         guard let size else { return "Calculating…" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+}
+
+struct CloudFavorite: Identifiable {
+    let id = UUID()
+    let accountId: UUID
+    let path: String
+    var displayName: String
+    let providerType: CloudProviderType
+    let icon: String = "cloud.fill"
+}
+
+@Observable @MainActor
+final class TransferProgress: Identifiable {
+    let id = UUID()
+    let operation: String  // "Copying", "Moving", "Downloading"
+    let totalItems: Int
+    var completedItems: Int = 0
+    var currentFileName: String = ""
+    var isComplete: Bool = false
+    var transferredFileNames: [String] = []
+    var totalBytes: Int64 = 0
+    let startTime = Date()
+    var endTime: Date?
+
+    init(operation: String, totalItems: Int) {
+        self.operation = operation
+        self.totalItems = totalItems
+    }
+
+    var fraction: Double {
+        guard totalItems > 0 else { return 0 }
+        return Double(completedItems) / Double(totalItems)
+    }
+
+    var statusText: String {
+        if isComplete { return completionSummary }
+        return "\(operation) \(completedItems + 1) of \(totalItems)"
+    }
+
+    var completionSummary: String {
+        let names = transferredFileNames
+        let pastTense: String
+        switch operation {
+        case "Copying": pastTense = "Copied"
+        case "Moving": pastTense = "Moved"
+        case "Downloading": pastTense = "Downloaded"
+        default: pastTense = operation
+        }
+        if names.count == 1 {
+            return "Done: \(pastTense) \(names[0])"
+        } else if names.count > 1 {
+            return "Done: \(pastTense) \(names.count) items"
+        }
+        return "Done"
+    }
+
+    var duration: TimeInterval {
+        (endTime ?? Date()).timeIntervalSince(startTime)
+    }
+
+    var averageSpeed: String {
+        guard duration > 0, totalBytes > 0 else { return "--" }
+        let bytesPerSec = Double(totalBytes) / duration
+        return ByteCountFormatter.string(fromByteCount: Int64(bytesPerSec), countStyle: .file) + "/s"
+    }
+
+    var formattedEndTime: String {
+        guard let end = endTime else { return "--" }
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .medium
+        return f.string(from: end)
     }
 }
 
@@ -152,6 +344,7 @@ enum SidebarItem: Hashable, Identifiable {
     case favorites
     case location(URL)
     case cloudAccount(CloudAccount)
+    case cloudFolder(accountId: UUID, path: String)
     case syncRules
 
     var id: String {
@@ -160,6 +353,7 @@ enum SidebarItem: Hashable, Identifiable {
         case .favorites: return "favorites"
         case .location(let url): return url.path()
         case .cloudAccount(let account): return account.id.uuidString
+        case .cloudFolder(let accountId, let path): return "cloud:\(accountId.uuidString):\(path)"
         case .syncRules: return "syncRules"
         }
     }

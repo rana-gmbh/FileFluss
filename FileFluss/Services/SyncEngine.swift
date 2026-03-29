@@ -15,6 +15,10 @@ actor SyncEngine {
         providers.removeValue(forKey: accountId)
     }
 
+    func provider(for accountId: UUID) -> (any CloudProvider)? {
+        providers[accountId]
+    }
+
     func sync(rule: SyncRule) async throws {
         guard let provider = providers[rule.accountId] else {
             throw CloudProviderError.notAuthenticated
