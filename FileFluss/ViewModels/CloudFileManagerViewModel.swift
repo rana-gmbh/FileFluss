@@ -193,8 +193,10 @@ final class CloudFileManagerViewModel {
         } catch {
             self.error = error.localizedDescription
         }
-        progress?.endTime = Date()
-        progress?.isComplete = true
+        if !(progress?.isCloudToCloud ?? false) {
+            progress?.endTime = Date()
+            progress?.isComplete = true
+        }
     }
 
     private func downloadRecursively(items: [CloudFileItem], to localDirectory: URL, provider: CloudProvider, overwrite: Bool, progress: TransferProgress?, downloadedCount: inout Int) async throws {
@@ -254,8 +256,10 @@ final class CloudFileManagerViewModel {
         } catch {
             uploadError = error.localizedDescription
         }
-        progress?.endTime = Date()
-        progress?.isComplete = true
+        if !(progress?.isCloudToCloud ?? false) {
+            progress?.endTime = Date()
+            progress?.isComplete = true
+        }
         await loadDirectory()
         if let uploadError {
             self.error = uploadError

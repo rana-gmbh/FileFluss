@@ -21,6 +21,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
+    var onReceiveCloudDrop: (() -> Void)?
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -67,7 +68,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         tableView.doubleAction = #selector(coordinator.handleDoubleClick(_:))
         tableView.target = coordinator
 
-        tableView.registerForDraggedTypes([.fileURL])
+        tableView.registerForDraggedTypes([.fileURL, .filePromise])
         tableView.setDraggingSourceOperationMask(.every, forLocal: true)
         tableView.setDraggingSourceOperationMask(.every, forLocal: false)
 
@@ -114,6 +115,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onDownloadToTemp = onDownloadToTemp
         coordinator.onDragSessionStarted = onDragSessionStarted
         coordinator.onDragSessionEnded = onDragSessionEnded
+        coordinator.onReceiveCloudDrop = onReceiveCloudDrop
         coordinator.selectedIDs = _selectedIDs
 
         let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
@@ -192,6 +194,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
+    var onReceiveCloudDrop: (() -> Void)?
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
     let filePromiseDelegate = CloudFilePromiseDelegate()
@@ -377,6 +380,12 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     // MARK: - Drop Destination (accept local files for upload)
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        // Accept file promises from other cloud panels
+        if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
+            tableView.setDropRow(-1, dropOperation: .on)
+            return .copy
+        }
+        // Accept file URLs from local panels
         guard info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else {
             return []
         }
@@ -385,6 +394,12 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        // Handle file promises from other cloud panels — call immediately before drag session ends
+        if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
+            onReceiveCloudDrop?()
+            return true
+        }
+
         guard let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty else {
             return false
         }

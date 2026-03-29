@@ -300,8 +300,17 @@ private struct TransferDetailsView: View {
                 LabeledContent("Total Size") {
                     Text(ByteCountFormatter.string(fromByteCount: transfer.totalBytes, countStyle: .file))
                 }
-                LabeledContent("Avg. Speed") {
-                    Text(transfer.averageSpeed)
+                if transfer.isCloudToCloud {
+                    LabeledContent("Download Speed") {
+                        Text(transfer.downloadSpeed)
+                    }
+                    LabeledContent("Upload Speed") {
+                        Text(transfer.uploadSpeed)
+                    }
+                } else {
+                    LabeledContent("Avg. Speed") {
+                        Text(transfer.averageSpeed)
+                    }
                 }
             }
 

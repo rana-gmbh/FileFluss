@@ -288,6 +288,20 @@ final class TransferProgress: Identifiable {
     let startTime = Date()
     var endTime: Date?
 
+    // Cloud-to-cloud phase tracking
+    var isCloudToCloud: Bool = false
+    var currentPhase: TransferPhase = .downloading
+    var downloadBytes: Int64 = 0
+    var uploadBytes: Int64 = 0
+    var downloadStartTime: Date?
+    var downloadEndTime: Date?
+    var uploadStartTime: Date?
+    var uploadEndTime: Date?
+
+    enum TransferPhase {
+        case downloading, uploading
+    }
+
     init(operation: String, totalItems: Int) {
         self.operation = operation
         self.totalItems = totalItems
@@ -295,11 +309,30 @@ final class TransferProgress: Identifiable {
 
     var fraction: Double {
         guard totalItems > 0 else { return 0 }
+        if isCloudToCloud {
+            let halfItems = Double(totalItems)
+            switch currentPhase {
+            case .downloading:
+                return Double(completedItems) / (halfItems * 2)
+            case .uploading:
+                return (halfItems + Double(completedItems)) / (halfItems * 2)
+            }
+        }
         return Double(completedItems) / Double(totalItems)
     }
 
     var statusText: String {
         if isComplete { return completionSummary }
+        if isCloudToCloud {
+            let names = transferredFileNames
+            let label = names.count == 1 ? names[0] : "\(names.count) items"
+            switch currentPhase {
+            case .downloading:
+                return "Downloading \(label)"
+            case .uploading:
+                return "Uploading \(label)"
+            }
+        }
         return "\(operation) \(completedItems + 1) of \(totalItems)"
     }
 
@@ -327,6 +360,24 @@ final class TransferProgress: Identifiable {
     var averageSpeed: String {
         guard duration > 0, totalBytes > 0 else { return "--" }
         let bytesPerSec = Double(totalBytes) / duration
+        return ByteCountFormatter.string(fromByteCount: Int64(bytesPerSec), countStyle: .file) + "/s"
+    }
+
+    var downloadSpeed: String {
+        guard let start = downloadStartTime else { return "--" }
+        let end = downloadEndTime ?? Date()
+        let dur = end.timeIntervalSince(start)
+        guard dur > 0, downloadBytes > 0 else { return "--" }
+        let bytesPerSec = Double(downloadBytes) / dur
+        return ByteCountFormatter.string(fromByteCount: Int64(bytesPerSec), countStyle: .file) + "/s"
+    }
+
+    var uploadSpeed: String {
+        guard let start = uploadStartTime else { return "--" }
+        let end = uploadEndTime ?? Date()
+        let dur = end.timeIntervalSince(start)
+        guard dur > 0, uploadBytes > 0 else { return "--" }
+        let bytesPerSec = Double(uploadBytes) / dur
         return ByteCountFormatter.string(fromByteCount: Int64(bytesPerSec), countStyle: .file) + "/s"
     }
 

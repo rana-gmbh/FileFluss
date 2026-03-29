@@ -8,6 +8,13 @@ struct CloudFileListView: View {
     @State private var showOverwriteConfirmation = false
     @State private var showDropConfirmation = false
     @State private var pendingUploadURLs: [URL]?
+    @State private var showCloudToCloudDropConfirmation = false
+    @State private var pendingCloudToCloudDrop: PendingCloudToCloudDrop?
+
+    struct PendingCloudToCloudDrop {
+        let sourceItems: [CloudFileItem]
+        let sourceAccountId: UUID
+    }
 
     private var vm: CloudFileManagerViewModel {
         appState.cloudFileManager(for: accountId)
@@ -113,6 +120,44 @@ struct CloudFileListView: View {
                 Text("What would you like to do with \(urls.count) items in \"\(name)\"?")
             }
         }
+        .confirmationDialog(
+            "Move or Copy?",
+            isPresented: $showCloudToCloudDropConfirmation,
+            presenting: pendingCloudToCloudDrop
+        ) { drop in
+            Button("Move Here") {
+                let sourceItems = drop.sourceItems
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudToCloudDrop = nil
+                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true)
+                }
+            }
+            Button("Copy Here") {
+                let sourceItems = drop.sourceItems
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudToCloudDrop = nil
+                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingCloudToCloudDrop = nil
+            }
+        } message: { drop in
+            let count = drop.sourceItems.count
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
+            Text(count == 1
+                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
+                 : "What would you like to do with \(count) items in \"\(name)\"?")
+        }
     }
 
     private var cloudPathBar: some View {
@@ -170,23 +215,43 @@ struct CloudFileListView: View {
                 },
                 onCopyToOtherPanel: { items in
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
-                    let otherFM = appState.fileManager(for: otherSide)
-                    let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
-                    appState.addTransfer(transfer, panel: otherSide)
-                    Task {
-                        await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                        await otherFM.refresh()
+                    if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                        // Cloud-to-cloud copy
+                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        Task {
+                            await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false)
+                        }
+                    } else {
+                        let otherFM = appState.fileManager(for: otherSide)
+                        let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        Task {
+                            await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                            await otherFM.refresh()
+                        }
                     }
                 },
                 onMoveToOtherPanel: { items in
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
-                    let otherFM = appState.fileManager(for: otherSide)
-                    let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                    appState.addTransfer(transfer, panel: otherSide)
-                    Task {
-                        await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                        await vm.deleteItems(items)
-                        await otherFM.refresh()
+                    if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                        // Cloud-to-cloud move
+                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        Task {
+                            await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true)
+                        }
+                    } else {
+                        let otherFM = appState.fileManager(for: otherSide)
+                        let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                        appState.addTransfer(transfer, panel: otherSide)
+                        Task {
+                            await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                            await vm.deleteItems(items)
+                            await otherFM.refresh()
+                        }
                     }
                 },
                 onCalculateFolderSize: { folder in
@@ -229,6 +294,17 @@ struct CloudFileListView: View {
                 onDragSessionEnded: {
                     appState.cloudDragSourceItems = []
                     appState.cloudDragSourceAccountId = nil
+                },
+                onReceiveCloudDrop: {
+                    if !appState.cloudDragSourceItems.isEmpty,
+                       let sourceAccountId = appState.cloudDragSourceAccountId,
+                       sourceAccountId != accountId {
+                        pendingCloudToCloudDrop = PendingCloudToCloudDrop(
+                            sourceItems: appState.cloudDragSourceItems,
+                            sourceAccountId: sourceAccountId
+                        )
+                        showCloudToCloudDropConfirmation = true
+                    }
                 }
             )
             .onChange(of: vm.selectedItemIDs) {
@@ -252,6 +328,68 @@ struct CloudFileListView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
+        }
+    }
+
+    /// Download items from source cloud to a temp directory, then upload to target cloud.
+    private static func cloudToCloudTransfer(
+        items: [CloudFileItem],
+        from sourceVM: CloudFileManagerViewModel,
+        to targetVM: CloudFileManagerViewModel,
+        progress: TransferProgress?,
+        deleteFromSource: Bool
+    ) async {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cloud-transfer-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+
+        // Phase 1: Download
+        if let progress {
+            progress.isCloudToCloud = true
+            progress.currentPhase = .downloading
+            progress.downloadStartTime = Date()
+        }
+
+        await sourceVM.downloadItems(items, to: tempDir, progress: progress)
+
+        if let progress {
+            progress.downloadEndTime = Date()
+            progress.downloadBytes = progress.totalBytes
+        }
+
+        // Phase 2: Upload
+        let localURLs = items.map { tempDir.appendingPathComponent($0.name) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+        if let progress {
+            progress.currentPhase = .uploading
+            progress.completedItems = 0
+            progress.currentFileName = ""
+            progress.totalBytes = 0
+            progress.uploadStartTime = Date()
+        }
+
+        await targetVM.uploadFiles(from: localURLs, progress: progress)
+
+        if let progress {
+            progress.uploadEndTime = Date()
+            progress.uploadBytes = progress.totalBytes
+            progress.totalBytes = progress.downloadBytes + progress.uploadBytes
+        }
+
+        if deleteFromSource {
+            await sourceVM.deleteItems(items)
+            await sourceVM.loadDirectory()
+        }
+
+        // Mark complete only after both phases are done
+        if let progress {
+            progress.endTime = Date()
+            progress.isComplete = true
         }
     }
 
