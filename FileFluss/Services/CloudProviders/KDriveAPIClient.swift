@@ -171,26 +171,20 @@ actor KDriveAPIClient {
 
     func folderSize(path: String) async throws -> Int64 {
         let fileId = try await resolvePathToId(path)
-        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)")!
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        return try await calculateFolderSizeRecursively(fileId: fileId)
+    }
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw Self.mapHTTPError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0)
-        }
-
-        // The file metadata response includes size directly
-        struct SizeResponse: Decodable {
-            let data: FileData
-            struct FileData: Decodable {
-                let size: Int64?
+    private func calculateFolderSizeRecursively(fileId: Int) async throws -> Int64 {
+        let items = try await listFolder(fileId: fileId)
+        var total: Int64 = 0
+        for item in items {
+            if item.isFolder {
+                total += try await calculateFolderSizeRecursively(fileId: item.id)
+            } else {
+                total += item.size ?? 0
             }
         }
-        if let parsed = try? JSONDecoder().decode(SizeResponse.self, from: data) {
-            return parsed.data.size ?? 0
-        }
-        return 0
+        return total
     }
 
     // MARK: - User Info
