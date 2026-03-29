@@ -44,6 +44,8 @@ struct SidebarView: View {
     @State private var renameText: String = ""
     @State private var renamingCloudFavorite: CloudFavorite?
     @State private var renameCloudText: String = ""
+    @State private var renamingAccountId: UUID?
+    @State private var renameAccountText: String = ""
 
     var body: some View {
         List(selection: selection) {
@@ -98,6 +100,12 @@ struct SidebarView: View {
                             Image(systemName: account.providerType.icon)
                         }
                         .tag(SidebarItem.cloudAccount(account))
+                        .contextMenu {
+                            Button("Rename...") {
+                                renamingAccountId = account.id
+                                renameAccountText = account.displayName
+                            }
+                        }
                     }
 
                     Button {
@@ -205,6 +213,23 @@ struct SidebarView: View {
             }
         } message: {
             Text("Enter a new name for this cloud favorite.")
+        }
+        .alert("Rename Cloud Account", isPresented: Binding(
+            get: { renamingAccountId != nil },
+            set: { if !$0 { renamingAccountId = nil } }
+        )) {
+            TextField("Name", text: $renameAccountText)
+            Button("Rename") {
+                if let accountId = renamingAccountId, !renameAccountText.isEmpty {
+                    appState.syncManager.renameAccount(id: accountId, to: renameAccountText)
+                }
+                renamingAccountId = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renamingAccountId = nil
+            }
+        } message: {
+            Text("Enter a new name for this cloud account.")
         }
     }
 }

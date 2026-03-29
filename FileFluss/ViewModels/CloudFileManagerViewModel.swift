@@ -239,37 +239,52 @@ final class CloudFileManagerViewModel {
     // MARK: - Upload
 
     func uploadFiles(from urls: [URL], progress: TransferProgress? = nil) async {
-        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            self.error = "Cloud account not connected"
+            progress?.isComplete = true
+            return
+        }
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
 
         var uploadedCount = 0
+        var uploadError: String?
         do {
             try await uploadRecursively(urls: urls, toRemotePath: currentPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
         } catch {
-            self.error = error.localizedDescription
+            uploadError = error.localizedDescription
         }
         progress?.endTime = Date()
         progress?.isComplete = true
         await loadDirectory()
+        if let uploadError {
+            self.error = uploadError
+        }
     }
 
     private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
         let fm = FileManager.default
         for url in urls {
             var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else {
+                print("[Upload] File not found, skipping: \(url.path)")
+                continue
+            }
 
             let itemRemotePath = remotePath == "/" ? "/\(url.lastPathComponent)" : "\(remotePath)/\(url.lastPathComponent)"
 
             if isDir.boolValue {
+                print("[Upload] Creating directory: \(itemRemotePath)")
                 try await provider.createDirectory(at: itemRemotePath)
                 let contents = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey])
+                print("[Upload] Directory \(url.lastPathComponent) has \(contents.count) items")
                 try await uploadRecursively(urls: contents, toRemotePath: itemRemotePath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
             } else {
                 progress?.currentFileName = url.lastPathComponent
                 let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                print("[Upload] Uploading file: \(url.lastPathComponent) (\(fileSize) bytes) to \(itemRemotePath)")
                 try await provider.uploadFile(from: url, to: itemRemotePath)
+                print("[Upload] Success: \(url.lastPathComponent)")
                 progress?.totalBytes += Int64(fileSize)
                 uploadedCount += 1
                 progress?.completedItems = uploadedCount

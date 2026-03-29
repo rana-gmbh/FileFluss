@@ -187,8 +187,6 @@ struct FileListView: View {
             if fm.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if fm.filteredItems.isEmpty {
-                ContentUnavailableView("No Files", systemImage: "folder", description: Text("This folder is empty"))
             } else {
                 NativeFileList(
                     items: fm.filteredItems,
@@ -285,6 +283,14 @@ struct FileListView: View {
                 .background {
                     QuickLookBridge(controller: fm.quickLookController)
                         .frame(width: 0, height: 0)
+                }
+                .overlay {
+                    if fm.filteredItems.isEmpty {
+                        ContentUnavailableView("No Files", systemImage: "folder", description: Text("This folder is empty"))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 40)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
         }

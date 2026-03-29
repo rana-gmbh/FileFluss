@@ -65,6 +65,7 @@ actor SyncEngine {
     func createProvider(for type: CloudProviderType) -> any CloudProvider {
         switch type {
         case .pCloud: return PCloudProvider()
+        case .kDrive: return KDriveProvider()
         case .oneDrive: return OneDriveProvider()
         case .googleDrive: return GoogleDriveProvider()
         case .nextCloud: return NextCloudProvider()

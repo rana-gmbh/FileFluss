@@ -25,9 +25,32 @@ final class SyncViewModel {
             try await provider.authenticate(email: email, password: password)
             var connectedAccount = account
 
-            let displayName = try? await provider.userDisplayName()
-            if let displayName, !displayName.isEmpty {
-                connectedAccount.displayName = displayName
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addKDriveAccount(apiToken: String) async {
+        let account = CloudAccount(providerType: .kDrive)
+        let provider = KDriveProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(apiToken: apiToken)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
             }
 
             connectedAccount.isConnected = true
@@ -63,11 +86,28 @@ final class SyncViewModel {
         saveAccounts()
     }
 
+    func renameAccount(id: UUID, to newName: String) {
+        if let idx = accounts.firstIndex(where: { $0.id == id }) {
+            accounts[idx].displayName = newName
+            saveAccounts()
+        }
+    }
+
     func reconnectSavedAccounts() async {
-        for account in accounts where account.providerType == .pCloud {
-            let provider = PCloudProvider(accountId: account.id)
-            if await provider.isAuthenticated {
-                await syncEngine.registerProvider(for: account.id, provider: provider)
+        for account in accounts {
+            switch account.providerType {
+            case .pCloud:
+                let provider = PCloudProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .kDrive:
+                let provider = KDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            default:
+                break
             }
         }
     }

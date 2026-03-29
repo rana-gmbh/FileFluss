@@ -7,10 +7,11 @@ struct AddCloudAccountView: View {
     @State private var selectedProvider: CloudProviderType?
     @State private var email = ""
     @State private var password = ""
+    @State private var apiToken = ""
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -71,17 +72,11 @@ struct AddCloudAccountView: View {
                     .font(.title2.bold())
             }
 
-            VStack(spacing: 12) {
-                TextField("Email", text: $email)
-                    .textFieldStyle(.roundedBorder)
-                    .textContentType(.emailAddress)
-                    .disabled(isAuthenticating)
-
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .textContentType(.password)
-                    .disabled(isAuthenticating)
-                    .onSubmit { login() }
+            switch provider {
+            case .kDrive:
+                kDriveFields
+            default:
+                credentialFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -97,6 +92,7 @@ struct AddCloudAccountView: View {
                     appState.syncManager.authError = nil
                     email = ""
                     password = ""
+                    apiToken = ""
                 }
                 .disabled(isAuthenticating)
 
@@ -107,18 +103,60 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                Button("Sign In") { login() }
+                Button("Connect") { login() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(email.isEmpty || password.isEmpty || isAuthenticating)
+                    .disabled(isLoginDisabled)
             }
         }
     }
 
+    private var credentialFields: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
+    private var kDriveFields: some View {
+        VStack(spacing: 12) {
+            Text("Create an API token at manager.infomaniak.com with kDrive access, then paste it below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            SecureField("API Token", text: $apiToken)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
+    private var isLoginDisabled: Bool {
+        if isAuthenticating { return true }
+        switch selectedProvider {
+        case .kDrive: return apiToken.isEmpty
+        default: return email.isEmpty || password.isEmpty
+        }
+    }
+
     private func login() {
-        guard !email.isEmpty, !password.isEmpty, !isAuthenticating else { return }
+        guard !isAuthenticating else { return }
         isAuthenticating = true
         Task {
-            await appState.syncManager.addPCloudAccount(email: email, password: password)
+            switch selectedProvider {
+            case .kDrive:
+                await appState.syncManager.addKDriveAccount(apiToken: apiToken)
+            default:
+                await appState.syncManager.addPCloudAccount(email: email, password: password)
+            }
             if appState.syncManager.authError == nil {
                 dismiss()
             }

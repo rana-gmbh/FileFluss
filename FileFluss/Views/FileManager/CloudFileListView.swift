@@ -35,7 +35,7 @@ struct CloudFileListView: View {
         } message: {
             let items = vm.selectedItems
             if items.count == 1 {
-                Text("Are you sure you want to delete \"\(items[0].name)\" from pCloud?")
+                Text("Are you sure you want to delete \"\(items[0].name)\" from the cloud?")
             } else {
                 Text("Are you sure you want to delete \(items.count) items from pCloud?")
             }
@@ -105,7 +105,8 @@ struct CloudFileListView: View {
                 pendingUploadURLs = nil
             }
         } message: { urls in
-            let name = vm.currentPath == "/" ? "pCloud" : (vm.currentPath as NSString).lastPathComponent
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
             if urls.count == 1 {
                 Text("What would you like to do with \"\(urls[0].lastPathComponent)\" in \"\(name)\"?")
             } else {
@@ -117,7 +118,7 @@ struct CloudFileListView: View {
     private var cloudPathBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                Image(systemName: "cloud.fill")
+                Image(systemName: appState.syncManager.accountFor(id: accountId)?.providerType.icon ?? "cloud.fill")
                     .foregroundStyle(.secondary)
                     .font(.caption)
 
@@ -148,8 +149,6 @@ struct CloudFileListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = vm.error {
             ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error))
-        } else if vm.filteredItems.isEmpty {
-            ContentUnavailableView("Empty Folder", systemImage: "folder", description: Text("This cloud folder is empty"))
         } else {
             NativeCloudFileList(
                 items: vm.filteredItems,
@@ -239,18 +238,26 @@ struct CloudFileListView: View {
                 QuickLookBridge(controller: vm.quickLookController)
                     .frame(width: 0, height: 0)
             }
-            .overlay(alignment: .top) {
+            .overlay {
+                if vm.filteredItems.isEmpty && !vm.isLoading {
+                    ContentUnavailableView("Empty Folder", systemImage: "folder", description: Text("This cloud folder is empty"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 40)
+                        .allowsHitTesting(false)
+                }
                 if vm.isLoading {
                     ProgressView()
                         .scaleEffect(0.5)
                         .padding(4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
         }
     }
 
     private var pathComponents: [(name: String, path: String)] {
-        var components: [(String, String)] = [("pCloud", "/")]
+        let rootName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+        var components: [(String, String)] = [(rootName, "/")]
         let parts = vm.currentPath.split(separator: "/", omittingEmptySubsequences: true)
         var accumulated = ""
         for part in parts {

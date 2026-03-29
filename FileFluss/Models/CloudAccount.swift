@@ -2,6 +2,7 @@ import Foundation
 
 enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case pCloud
+    case kDrive
     case oneDrive
     case googleDrive
     case nextCloud
@@ -12,6 +13,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .pCloud: return "pCloud"
+        case .kDrive: return "kDrive"
         case .oneDrive: return "OneDrive"
         case .googleDrive: return "Google Drive"
         case .nextCloud: return "NextCloud"
@@ -22,6 +24,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .pCloud: return "cloud"
+        case .kDrive: return "externaldrive.badge.icloud"
         case .oneDrive: return "cloud.fill"
         case .googleDrive: return "externaldrive.connected.to.line.below"
         case .nextCloud: return "cloud.circle"
