@@ -55,6 +55,9 @@ struct FileCommands: Commands {
                         html: Data("""
                         <div style="text-align: center; font-family: -apple-system; font-size: 11px;">
                             <p>Conveniently handle files across cloud storage providers.</p>
+                            <p>Licensed under the \
+                        <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License v3.0</a>.<br>\
+                        Copyright © 2026 Rana GmbH.</p>
                             <p>If you want to support the FileFluss project<br>please consider \
                         <a href="https://buymeacoffee.com/robertrudolph">Buying me a coffee</a>.</p>
                         </div>

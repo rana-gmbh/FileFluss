@@ -50,4 +50,6 @@ If you want to support the FileFluss project, please consider [buying me a coffe
 
 ## License
 
-Copyright 2026 Rana GmbH. All rights reserved.
+FileFluss is released under the [GNU General Public License v3.0](LICENSE).
+
+Copyright &copy; 2026 Rana GmbH.
