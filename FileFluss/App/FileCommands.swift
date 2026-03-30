@@ -47,5 +47,28 @@ struct FileCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: .command)
         }
+
+        CommandGroup(replacing: .appInfo) {
+            Button("About FileFluss") {
+                NSApplication.shared.orderFrontStandardAboutPanel(options: [
+                    .credits: NSAttributedString(
+                        html: Data("""
+                        <div style="text-align: center; font-family: -apple-system; font-size: 11px;">
+                            <p>A dual-panel file manager with multi-cloud sync.</p>
+                            <p>If you want to support the FileFluss project<br>please consider \
+                        <a href="https://buymeacoffee.com/robertrudolph">Buying me a coffee</a>.</p>
+                        </div>
+                        """.utf8),
+                        documentAttributes: nil
+                    )!
+                ])
+            }
+        }
+
+        CommandGroup(before: .help) {
+            Button("Support the FileFluss Project") {
+                NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
+            }
+        }
     }
 }
