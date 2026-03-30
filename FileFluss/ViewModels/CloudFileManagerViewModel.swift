@@ -207,8 +207,10 @@ final class CloudFileManagerViewModel {
             }
         }
 
-        // Track top-level names for completion summary
+        // Track top-level names and folder info for completion summary
         progress?.transferredFileNames = items.map(\.name)
+        progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
+        progress?.isCloudDownload = true
 
         var downloadedCount = 0
         do {
@@ -238,6 +240,7 @@ final class CloudFileManagerViewModel {
                 try await provider.downloadFile(remotePath: item.path, to: localURL)
                 progress?.totalBytes += item.size
                 downloadedCount += 1
+                progress?.totalFiles = downloadedCount
                 progress?.completedItems = downloadedCount
             }
         }
@@ -271,6 +274,9 @@ final class CloudFileManagerViewModel {
         }
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
+        let fm = FileManager.default
+        progress?.transferredFolderNames = Set(urls.filter { var isDir: ObjCBool = false; return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue }.map(\.lastPathComponent))
+        progress?.isCloudUpload = true
 
         var uploadedCount = 0
         var uploadError: String?
@@ -314,6 +320,7 @@ final class CloudFileManagerViewModel {
                 print("[Upload] Success: \(url.lastPathComponent)")
                 progress?.totalBytes += Int64(fileSize)
                 uploadedCount += 1
+                progress?.totalFiles = uploadedCount
                 progress?.completedItems = uploadedCount
             }
         }

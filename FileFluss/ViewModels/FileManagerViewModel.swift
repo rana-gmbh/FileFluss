@@ -214,6 +214,7 @@ final class FileManagerViewModel {
             }
         }
         progress?.transferredFileNames = items.map(\.name)
+        progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
         for (index, item) in items.enumerated() {
             let dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
@@ -251,6 +252,7 @@ final class FileManagerViewModel {
             }
         }
         progress?.transferredFileNames = items.map(\.name)
+        progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
         for (index, item) in items.enumerated() {
             let dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name

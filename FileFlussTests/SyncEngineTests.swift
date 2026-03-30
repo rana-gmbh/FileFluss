@@ -20,7 +20,7 @@ struct SyncEngineTests {
         let engine = SyncEngine.shared
         let accountId = UUID()
         // Use a stub provider that doesn't require authentication
-        let provider = OneDriveProvider()
+        let provider = GoogleDriveProvider()
 
         await engine.registerProvider(for: accountId, provider: provider)
 
@@ -52,7 +52,6 @@ struct SyncEngineTests {
     @Test("Stub providers return empty list and start unauthenticated")
     func stubProviderInitialState() async {
         let providers: [any CloudProvider] = [
-            OneDriveProvider(),
             GoogleDriveProvider(),
             NextCloudProvider(),
             ICloudProvider(),
@@ -61,6 +60,17 @@ struct SyncEngineTests {
         for provider in providers {
             let items = try? await provider.listDirectory(at: "/")
             #expect(items?.isEmpty == true, "\(provider.providerType) should return empty list")
+        }
+    }
+
+    @Test("OneDriveProvider requires authentication")
+    func oneDriveRequiresAuth() async {
+        let provider = OneDriveProvider()
+        let isAuth = await provider.isAuthenticated
+        #expect(isAuth == false)
+
+        await #expect(throws: CloudProviderError.self) {
+            _ = try await provider.listDirectory(at: "/")
         }
     }
 
@@ -78,7 +88,6 @@ struct SyncEngineTests {
     @Test("Provider getFileMetadata throws for stubs")
     func metadataNotImplemented() async {
         let providers: [any CloudProvider] = [
-            OneDriveProvider(),
             GoogleDriveProvider(),
             NextCloudProvider(),
             ICloudProvider(),

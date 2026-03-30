@@ -313,6 +313,7 @@ final class TransferProgress: Identifiable {
     let operation: String  // "Copying", "Moving", "Downloading"
     let totalItems: Int
     var completedItems: Int = 0
+    var totalFiles: Int = 0 // actual file count discovered during recursive traversal
     var currentFileName: String = ""
     var isComplete: Bool = false
     var transferredFileNames: [String] = []
@@ -330,6 +331,10 @@ final class TransferProgress: Identifiable {
     var uploadStartTime: Date?
     var uploadEndTime: Date?
 
+    // Transfer direction for speed display
+    var isCloudDownload: Bool = false
+    var isCloudUpload: Bool = false
+
     enum TransferPhase {
         case downloading, uploading
     }
@@ -340,17 +345,18 @@ final class TransferProgress: Identifiable {
     }
 
     var fraction: Double {
-        guard totalItems > 0 else { return 0 }
+        let effectiveTotal = totalFiles > 0 ? totalFiles : totalItems
+        guard effectiveTotal > 0 else { return 0 }
         if isCloudToCloud {
-            let halfItems = Double(totalItems)
+            let half = Double(effectiveTotal)
             switch currentPhase {
             case .downloading:
-                return Double(completedItems) / (halfItems * 2)
+                return Double(completedItems) / (half * 2)
             case .uploading:
-                return (halfItems + Double(completedItems)) / (halfItems * 2)
+                return (half + Double(completedItems)) / (half * 2)
             }
         }
-        return Double(completedItems) / Double(totalItems)
+        return Double(completedItems) / Double(effectiveTotal)
     }
 
     var statusText: String {
@@ -365,8 +371,28 @@ final class TransferProgress: Identifiable {
                 return "Uploading \(label)"
             }
         }
-        return "\(operation) \(completedItems + 1) of \(totalItems)"
+        return "\(operation) \(itemSummary) — \(completedItems) of \(totalFiles > 0 ? totalFiles : totalItems) files"
     }
+
+    private var itemSummary: String {
+        let names = transferredFileNames
+        if names.count == 1 {
+            return names[0]
+        }
+        let folders = names.filter { transferredFolderNames.contains($0) }
+        let files = names.filter { !transferredFolderNames.contains($0) }
+        var parts: [String] = []
+        if !folders.isEmpty {
+            parts.append("\(folders.count) \(folders.count == 1 ? "folder" : "folders")")
+        }
+        if !files.isEmpty {
+            parts.append("\(files.count) \(files.count == 1 ? "file" : "files")")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Names of top-level items that are directories (set by the caller)
+    var transferredFolderNames: Set<String> = []
 
     var completionSummary: String {
         let names = transferredFileNames
@@ -375,9 +401,14 @@ final class TransferProgress: Identifiable {
         case "Copying": pastTense = "Copied"
         case "Moving": pastTense = "Moved"
         case "Downloading": pastTense = "Downloaded"
+        case "Uploading": pastTense = "Uploaded"
         default: pastTense = operation
         }
         if names.count == 1 {
+            let fileCount = totalFiles > 0 ? totalFiles : totalItems
+            if !transferredFolderNames.isEmpty && fileCount > 1 {
+                return "Done: \(pastTense) \(names[0]) (\(fileCount) files)"
+            }
             return "Done: \(pastTense) \(names[0])"
         } else if names.count > 1 {
             return "Done: \(pastTense) \(names.count) items"

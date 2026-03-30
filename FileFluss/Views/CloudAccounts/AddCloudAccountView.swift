@@ -11,7 +11,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -75,6 +75,8 @@ struct AddCloudAccountView: View {
             switch provider {
             case .kDrive:
                 kDriveFields
+            case .oneDrive:
+                oneDriveFields
             default:
                 credentialFields
             }
@@ -90,6 +92,8 @@ struct AddCloudAccountView: View {
                 Button("Back") {
                     selectedProvider = nil
                     appState.syncManager.authError = nil
+                    appState.syncManager.oneDriveDeviceCode = nil
+                    appState.syncManager.isPollingForOneDrive = false
                     email = ""
                     password = ""
                     apiToken = ""
@@ -103,9 +107,11 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                Button("Connect") { login() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isLoginDisabled)
+                if provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil {
+                    Button("Connect") { login() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isLoginDisabled)
+                }
             }
         }
     }
@@ -139,10 +145,54 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var oneDriveFields: some View {
+        VStack(spacing: 12) {
+            if let deviceCode = appState.syncManager.oneDriveDeviceCode {
+                // Show the device code for the user to enter at Microsoft's page
+                Text("Enter the code below at Microsoft's sign-in page:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Text(deviceCode.userCode)
+                    .font(.system(.title, design: .monospaced).bold())
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .background(.quaternary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .textSelection(.enabled)
+
+                Link(destination: URL(string: deviceCode.verificationUri)!) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.right.square")
+                        Text("Open Microsoft Login")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+
+                if appState.syncManager.isPollingForOneDrive {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Waiting for sign-in…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Text("Click Connect to sign in with your Microsoft account. A code will appear for you to enter at Microsoft's login page.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
     private var isLoginDisabled: Bool {
         if isAuthenticating { return true }
         switch selectedProvider {
         case .kDrive: return apiToken.isEmpty
+        case .oneDrive: return false
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -154,10 +204,12 @@ struct AddCloudAccountView: View {
             switch selectedProvider {
             case .kDrive:
                 await appState.syncManager.addKDriveAccount(apiToken: apiToken)
+            case .oneDrive:
+                await appState.syncManager.addOneDriveAccount()
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }
-            if appState.syncManager.authError == nil {
+            if appState.syncManager.authError == nil && !appState.syncManager.isPollingForOneDrive {
                 dismiss()
             }
             isAuthenticating = false

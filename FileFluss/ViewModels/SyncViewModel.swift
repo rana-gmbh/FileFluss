@@ -9,6 +9,10 @@ final class SyncViewModel {
     var isAddingRule: Bool = false
     var authError: String?
 
+    // OneDrive device code flow state
+    var oneDriveDeviceCode: OneDriveDeviceCode?
+    var isPollingForOneDrive: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -62,6 +66,39 @@ final class SyncViewModel {
         }
     }
 
+    func addOneDriveAccount() async {
+        let account = CloudAccount(providerType: .oneDrive)
+        let provider = OneDriveProvider(accountId: account.id)
+        authError = nil
+        oneDriveDeviceCode = nil
+        isPollingForOneDrive = false
+
+        do {
+            let deviceCode = try await provider.startDeviceCodeFlow()
+            oneDriveDeviceCode = deviceCode
+            isPollingForOneDrive = true
+
+            try await provider.completeDeviceCodeFlow(deviceCode: deviceCode.deviceCode)
+            isPollingForOneDrive = false
+            oneDriveDeviceCode = nil
+
+            var connectedAccount = account
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isPollingForOneDrive = false
+            oneDriveDeviceCode = nil
+            authError = error.localizedDescription
+        }
+    }
+
     func addAccount(type: CloudProviderType) async {
         let account = CloudAccount(providerType: type)
         let provider = await syncEngine.createProvider(for: type)
@@ -103,6 +140,11 @@ final class SyncViewModel {
                 }
             case .kDrive:
                 let provider = KDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .oneDrive:
+                let provider = OneDriveProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

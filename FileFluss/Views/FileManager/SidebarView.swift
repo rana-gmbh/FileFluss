@@ -317,6 +317,14 @@ private struct TransferDetailsView: View {
                     LabeledContent("Upload Speed") {
                         Text(transfer.uploadSpeed)
                     }
+                } else if transfer.isCloudDownload {
+                    LabeledContent("Download Speed") {
+                        Text(transfer.averageSpeed)
+                    }
+                } else if transfer.isCloudUpload {
+                    LabeledContent("Upload Speed") {
+                        Text(transfer.averageSpeed)
+                    }
                 } else {
                     LabeledContent("Avg. Speed") {
                         Text(transfer.averageSpeed)
