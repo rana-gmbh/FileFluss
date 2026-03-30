@@ -7,11 +7,14 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 - **Dual-panel file browser** — navigate two directories side by side, copy and move files between panels with keyboard shortcuts
 ![FileFluss Main window](FileFluss%20Screenshot%20Main%20Window.png)
 - **Multi-cloud support** — connect multiple cloud storage accounts and browse them directly alongside your local files
+![FileFluss Cloud Providers](https://FileFluss%20Cloud%20Provider.png)
 - **Cloud-to-cloud transfers** — move or copy files between cloud providers without downloading to your machine first
+![FileFluss transfer details](FileFluss%20Transfer%20Details.png)
 - **Native performance** — built with SwiftUI and AppKit for a fast, responsive experience on macOS
 - **Quick Look previews** — preview files inline without leaving the app
 - **Keyboard-driven workflow** — navigate, select, copy, move, rename, and delete with shortcuts
 - **Folder size calculation** — calculate folder sizes in the background without blocking the UI
+![FileFluss Folder calculation](FileFluss%20Context%20Menu%20and%20Folder%20size%20calculation.png)
 - **Favorites** — pin frequently accessed local and cloud folders to the sidebar
 - **Hidden files toggle** — show or hide hidden files per panel
 
