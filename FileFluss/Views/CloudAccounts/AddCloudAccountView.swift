@@ -11,7 +11,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .koofr]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -42,8 +42,7 @@ struct AddCloudAccountView: View {
                         selectedProvider = provider
                     } label: {
                         VStack(spacing: 8) {
-                            Image(systemName: provider.icon)
-                                .font(.largeTitle)
+                            CloudProviderIcon(providerType: provider, size: 40)
                                 .frame(height: 40)
                             Text(provider.displayName)
                                 .font(.headline)
@@ -66,8 +65,7 @@ struct AddCloudAccountView: View {
     private func loginForm(for provider: CloudProviderType) -> some View {
         VStack(spacing: 16) {
             HStack(spacing: 8) {
-                Image(systemName: provider.icon)
-                    .font(.title2)
+                CloudProviderIcon(providerType: provider, size: 24)
                 Text("Sign in to \(provider.displayName)")
                     .font(.title2.bold())
             }
@@ -77,6 +75,8 @@ struct AddCloudAccountView: View {
                 kDriveFields
             case .oneDrive:
                 oneDriveFields
+            case .koofr:
+                koofrFields
             default:
                 credentialFields
             }
@@ -188,11 +188,31 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var koofrFields: some View {
+        VStack(spacing: 12) {
+            Text("Create an app password at koofr.net → Preferences → Password, then enter your credentials below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+
+            SecureField("App Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var isLoginDisabled: Bool {
         if isAuthenticating { return true }
         switch selectedProvider {
         case .kDrive: return apiToken.isEmpty
         case .oneDrive: return false
+        case .koofr: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -206,6 +226,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addKDriveAccount(apiToken: apiToken)
             case .oneDrive:
                 await appState.syncManager.addOneDriveAccount()
+            case .koofr:
+                await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }

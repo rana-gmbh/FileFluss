@@ -7,6 +7,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case googleDrive
     case nextCloud
     case iCloud
+    case koofr
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .googleDrive: return "Google Drive"
         case .nextCloud: return "NextCloud"
         case .iCloud: return "iCloud"
+        case .koofr: return "Koofr"
         }
     }
 
@@ -29,6 +31,18 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .googleDrive: return "externaldrive.connected.to.line.below"
         case .nextCloud: return "cloud.circle"
         case .iCloud: return "icloud"
+        case .koofr: return "cloud.bolt"
+        }
+    }
+
+    /// Asset catalog name for providers with official logos; nil falls back to SF Symbol `icon`.
+    var logoAssetName: String? {
+        switch self {
+        case .pCloud: return "pCloudLogo"
+        case .kDrive: return "kDriveLogo"
+        case .oneDrive: return "OneDriveLogo"
+        case .koofr: return "KoofrLogo"
+        default: return nil
         }
     }
 }

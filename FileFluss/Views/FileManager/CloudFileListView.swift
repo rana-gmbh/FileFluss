@@ -232,9 +232,13 @@ struct CloudFileListView: View {
     private var cloudPathBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                Image(systemName: appState.syncManager.accountFor(id: accountId)?.providerType.icon ?? "cloud.fill")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
+                if let providerType = appState.syncManager.accountFor(id: accountId)?.providerType {
+                    CloudProviderIcon(providerType: providerType, size: 12)
+                } else {
+                    Image(systemName: "cloud.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
 
                 ForEach(pathComponents, id: \.path) { component in
                     Button(component.name) {

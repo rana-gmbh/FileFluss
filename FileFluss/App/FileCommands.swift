@@ -4,7 +4,7 @@ struct FileCommands: Commands {
     let appState: AppState
 
     var body: some Commands {
-        CommandGroup(after: .newItem) {
+        CommandGroup(replacing: .newItem) {
             Button("New Folder") {
                 NotificationCenter.default.post(name: .menuNewFolder, object: nil)
             }
@@ -39,6 +39,13 @@ struct FileCommands: Commands {
             }
             .keyboardShortcut(.delete, modifiers: [.command])
             .disabled(!appState.hasSelection)
+        }
+
+        CommandGroup(after: .toolbar) {
+            Button("Refresh") {
+                Task { await appState.refreshAllPanels() }
+            }
+            .keyboardShortcut("r", modifiers: .command)
         }
     }
 }

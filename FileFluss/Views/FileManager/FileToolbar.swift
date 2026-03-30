@@ -22,11 +22,11 @@ struct FileToolbar: ToolbarContent {
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task { await appState.activeFileManager.refresh() }
+                Task { await appState.refreshAllPanels() }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .keyboardShortcut("r", modifiers: .command)
+            .help("Refresh both panels")
 
             Toggle(isOn: Bindable(appState.activeFileManager).showHiddenFiles) {
                 Image(systemName: "eye")
@@ -35,36 +35,6 @@ struct FileToolbar: ToolbarContent {
             .onChange(of: appState.activeFileManager.showHiddenFiles) { _, _ in
                 Task { await appState.activeFileManager.refresh() }
             }
-
-            Menu {
-                ForEach(FileManagerViewModel.SortOrder.allCases, id: \.self) { order in
-                    Button {
-                        if appState.activeFileManager.sortOrder == order {
-                            appState.activeFileManager.sortAscending.toggle()
-                        } else {
-                            appState.activeFileManager.sortOrder = order
-                            appState.activeFileManager.sortAscending = true
-                        }
-                    } label: {
-                        HStack {
-                            Text(order.label)
-                            if appState.activeFileManager.sortOrder == order {
-                                Image(systemName: appState.activeFileManager.sortAscending
-                                    ? "chevron.up" : "chevron.down")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-            }
-
-            Button {
-                Task { await appState.syncManager.syncAll() }
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-            }
-            .help("Sync all enabled rules")
         }
     }
 }

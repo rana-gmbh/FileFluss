@@ -74,6 +74,17 @@ struct SyncEngineTests {
         }
     }
 
+    @Test("KoofrProvider requires authentication")
+    func koofrRequiresAuth() async {
+        let provider = KoofrProvider()
+        let isAuth = await provider.isAuthenticated
+        #expect(isAuth == false)
+
+        await #expect(throws: CloudProviderError.self) {
+            _ = try await provider.listDirectory(at: "/")
+        }
+    }
+
     @Test("PCloudProvider requires authentication")
     func pcloudRequiresAuth() async {
         let provider = PCloudProvider()

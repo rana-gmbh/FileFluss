@@ -70,6 +70,7 @@ actor SyncEngine {
         case .googleDrive: return GoogleDriveProvider()
         case .nextCloud: return NextCloudProvider()
         case .iCloud: return ICloudProvider()
+        case .koofr: return KoofrProvider()
         }
     }
 }

@@ -103,7 +103,7 @@ struct SidebarView: View {
                                     .frame(width: 8, height: 8)
                             }
                         } icon: {
-                            Image(systemName: account.providerType.icon)
+                            CloudProviderIcon(providerType: account.providerType, size: 16)
                         }
                         .tag(SidebarItem.cloudAccount(account))
                         .contextMenu {
@@ -126,12 +126,6 @@ struct SidebarView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                 }
-
-            Section("Sync") {
-                Label("Sync Rules", systemImage: "arrow.triangle.2.circlepath")
-                    .tag(SidebarItem.syncRules)
-                    .badge(appState.syncManager.syncRules.count)
-            }
 
             if !appState.transfers(for: panelSide).isEmpty {
                 Section("Transfers") {

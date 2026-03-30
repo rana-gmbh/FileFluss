@@ -51,7 +51,7 @@ struct CloudSettingsView: View {
             } else {
                 ForEach(appState.syncManager.accounts) { account in
                     HStack {
-                        Image(systemName: account.providerType.icon)
+                        CloudProviderIcon(providerType: account.providerType, size: 16)
                         Text(account.displayName)
                         Spacer()
                         Circle()

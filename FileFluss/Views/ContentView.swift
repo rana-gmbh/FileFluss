@@ -47,8 +47,6 @@ struct ContentView: View {
 
         VStack(spacing: 0) {
             switch sidebarItem {
-            case .syncRules:
-                SyncRulesView()
             case .cloudAccount(let account):
                 CloudFileListView(panelSide: side, accountId: account.id)
             case .cloudFolder(let accountId, _):

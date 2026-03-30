@@ -99,6 +99,29 @@ final class SyncViewModel {
         }
     }
 
+    func addKoofrAccount(email: String, appPassword: String) async {
+        let account = CloudAccount(providerType: .koofr)
+        let provider = KoofrProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(email: email, appPassword: appPassword)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addAccount(type: CloudProviderType) async {
         let account = CloudAccount(providerType: type)
         let provider = await syncEngine.createProvider(for: type)
@@ -145,6 +168,11 @@ final class SyncViewModel {
                 }
             case .oneDrive:
                 let provider = OneDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .koofr:
+                let provider = KoofrProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
