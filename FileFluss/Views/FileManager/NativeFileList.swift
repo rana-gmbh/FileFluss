@@ -20,6 +20,8 @@ struct NativeFileList: NSViewRepresentable {
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
     var onReceivePromises: ((URL) -> Void)?
+    var onCreateFolder: (() -> Void)?
+    var onRename: ((FileItem) -> Void)?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -128,10 +130,13 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onSortChanged = onSortChanged
         coordinator.onBecameActive = onBecameActive
         coordinator.onReceivePromises = onReceivePromises
+        coordinator.onCreateFolder = onCreateFolder
+        coordinator.onRename = onRename
         coordinator.selectedIDs = _selectedIDs
 
         // Update data
         let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
+            || coordinator.items.map(\.name) != items.map(\.name)
             || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
 
         coordinator.items = items
@@ -207,6 +212,8 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
     var onReceivePromises: ((URL) -> Void)?
+    var onCreateFolder: (() -> Void)?
+    var onRename: ((FileItem) -> Void)?
     weak var tableView: FileTableView?
     var suppressSelectionUpdate = false
 
@@ -292,7 +299,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         guard let tableView else { return }
 
         let clickedRow = tableView.clickedRow
-        guard clickedRow >= 0, clickedRow < items.count else { return }
+
+        // Right-click on empty area — show "New Folder" only
+        if clickedRow < 0 || clickedRow >= items.count {
+            let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+            newFolderItem.target = self
+            menu.addItem(newFolderItem)
+            return
+        }
 
         // If the clicked row is not in the current selection, select only that row
         if !tableView.selectedRowIndexes.contains(clickedRow) {
@@ -317,6 +331,20 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         moveItem.target = self
         moveItem.representedObject = contextItems
         menu.addItem(moveItem)
+
+        menu.addItem(.separator())
+
+        // Rename — only for single selection
+        if contextItems.count == 1 {
+            let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "")
+            renameItem.target = self
+            renameItem.representedObject = contextItems[0]
+            menu.addItem(renameItem)
+        }
+
+        let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+        newFolderItem.target = self
+        menu.addItem(newFolderItem)
 
         // Show folder-specific options if exactly one folder is right-clicked
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
@@ -363,6 +391,15 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {
         onDelete?()
+    }
+
+    @objc func handleCreateFolder(_ sender: NSMenuItem) {
+        onCreateFolder?()
+    }
+
+    @objc func handleRename(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? FileItem else { return }
+        onRename?(item)
     }
 
     // MARK: - Drag Source

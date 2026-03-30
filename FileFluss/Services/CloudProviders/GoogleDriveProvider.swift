@@ -38,6 +38,10 @@ final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement Google Drive API v3 - files.create (folder)
     }
 
+    func renameItem(at path: String, to newName: String) async throws {
+        // TODO: Implement Google Drive API v3 - files.update
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         // TODO: Implement Google Drive API v3 - files.get
         throw CloudProviderError.notImplemented

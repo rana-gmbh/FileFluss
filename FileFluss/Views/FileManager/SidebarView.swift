@@ -69,6 +69,9 @@ struct SidebarView: View {
                             }
                         }
                 }
+                .onMove { indices, destination in
+                    appState.customFavorites.move(fromOffsets: indices, toOffset: destination)
+                }
 
                 ForEach(appState.cloudFavorites) { fav in
                     Label(fav.displayName, systemImage: fav.icon)
@@ -83,6 +86,9 @@ struct SidebarView: View {
                                 appState.removeCloudFavorite(id: fav.id)
                             }
                         }
+                }
+                .onMove { indices, destination in
+                    appState.cloudFavorites.move(fromOffsets: indices, toOffset: destination)
                 }
             }
 
@@ -106,6 +112,10 @@ struct SidebarView: View {
                                 renameAccountText = account.displayName
                             }
                         }
+                    }
+                    .onMove { indices, destination in
+                        appState.syncManager.accounts.move(fromOffsets: indices, toOffset: destination)
+                        appState.syncManager.saveAccounts()
                     }
 
                     Button {

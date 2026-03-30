@@ -130,6 +130,29 @@ final class CloudFileManagerViewModel {
         }
     }
 
+    // MARK: - Create & Rename
+
+    func createNewFolder(named name: String) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+        let folderPath = currentPath == "/" ? "/\(name)" : "\(currentPath)/\(name)"
+        do {
+            try await provider.createDirectory(at: folderPath)
+            await loadDirectory()
+        } catch {
+            self.error = "Failed to create folder: \(error.localizedDescription)"
+        }
+    }
+
+    func renameItem(_ item: CloudFileItem, to newName: String) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+        do {
+            try await provider.renameItem(at: item.path, to: newName)
+            await loadDirectory()
+        } catch {
+            self.error = "Failed to rename: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Delete
 
     func deleteSelectedItems() async {

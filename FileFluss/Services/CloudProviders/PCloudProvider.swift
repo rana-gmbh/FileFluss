@@ -76,6 +76,16 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         try await client.createFolder(path: path)
     }
 
+    func renameItem(at path: String, to newName: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        let metadata = try await client.stat(path: path)
+        if metadata.isDirectory {
+            try await client.renameFolder(path: path, toName: newName)
+        } else {
+            try await client.renameFile(path: path, toName: newName)
+        }
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.stat(path: path)

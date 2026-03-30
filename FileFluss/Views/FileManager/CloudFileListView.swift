@@ -10,6 +10,8 @@ struct CloudFileListView: View {
     @State private var pendingUploadURLs: [URL]?
     @State private var showCloudToCloudDropConfirmation = false
     @State private var pendingCloudToCloudDrop: PendingCloudToCloudDrop?
+    @State private var showNewFolderDialog = false
+    @State private var newFolderName = ""
 
     struct PendingCloudToCloudDrop {
         let sourceItems: [CloudFileItem]
@@ -158,6 +160,73 @@ struct CloudFileListView: View {
                  ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
                  : "What would you like to do with \(count) items in \"\(name)\"?")
         }
+        .alert("New Folder", isPresented: $showNewFolderDialog) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Create") {
+                let name = newFolderName
+                Task { await vm.createNewFolder(named: name) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
+            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+            newFolderName = "New Folder"
+            showNewFolderDialog = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
+            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+            if let item = vm.selectedItems.first, vm.selectedItems.count == 1 {
+                showRenameAlert(currentName: item.name) { newName in
+                    Task { await vm.renameItem(item, to: newName) }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
+            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+            guard !vm.selectedItems.isEmpty else { return }
+            showDeleteConfirmation = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
+            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+            let items = vm.selectedItems
+            guard !items.isEmpty else { return }
+            let otherSide: PanelSide = panelSide == .left ? .right : .left
+            if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                appState.addTransfer(transfer, panel: otherSide)
+                Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
+                appState.addTransfer(transfer, panel: otherSide)
+                Task {
+                    await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                    await otherFM.refresh()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
+            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+            let items = vm.selectedItems
+            guard !items.isEmpty else { return }
+            let otherSide: PanelSide = panelSide == .left ? .right : .left
+            if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                appState.addTransfer(transfer, panel: otherSide)
+                Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                appState.addTransfer(transfer, panel: otherSide)
+                Task {
+                    await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                    await vm.deleteItems(items)
+                    await otherFM.refresh()
+                }
+            }
+        }
     }
 
     private var cloudPathBar: some View {
@@ -304,6 +373,15 @@ struct CloudFileListView: View {
                             sourceAccountId: sourceAccountId
                         )
                         showCloudToCloudDropConfirmation = true
+                    }
+                },
+                onCreateFolder: {
+                    newFolderName = "New Folder"
+                    showNewFolderDialog = true
+                },
+                onRename: { item in
+                    showRenameAlert(currentName: item.name) { newName in
+                        Task { await vm.renameItem(item, to: newName) }
                     }
                 }
             )

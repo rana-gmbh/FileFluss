@@ -38,6 +38,10 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement using FileManager.createDirectory in iCloud container
     }
 
+    func renameItem(at path: String, to newName: String) async throws {
+        // TODO: Implement rename
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         // TODO: Implement using NSMetadataQuery
         throw CloudProviderError.notImplemented

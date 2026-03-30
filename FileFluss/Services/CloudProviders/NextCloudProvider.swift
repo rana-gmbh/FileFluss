@@ -40,6 +40,10 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement WebDAV MKCOL
     }
 
+    func renameItem(at path: String, to newName: String) async throws {
+        // TODO: Implement WebDAV MOVE
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         // TODO: Implement WebDAV PROPFIND (single file)
         throw CloudProviderError.notImplemented

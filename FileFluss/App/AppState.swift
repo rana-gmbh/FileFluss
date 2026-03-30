@@ -5,6 +5,14 @@ enum PanelSide: Hashable {
     case left, right
 }
 
+extension Notification.Name {
+    static let menuNewFolder = Notification.Name("menuNewFolder")
+    static let menuRename = Notification.Name("menuRename")
+    static let menuDelete = Notification.Name("menuDelete")
+    static let menuCopyToOtherPanel = Notification.Name("menuCopyToOtherPanel")
+    static let menuMoveToOtherPanel = Notification.Name("menuMoveToOtherPanel")
+}
+
 @Observable @MainActor
 final class AppState {
     var leftFileManager: FileManagerViewModel
@@ -22,6 +30,30 @@ final class AppState {
 
     var activeFileManager: FileManagerViewModel {
         activePanel == .left ? leftFileManager : rightFileManager
+    }
+
+    var isActivePanelCloud: Bool {
+        cloudAccountId(for: activePanel) != nil
+    }
+
+    var hasSelection: Bool {
+        if isActivePanelCloud {
+            if let cloudId = cloudAccountId(for: activePanel) {
+                return !cloudFileManager(for: cloudId).selectedItems.isEmpty
+            }
+            return false
+        }
+        return !activeFileManager.selectedItems.isEmpty
+    }
+
+    var hasSingleSelection: Bool {
+        if isActivePanelCloud {
+            if let cloudId = cloudAccountId(for: activePanel) {
+                return cloudFileManager(for: cloudId).selectedItems.count == 1
+            }
+            return false
+        }
+        return activeFileManager.selectedItems.count == 1
     }
 
     func fileManager(for panel: PanelSide) -> FileManagerViewModel {

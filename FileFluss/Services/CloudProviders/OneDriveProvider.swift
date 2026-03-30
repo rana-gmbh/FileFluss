@@ -38,6 +38,10 @@ final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         // TODO: Implement Microsoft Graph API - create folder
     }
 
+    func renameItem(at path: String, to newName: String) async throws {
+        // TODO: Implement Microsoft Graph API - update
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         // TODO: Implement Microsoft Graph API - get item
         throw CloudProviderError.notImplemented

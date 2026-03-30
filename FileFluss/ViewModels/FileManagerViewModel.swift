@@ -183,6 +183,16 @@ final class FileManagerViewModel {
         }
     }
 
+    func renameItem(_ item: FileItem, to newName: String) async {
+        let newURL = item.url.deletingLastPathComponent().appendingPathComponent(newName)
+        do {
+            try await FileSystemService.shared.moveItem(from: item.url, to: newURL)
+            await loadDirectory()
+        } catch {
+            self.error = "Failed to rename: \(error.localizedDescription)"
+        }
+    }
+
     func refresh() async {
         await loadDirectory()
     }

@@ -55,6 +55,7 @@ protocol CloudProvider: Sendable {
     func uploadFile(from localURL: URL, to remotePath: String) async throws
     func deleteItem(at path: String) async throws
     func createDirectory(at path: String) async throws
+    func renameItem(at path: String, to newName: String) async throws
     func getFileMetadata(at path: String) async throws -> CloudFileItem
     func folderSize(at path: String) async throws -> Int64
 }

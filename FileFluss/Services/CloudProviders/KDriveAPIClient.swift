@@ -161,6 +161,33 @@ actor KDriveAPIClient {
         pathToId.removeValue(forKey: path)
     }
 
+    func renameFile(fileId: Int, to newName: String) async throws {
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/rename")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["name": newName])
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let http = response as? HTTPURLResponse
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] POST rename → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
+            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+        }
+    }
+
+    func renameFile(path: String, to newName: String) async throws {
+        let fileId = try await resolvePathToId(path)
+        try await renameFile(fileId: fileId, to: newName)
+        // Update cache: remove old path, add new path
+        pathToId.removeValue(forKey: path)
+        let parentPath = (path as NSString).deletingLastPathComponent
+        let newPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
+        pathToId[newPath] = fileId
+    }
+
     func stat(fileId: Int) async throws -> KDriveFileMetadata {
         let response: KDriveResponse<KDriveFileMetadata> = try await request(
             .get,

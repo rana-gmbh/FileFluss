@@ -22,6 +22,8 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
     var onReceiveCloudDrop: (() -> Void)?
+    var onCreateFolder: (() -> Void)?
+    var onRename: ((CloudFileItem) -> Void)?
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -116,9 +118,12 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onDragSessionStarted = onDragSessionStarted
         coordinator.onDragSessionEnded = onDragSessionEnded
         coordinator.onReceiveCloudDrop = onReceiveCloudDrop
+        coordinator.onCreateFolder = onCreateFolder
+        coordinator.onRename = onRename
         coordinator.selectedIDs = _selectedIDs
 
         let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
+            || coordinator.items.map(\.name) != items.map(\.name)
             || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
 
         coordinator.items = items
@@ -195,6 +200,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
     var onReceiveCloudDrop: (() -> Void)?
+    var onCreateFolder: (() -> Void)?
+    var onRename: ((CloudFileItem) -> Void)?
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
     let filePromiseDelegate = CloudFilePromiseDelegate()
@@ -280,7 +287,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         guard let tableView else { return }
 
         let clickedRow = tableView.clickedRow
-        guard clickedRow >= 0, clickedRow < items.count else { return }
+
+        // Right-click on empty area — show "New Folder" only
+        if clickedRow < 0 || clickedRow >= items.count {
+            let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+            newFolderItem.target = self
+            menu.addItem(newFolderItem)
+            return
+        }
 
         if !tableView.selectedRowIndexes.contains(clickedRow) {
             tableView.selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
@@ -304,6 +318,20 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         moveItem.target = self
         moveItem.representedObject = contextItems
         menu.addItem(moveItem)
+
+        menu.addItem(.separator())
+
+        // Rename — only for single selection
+        if contextItems.count == 1 {
+            let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "")
+            renameItem.target = self
+            renameItem.representedObject = contextItems[0]
+            menu.addItem(renameItem)
+        }
+
+        let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+        newFolderItem.target = self
+        menu.addItem(newFolderItem)
 
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
             menu.addItem(.separator())
@@ -345,6 +373,15 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {
         guard let folder = sender.representedObject as? CloudFileItem else { return }
         onCalculateFolderSize?(folder)
+    }
+
+    @objc func handleCreateFolder(_ sender: NSMenuItem) {
+        onCreateFolder?()
+    }
+
+    @objc func handleRename(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? CloudFileItem else { return }
+        onRename?(item)
     }
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {

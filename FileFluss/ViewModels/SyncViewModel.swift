@@ -159,7 +159,7 @@ final class SyncViewModel {
 
     // MARK: - Persistence
 
-    private func saveAccounts() {
+    func saveAccounts() {
         if let data = try? JSONEncoder().encode(accounts) {
             UserDefaults.standard.set(data, forKey: Self.accountsKey)
         }

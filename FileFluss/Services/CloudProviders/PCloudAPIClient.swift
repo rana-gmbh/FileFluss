@@ -65,6 +65,18 @@ actor PCloudAPIClient {
         let _: PCloudBasicResponse = try await request("deletefolderrecursive", params: params)
     }
 
+    func renameFile(path: String, toName newName: String) async throws {
+        let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
+        let params = ["path": path, "topath": toPath]
+        let _: PCloudBasicResponse = try await request("renamefile", params: params)
+    }
+
+    func renameFolder(path: String, toName newName: String) async throws {
+        let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
+        let params = ["path": path, "topath": toPath]
+        let _: PCloudBasicResponse = try await request("renamefolder", params: params)
+    }
+
     // MARK: - File Operations
 
     func stat(path: String) async throws -> CloudFileItem {

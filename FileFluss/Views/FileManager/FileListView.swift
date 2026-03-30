@@ -8,6 +8,8 @@ struct FileListView: View {
     @State private var showOverwriteConfirmation: Bool = false
     @State private var showCloudDropConfirmation: Bool = false
     @State private var pendingCloudDrop: PendingCloudDrop?
+    @State private var showNewFolderDialog: Bool = false
+    @State private var newFolderName: String = ""
 
     struct PendingCloudDrop {
         let sourceItems: [CloudFileItem]
@@ -157,6 +159,72 @@ struct FileListView: View {
                  ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
                  : "What would you like to do with \(count) items in \"\(name)\"?")
         }
+        .alert("New Folder", isPresented: $showNewFolderDialog) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Create") {
+                let name = newFolderName
+                Task { await fm.createNewFolder(named: name) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            newFolderName = "New Folder"
+            showNewFolderDialog = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            if let item = fm.selectedItems.first, fm.selectedItems.count == 1 {
+                showRenameAlert(currentName: item.name) { newName in
+                    Task { await fm.renameItem(item, to: newName) }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard !fm.selectedItems.isEmpty else { return }
+            showDeleteConfirmation = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            let items = fm.selectedItems
+            guard !items.isEmpty else { return }
+            let otherSide: PanelSide = panelSide == .left ? .right : .left
+            let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+            appState.addTransfer(transfer, panel: otherSide)
+            if let cloudId = appState.cloudAccountId(for: otherSide) {
+                let cloudVM = appState.cloudFileManager(for: cloudId)
+                Task { await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer) }
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                Task {
+                    await fm.performCopy(items: items, to: otherFM.currentDirectory, progress: transfer)
+                    await appState.refreshAllPanels()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            let items = fm.selectedItems
+            guard !items.isEmpty else { return }
+            let otherSide: PanelSide = panelSide == .left ? .right : .left
+            let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+            appState.addTransfer(transfer, panel: otherSide)
+            if let cloudId = appState.cloudAccountId(for: otherSide) {
+                let cloudVM = appState.cloudFileManager(for: cloudId)
+                Task {
+                    await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
+                    await fm.deleteItems(items)
+                    await fm.refresh()
+                }
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                Task {
+                    await fm.performMove(items: items, to: otherFM.currentDirectory, progress: transfer)
+                    await appState.refreshAllPanels()
+                }
+            }
+        }
     }
 
     private var pathBar: some View {
@@ -275,6 +343,15 @@ struct FileListView: View {
                             showCloudDropConfirmation = true
                         }
                         Task { await fm.refresh() }
+                    },
+                    onCreateFolder: {
+                        newFolderName = "New Folder"
+                        showNewFolderDialog = true
+                    },
+                    onRename: { item in
+                        showRenameAlert(currentName: item.name) { newName in
+                            Task { await fm.renameItem(item, to: newName) }
+                        }
                     }
                 )
                 .onChange(of: fm.selectedItemIDs) {
@@ -305,5 +382,27 @@ struct FileListView: View {
         }
         components.insert(("/", URL(filePath: "/")), at: 0)
         return components
+    }
+}
+
+@MainActor
+func showRenameAlert(currentName: String, onRename: @escaping (String) -> Void) {
+    let alert = NSAlert()
+    alert.messageText = "Rename"
+    alert.informativeText = "Rename \"\(currentName)\""
+    alert.addButton(withTitle: "Rename")
+    alert.addButton(withTitle: "Cancel")
+
+    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+    textField.stringValue = currentName
+    alert.accessoryView = textField
+    alert.window.initialFirstResponder = textField
+
+    let response = alert.runModal()
+    if response == .alertFirstButtonReturn {
+        let newName = textField.stringValue.trimmingCharacters(in: .whitespaces)
+        if !newName.isEmpty, newName != currentName {
+            onRename(newName)
+        }
     }
 }
