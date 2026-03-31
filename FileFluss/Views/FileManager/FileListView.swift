@@ -390,6 +390,7 @@ func showRenameAlert(currentName: String, onRename: @escaping (String) -> Void) 
     let alert = NSAlert()
     alert.messageText = "Rename"
     alert.informativeText = "Rename \"\(currentName)\""
+    alert.icon = NSImage(size: .zero)
     alert.addButton(withTitle: "Rename")
     alert.addButton(withTitle: "Cancel")
 
