@@ -53,13 +53,23 @@ struct SyncEngineTests {
     func stubProviderInitialState() async {
         let providers: [any CloudProvider] = [
             GoogleDriveProvider(),
-            NextCloudProvider(),
             ICloudProvider(),
         ]
 
         for provider in providers {
             let items = try? await provider.listDirectory(at: "/")
             #expect(items?.isEmpty == true, "\(provider.providerType) should return empty list")
+        }
+    }
+
+    @Test("NextCloudProvider requires authentication")
+    func nextCloudRequiresAuth() async {
+        let provider = NextCloudProvider()
+        let isAuth = await provider.isAuthenticated
+        #expect(isAuth == false)
+
+        await #expect(throws: CloudProviderError.self) {
+            _ = try await provider.listDirectory(at: "/")
         }
     }
 
@@ -100,7 +110,6 @@ struct SyncEngineTests {
     func metadataNotImplemented() async {
         let providers: [any CloudProvider] = [
             GoogleDriveProvider(),
-            NextCloudProvider(),
             ICloudProvider(),
         ]
 

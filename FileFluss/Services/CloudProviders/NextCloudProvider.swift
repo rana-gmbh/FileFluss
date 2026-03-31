@@ -1,56 +1,102 @@
 import Foundation
+import os
+
+private let nextCloudProviderLog = Logger(subsystem: "com.rana.FileFluss", category: "nextCloudProvider")
 
 final class NextCloudProvider: CloudProvider, @unchecked Sendable {
     let providerType: CloudProviderType = .nextCloud
-    private var authenticated = false
-    private var serverURL: URL?
+
+    private var apiClient: NextCloudAPIClient?
+    private let keychainKey: String
 
     var isAuthenticated: Bool {
-        get async { authenticated }
+        get async { apiClient != nil }
+    }
+
+    init(accountId: UUID = UUID()) {
+        self.keychainKey = "nextcloud.\(accountId.uuidString)"
+        restoreCredentials()
+    }
+
+    init(credentials: NextCloudCredentials) {
+        self.keychainKey = "nextcloud.\(credentials.username)"
+        self.apiClient = NextCloudAPIClient(credentials: credentials)
+    }
+
+    // MARK: - Authentication
+
+    func authenticate(serverURL: String, username: String, appPassword: String) async throws {
+        let credentials = try await NextCloudAPIClient.authenticate(
+            serverURL: serverURL,
+            username: username,
+            appPassword: appPassword
+        )
+        self.apiClient = NextCloudAPIClient(credentials: credentials)
+        try KeychainService.save(key: keychainKey, value: credentials)
+        nextCloudProviderLog.info("[NextCloud] Authenticated as \(credentials.displayName)")
     }
 
     func authenticate() async throws {
-        // TODO: Implement NextCloud Login Flow v2 authentication
-        authenticated = true
+        throw CloudProviderError.notAuthenticated
     }
 
     func disconnect() async throws {
-        authenticated = false
-        serverURL = nil
+        apiClient = nil
+        try KeychainService.delete(key: keychainKey)
     }
 
+    func userDisplayName() async throws -> String {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return await client.userDisplayName()
+    }
+
+    // MARK: - File Operations
+
     func listDirectory(at path: String) async throws -> [CloudFileItem] {
-        // TODO: Implement WebDAV PROPFIND
-        return []
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.listFolder(path: path)
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
-        // TODO: Implement WebDAV GET
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.downloadFile(remotePath: remotePath, to: localURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
-        // TODO: Implement WebDAV PUT
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.uploadFile(from: localURL, to: remotePath)
     }
 
     func deleteItem(at path: String) async throws {
-        // TODO: Implement WebDAV DELETE
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.deleteItem(at: path)
     }
 
     func createDirectory(at path: String) async throws {
-        // TODO: Implement WebDAV MKCOL
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.createFolder(at: path)
     }
 
     func renameItem(at path: String, to newName: String) async throws {
-        // TODO: Implement WebDAV MOVE
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.renameItem(at: path, to: newName)
     }
 
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
-        // TODO: Implement WebDAV PROPFIND (single file)
-        throw CloudProviderError.notImplemented
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.getFileInfo(at: path)
     }
 
     func folderSize(at path: String) async throws -> Int64 {
-        // TODO: Implement recursive WebDAV listing
-        throw CloudProviderError.notImplemented
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.folderSize(path: path)
+    }
+
+    // MARK: - Private
+
+    private func restoreCredentials() {
+        if let creds = KeychainService.load(key: keychainKey, as: NextCloudCredentials.self) {
+            apiClient = NextCloudAPIClient(credentials: creds)
+        }
     }
 }

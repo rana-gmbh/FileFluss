@@ -99,6 +99,29 @@ final class SyncViewModel {
         }
     }
 
+    func addNextCloudAccount(serverURL: String, username: String, appPassword: String) async {
+        let account = CloudAccount(providerType: .nextCloud)
+        let provider = NextCloudProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(serverURL: serverURL, username: username, appPassword: appPassword)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addKoofrAccount(email: String, appPassword: String) async {
         let account = CloudAccount(providerType: .koofr)
         let provider = KoofrProvider(accountId: account.id)
@@ -168,6 +191,11 @@ final class SyncViewModel {
                 }
             case .oneDrive:
                 let provider = OneDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .nextCloud:
+                let provider = NextCloudProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

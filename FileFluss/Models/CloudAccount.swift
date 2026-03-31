@@ -42,6 +42,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .kDrive: return "kDriveLogo"
         case .oneDrive: return "OneDriveLogo"
         case .koofr: return "KoofrLogo"
+        case .nextCloud: return "NextCloudLogo"
         default: return nil
         }
     }

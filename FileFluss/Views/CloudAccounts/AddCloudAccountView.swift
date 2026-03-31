@@ -8,10 +8,12 @@ struct AddCloudAccountView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var apiToken = ""
+    @State private var serverURL = ""
+    @State private var username = ""
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .koofr]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .nextCloud, .koofr]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -75,6 +77,8 @@ struct AddCloudAccountView: View {
                 kDriveFields
             case .oneDrive:
                 oneDriveFields
+            case .nextCloud:
+                nextCloudFields
             case .koofr:
                 koofrFields
             default:
@@ -97,6 +101,8 @@ struct AddCloudAccountView: View {
                     email = ""
                     password = ""
                     apiToken = ""
+                    serverURL = ""
+                    username = ""
                 }
                 .disabled(isAuthenticating)
 
@@ -188,6 +194,30 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var nextCloudFields: some View {
+        VStack(spacing: 12) {
+            Text("Enter your Nextcloud server URL and an app password. Create one at Settings → Security → Devices & sessions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("Server URL (e.g. https://cloud.example.com)", text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField("App Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var koofrFields: some View {
         VStack(spacing: 12) {
             Text("Create an app password at koofr.net → Preferences → Password, then enter your credentials below.")
@@ -212,6 +242,7 @@ struct AddCloudAccountView: View {
         switch selectedProvider {
         case .kDrive: return apiToken.isEmpty
         case .oneDrive: return false
+        case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
@@ -226,6 +257,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addKDriveAccount(apiToken: apiToken)
             case .oneDrive:
                 await appState.syncManager.addOneDriveAccount()
+            case .nextCloud:
+                await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
             case .koofr:
                 await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
             default:
