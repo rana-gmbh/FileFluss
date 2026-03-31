@@ -13,7 +13,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .nextCloud, .koofr]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -77,6 +77,8 @@ struct AddCloudAccountView: View {
                 kDriveFields
             case .oneDrive:
                 oneDriveFields
+            case .googleDrive:
+                googleDriveFields
             case .nextCloud:
                 nextCloudFields
             case .koofr:
@@ -113,7 +115,7 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil {
+                if !appState.syncManager.isAuthenticatingGoogleDrive && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -194,6 +196,25 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var googleDriveFields: some View {
+        VStack(spacing: 12) {
+            if appState.syncManager.isAuthenticatingGoogleDrive {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Waiting for sign-in in browser…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Click Connect to sign in with your Google account. Your browser will open for authentication.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
     private var nextCloudFields: some View {
         VStack(spacing: 12) {
             Text("Enter your Nextcloud server URL and an app password. Create one at Settings → Security → Devices & sessions.")
@@ -242,6 +263,7 @@ struct AddCloudAccountView: View {
         switch selectedProvider {
         case .kDrive: return apiToken.isEmpty
         case .oneDrive: return false
+        case .googleDrive: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
@@ -257,6 +279,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addKDriveAccount(apiToken: apiToken)
             case .oneDrive:
                 await appState.syncManager.addOneDriveAccount()
+            case .googleDrive:
+                await appState.syncManager.addGoogleDriveAccount()
             case .nextCloud:
                 await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
             case .koofr:

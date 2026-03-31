@@ -15,6 +15,8 @@ struct FileFlussApp: App {
         .defaultSize(width: 1600, height: 800)
         .commands {
             FileCommands(appState: appState)
+            CommandGroup(replacing: .pasteboard) {}
+            CommandGroup(replacing: .undoRedo) {}
         }
 
         Settings {

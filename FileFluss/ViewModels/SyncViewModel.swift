@@ -13,6 +13,9 @@ final class SyncViewModel {
     var oneDriveDeviceCode: OneDriveDeviceCode?
     var isPollingForOneDrive: Bool = false
 
+    // Google Drive OAuth state
+    var isAuthenticatingGoogleDrive: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -62,6 +65,31 @@ final class SyncViewModel {
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
         } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addGoogleDriveAccount() async {
+        let account = CloudAccount(providerType: .googleDrive)
+        let provider = GoogleDriveProvider(accountId: account.id)
+        authError = nil
+        isAuthenticatingGoogleDrive = true
+
+        do {
+            let credentials = try await provider.startOAuthFlow()
+            isAuthenticatingGoogleDrive = false
+
+            var connectedAccount = account
+            if !credentials.displayName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.displayName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isAuthenticatingGoogleDrive = false
             authError = error.localizedDescription
         }
     }
@@ -179,6 +207,11 @@ final class SyncViewModel {
     func reconnectSavedAccounts() async {
         for account in accounts {
             switch account.providerType {
+            case .googleDrive:
+                let provider = GoogleDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             case .pCloud:
                 let provider = PCloudProvider(accountId: account.id)
                 if await provider.isAuthenticated {

@@ -14,11 +14,6 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Cloud Accounts", systemImage: "cloud")
                 }
-
-            SyncSettingsView()
-                .tabItem {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-                }
         }
         .frame(width: 500, height: 350)
     }
@@ -68,22 +63,3 @@ struct CloudSettingsView: View {
     }
 }
 
-struct SyncSettingsView: View {
-    @AppStorage("autoSync") private var autoSync = true
-    @AppStorage("syncIntervalMinutes") private var syncInterval = 15
-
-    var body: some View {
-        Form {
-            Toggle("Enable automatic sync", isOn: $autoSync)
-
-            Picker("Sync interval", selection: $syncInterval) {
-                Text("5 minutes").tag(5)
-                Text("15 minutes").tag(15)
-                Text("30 minutes").tag(30)
-                Text("1 hour").tag(60)
-            }
-            .disabled(!autoSync)
-        }
-        .formStyle(.grouped)
-    }
-}

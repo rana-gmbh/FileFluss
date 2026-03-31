@@ -393,7 +393,8 @@ func showRenameAlert(currentName: String, onRename: @escaping (String) -> Void) 
     alert.addButton(withTitle: "Rename")
     alert.addButton(withTitle: "Cancel")
 
-    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+    let estimatedWidth = max(300, min(600, CGFloat(currentName.count) * 8 + 40))
+    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: estimatedWidth, height: 24))
     textField.stringValue = currentName
     alert.accessoryView = textField
     alert.window.initialFirstResponder = textField

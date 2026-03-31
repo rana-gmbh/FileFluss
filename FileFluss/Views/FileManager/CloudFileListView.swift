@@ -28,10 +28,8 @@ struct CloudFileListView: View {
             Divider()
             cloudFileArea
         }
-        .task {
-            if vm.items.isEmpty {
-                await vm.loadDirectory()
-            }
+        .task(id: accountId) {
+            await vm.loadDirectory()
         }
         .confirmationDialog(
             "Delete from Cloud",
