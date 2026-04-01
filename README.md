@@ -48,6 +48,7 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 ### Homebrew
 
 ```bash
+brew tap rana-gmbh/filefluss
 brew install --cask filefluss
 ```
 
