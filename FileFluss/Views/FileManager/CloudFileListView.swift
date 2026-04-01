@@ -6,6 +6,7 @@ struct CloudFileListView: View {
     @Environment(AppState.self) private var appState
     @State private var showDeleteConfirmation = false
     @State private var showOverwriteConfirmation = false
+    @State private var showUploadOverwriteConfirmation = false
     @State private var showDropConfirmation = false
     @State private var pendingUploadURLs: [URL]?
     @State private var showCloudToCloudDropConfirmation = false
@@ -85,11 +86,47 @@ struct CloudFileListView: View {
         .onChange(of: vm.pendingOverwrite != nil) { _, hasOverwrite in
             if hasOverwrite { showOverwriteConfirmation = true }
         }
+        .onChange(of: vm.pendingUploadOverwrite != nil) { _, hasOverwrite in
+            if hasOverwrite { showUploadOverwriteConfirmation = true }
+        }
+        .confirmationDialog(
+            "File Already Exists",
+            isPresented: $showUploadOverwriteConfirmation,
+            presenting: vm.pendingUploadOverwrite
+        ) { overwrite in
+            Button("Overwrite", role: .destructive) {
+                let urls = overwrite.urls
+                let progress = overwrite.progress
+                vm.pendingUploadOverwrite = nil
+                Task {
+                    await vm.uploadFiles(from: urls, progress: progress, overwrite: true)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                overwrite.progress?.isComplete = true
+                vm.pendingUploadOverwrite = nil
+            }
+        } message: { overwrite in
+            let names = overwrite.conflicting
+            if names.count == 1 {
+                Text("\"\(names[0])\" already exists in the destination. Do you want to overwrite it?")
+            } else {
+                Text("\(names.count) files already exist in the destination. Do you want to overwrite them?")
+            }
+        }
         .confirmationDialog(
             "Move or Copy?",
             isPresented: $showDropConfirmation,
             presenting: pendingUploadURLs
         ) { urls in
+            Button("Copy Here") {
+                let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                pendingUploadURLs = nil
+                Task {
+                    await vm.uploadFiles(from: urls, progress: transfer)
+                }
+            }
             Button("Move Here") {
                 let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
                 appState.addTransfer(transfer, panel: panelSide)
@@ -101,14 +138,6 @@ struct CloudFileListView: View {
                     }
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
                     await appState.fileManager(for: otherSide).refresh()
-                }
-            }
-            Button("Copy Here") {
-                let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                pendingUploadURLs = nil
-                Task {
-                    await vm.uploadFiles(from: urls, progress: transfer)
                 }
             }
             Button("Cancel", role: .cancel) {
@@ -128,17 +157,6 @@ struct CloudFileListView: View {
             isPresented: $showCloudToCloudDropConfirmation,
             presenting: pendingCloudToCloudDrop
         ) { drop in
-            Button("Move Here") {
-                let sourceItems = drop.sourceItems
-                let sourceAccountId = drop.sourceAccountId
-                pendingCloudToCloudDrop = nil
-                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
-                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                Task {
-                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true)
-                }
-            }
             Button("Copy Here") {
                 let sourceItems = drop.sourceItems
                 let sourceAccountId = drop.sourceAccountId
@@ -148,6 +166,17 @@ struct CloudFileListView: View {
                 appState.addTransfer(transfer, panel: panelSide)
                 Task {
                     await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false)
+                }
+            }
+            Button("Move Here") {
+                let sourceItems = drop.sourceItems
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudToCloudDrop = nil
+                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true)
                 }
             }
             Button("Cancel", role: .cancel) {

@@ -8,6 +8,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case nextCloud
     case iCloud
     case koofr
+    case dropbox
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .nextCloud: return "NextCloud"
         case .iCloud: return "iCloud"
         case .koofr: return "Koofr"
+        case .dropbox: return "Dropbox"
         }
     }
 
@@ -32,6 +34,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .nextCloud: return "cloud.circle"
         case .iCloud: return "icloud"
         case .koofr: return "cloud.bolt"
+        case .dropbox: return "drop"
         }
     }
 
@@ -44,6 +47,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .googleDrive: return "GoogleDriveLogo"
         case .koofr: return "KoofrLogo"
         case .nextCloud: return "NextCloudLogo"
+        case .dropbox: return "DropboxLogo"
         default: return nil
         }
     }

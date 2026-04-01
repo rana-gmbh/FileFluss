@@ -292,6 +292,17 @@ private struct TransferDetailsView: View {
             Text("Transfer Details")
                 .font(.headline)
 
+            if let errorMessage = transfer.errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+                .padding(.vertical, 2)
+            }
+
             Divider()
 
             LabeledContent("Operation") {

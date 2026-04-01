@@ -116,6 +116,17 @@ struct SyncEngineTests {
         }
     }
 
+    @Test("DropboxProvider requires authentication")
+    func dropboxRequiresAuth() async {
+        let provider = DropboxProvider()
+        let isAuth = await provider.isAuthenticated
+        #expect(isAuth == false)
+
+        await #expect(throws: CloudProviderError.self) {
+            _ = try await provider.listDirectory(at: "/")
+        }
+    }
+
     @Test("Provider getFileMetadata throws for stubs")
     func metadataNotImplemented() async {
         let providers: [any CloudProvider] = [

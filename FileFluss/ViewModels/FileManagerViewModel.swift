@@ -227,6 +227,7 @@ final class FileManagerViewModel {
                 progress?.completedItems = index + 1
             } catch {
                 self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+                progress?.errorMessage = error.localizedDescription
                 progress?.endTime = Date()
                 progress?.isComplete = true
                 return
@@ -265,6 +266,7 @@ final class FileManagerViewModel {
                 progress?.completedItems = index + 1
             } catch {
                 self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
+                progress?.errorMessage = error.localizedDescription
                 progress?.endTime = Date()
                 progress?.isComplete = true
                 return

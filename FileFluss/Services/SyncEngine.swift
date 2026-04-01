@@ -71,6 +71,7 @@ actor SyncEngine {
         case .nextCloud: return NextCloudProvider()
         case .iCloud: return ICloudProvider()
         case .koofr: return KoofrProvider()
+        case .dropbox: return DropboxProvider()
         }
     }
 }

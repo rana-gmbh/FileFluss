@@ -35,16 +35,6 @@ struct FileListView: View {
             isPresented: $showDropConfirmation,
             presenting: fm.pendingDrop
         ) { drop in
-            Button("Move Here") {
-                let items = drop.items
-                let dest = drop.destinationFolder
-                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                Task {
-                    await fm.performMove(items: items, to: dest, progress: transfer)
-                    await appState.refreshAllPanels()
-                }
-            }
             Button("Copy Here") {
                 let items = drop.items
                 let dest = drop.destinationFolder
@@ -52,6 +42,16 @@ struct FileListView: View {
                 appState.addTransfer(transfer, panel: panelSide)
                 Task {
                     await fm.performCopy(items: items, to: dest, progress: transfer)
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button("Move Here") {
+                let items = drop.items
+                let dest = drop.destinationFolder
+                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    await fm.performMove(items: items, to: dest, progress: transfer)
                     await appState.refreshAllPanels()
                 }
             }
@@ -125,6 +125,19 @@ struct FileListView: View {
             isPresented: $showCloudDropConfirmation,
             presenting: pendingCloudDrop
         ) { drop in
+            Button("Copy Here") {
+                let sourceItems = drop.sourceItems
+                let targetDir = drop.targetDirectory
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudDrop = nil
+                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task {
+                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
+                    await fm.refresh()
+                }
+            }
             Button("Move Here") {
                 let sourceItems = drop.sourceItems
                 let targetDir = drop.targetDirectory
@@ -136,19 +149,6 @@ struct FileListView: View {
                     let cloudVM = appState.cloudFileManager(for: sourceAccountId)
                     await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
                     await cloudVM.deleteItems(sourceItems)
-                    await fm.refresh()
-                }
-            }
-            Button("Copy Here") {
-                let sourceItems = drop.sourceItems
-                let targetDir = drop.targetDirectory
-                let sourceAccountId = drop.sourceAccountId
-                pendingCloudDrop = nil
-                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                Task {
-                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
-                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
                     await fm.refresh()
                 }
             }

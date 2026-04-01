@@ -316,6 +316,7 @@ final class TransferProgress: Identifiable {
     var totalFiles: Int = 0 // actual file count discovered during recursive traversal
     var currentFileName: String = ""
     var isComplete: Bool = false
+    var errorMessage: String?
     var transferredFileNames: [String] = []
     var totalBytes: Int64 = 0
     let startTime = Date()
@@ -395,6 +396,11 @@ final class TransferProgress: Identifiable {
     var transferredFolderNames: Set<String> = []
 
     var completionSummary: String {
+        if let errorMessage {
+            let names = transferredFileNames
+            let label = names.count == 1 ? names[0] : "\(names.count) items"
+            return "Failed: \(operation) \(label) — \(errorMessage)"
+        }
         let names = transferredFileNames
         let pastTense: String
         switch operation {

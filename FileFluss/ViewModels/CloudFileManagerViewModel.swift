@@ -16,6 +16,7 @@ final class CloudFileManagerViewModel {
     let quickLookController = QuickLookController()
 
     var pendingOverwrite: PendingCloudOverwrite?
+    var pendingUploadOverwrite: PendingUploadOverwrite?
 
     struct PendingCloudOverwrite {
         let conflicting: [String]
@@ -23,6 +24,12 @@ final class CloudFileManagerViewModel {
         let localDirectory: URL
         let progress: TransferProgress?
         let deleteAfter: Bool
+    }
+
+    struct PendingUploadOverwrite {
+        let conflicting: [String]
+        let urls: [URL]
+        let progress: TransferProgress?
     }
 
     private var pathHistory: [String] = ["/"]
@@ -217,6 +224,7 @@ final class CloudFileManagerViewModel {
             try await downloadRecursively(items: items, to: localDirectory, provider: provider, overwrite: overwrite, progress: progress, downloadedCount: &downloadedCount)
         } catch {
             self.error = error.localizedDescription
+            progress?.errorMessage = error.localizedDescription
         }
         if !(progress?.isCloudToCloud ?? false) {
             progress?.endTime = Date()
@@ -266,11 +274,43 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Upload
 
-    func uploadFiles(from urls: [URL], progress: TransferProgress? = nil) async {
+    func uploadFiles(from urls: [URL], progress: TransferProgress? = nil, overwrite: Bool = false) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             self.error = "Cloud account not connected"
             progress?.isComplete = true
             return
+        }
+
+        // Check for conflicts at the top level
+        if !overwrite {
+            let existingNames = Set(items.map(\.name))
+            let conflicts = urls.filter { existingNames.contains($0.lastPathComponent) }
+            if !conflicts.isEmpty {
+                pendingUploadOverwrite = PendingUploadOverwrite(
+                    conflicting: conflicts.map(\.lastPathComponent),
+                    urls: urls,
+                    progress: progress
+                )
+                return
+            }
+        }
+
+        // Delete conflicting remote items before re-uploading
+        if overwrite {
+            let existingByName = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0) })
+            for url in urls {
+                if let existing = existingByName[url.lastPathComponent] {
+                    do {
+                        try await provider.deleteItem(at: existing.path)
+                    } catch {
+                        self.error = "Failed to overwrite \(existing.name): \(error.localizedDescription)"
+                        progress?.errorMessage = error.localizedDescription
+                        progress?.endTime = Date()
+                        progress?.isComplete = true
+                        return
+                    }
+                }
+            }
         }
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
@@ -286,6 +326,9 @@ final class CloudFileManagerViewModel {
             uploadError = error.localizedDescription
         }
         if !(progress?.isCloudToCloud ?? false) {
+            if let uploadError {
+                progress?.errorMessage = uploadError
+            }
             progress?.endTime = Date()
             progress?.isComplete = true
         }
@@ -308,7 +351,17 @@ final class CloudFileManagerViewModel {
 
             if isDir.boolValue {
                 print("[Upload] Creating directory: \(itemRemotePath)")
-                try await provider.createDirectory(at: itemRemotePath)
+                do {
+                    try await provider.createDirectory(at: itemRemotePath)
+                } catch let error as CloudProviderError {
+                    switch error {
+                    case .notAuthenticated, .unauthorized:
+                        throw error // Auth errors must propagate
+                    default:
+                        // Folder may already exist — continue uploading contents
+                        print("[Upload] Create directory failed (may already exist): \(itemRemotePath) — \(error.localizedDescription)")
+                    }
+                }
                 let contents = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey])
                 print("[Upload] Directory \(url.lastPathComponent) has \(contents.count) items")
                 try await uploadRecursively(urls: contents, toRemotePath: itemRemotePath, provider: provider, progress: progress, uploadedCount: &uploadedCount)

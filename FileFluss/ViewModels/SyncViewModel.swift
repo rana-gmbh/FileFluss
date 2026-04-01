@@ -16,6 +16,9 @@ final class SyncViewModel {
     // Google Drive OAuth state
     var isAuthenticatingGoogleDrive: Bool = false
 
+    // Dropbox OAuth state
+    var isAuthenticatingDropbox: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -90,6 +93,31 @@ final class SyncViewModel {
             saveAccounts()
         } catch {
             isAuthenticatingGoogleDrive = false
+            authError = error.localizedDescription
+        }
+    }
+
+    func addDropboxAccount() async {
+        let account = CloudAccount(providerType: .dropbox)
+        let provider = DropboxProvider(accountId: account.id)
+        authError = nil
+        isAuthenticatingDropbox = true
+
+        do {
+            let credentials = try await provider.startOAuthFlow()
+            isAuthenticatingDropbox = false
+
+            var connectedAccount = account
+            if !credentials.displayName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.displayName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isAuthenticatingDropbox = false
             authError = error.localizedDescription
         }
     }
@@ -234,6 +262,11 @@ final class SyncViewModel {
                 }
             case .koofr:
                 let provider = KoofrProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .dropbox:
+                let provider = DropboxProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
