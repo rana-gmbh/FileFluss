@@ -10,6 +10,9 @@ struct FileListView: View {
     @State private var pendingCloudDrop: PendingCloudDrop?
     @State private var showNewFolderDialog: Bool = false
     @State private var newFolderName: String = ""
+    @State private var showRenameDialog: Bool = false
+    @State private var renameText: String = ""
+    @State private var renameItem: FileItem?
 
     struct PendingCloudDrop {
         let sourceItems: [CloudFileItem]
@@ -167,6 +170,16 @@ struct FileListView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .alert("Rename", isPresented: $showRenameDialog) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                if let item = renameItem {
+                    let newName = renameText
+                    Task { await fm.renameItem(item, to: newName) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             newFolderName = "New Folder"
@@ -175,9 +188,9 @@ struct FileListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             if let item = fm.selectedItems.first, fm.selectedItems.count == 1 {
-                showRenameAlert(currentName: item.name) { newName in
-                    Task { await fm.renameItem(item, to: newName) }
-                }
+                renameItem = item
+                renameText = item.name
+                showRenameDialog = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
@@ -349,9 +362,9 @@ struct FileListView: View {
                         showNewFolderDialog = true
                     },
                     onRename: { item in
-                        showRenameAlert(currentName: item.name) { newName in
-                            Task { await fm.renameItem(item, to: newName) }
-                        }
+                        renameItem = item
+                        renameText = item.name
+                        showRenameDialog = true
                     }
                 )
                 .onChange(of: fm.selectedItemIDs) {
@@ -385,26 +398,3 @@ struct FileListView: View {
     }
 }
 
-@MainActor
-func showRenameAlert(currentName: String, onRename: @escaping (String) -> Void) {
-    let alert = NSAlert()
-    alert.messageText = "Rename"
-    alert.informativeText = "Rename \"\(currentName)\""
-    alert.icon = NSImage(size: .zero)
-    alert.addButton(withTitle: "Rename")
-    alert.addButton(withTitle: "Cancel")
-
-    let estimatedWidth = max(300, min(600, CGFloat(currentName.count) * 8 + 40))
-    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: estimatedWidth, height: 24))
-    textField.stringValue = currentName
-    alert.accessoryView = textField
-    alert.window.initialFirstResponder = textField
-
-    let response = alert.runModal()
-    if response == .alertFirstButtonReturn {
-        let newName = textField.stringValue.trimmingCharacters(in: .whitespaces)
-        if !newName.isEmpty, newName != currentName {
-            onRename(newName)
-        }
-    }
-}

@@ -12,6 +12,9 @@ struct CloudFileListView: View {
     @State private var pendingCloudToCloudDrop: PendingCloudToCloudDrop?
     @State private var showNewFolderDialog = false
     @State private var newFolderName = ""
+    @State private var showRenameDialog = false
+    @State private var renameText = ""
+    @State private var renameCloudItem: CloudFileItem?
 
     struct PendingCloudToCloudDrop {
         let sourceItems: [CloudFileItem]
@@ -166,6 +169,16 @@ struct CloudFileListView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .alert("Rename", isPresented: $showRenameDialog) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                if let item = renameCloudItem {
+                    let newName = renameText
+                    Task { await vm.renameItem(item, to: newName) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
             guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
             newFolderName = "New Folder"
@@ -174,9 +187,9 @@ struct CloudFileListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
             guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
             if let item = vm.selectedItems.first, vm.selectedItems.count == 1 {
-                showRenameAlert(currentName: item.name) { newName in
-                    Task { await vm.renameItem(item, to: newName) }
-                }
+                renameCloudItem = item
+                renameText = item.name
+                showRenameDialog = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
@@ -382,9 +395,9 @@ struct CloudFileListView: View {
                     showNewFolderDialog = true
                 },
                 onRename: { item in
-                    showRenameAlert(currentName: item.name) { newName in
-                        Task { await vm.renameItem(item, to: newName) }
-                    }
+                    renameCloudItem = item
+                    renameText = item.name
+                    showRenameDialog = true
                 }
             )
             .onChange(of: vm.selectedItemIDs) {
