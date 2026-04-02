@@ -16,6 +16,10 @@ struct ContentView: View {
         .toolbar {
             FileToolbar()
         }
+        .sheet(isPresented: Bindable(appState).showSearchPopup) {
+            SearchPopupView()
+                .environment(appState)
+        }
     }
 
     @ViewBuilder

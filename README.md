@@ -10,6 +10,8 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 ![FileFluss Cloud Providers new](FileFluss%20Cloud%20Provider2.png)
 - **Cloud-to-cloud transfers** — conveniently move or copy files between cloud providers
 ![FileFluss transfer details](FileFluss%20Transfer%20Details.png)
+- **Universal search** — search across all local files and connected cloud accounts at once, with results grouped by source and right-click to open in either panel
+![FileFluss Search](FileFluss%20Search.png)
 - **Native performance** — built with SwiftUI and AppKit for a fast, responsive experience on macOS
 - **Quick Look previews** — preview files inline without leaving the app
 - **Keyboard-driven workflow** — navigate, select, copy, move, rename, and delete with shortcuts
@@ -28,16 +30,12 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 - **Dropbox** — *new in 0.4*
 - **Koofr**
 
-## What's New in 0.4.0 Beta
+## What's New in 0.5.0 Beta
 
-- **Google Drive integration** — full OAuth2 authentication with PKCE, file browsing, upload/download, Google Workspace file export (Docs, Sheets, Slides)
-- **Nextcloud integration** — connect via WebDAV with app password authentication, full file management support
-- **Dropbox integration** — OAuth2 with PKCE, path-based file access, upload session support for large files
-- **Upload overwrite protection** — confirmation dialog when uploading files that already exist on the cloud
-- **Improved transfer error reporting** — failed transfers now show "Failed" instead of "Done", with full error details in the sidebar
-- **Redesigned rename dialog** — consistent SwiftUI alert style matching the Create Folder dialog
-- **Copy-first drag & drop** — drop dialogs now default to Copy (highlighted) instead of Move
-- **Removed unused Edit menu** and Sync settings tab for a cleaner interface
+- **Universal search** — search across all local files and connected cloud accounts from a single popup (Cmd+F), with results grouped by source, source filtering, and right-click to open in either panel
+- **Native cloud search APIs** — Google Drive, Dropbox, OneDrive, and Nextcloud all support fast server-side search
+- **Smart search index** — SQLite FTS5 cache for instant cloud file lookups, Spotlight integration for recursive local search
+- **Progressive results** — search results stream in as each source responds
 
 ## Requirements
 

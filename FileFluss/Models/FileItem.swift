@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-struct FileItem: Identifiable, Hashable {
+struct FileItem: Identifiable, Hashable, Sendable {
     let id: String
     let url: URL
     let name: String

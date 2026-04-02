@@ -257,6 +257,68 @@ actor NextCloudAPIClient {
         return total
     }
 
+    // MARK: - Search
+
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+        let searchPath = path ?? "/"
+        let davPath = buildDAVPath(searchPath)
+        guard let url = URL(string: davPath) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        let searchBody = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <d:searchrequest xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+            <d:basicsearch>
+                <d:select>
+                    <d:prop>
+                        <d:getlastmodified/>
+                        <d:getcontentlength/>
+                        <d:getcontenttype/>
+                        <d:resourcetype/>
+                        <d:displayname/>
+                        <oc:checksums/>
+                        <oc:size/>
+                    </d:prop>
+                </d:select>
+                <d:from>
+                    <d:scope>
+                        <d:href>\(davPath)</d:href>
+                        <d:depth>infinity</d:depth>
+                    </d:scope>
+                </d:from>
+                <d:where>
+                    <d:like>
+                        <d:prop><d:displayname/></d:prop>
+                        <d:literal>%\(query)%</d:literal>
+                    </d:like>
+                </d:where>
+                <d:limit>
+                    <d:nresults>100</d:nresults>
+                </d:limit>
+            </d:basicsearch>
+        </d:searchrequest>
+        """
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "SEARCH"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("application/xml", forHTTPHeaderField: "Content-Type")
+        request.httpBody = searchBody.data(using: .utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        guard http.statusCode == 207 else {
+            nextCloudLog.error("[NextCloud] SEARCH \(searchPath) → HTTP \(http.statusCode)")
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+
+        return WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
+    }
+
     // MARK: - Private
 
     private func buildDAVPath(_ path: String) -> String {

@@ -18,6 +18,8 @@ final class AppState {
     var leftFileManager: FileManagerViewModel
     var rightFileManager: FileManagerViewModel
     var syncManager: SyncViewModel
+    var searchVM = SearchViewModel()
+    var showSearchPopup = false
 
     var selectedLeftSidebarItem: SidebarItem? = .location(
         FileManager.default.homeDirectoryForCurrentUser
@@ -256,6 +258,7 @@ final class AppState {
 
         Task {
             await syncManager.reconnectSavedAccounts()
+            try? await SearchIndex.shared.open()
         }
     }
 }

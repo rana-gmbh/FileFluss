@@ -27,18 +27,71 @@ struct CloudFileListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            cloudPathBar
-            Divider()
-            cloudFileArea
-        }
-        .task(id: accountId) {
-            await vm.loadDirectory()
-        }
-        .confirmationDialog(
-            "Delete from Cloud",
-            isPresented: $showDeleteConfirmation
-        ) {
+        bodyWithDialogs
+            .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                newFolderName = "New Folder"
+                showNewFolderDialog = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                if let item = vm.selectedItems.first, vm.selectedItems.count == 1 {
+                    renameCloudItem = item
+                    renameText = item.name
+                    showRenameDialog = true
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !vm.selectedItems.isEmpty else { return }
+                showDeleteConfirmation = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                let items = vm.selectedItems
+                guard !items.isEmpty else { return }
+                let otherSide: PanelSide = panelSide == .left ? .right : .left
+                if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                    appState.addTransfer(transfer, panel: otherSide)
+                    Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
+                    appState.addTransfer(transfer, panel: otherSide)
+                    Task {
+                        await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                        await otherFM.refresh()
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                let items = vm.selectedItems
+                guard !items.isEmpty else { return }
+                let otherSide: PanelSide = panelSide == .left ? .right : .left
+                if let otherCloudId = appState.cloudAccountId(for: otherSide) {
+                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                    appState.addTransfer(transfer, panel: otherSide)
+                    Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                    appState.addTransfer(transfer, panel: otherSide)
+                    Task {
+                        await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
+                        await vm.deleteItems(items)
+                        await otherFM.refresh()
+                    }
+                }
+            }
+    }
+
+    private var bodyWithDialogs: some View {
+        bodyWithDropDialogs
+        .confirmationDialog("Delete from Cloud", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 Task { await vm.deleteSelectedItems() }
             }
@@ -51,11 +104,7 @@ struct CloudFileListView: View {
                 Text("Are you sure you want to delete \(items.count) items from pCloud?")
             }
         }
-        .confirmationDialog(
-            "File Already Exists",
-            isPresented: $showOverwriteConfirmation,
-            presenting: vm.pendingOverwrite
-        ) { overwrite in
+        .confirmationDialog("File Already Exists", isPresented: $showOverwriteConfirmation, presenting: vm.pendingOverwrite) { overwrite in
             Button("Overwrite", role: .destructive) {
                 let items = overwrite.items
                 let dest = overwrite.localDirectory
@@ -64,9 +113,7 @@ struct CloudFileListView: View {
                 vm.pendingOverwrite = nil
                 Task {
                     await vm.downloadItems(items, to: dest, progress: progress, overwrite: true)
-                    if deleteAfter {
-                        await vm.deleteItems(items)
-                    }
+                    if deleteAfter { await vm.deleteItems(items) }
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
                     await appState.fileManager(for: otherSide).refresh()
                 }
@@ -89,18 +136,12 @@ struct CloudFileListView: View {
         .onChange(of: vm.pendingUploadOverwrite != nil) { _, hasOverwrite in
             if hasOverwrite { showUploadOverwriteConfirmation = true }
         }
-        .confirmationDialog(
-            "File Already Exists",
-            isPresented: $showUploadOverwriteConfirmation,
-            presenting: vm.pendingUploadOverwrite
-        ) { overwrite in
+        .confirmationDialog("File Already Exists", isPresented: $showUploadOverwriteConfirmation, presenting: vm.pendingUploadOverwrite) { overwrite in
             Button("Overwrite", role: .destructive) {
                 let urls = overwrite.urls
                 let progress = overwrite.progress
                 vm.pendingUploadOverwrite = nil
-                Task {
-                    await vm.uploadFiles(from: urls, progress: progress, overwrite: true)
-                }
+                Task { await vm.uploadFiles(from: urls, progress: progress, overwrite: true) }
             }
             Button("Cancel", role: .cancel) {
                 overwrite.progress?.isComplete = true
@@ -113,82 +154,6 @@ struct CloudFileListView: View {
             } else {
                 Text("\(names.count) files already exist in the destination. Do you want to overwrite them?")
             }
-        }
-        .confirmationDialog(
-            "Move or Copy?",
-            isPresented: $showDropConfirmation,
-            presenting: pendingUploadURLs
-        ) { urls in
-            Button("Copy Here") {
-                let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                pendingUploadURLs = nil
-                Task {
-                    await vm.uploadFiles(from: urls, progress: transfer)
-                }
-            }
-            Button("Move Here") {
-                let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                pendingUploadURLs = nil
-                Task {
-                    await vm.uploadFiles(from: urls, progress: transfer)
-                    for url in urls {
-                        try? FileManager.default.removeItem(at: url)
-                    }
-                    let otherSide: PanelSide = panelSide == .left ? .right : .left
-                    await appState.fileManager(for: otherSide).refresh()
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                pendingUploadURLs = nil
-            }
-        } message: { urls in
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
-            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
-            if urls.count == 1 {
-                Text("What would you like to do with \"\(urls[0].lastPathComponent)\" in \"\(name)\"?")
-            } else {
-                Text("What would you like to do with \(urls.count) items in \"\(name)\"?")
-            }
-        }
-        .confirmationDialog(
-            "Move or Copy?",
-            isPresented: $showCloudToCloudDropConfirmation,
-            presenting: pendingCloudToCloudDrop
-        ) { drop in
-            Button("Copy Here") {
-                let sourceItems = drop.sourceItems
-                let sourceAccountId = drop.sourceAccountId
-                pendingCloudToCloudDrop = nil
-                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
-                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                Task {
-                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false)
-                }
-            }
-            Button("Move Here") {
-                let sourceItems = drop.sourceItems
-                let sourceAccountId = drop.sourceAccountId
-                pendingCloudToCloudDrop = nil
-                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
-                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                Task {
-                    await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true)
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                pendingCloudToCloudDrop = nil
-            }
-        } message: { drop in
-            let count = drop.sourceItems.count
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
-            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
-            Text(count == 1
-                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
-                 : "What would you like to do with \(count) items in \"\(name)\"?")
         }
         .alert("New Folder", isPresented: $showNewFolderDialog) {
             TextField("Folder name", text: $newFolderName)
@@ -208,64 +173,76 @@ struct CloudFileListView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
-            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-            newFolderName = "New Folder"
-            showNewFolderDialog = true
+    }
+
+    private var bodyWithDropDialogs: some View {
+        mainContent
+        .task(id: accountId) {
+            await vm.loadDirectory()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
-            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-            if let item = vm.selectedItems.first, vm.selectedItems.count == 1 {
-                renameCloudItem = item
-                renameText = item.name
-                showRenameDialog = true
+        .confirmationDialog("Move or Copy?", isPresented: $showDropConfirmation, presenting: pendingUploadURLs) { urls in
+            Button("Copy Here") {
+                let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                pendingUploadURLs = nil
+                Task { await vm.uploadFiles(from: urls, progress: transfer) }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
-            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-            guard !vm.selectedItems.isEmpty else { return }
-            showDeleteConfirmation = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
-            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-            let items = vm.selectedItems
-            guard !items.isEmpty else { return }
-            let otherSide: PanelSide = panelSide == .left ? .right : .left
-            if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
-                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
-                appState.addTransfer(transfer, panel: otherSide)
-                Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
-            } else {
-                let otherFM = appState.fileManager(for: otherSide)
-                let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
-                appState.addTransfer(transfer, panel: otherSide)
+            Button("Move Here") {
+                let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                pendingUploadURLs = nil
                 Task {
-                    await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                    await otherFM.refresh()
+                    await vm.uploadFiles(from: urls, progress: transfer)
+                    for url in urls { try? FileManager.default.removeItem(at: url) }
+                    let otherSide: PanelSide = panelSide == .left ? .right : .left
+                    await appState.fileManager(for: otherSide).refresh()
                 }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
-            guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-            let items = vm.selectedItems
-            guard !items.isEmpty else { return }
-            let otherSide: PanelSide = panelSide == .left ? .right : .left
-            if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
-                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                appState.addTransfer(transfer, panel: otherSide)
-                Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
+            Button("Cancel", role: .cancel) { pendingUploadURLs = nil }
+        } message: { urls in
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
+            if urls.count == 1 {
+                Text("What would you like to do with \"\(urls[0].lastPathComponent)\" in \"\(name)\"?")
             } else {
-                let otherFM = appState.fileManager(for: otherSide)
-                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                appState.addTransfer(transfer, panel: otherSide)
-                Task {
-                    await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                    await vm.deleteItems(items)
-                    await otherFM.refresh()
-                }
+                Text("What would you like to do with \(urls.count) items in \"\(name)\"?")
             }
+        }
+        .confirmationDialog("Move or Copy?", isPresented: $showCloudToCloudDropConfirmation, presenting: pendingCloudToCloudDrop) { drop in
+            Button("Copy Here") {
+                let sourceItems = drop.sourceItems
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudToCloudDrop = nil
+                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false) }
+            }
+            Button("Move Here") {
+                let sourceItems = drop.sourceItems
+                let sourceAccountId = drop.sourceAccountId
+                pendingCloudToCloudDrop = nil
+                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true) }
+            }
+            Button("Cancel", role: .cancel) { pendingCloudToCloudDrop = nil }
+        } message: { drop in
+            let count = drop.sourceItems.count
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let name = vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent
+            Text(count == 1
+                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
+                 : "What would you like to do with \(count) items in \"\(name)\"?")
+        }
+    }
+
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            cloudPathBar
+            Divider()
+            cloudFileArea
         }
     }
 

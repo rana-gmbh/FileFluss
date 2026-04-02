@@ -1,6 +1,6 @@
 import Foundation
 
-struct CloudFileItem: Identifiable, Hashable {
+struct CloudFileItem: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let path: String
@@ -58,4 +58,13 @@ protocol CloudProvider: Sendable {
     func renameItem(at path: String, to newName: String) async throws
     func getFileMetadata(at path: String) async throws -> CloudFileItem
     func folderSize(at path: String) async throws -> Int64
+
+    /// Search for files matching the query. Returns nil if the provider does not support search.
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]?
+}
+
+extension CloudProvider {
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+        nil
+    }
 }

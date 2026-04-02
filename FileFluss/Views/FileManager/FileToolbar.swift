@@ -22,6 +22,14 @@ struct FileToolbar: ToolbarContent {
 
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
+                appState.showSearchPopup = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .help("Search all sources (⌘F)")
+            .keyboardShortcut("f", modifiers: .command)
+
+            Button {
                 Task { await appState.refreshAllPanels() }
             } label: {
                 Image(systemName: "arrow.clockwise")

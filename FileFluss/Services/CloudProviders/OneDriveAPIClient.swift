@@ -407,6 +407,24 @@ actor OneDriveAPIClient {
         return creds.userEmail
     }
 
+    // MARK: - Search
+
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+        let endpoint: String
+        if let path, path != "/" {
+            let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+            endpoint = "/me/drive/root:\(encodedPath):/search(q='\(query)')"
+        } else {
+            endpoint = "/me/drive/root/search(q='\(query)')"
+        }
+
+        let response: GraphListResponse = try await graphRequest(.get, path: endpoint, queryItems: [
+            URLQueryItem(name: "$top", value: "100"),
+        ])
+
+        return response.value.map { $0.toCloudFileItem(parentPath: "/") }
+    }
+
     // MARK: - HTTP
 
     private enum HTTPMethod: String {

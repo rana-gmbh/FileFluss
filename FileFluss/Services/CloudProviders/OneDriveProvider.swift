@@ -94,6 +94,11 @@ final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(at: path)
     }
 
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.searchFiles(query: query, path: path)
+    }
+
     // MARK: - Token Refresh
 
     /// Refreshes credentials if expired and persists the updated tokens.

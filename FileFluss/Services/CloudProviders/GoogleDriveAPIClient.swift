@@ -582,6 +582,38 @@ actor GoogleDriveAPIClient {
         return currentCached
     }
 
+    // MARK: - Search
+
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+        let escapedQuery = query.replacingOccurrences(of: "'", with: "\\'")
+        var q = "name contains '\(escapedQuery)' and trashed = false"
+
+        // Scope to a specific folder if path is provided
+        if let path, path != "/" {
+            let cached = try await resolvePathToCachedFile(path)
+            q = "'\(cached.id)' in parents and name contains '\(escapedQuery)' and trashed = false"
+        }
+
+        var allItems: [GoogleDriveFile] = []
+        var pageToken: String?
+
+        repeat {
+            var queryItems = [
+                URLQueryItem(name: "q", value: q),
+                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)"),
+                URLQueryItem(name: "pageSize", value: "100"),
+            ]
+            if let pageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
+            allItems.append(contentsOf: response.files)
+            pageToken = response.nextPageToken
+        } while pageToken != nil && allItems.count < 500
+
+        return allItems.map { $0.toCloudFileItem(parentPath: "/") }
+    }
+
     // MARK: - HTTP Helpers
 
     private enum HTTPMethod: String {

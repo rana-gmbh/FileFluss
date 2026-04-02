@@ -92,6 +92,11 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(path: path)
     }
 
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.searchFiles(query: query, path: path)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

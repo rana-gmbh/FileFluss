@@ -86,6 +86,12 @@ final class CloudFileManagerViewModel {
 
             let loadedItems = try await provider.listDirectory(at: targetPath)
 
+            // Feed into search index (fire-and-forget)
+            let accId = self.accountId
+            Task.detached(priority: .utility) {
+                await SearchIndex.shared.upsertItems(loadedItems, accountId: accId)
+            }
+
             self.items = loadedItems
             if let path, path != self.currentPath {
                 self.currentPath = path

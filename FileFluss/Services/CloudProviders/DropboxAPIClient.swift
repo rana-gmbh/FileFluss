@@ -627,6 +627,42 @@ actor DropboxAPIClient {
         return newCreds
     }
 
+    // MARK: - Search
+
+    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+        struct SearchRequest: Encodable {
+            let query: String
+            let options: SearchOptions?
+        }
+        struct SearchOptions: Encodable {
+            let path: String?
+            let max_results: Int
+        }
+        struct SearchResponse: Decodable {
+            let matches: [SearchMatch]
+            let has_more: Bool
+        }
+        struct SearchMatch: Decodable {
+            let metadata: SearchMatchMetadata
+        }
+        struct SearchMatchMetadata: Decodable {
+            let metadata: DropboxEntry
+        }
+
+        let searchPath = path.flatMap { dropboxPath($0) }
+        let requestBody = SearchRequest(
+            query: query,
+            options: SearchOptions(path: searchPath, max_results: 100)
+        )
+
+        let response: SearchResponse = try await rpcRequest(
+            path: "/files/search_v2",
+            body: requestBody
+        )
+
+        return response.matches.compactMap { $0.metadata.metadata.toCloudFileItem() }
+    }
+
     private func rpcRequest<B: Encodable, T: Decodable>(path: String, body: B) async throws -> T {
         let creds = try await refreshTokenIfNeeded()
         let encodedBody = try JSONEncoder().encode(body)

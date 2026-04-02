@@ -24,6 +24,7 @@ struct FileListView: View {
         appState.fileManager(for: panelSide)
     }
 
+
     var body: some View {
         VStack(spacing: 0) {
             pathBar

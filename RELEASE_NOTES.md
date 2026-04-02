@@ -1,28 +1,35 @@
-# FileFluss 0.4.0 Beta
+# FileFluss 0.5.0 Beta
 
-## New Cloud Storage Providers
+## Universal Search Across All Sources
 
-### Google Drive
-Full integration with Google Drive via OAuth2 with PKCE. Browse, upload, download, rename, and delete files directly from FileFluss. Google Workspace files (Docs, Sheets, Slides, Drawings) are automatically exported to compatible formats on download.
+FileFluss now includes a powerful search function that lets you find files across **all connected cloud accounts and local files** from a single search popup.
 
-### Nextcloud
-Connect to any Nextcloud server using app password authentication. All file operations are supported over WebDAV, including folder creation, rename, and recursive uploads.
+- **Search everything at once** — one search query scans your local file system and every connected cloud provider simultaneously
+- **Grouped results** — results are organized by source (Local Files, Google Drive, Dropbox, Nextcloud, etc.) for easy orientation
+- **Source filtering** — quickly filter results by source using the chip-based filter bar
+- **Open anywhere** — right-click any result to open it in the left or right panel, or double-click to open in the active panel
+- **Progressive results** — results stream in as each source responds, no waiting for the slowest provider
 
-### Dropbox
-Full Dropbox integration via OAuth2 with PKCE. Supports path-based file access, cursor-based pagination for large directories, and upload sessions for files over 150 MB. Non-ASCII file names in paths are properly escaped for Dropbox's API header requirements.
+## Cloud Provider Search APIs
 
-## UI Improvements
+Each cloud provider now supports native server-side search for fast, accurate results:
 
-- **Redesigned rename dialog** — the rename popup now uses a clean SwiftUI alert consistent with the Create Folder dialog
-- **Copy-first drag & drop** — drop confirmation dialogs now default to "Copy Here" (highlighted) instead of "Move Here"
-- **Removed unused menus** — the Edit menu and Sync settings tab have been removed for a cleaner interface
-- **Upload overwrite protection** — uploading files to cloud storage now shows a confirmation dialog when files with the same name already exist at the destination
+- **Google Drive** — Files.list with query parameter
+- **Dropbox** — /files/search_v2 endpoint
+- **OneDrive** — Microsoft Graph search API
+- **Nextcloud** — WebDAV SEARCH method
 
-## Transfer Reliability
+## Smart Search Infrastructure
 
-- **Improved error reporting** — failed transfers now display "Failed" in the sidebar instead of "Done", with the full error message visible in the transfer details popover
-- **Automatic token refresh on 401** — cloud file operations automatically retry with a refreshed token if authentication expires mid-transfer
-- **Graceful folder conflict handling** — uploading folders that already exist on the cloud no longer causes errors; existing folders are reused
+- **Spotlight integration** — uses macOS Spotlight (NSMetadataQuery) for fast recursive local file search
+- **SQLite FTS5 index cache** — cloud file metadata is cached locally for instant prefix-match lookups, updated automatically as you browse
+- **Debounced input** — search triggers after a short delay to avoid unnecessary API calls while typing
+
+## Other Improvements
+
+- Cleaner toolbar with dedicated search button (Cmd+F)
+- Improved CloudFileListView performance by splitting complex SwiftUI view bodies
+- Various internal optimizations for snappier UI response
 
 ## Full Changelog
 
