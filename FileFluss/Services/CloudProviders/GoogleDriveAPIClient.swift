@@ -44,10 +44,17 @@ actor GoogleDriveAPIClient {
     ]
 
     private static let exportMimeTypes: [String: String] = [
-        "application/vnd.google-apps.document": "application/pdf",
+        "application/vnd.google-apps.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.google-apps.spreadsheet": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.google-apps.presentation": "application/pdf",
+        "application/vnd.google-apps.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.google-apps.drawing": "application/pdf",
+    ]
+
+    private static let exportExtensions: [String: String] = [
+        "application/vnd.google-apps.document": "docx",
+        "application/vnd.google-apps.spreadsheet": "xlsx",
+        "application/vnd.google-apps.presentation": "pptx",
+        "application/vnd.google-apps.drawing": "pdf",
     ]
 
     init(credentials: GoogleDriveCredentials) {
@@ -323,11 +330,16 @@ actor GoogleDriveAPIClient {
         let creds = try await refreshTokenIfNeeded()
 
         let url: URL
+        var actualLocalURL = localURL
         if let exportMime = Self.exportMimeTypes[cached.mimeType] {
             // Google Workspace file — use export endpoint
             let encodedMime = exportMime.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exportMime
             url = URL(string: "\(apiURL)/files/\(cached.id)/export?mimeType=\(encodedMime)")!
-            googleLog.debug("[Google] Exporting workspace file as \(exportMime)")
+            // Append correct file extension for the exported format
+            if let ext = Self.exportExtensions[cached.mimeType] {
+                actualLocalURL = localURL.appendingPathExtension(ext)
+            }
+            googleLog.debug("[Google] Exporting workspace file as \(exportMime) → .\(Self.exportExtensions[cached.mimeType] ?? "?")")
         } else {
             // Regular file — use alt=media
             url = URL(string: "\(apiURL)/files/\(cached.id)?alt=media")!
@@ -343,7 +355,7 @@ actor GoogleDriveAPIClient {
             googleLog.error("[Google] Download failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: data)
         }
-        try data.write(to: localURL)
+        try data.write(to: actualLocalURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {

@@ -1,35 +1,26 @@
-# FileFluss 0.5.0 Beta
+# FileFluss 0.6.0 Beta
 
-## Universal Search Across All Sources
+## Automatic Google Workspace Document Conversion
 
-FileFluss now includes a powerful search function that lets you find files across **all connected cloud accounts and local files** from a single search popup.
+When copying or moving files from Google Drive to local folders or other cloud services, Google Workspace documents are now **automatically converted into formats editable by LibreOffice and Microsoft Office**:
 
-- **Search everything at once** — one search query scans your local file system and every connected cloud provider simultaneously
-- **Grouped results** — results are organized by source (Local Files, Google Drive, Dropbox, Nextcloud, etc.) for easy orientation
-- **Source filtering** — quickly filter results by source using the chip-based filter bar
-- **Open anywhere** — right-click any result to open it in the left or right panel, or double-click to open in the active panel
-- **Progressive results** — results stream in as each source responds, no waiting for the slowest provider
+| Google Workspace Format | Converted To |
+|---|---|
+| Google Docs | **DOCX** (Word) |
+| Google Sheets | **XLSX** (Excel) |
+| Google Slides | **PPTX** (PowerPoint) |
+| Google Drawings | PDF |
 
-## Cloud Provider Search APIs
+- Conversion happens server-side via Google's export API — fast and lossless
+- Exported files are saved with the correct file extension (e.g. `My Document.docx`)
+- Works for both cloud-to-local and cloud-to-cloud transfers (e.g. Google Drive → pCloud)
+- Quick Look previews also use the converted format
 
-Each cloud provider now supports native server-side search for fast, accurate results:
+## Bug Fixes
 
-- **Google Drive** — Files.list with query parameter
-- **Dropbox** — /files/search_v2 endpoint
-- **OneDrive** — Microsoft Graph search API
-- **Nextcloud** — WebDAV SEARCH method
-
-## Smart Search Infrastructure
-
-- **Spotlight integration** — uses macOS Spotlight (NSMetadataQuery) for fast recursive local file search
-- **SQLite FTS5 index cache** — cloud file metadata is cached locally for instant prefix-match lookups, updated automatically as you browse
-- **Debounced input** — search triggers after a short delay to avoid unnecessary API calls while typing
-
-## Other Improvements
-
-- Cleaner toolbar with dedicated search button (Cmd+F)
-- Improved CloudFileListView performance by splitting complex SwiftUI view bodies
-- Various internal optimizations for snappier UI response
+- Fixed cloud-to-cloud transfers silently failing for Google Workspace files (download succeeded but upload found no file due to filename mismatch)
+- Fixed overwrite detection for converted Google Workspace files
+- Fixed Quick Look temp cache not finding previously converted files
 
 ## Full Changelog
 

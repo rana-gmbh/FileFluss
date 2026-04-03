@@ -203,10 +203,16 @@ final class CloudFileManagerViewModel {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
 
         // Check for conflicts at the top level (files only)
+        // Also check for converted Google Workspace names (e.g. "Doc" → "Doc.docx")
         let topLevelFiles = items.filter { !$0.isDirectory }
         if !overwrite {
-            let conflicts = topLevelFiles.filter {
-                FileManager.default.fileExists(atPath: localDirectory.appendingPathComponent($0.name).path)
+            let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
+            let conflicts = topLevelFiles.filter { item in
+                let base = localDirectory.appendingPathComponent(item.name)
+                if FileManager.default.fileExists(atPath: base.path) { return true }
+                return convertedExtensions.contains { ext in
+                    FileManager.default.fileExists(atPath: base.appendingPathExtension(ext).path)
+                }
             }
             if !conflicts.isEmpty {
                 pendingOverwrite = PendingCloudOverwrite(
@@ -248,8 +254,17 @@ final class CloudFileManagerViewModel {
             } else {
                 let localURL = localDirectory.appendingPathComponent(item.name)
                 progress?.currentFileName = item.name
-                if overwrite && FileManager.default.fileExists(atPath: localURL.path) {
-                    try FileManager.default.removeItem(at: localURL)
+                if overwrite {
+                    // Remove both the original and any converted variant
+                    if FileManager.default.fileExists(atPath: localURL.path) {
+                        try FileManager.default.removeItem(at: localURL)
+                    }
+                    for ext in ["docx", "xlsx", "pptx", "pdf"] {
+                        let converted = localURL.appendingPathExtension(ext)
+                        if FileManager.default.fileExists(atPath: converted.path) {
+                            try FileManager.default.removeItem(at: converted)
+                        }
+                    }
                 }
                 try await provider.downloadFile(remotePath: item.path, to: localURL)
                 progress?.totalBytes += item.size
@@ -264,13 +279,26 @@ final class CloudFileManagerViewModel {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else { return nil }
         let localURL = tempDownloadDir.appendingPathComponent(item.name)
 
-        // Use cached version if it exists
+        // Use cached version if it exists (check both original and converted names)
         if FileManager.default.fileExists(atPath: localURL.path) {
             return localURL
+        }
+        for ext in ["docx", "xlsx", "pptx", "pdf"] {
+            let converted = localURL.appendingPathExtension(ext)
+            if FileManager.default.fileExists(atPath: converted.path) {
+                return converted
+            }
         }
 
         do {
             try await provider.downloadFile(remotePath: item.path, to: localURL)
+            // Google Workspace files get written with an appended extension
+            for ext in ["docx", "xlsx", "pptx", "pdf"] {
+                let converted = localURL.appendingPathExtension(ext)
+                if FileManager.default.fileExists(atPath: converted.path) {
+                    return converted
+                }
+            }
             return localURL
         } catch {
             self.error = "Failed to download \(item.name): \(error.localizedDescription)"

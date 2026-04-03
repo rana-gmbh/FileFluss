@@ -460,9 +460,22 @@ struct CloudFileListView: View {
             progress.downloadBytes = progress.totalBytes
         }
 
-        // Phase 2: Upload
-        let localURLs = items.map { tempDir.appendingPathComponent($0.name) }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        // Phase 2: Upload — find downloaded files, including Google Workspace
+        // exports that have an extension appended (e.g. "My Doc" → "My Doc.docx")
+        let localURLs = items.compactMap { item -> URL? in
+            let expected = tempDir.appendingPathComponent(item.name)
+            if FileManager.default.fileExists(atPath: expected.path) {
+                return expected
+            }
+            // Check for converted Google Workspace files with appended extension
+            for ext in ["docx", "xlsx", "pptx", "pdf"] {
+                let converted = expected.appendingPathExtension(ext)
+                if FileManager.default.fileExists(atPath: converted.path) {
+                    return converted
+                }
+            }
+            return nil
+        }
 
         if let progress {
             progress.currentPhase = .uploading
