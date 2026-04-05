@@ -19,8 +19,8 @@ struct GoogleDriveDeviceAuth: Sendable {
 }
 
 actor GoogleDriveAPIClient {
-    static let clientId = "424138139102-slpfu3jj03u2ggop9j757aq6ec2hamv2.apps.googleusercontent.com"
-    static let clientSecret = "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"
+    static let clientId = "682536313816-j07jrk2kbff3sljb16vfal5soqs8vte9.apps.googleusercontent.com"
+    static let clientSecret = "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"
     static let scopes = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
 
     private(set) var credentials: GoogleDriveCredentials

@@ -30,7 +30,7 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 - **Dropbox** — *new in 0.4*
 - **Koofr**
 
-## What's New in 0.6.0 Beta
+## What's New in 0.6.1 Beta
 
 - **Automatic Google Workspace conversion** — Google Docs, Sheets, and Slides are automatically converted to DOCX, XLSX, and PPTX when copying or moving them to local folders or other cloud services, making them editable in LibreOffice and Microsoft Office
 - **Universal search** — search across all local files and connected cloud accounts from a single popup (Cmd+F), with results grouped by source, source filtering, and right-click to open in either panel
