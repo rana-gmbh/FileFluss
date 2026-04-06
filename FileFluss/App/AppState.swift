@@ -398,31 +398,50 @@ final class TransferProgress: Identifiable {
     /// Names of top-level items that are directories (set by the caller)
     var transferredFolderNames: Set<String> = []
 
+    private var pastTenseOperation: String {
+        switch operation {
+        case "Copying": return "Copied"
+        case "Moving": return "Moved"
+        case "Downloading": return "Downloaded"
+        case "Uploading": return "Uploaded"
+        default: return operation
+        }
+    }
+
     var completionSummary: String {
+        let names = transferredFileNames
+        let pastTense = pastTenseOperation
+
         if let errorMessage {
-            let names = transferredFileNames
             let label = names.count == 1 ? names[0] : "\(names.count) items"
             return "Failed: \(operation) \(label) — \(errorMessage)"
         }
-        let names = transferredFileNames
-        let pastTense: String
-        switch operation {
-        case "Copying": pastTense = "Copied"
-        case "Moving": pastTense = "Moved"
-        case "Downloading": pastTense = "Downloaded"
-        case "Uploading": pastTense = "Uploaded"
-        default: pastTense = operation
-        }
+
+        if names.isEmpty { return "Done" }
+
+        let maxInline = 3
+        let header = "Done: \(pastTense) "
         if names.count == 1 {
             let fileCount = totalFiles > 0 ? totalFiles : totalItems
             if !transferredFolderNames.isEmpty && fileCount > 1 {
-                return "Done: \(pastTense) \(names[0]) (\(fileCount) files)"
+                return "\(header)\(names[0]) (\(fileCount) files)"
             }
-            return "Done: \(pastTense) \(names[0])"
-        } else if names.count > 1 {
-            return "Done: \(pastTense) \(names.count) items"
+            return "\(header)\(names[0])"
         }
-        return "Done"
+
+        let shown = names.prefix(maxInline).joined(separator: ", ")
+        let remaining = names.count - maxInline
+        if remaining > 0 {
+            return "\(header)\(shown) +\(remaining) more"
+        }
+        return "\(header)\(shown)"
+    }
+
+    /// Full item list for tooltip display when the summary is truncated.
+    var completionDetailNames: String? {
+        let names = transferredFileNames
+        guard names.count > 3 else { return nil }
+        return names.joined(separator: "\n")
     }
 
     var duration: TimeInterval {

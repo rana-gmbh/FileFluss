@@ -249,9 +249,16 @@ private struct TransferRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(transfer.statusText)
-                    .font(.caption)
-                    .lineLimit(1)
+                if let details = transfer.completionDetailNames, transfer.isComplete {
+                    Text(transfer.statusText)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .help(details)
+                } else {
+                    Text(transfer.statusText)
+                        .font(.caption)
+                        .lineLimit(1)
+                }
                 Spacer()
                 if transfer.isComplete {
                     Button("Details") {
