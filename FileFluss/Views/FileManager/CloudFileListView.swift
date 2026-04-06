@@ -243,7 +243,35 @@ struct CloudFileListView: View {
             cloudPathBar
             Divider()
             cloudFileArea
+            Divider()
+            cloudStatusFooter
         }
+    }
+
+    private var cloudStatusFooter: some View {
+        let items = vm.filteredItems
+        let fileCount = items.filter { !$0.isDirectory }.count
+        let folderCount = items.filter { $0.isDirectory }.count
+        let totalSize = items.filter { !$0.isDirectory }.reduce(Int64(0)) { $0 + $1.size }
+        let selected = vm.selectedItems
+
+        return HStack(spacing: 4) {
+            Text("\(fileCount) files, \(folderCount) folders — \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))")
+            if !selected.isEmpty {
+                Text("·")
+                if vm.isCalculatingSelectionSize {
+                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), Calculating…")
+                } else if let size = vm.selectionSize {
+                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
+                }
+            }
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(.bar)
     }
 
     private var cloudPathBar: some View {
@@ -409,6 +437,7 @@ struct CloudFileListView: View {
             )
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()
+                vm.recalculateSelectionSize()
             }
             .overlay {
                 if vm.filteredItems.isEmpty && !vm.isLoading {

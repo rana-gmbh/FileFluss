@@ -136,6 +136,55 @@ final class FileManagerViewModel {
         items.filter { selectedItemIDs.contains($0.id) }
     }
 
+    // MARK: - Selection Size (for footer)
+
+    var selectionSize: Int64? = nil
+    var isCalculatingSelectionSize = false
+    private var selectionSizeTask: Task<Void, Never>?
+
+    func recalculateSelectionSize() {
+        selectionSizeTask?.cancel()
+
+        let selected = selectedItems
+        guard !selected.isEmpty else {
+            selectionSize = nil
+            isCalculatingSelectionSize = false
+            return
+        }
+
+        let files = selected.filter { !$0.isDirectory }
+        let folders = selected.filter { $0.isDirectory }
+        let fileSize = files.reduce(Int64(0)) { $0 + $1.size }
+
+        if folders.isEmpty {
+            selectionSize = fileSize
+            isCalculatingSelectionSize = false
+            return
+        }
+
+        isCalculatingSelectionSize = true
+        selectionSize = fileSize // show file size immediately
+
+        selectionSizeTask = Task {
+            var total = fileSize
+            let fm = Foundation.FileManager.default
+            for folder in folders {
+                guard !Task.isCancelled else { return }
+                let enumerator = fm.enumerator(at: folder.url, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: [.skipsHiddenFiles])
+                while let fileURL = enumerator?.nextObject() as? URL {
+                    guard !Task.isCancelled else { return }
+                    if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+                       values.isRegularFile == true {
+                        total += Int64(values.fileSize ?? 0)
+                    }
+                }
+            }
+            guard !Task.isCancelled else { return }
+            self.selectionSize = total
+            self.isCalculatingSelectionSize = false
+        }
+    }
+
     func deleteSelectedItems() async {
         for item in selectedItems {
             do {

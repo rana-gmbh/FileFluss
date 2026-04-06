@@ -30,6 +30,8 @@ struct FileListView: View {
             pathBar
             Divider()
             fileArea
+            Divider()
+            statusFooter
         }
         .confirmationDialog(
             "Move or Copy?",
@@ -371,6 +373,7 @@ struct FileListView: View {
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()
+                    fm.recalculateSelectionSize()
                 }
                 .overlay {
                     if fm.filteredItems.isEmpty {
@@ -382,6 +385,32 @@ struct FileListView: View {
                 }
             }
         }
+    }
+
+    private var statusFooter: some View {
+        let items = fm.filteredItems
+        let fileCount = items.filter { !$0.isDirectory }.count
+        let folderCount = items.filter { $0.isDirectory }.count
+        let totalSize = items.filter { !$0.isDirectory }.reduce(Int64(0)) { $0 + $1.size }
+        let selected = fm.selectedItems
+
+        return HStack(spacing: 4) {
+            Text("\(fileCount) files, \(folderCount) folders — \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))")
+            if !selected.isEmpty {
+                Text("·")
+                if fm.isCalculatingSelectionSize {
+                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), Calculating…")
+                } else if let size = fm.selectionSize {
+                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
+                }
+            }
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(.bar)
     }
 
     private var pathComponents: [(name: String, url: URL)] {

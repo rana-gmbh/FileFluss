@@ -66,6 +66,53 @@ final class CloudFileManagerViewModel {
         items.filter { selectedItemIDs.contains($0.id) }
     }
 
+    // MARK: - Selection Size (for footer)
+
+    var selectionSize: Int64? = nil
+    var isCalculatingSelectionSize = false
+    private var selectionSizeTask: Task<Void, Never>?
+
+    func recalculateSelectionSize() {
+        selectionSizeTask?.cancel()
+
+        let selected = selectedItems
+        guard !selected.isEmpty else {
+            selectionSize = nil
+            isCalculatingSelectionSize = false
+            return
+        }
+
+        let files = selected.filter { !$0.isDirectory }
+        let folders = selected.filter { $0.isDirectory }
+        let fileSize = files.reduce(Int64(0)) { $0 + $1.size }
+
+        if folders.isEmpty {
+            selectionSize = fileSize
+            isCalculatingSelectionSize = false
+            return
+        }
+
+        isCalculatingSelectionSize = true
+        selectionSize = fileSize
+
+        selectionSizeTask = Task {
+            var total = fileSize
+            guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+            for folder in folders {
+                guard !Task.isCancelled else { return }
+                do {
+                    let size = try await provider.folderSize(at: folder.path)
+                    total += size
+                } catch {
+                    // skip folders that fail
+                }
+            }
+            guard !Task.isCancelled else { return }
+            self.selectionSize = total
+            self.isCalculatingSelectionSize = false
+        }
+    }
+
     var canGoBack: Bool { pathHistoryIndex > 0 }
     var canGoForward: Bool { pathHistoryIndex < pathHistory.count - 1 }
 
