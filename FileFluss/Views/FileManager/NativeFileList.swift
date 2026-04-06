@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import QuickLookUI
 
 // MARK: - NSViewRepresentable Bridge
 
@@ -9,6 +10,7 @@ struct NativeFileList: NSViewRepresentable {
     let currentDirectory: URL
     let panelSide: PanelSide
     @Binding var selectedIDs: Set<String>
+    var quickLookController: QuickLookController?
     var onDoubleClick: (FileItem) -> Void
     var onDrop: ([FileItem], URL) -> Void
     var onKeySpace: () -> Void
@@ -95,6 +97,12 @@ struct NativeFileList: NSViewRepresentable {
             coordinator?.onBecameActive?()
         }
 
+        // Quick Look controller
+        if let qlController = quickLookController {
+            tableView.quickLookController = qlController
+            qlController.sourceTableView = tableView
+        }
+
         // Context menu
         let menu = NSMenu()
         menu.delegate = coordinator
@@ -167,6 +175,7 @@ class FileTableView: NSTableView {
     var onSpaceKey: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBecameFirstResponder: (() -> Void)?
+    var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
         if event.charactersIgnoringModifiers == " " {
@@ -190,6 +199,26 @@ class FileTableView: NSTableView {
     override func mouseDown(with event: NSEvent) {
         onBecameFirstResponder?()
         super.mouseDown(with: event)
+    }
+
+    // MARK: - QLPreviewPanel support
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        true
+    }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = quickLookController
+            panel.delegate = quickLookController
+        }
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = nil
+            panel.delegate = nil
+        }
     }
 }
 

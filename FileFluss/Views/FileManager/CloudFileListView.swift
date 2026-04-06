@@ -289,6 +289,7 @@ struct CloudFileListView: View {
                 items: vm.filteredItems,
                 panelSide: panelSide,
                 selectedIDs: Bindable(vm).selectedItemIDs,
+                quickLookController: vm.quickLookController,
                 onDoubleClick: { item in
                     Task { await vm.openItem(item) }
                 },
@@ -408,10 +409,6 @@ struct CloudFileListView: View {
             )
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()
-            }
-            .background {
-                QuickLookBridge(controller: vm.quickLookController)
-                    .frame(width: 0, height: 0)
             }
             .overlay {
                 if vm.filteredItems.isEmpty && !vm.isLoading {

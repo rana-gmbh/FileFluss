@@ -275,6 +275,7 @@ struct FileListView: View {
                     currentDirectory: fm.currentDirectory,
                     panelSide: panelSide,
                     selectedIDs: Bindable(fm).selectedItemIDs,
+                    quickLookController: fm.quickLookController,
                     onDoubleClick: { item in
                         Task { await fm.openItem(item) }
                     },
@@ -370,10 +371,6 @@ struct FileListView: View {
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()
-                }
-                .background {
-                    QuickLookBridge(controller: fm.quickLookController)
-                        .frame(width: 0, height: 0)
                 }
                 .overlay {
                     if fm.filteredItems.isEmpty {

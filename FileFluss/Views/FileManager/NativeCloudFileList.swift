@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import QuickLookUI
 
 // MARK: - NSViewRepresentable Bridge
 
@@ -8,6 +9,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     let items: [CloudFileItem]
     let panelSide: PanelSide
     @Binding var selectedIDs: Set<String>
+    var quickLookController: QuickLookController?
     var onDoubleClick: (CloudFileItem) -> Void
     var onDrop: (([URL]) -> Void)?
     var onKeySpace: () -> Void
@@ -84,6 +86,12 @@ struct NativeCloudFileList: NSViewRepresentable {
             coordinator?.onBecameActive?()
         }
 
+        // Quick Look controller
+        if let qlController = quickLookController {
+            tableView.quickLookController = qlController
+            qlController.sourceTableView = tableView
+        }
+
         let menu = NSMenu()
         menu.delegate = coordinator
         tableView.menu = menu
@@ -156,6 +164,7 @@ class CloudTableView: NSTableView {
     var onSpaceKey: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBecameFirstResponder: (() -> Void)?
+    var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
         if event.charactersIgnoringModifiers == " " {
@@ -171,6 +180,26 @@ class CloudTableView: NSTableView {
         let result = super.becomeFirstResponder()
         if result { onBecameFirstResponder?() }
         return result
+    }
+
+    // MARK: - QLPreviewPanel support
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        true
+    }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = quickLookController
+            panel.delegate = quickLookController
+        }
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        MainActor.assumeIsolated {
+            panel.dataSource = nil
+            panel.delegate = nil
+        }
     }
 
     override func mouseDown(with event: NSEvent) {

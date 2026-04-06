@@ -301,7 +301,6 @@ final class CloudFileManagerViewModel {
             }
             return localURL
         } catch {
-            self.error = "Failed to download \(item.name): \(error.localizedDescription)"
             return nil
         }
     }

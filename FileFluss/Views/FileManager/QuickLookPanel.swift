@@ -5,14 +5,9 @@ import QuickLookUI
 /// Manages the QLPreviewPanel directly, without SwiftUI binding-driven show/hide.
 /// This avoids race conditions where the panel re-opens after being closed.
 @MainActor
-final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     var urls: [URL] = []
-    private var anchorView: QuickLookAnchorView?
-
-    func setAnchorView(_ view: QuickLookAnchorView) {
-        anchorView = view
-        view.controller = self
-    }
+    weak var sourceTableView: NSTableView?
 
     func toggle() {
         guard let panel = QLPreviewPanel.shared() else { return }
@@ -21,7 +16,11 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
             panel.orderOut(nil)
         } else {
             guard !urls.isEmpty else { return }
-            anchorView?.window?.makeFirstResponder(anchorView)
+            // Ensure the table view is first responder so QLPreviewPanel
+            // finds it via the responder chain.
+            if let tv = sourceTableView {
+                tv.window?.makeFirstResponder(tv)
+            }
             panel.makeKeyAndOrderFront(nil)
         }
     }
@@ -46,44 +45,27 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
         guard index >= 0, index < urls.count else { return nil }
         return urls[index] as NSURL
     }
-}
 
-/// Invisible NSView that participates in the responder chain for QLPreviewPanel.
-class QuickLookAnchorView: NSView {
-    var controller: QuickLookController?
+    // MARK: - QLPreviewPanelDelegate
 
-    override var acceptsFirstResponder: Bool { true }
+    /// Forward arrow key events back to the source table view so the user
+    /// can navigate files while Quick Look is open. Space closes the panel.
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        guard let event, event.type == .keyDown else { return false }
 
-    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
-        true
-    }
-
-    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
-        MainActor.assumeIsolated {
-            panel.dataSource = controller
-            panel.delegate = controller
+        // Space toggles (closes) the panel
+        if event.charactersIgnoringModifiers == " " {
+            panel.orderOut(nil)
+            return true
         }
-    }
 
-    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
-        MainActor.assumeIsolated {
-            panel.dataSource = nil
-            panel.delegate = nil
+        // Arrow keys → forward to table view to change selection
+        let arrowKeyCodes: Set<UInt16> = [125, 126] // down, up
+        if arrowKeyCodes.contains(event.keyCode), let tableView = sourceTableView {
+            tableView.keyDown(with: event)
+            return true
         }
-    }
-}
 
-/// NSViewRepresentable that embeds the anchor view into the SwiftUI hierarchy.
-struct QuickLookBridge: NSViewRepresentable {
-    let controller: QuickLookController
-
-    func makeNSView(context: Context) -> QuickLookAnchorView {
-        let view = QuickLookAnchorView()
-        controller.setAnchorView(view)
-        return view
-    }
-
-    func updateNSView(_ nsView: QuickLookAnchorView, context: Context) {
-        // No-op: panel is controlled directly via QuickLookController.toggle()
+        return false
     }
 }
