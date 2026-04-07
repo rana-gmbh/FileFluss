@@ -19,23 +19,23 @@ final class FileManagerViewModel {
     // Drag & Drop
     var draggedItems: [FileItem] = []
     var pendingDrop: PendingDrop?
-    var pendingOverwrite: PendingOverwrite?
+    // Drag & Drop pending state
 
     struct PendingDrop {
         let items: [FileItem]
         let destinationFolder: URL
     }
 
-    struct PendingOverwrite {
-        let conflicting: [String]  // names that already exist
-        let items: [FileItem]
-        let destinationFolder: URL
-        let operation: OverwriteOperation
-        let progress: TransferProgress?
-    }
+    // MARK: - Per-item conflict resolution
 
-    enum OverwriteOperation {
-        case copy, move
+    var conflictDirection: ConflictDirection = .leftToRight
+    var pendingConflict: PendingConflict?
+    private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
+
+    func resolveConflict(_ resolution: ConflictResolution) {
+        conflictContinuation?.resume(returning: resolution)
+        conflictContinuation = nil
+        pendingConflict = nil
     }
 
     // Quick Look — controlled directly, no SwiftUI binding
@@ -248,27 +248,48 @@ final class FileManagerViewModel {
 
     // MARK: - Drag & Drop
 
-    func performMove(items: [FileItem], to folder: URL, progress: TransferProgress? = nil, overwrite: Bool = false) async {
-        if !overwrite {
-            let conflicts = items.filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path) }
-            if !conflicts.isEmpty {
-                pendingOverwrite = PendingOverwrite(
-                    conflicting: conflicts.map(\.name),
-                    items: items,
-                    destinationFolder: folder,
-                    operation: .move,
-                    progress: progress
-                )
-                return
-            }
-        }
+    func performMove(items: [FileItem], to folder: URL, progress: TransferProgress? = nil) async {
         progress?.transferredFileNames = items.map(\.name)
         progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
+
+        var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
-            let dest = folder.appendingPathComponent(item.name)
+            var dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
+
+            if FileManager.default.fileExists(atPath: dest.path) {
+                let choice: ConflictChoice
+                if let saved = applyToAllChoice {
+                    choice = saved
+                } else {
+                    let remaining = items[(index + 1)...].filter {
+                        FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
+                    }.count
+                    let destInfo = Self.localFileInfo(at: dest)
+                    let resolution = await withCheckedContinuation { continuation in
+                        self.conflictContinuation = continuation
+                        self.pendingConflict = PendingConflict(
+                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
+                            destination: destInfo,
+                            remainingConflicts: remaining,
+                            direction: self.conflictDirection
+                        )
+                    }
+                    choice = resolution.choice
+                    if resolution.applyToAll { applyToAllChoice = choice }
+                }
+                switch choice {
+                case .skip: progress?.completedItems = index + 1; continue
+                case .stop:
+                    progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
+                case .keepBoth:
+                    dest = Self.uniqueDestination(for: dest)
+                case .replace: break
+                }
+            }
+
             do {
-                if overwrite && FileManager.default.fileExists(atPath: dest.path) {
+                if FileManager.default.fileExists(atPath: dest.path) {
                     try FileManager.default.removeItem(at: dest)
                 }
                 progress?.totalBytes += item.size
@@ -287,27 +308,48 @@ final class FileManagerViewModel {
         await loadDirectory()
     }
 
-    func performCopy(items: [FileItem], to folder: URL, progress: TransferProgress? = nil, overwrite: Bool = false) async {
-        if !overwrite {
-            let conflicts = items.filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path) }
-            if !conflicts.isEmpty {
-                pendingOverwrite = PendingOverwrite(
-                    conflicting: conflicts.map(\.name),
-                    items: items,
-                    destinationFolder: folder,
-                    operation: .copy,
-                    progress: progress
-                )
-                return
-            }
-        }
+    func performCopy(items: [FileItem], to folder: URL, progress: TransferProgress? = nil) async {
         progress?.transferredFileNames = items.map(\.name)
         progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
+
+        var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
-            let dest = folder.appendingPathComponent(item.name)
+            var dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
+
+            if FileManager.default.fileExists(atPath: dest.path) {
+                let choice: ConflictChoice
+                if let saved = applyToAllChoice {
+                    choice = saved
+                } else {
+                    let remaining = items[(index + 1)...].filter {
+                        FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
+                    }.count
+                    let destInfo = Self.localFileInfo(at: dest)
+                    let resolution = await withCheckedContinuation { continuation in
+                        self.conflictContinuation = continuation
+                        self.pendingConflict = PendingConflict(
+                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
+                            destination: destInfo,
+                            remainingConflicts: remaining,
+                            direction: self.conflictDirection
+                        )
+                    }
+                    choice = resolution.choice
+                    if resolution.applyToAll { applyToAllChoice = choice }
+                }
+                switch choice {
+                case .skip: progress?.completedItems = index + 1; continue
+                case .stop:
+                    progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
+                case .keepBoth:
+                    dest = Self.uniqueDestination(for: dest)
+                case .replace: break
+                }
+            }
+
             do {
-                if overwrite && FileManager.default.fileExists(atPath: dest.path) {
+                if FileManager.default.fileExists(atPath: dest.path) {
                     try FileManager.default.removeItem(at: dest)
                 }
                 progress?.totalBytes += item.size
@@ -347,6 +389,35 @@ final class FileManagerViewModel {
         }
         pathHistory.append(url)
         pathHistoryIndex = pathHistory.count - 1
+    }
+
+    static func localFileInfo(at url: URL) -> ConflictFileInfo {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .totalFileSizeKey])
+        return ConflictFileInfo(
+            name: url.lastPathComponent,
+            date: values?.contentModificationDate ?? .distantPast,
+            size: Int64(values?.totalFileSize ?? values?.fileSize ?? 0),
+            fileExtension: url.pathExtension,
+            localURL: url
+        )
+    }
+
+    static func uniqueDestination(for url: URL) -> URL {
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        let name = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var counter = 2
+        while true {
+            let candidate: URL
+            if ext.isEmpty {
+                candidate = dir.appendingPathComponent("\(name) \(counter)")
+            } else {
+                candidate = dir.appendingPathComponent("\(name) \(counter).\(ext)")
+            }
+            if !fm.fileExists(atPath: candidate.path) { return candidate }
+            counter += 1
+        }
     }
 
     private func sorted(_ items: [FileItem]) -> [FileItem] {

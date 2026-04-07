@@ -5,7 +5,7 @@ struct FileListView: View {
     @Environment(AppState.self) private var appState
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
-    @State private var showOverwriteConfirmation: Bool = false
+    @State private var showConflict: Bool = false
     @State private var showCloudDropConfirmation: Bool = false
     @State private var pendingCloudDrop: PendingCloudDrop?
     @State private var showNewFolderDialog: Bool = false
@@ -22,6 +22,16 @@ struct FileListView: View {
 
     private var fm: FileManagerViewModel {
         appState.fileManager(for: panelSide)
+    }
+
+    /// Direction for conflict dialog: source panel → destination panel (this panel receives)
+    private var incomingDirection: ConflictDirection {
+        panelSide == .right ? .leftToRight : .rightToLeft
+    }
+
+    /// Direction for conflict dialog: this panel → other panel (this panel sends)
+    private var outgoingDirection: ConflictDirection {
+        panelSide == .left ? .leftToRight : .rightToLeft
     }
 
 
@@ -43,6 +53,7 @@ struct FileListView: View {
                 let dest = drop.destinationFolder
                 let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                 appState.addTransfer(transfer, panel: panelSide)
+                fm.conflictDirection = incomingDirection
                 Task {
                     await fm.performCopy(items: items, to: dest, progress: transfer)
                     await appState.refreshAllPanels()
@@ -53,6 +64,7 @@ struct FileListView: View {
                 let dest = drop.destinationFolder
                 let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                 appState.addTransfer(transfer, panel: panelSide)
+                fm.conflictDirection = incomingDirection
                 Task {
                     await fm.performMove(items: items, to: dest, progress: transfer)
                     await appState.refreshAllPanels()
@@ -87,41 +99,16 @@ struct FileListView: View {
                 Text("Are you sure you want to move \(items.count) items to the Trash?")
             }
         }
-        .confirmationDialog(
-            "File Already Exists",
-            isPresented: $showOverwriteConfirmation,
-            presenting: fm.pendingOverwrite
-        ) { overwrite in
-            Button("Overwrite", role: .destructive) {
-                let items = overwrite.items
-                let dest = overwrite.destinationFolder
-                let progress = overwrite.progress
-                let op = overwrite.operation
-                fm.pendingOverwrite = nil
-                Task {
-                    switch op {
-                    case .copy:
-                        await fm.performCopy(items: items, to: dest, progress: progress, overwrite: true)
-                    case .move:
-                        await fm.performMove(items: items, to: dest, progress: progress, overwrite: true)
-                    }
-                    await appState.refreshAllPanels()
+        .sheet(isPresented: $showConflict) {
+            if let conflict = fm.pendingConflict {
+                ConflictResolutionView(conflict: conflict) { resolution in
+                    showConflict = false
+                    fm.resolveConflict(resolution)
                 }
             }
-            Button("Cancel", role: .cancel) {
-                fm.pendingOverwrite?.progress?.isComplete = true
-                fm.pendingOverwrite = nil
-            }
-        } message: { overwrite in
-            let names = overwrite.conflicting
-            if names.count == 1 {
-                Text("\"\(names[0])\" already exists in the destination. Do you want to overwrite it?")
-            } else {
-                Text("\(names.count) files already exist in the destination. Do you want to overwrite them?")
-            }
         }
-        .onChange(of: fm.pendingOverwrite != nil) { _, hasOverwrite in
-            if hasOverwrite { showOverwriteConfirmation = true }
+        .onChange(of: fm.pendingConflict != nil) { _, hasConflict in
+            showConflict = hasConflict
         }
         .confirmationDialog(
             "Move or Copy?",
@@ -137,6 +124,7 @@ struct FileListView: View {
                 appState.addTransfer(transfer, panel: panelSide)
                 Task {
                     let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+                    cloudVM.conflictDirection = incomingDirection
                     await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
                     await fm.refresh()
                 }
@@ -150,6 +138,7 @@ struct FileListView: View {
                 appState.addTransfer(transfer, panel: panelSide)
                 Task {
                     let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+                    cloudVM.conflictDirection = incomingDirection
                     await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
                     await cloudVM.deleteItems(sourceItems)
                     await fm.refresh()
@@ -210,9 +199,11 @@ struct FileListView: View {
             appState.addTransfer(transfer, panel: otherSide)
             if let cloudId = appState.cloudAccountId(for: otherSide) {
                 let cloudVM = appState.cloudFileManager(for: cloudId)
+                cloudVM.conflictDirection = outgoingDirection
                 Task { await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer) }
             } else {
                 let otherFM = appState.fileManager(for: otherSide)
+                fm.conflictDirection = outgoingDirection
                 Task {
                     await fm.performCopy(items: items, to: otherFM.currentDirectory, progress: transfer)
                     await appState.refreshAllPanels()
@@ -228,6 +219,7 @@ struct FileListView: View {
             appState.addTransfer(transfer, panel: otherSide)
             if let cloudId = appState.cloudAccountId(for: otherSide) {
                 let cloudVM = appState.cloudFileManager(for: cloudId)
+                cloudVM.conflictDirection = outgoingDirection
                 Task {
                     await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
                     await fm.deleteItems(items)
@@ -235,6 +227,7 @@ struct FileListView: View {
                 }
             } else {
                 let otherFM = appState.fileManager(for: otherSide)
+                fm.conflictDirection = outgoingDirection
                 Task {
                     await fm.performMove(items: items, to: otherFM.currentDirectory, progress: transfer)
                     await appState.refreshAllPanels()
@@ -299,8 +292,10 @@ struct FileListView: View {
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
                         let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
+                        fm.conflictDirection = outgoingDirection
                         if let cloudId = appState.cloudAccountId(for: otherSide) {
                             let cloudVM = appState.cloudFileManager(for: cloudId)
+                            cloudVM.conflictDirection = outgoingDirection
                             Task {
                                 await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
                             }
@@ -316,8 +311,10 @@ struct FileListView: View {
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
                         let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
+                        fm.conflictDirection = outgoingDirection
                         if let cloudId = appState.cloudAccountId(for: otherSide) {
                             let cloudVM = appState.cloudFileManager(for: cloudId)
+                            cloudVM.conflictDirection = outgoingDirection
                             Task {
                                 await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
                                 await fm.deleteItems(items)

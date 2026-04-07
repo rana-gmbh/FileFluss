@@ -15,22 +15,18 @@ final class CloudFileManagerViewModel {
 
     let quickLookController = QuickLookController()
 
-    var pendingOverwrite: PendingCloudOverwrite?
-    var pendingUploadOverwrite: PendingUploadOverwrite?
+    // MARK: - Per-item conflict resolution
 
-    struct PendingCloudOverwrite {
-        let conflicting: [String]
-        let items: [CloudFileItem]
-        let localDirectory: URL
-        let progress: TransferProgress?
-        let deleteAfter: Bool
+    var conflictDirection: ConflictDirection = .leftToRight
+    var pendingConflict: PendingConflict?
+    private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
+
+    func resolveConflict(_ resolution: ConflictResolution) {
+        conflictContinuation?.resume(returning: resolution)
+        conflictContinuation = nil
+        pendingConflict = nil
     }
 
-    struct PendingUploadOverwrite {
-        let conflicting: [String]
-        let urls: [URL]
-        let progress: TransferProgress?
-    }
 
     private var pathHistory: [String] = ["/"]
     private var pathHistoryIndex: Int = 0
@@ -244,81 +240,167 @@ final class CloudFileManagerViewModel {
         await loadDirectory()
     }
 
-    // MARK: - Download
+    // MARK: - Pre-flight Conflict Resolution (for cloud-to-cloud)
 
-    func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, overwrite: Bool = false) async {
-        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+    enum PreFlightResult: Equatable {
+        case transfer          // download + upload normally
+        case replace           // delete existing on target, then transfer
+        case keepBoth          // upload with a unique name
+        case skip              // don't transfer this item
+    }
 
-        // Check for conflicts at the top level (files only)
-        // Also check for converted Google Workspace names (e.g. "Doc" → "Doc.docx")
-        let topLevelFiles = items.filter { !$0.isDirectory }
-        if !overwrite {
-            let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
-            let conflicts = topLevelFiles.filter { item in
-                let base = localDirectory.appendingPathComponent(item.name)
-                if FileManager.default.fileExists(atPath: base.path) { return true }
-                return convertedExtensions.contains { ext in
-                    FileManager.default.fileExists(atPath: base.appendingPathExtension(ext).path)
-                }
+    /// Check source items against this VM's current items and resolve conflicts
+    /// before any downloads happen. Returns a resolution for each source item.
+    func preFlightConflictCheck(sourceItems: [CloudFileItem]) async -> [(CloudFileItem, PreFlightResult)] {
+        let existingByName = Dictionary(items.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        var results: [(CloudFileItem, PreFlightResult)] = []
+        var applyToAllChoice: ConflictChoice?
+
+        for (index, item) in sourceItems.enumerated() {
+            guard let existing = existingByName[item.name] else {
+                results.append((item, .transfer))
+                continue
             }
-            if !conflicts.isEmpty {
-                pendingOverwrite = PendingCloudOverwrite(
-                    conflicting: conflicts.map(\.name),
-                    items: items,
-                    localDirectory: localDirectory,
-                    progress: progress,
-                    deleteAfter: false
-                )
-                return
+
+            let choice: ConflictChoice
+            if let saved = applyToAllChoice {
+                choice = saved
+            } else {
+                let remaining = sourceItems[(index + 1)...].filter { existingByName[$0.name] != nil }.count
+                let resolution = await withCheckedContinuation { continuation in
+                    self.conflictContinuation = continuation
+                    self.pendingConflict = PendingConflict(
+                        source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
+                        destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
+                        remainingConflicts: remaining,
+                        direction: self.conflictDirection
+                    )
+                }
+                choice = resolution.choice
+                if resolution.applyToAll { applyToAllChoice = choice }
+            }
+            switch choice {
+            case .skip: results.append((item, .skip))
+            case .stop:
+                // Mark remaining items as skip
+                for remaining in sourceItems[index...] {
+                    results.append((remaining, .skip))
+                }
+                return results
+            case .keepBoth: results.append((item, .keepBoth))
+            case .replace: results.append((item, .replace))
             }
         }
+        return results
+    }
 
-        // Track top-level names and folder info for completion summary
+    // MARK: - Download
+
+    func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+
         progress?.transferredFileNames = items.map(\.name)
         progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
         progress?.isCloudDownload = true
 
+        let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
+        var applyToAllChoice: ConflictChoice?
         var downloadedCount = 0
-        do {
-            try await downloadRecursively(items: items, to: localDirectory, provider: provider, overwrite: overwrite, progress: progress, downloadedCount: &downloadedCount)
-        } catch {
-            self.error = error.localizedDescription
-            progress?.errorMessage = error.localizedDescription
+
+        for (index, item) in items.enumerated() {
+            var base = localDirectory.appendingPathComponent(item.name)
+            let existingURL = Self.findExistingFile(base: base, convertedExtensions: convertedExtensions)
+            let exists = existingURL != nil
+
+            if exists && !skipConflictCheck {
+                let choice: ConflictChoice
+                if let saved = applyToAllChoice {
+                    choice = saved
+                } else {
+                    let remaining = items[(index + 1)...].filter { nextItem in
+                        let nextBase = localDirectory.appendingPathComponent(nextItem.name)
+                        return Self.findExistingFile(base: nextBase, convertedExtensions: convertedExtensions) != nil
+                    }.count
+                    let destInfo = FileManagerViewModel.localFileInfo(at: existingURL!)
+                    let resolution = await withCheckedContinuation { continuation in
+                        self.conflictContinuation = continuation
+                        self.pendingConflict = PendingConflict(
+                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
+                            destination: destInfo,
+                            remainingConflicts: remaining,
+                            direction: self.conflictDirection
+                        )
+                    }
+                    choice = resolution.choice
+                    if resolution.applyToAll { applyToAllChoice = choice }
+                }
+                switch choice {
+                case .skip: progress?.completedItems = index + 1; continue
+                case .stop:
+                    if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
+                    return
+                case .keepBoth:
+                    base = FileManagerViewModel.uniqueDestination(for: base)
+                case .replace: break
+                }
+            }
+
+            do {
+                if exists {
+                    if !skipConflictCheck, let existing = existingURL {
+                        try FileManager.default.removeItem(at: existing)
+                    }
+                    for ext in convertedExtensions {
+                        let converted = localDirectory.appendingPathComponent(item.name).appendingPathExtension(ext)
+                        if FileManager.default.fileExists(atPath: converted.path) { try FileManager.default.removeItem(at: converted) }
+                    }
+                }
+                try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+                progress?.completedItems = index + 1
+            } catch {
+                self.error = "Failed to download \(item.name): \(error.localizedDescription)"
+                progress?.errorMessage = error.localizedDescription
+                if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
+                return
+            }
         }
+
         if !(progress?.isCloudToCloud ?? false) {
             progress?.endTime = Date()
             progress?.isComplete = true
         }
     }
 
-    private func downloadRecursively(items: [CloudFileItem], to localDirectory: URL, provider: CloudProvider, overwrite: Bool, progress: TransferProgress?, downloadedCount: inout Int) async throws {
-        for item in items {
-            if item.isDirectory {
-                let folderURL = localDirectory.appendingPathComponent(item.name)
-                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                let contents = try await provider.listDirectory(at: item.path)
-                try await downloadRecursively(items: contents, to: folderURL, provider: provider, overwrite: overwrite, progress: progress, downloadedCount: &downloadedCount)
-            } else {
-                let localURL = localDirectory.appendingPathComponent(item.name)
-                progress?.currentFileName = item.name
-                if overwrite {
-                    // Remove both the original and any converted variant
-                    if FileManager.default.fileExists(atPath: localURL.path) {
-                        try FileManager.default.removeItem(at: localURL)
-                    }
-                    for ext in ["docx", "xlsx", "pptx", "pdf"] {
-                        let converted = localURL.appendingPathExtension(ext)
-                        if FileManager.default.fileExists(atPath: converted.path) {
-                            try FileManager.default.removeItem(at: converted)
-                        }
-                    }
-                }
-                try await provider.downloadFile(remotePath: item.path, to: localURL)
-                progress?.totalBytes += item.size
-                downloadedCount += 1
-                progress?.totalFiles = downloadedCount
-                progress?.completedItems = downloadedCount
+    private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int) async throws {
+        if item.isDirectory {
+            let folderURL = localDirectory.appendingPathComponent(item.name)
+            try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            let contents = try await provider.listDirectory(at: item.path)
+            for child in contents {
+                try await downloadRecursively(item: child, to: folderURL, provider: provider, progress: progress, downloadedCount: &downloadedCount)
             }
+        } else {
+            let localURL = localDirectory.appendingPathComponent(item.name)
+            progress?.currentFileName = item.name
+            try await provider.downloadFile(remotePath: item.path, to: localURL)
+            // Preserve original cloud modification date on the local file
+            // so conflict dialogs and file listings show the correct date
+            let finalURL: URL
+            // Google Workspace files may get an extension appended
+            let convertedExts = ["docx", "xlsx", "pptx", "pdf"]
+            if let converted = convertedExts.lazy.map({ localURL.appendingPathExtension($0) }).first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+                finalURL = converted
+            } else {
+                finalURL = localURL
+            }
+            try? FileManager.default.setAttributes(
+                [.modificationDate: item.modificationDate],
+                ofItemAtPath: finalURL.path
+            )
+            progress?.totalBytes += item.size
+            downloadedCount += 1
+            progress?.totalFiles = downloadedCount
+            progress?.completedItems = downloadedCount
         }
     }
 
@@ -354,68 +436,82 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Upload
 
-    func uploadFiles(from urls: [URL], progress: TransferProgress? = nil, overwrite: Bool = false) async {
+    func uploadFiles(from urls: [URL], progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             self.error = "Cloud account not connected"
             progress?.isComplete = true
             return
         }
 
-        // Check for conflicts at the top level
-        if !overwrite {
-            let existingNames = Set(items.map(\.name))
-            let conflicts = urls.filter { existingNames.contains($0.lastPathComponent) }
-            if !conflicts.isEmpty {
-                pendingUploadOverwrite = PendingUploadOverwrite(
-                    conflicting: conflicts.map(\.lastPathComponent),
-                    urls: urls,
-                    progress: progress
-                )
-                return
-            }
-        }
-
-        // Delete conflicting remote items before re-uploading
-        if overwrite {
-            let existingByName = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0) })
-            for url in urls {
-                if let existing = existingByName[url.lastPathComponent] {
-                    do {
-                        try await provider.deleteItem(at: existing.path)
-                    } catch {
-                        self.error = "Failed to overwrite \(existing.name): \(error.localizedDescription)"
-                        progress?.errorMessage = error.localizedDescription
-                        progress?.endTime = Date()
-                        progress?.isComplete = true
-                        return
-                    }
-                }
-            }
-        }
+        let existingByName = Dictionary(items.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
         let fm = FileManager.default
         progress?.transferredFolderNames = Set(urls.filter { var isDir: ObjCBool = false; return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue }.map(\.lastPathComponent))
         progress?.isCloudUpload = true
 
+        var applyToAllChoice: ConflictChoice?
         var uploadedCount = 0
-        var uploadError: String?
-        do {
-            try await uploadRecursively(urls: urls, toRemotePath: currentPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
-        } catch {
-            uploadError = error.localizedDescription
-        }
-        if !(progress?.isCloudToCloud ?? false) {
-            if let uploadError {
-                progress?.errorMessage = uploadError
+
+        for (index, url) in urls.enumerated() {
+            var uploadURL = url
+            let name = url.lastPathComponent
+            if let existing = existingByName[name], !skipConflictCheck {
+                let choice: ConflictChoice
+                if let saved = applyToAllChoice {
+                    choice = saved
+                } else {
+                    let remaining = urls[(index + 1)...].filter { existingByName[$0.lastPathComponent] != nil }.count
+                    let sourceInfo = FileManagerViewModel.localFileInfo(at: url)
+                    let resolution = await withCheckedContinuation { continuation in
+                        self.conflictContinuation = continuation
+                        self.pendingConflict = PendingConflict(
+                            source: sourceInfo,
+                            destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
+                            remainingConflicts: remaining,
+                            direction: self.conflictDirection
+                        )
+                    }
+                    choice = resolution.choice
+                    if resolution.applyToAll { applyToAllChoice = choice }
+                }
+                switch choice {
+                case .skip: continue
+                case .stop:
+                    if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
+                    await loadDirectory(); return
+                case .keepBoth:
+                    let uniqueName = Self.uniqueCloudName(for: name, existing: Set(existingByName.keys))
+                    let tempCopy = FileManager.default.temporaryDirectory.appendingPathComponent(uniqueName)
+                    try? FileManager.default.removeItem(at: tempCopy)
+                    do { try FileManager.default.copyItem(at: url, to: tempCopy) } catch { break }
+                    uploadURL = tempCopy
+                case .replace:
+                    do { try await provider.deleteItem(at: existing.path) } catch {
+                        self.error = "Failed to overwrite \(name): \(error.localizedDescription)"
+                        progress?.errorMessage = error.localizedDescription
+                        progress?.endTime = Date(); progress?.isComplete = true
+                        return
+                    }
+                }
             }
+
+            do {
+                try await uploadRecursively(urls: [uploadURL], toRemotePath: currentPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                if uploadURL != url { try? FileManager.default.removeItem(at: uploadURL) }
+            } catch {
+                self.error = error.localizedDescription
+                progress?.errorMessage = error.localizedDescription
+                if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
+                return
+            }
+        }
+
+        if !(progress?.isCloudToCloud ?? false) {
             progress?.endTime = Date()
             progress?.isComplete = true
         }
         await loadDirectory()
-        if let uploadError {
-            self.error = uploadError
-        }
     }
 
     private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
@@ -493,6 +589,29 @@ final class CloudFileManagerViewModel {
             }
             quickLookController.updateAndReload(urls: urls)
         }
+    }
+
+    // MARK: - Helpers
+
+    static func uniqueCloudName(for name: String, existing: Set<String>) -> String {
+        let nsName = name as NSString
+        let ext = nsName.pathExtension
+        let base = nsName.deletingPathExtension
+        var counter = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)"
+            if !existing.contains(candidate) { return candidate }
+            counter += 1
+        }
+    }
+
+    static func findExistingFile(base: URL, convertedExtensions: [String]) -> URL? {
+        if FileManager.default.fileExists(atPath: base.path) { return base }
+        for ext in convertedExtensions {
+            let converted = base.appendingPathExtension(ext)
+            if FileManager.default.fileExists(atPath: converted.path) { return converted }
+        }
+        return nil
     }
 
     // MARK: - Private

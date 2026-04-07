@@ -5,8 +5,7 @@ struct CloudFileListView: View {
     let accountId: UUID
     @Environment(AppState.self) private var appState
     @State private var showDeleteConfirmation = false
-    @State private var showOverwriteConfirmation = false
-    @State private var showUploadOverwriteConfirmation = false
+    @State private var showConflict = false
     @State private var showDropConfirmation = false
     @State private var pendingUploadURLs: [URL]?
     @State private var showCloudToCloudDropConfirmation = false
@@ -24,6 +23,14 @@ struct CloudFileListView: View {
 
     private var vm: CloudFileManagerViewModel {
         appState.cloudFileManager(for: accountId)
+    }
+
+    private var incomingDirection: ConflictDirection {
+        panelSide == .right ? .leftToRight : .rightToLeft
+    }
+
+    private var outgoingDirection: ConflictDirection {
+        panelSide == .left ? .leftToRight : .rightToLeft
     }
 
     var body: some View {
@@ -51,8 +58,10 @@ struct CloudFileListView: View {
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
+                vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
                     let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
                     Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
@@ -71,8 +80,10 @@ struct CloudFileListView: View {
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
+                vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
                     let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
                     Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
@@ -104,56 +115,16 @@ struct CloudFileListView: View {
                 Text("Are you sure you want to delete \(items.count) items from pCloud?")
             }
         }
-        .confirmationDialog("File Already Exists", isPresented: $showOverwriteConfirmation, presenting: vm.pendingOverwrite) { overwrite in
-            Button("Overwrite", role: .destructive) {
-                let items = overwrite.items
-                let dest = overwrite.localDirectory
-                let progress = overwrite.progress
-                let deleteAfter = overwrite.deleteAfter
-                vm.pendingOverwrite = nil
-                Task {
-                    await vm.downloadItems(items, to: dest, progress: progress, overwrite: true)
-                    if deleteAfter { await vm.deleteItems(items) }
-                    let otherSide: PanelSide = panelSide == .left ? .right : .left
-                    await appState.fileManager(for: otherSide).refresh()
+        .sheet(isPresented: $showConflict) {
+            if let conflict = vm.pendingConflict {
+                ConflictResolutionView(conflict: conflict) { resolution in
+                    showConflict = false
+                    vm.resolveConflict(resolution)
                 }
             }
-            Button("Cancel", role: .cancel) {
-                vm.pendingOverwrite?.progress?.isComplete = true
-                vm.pendingOverwrite = nil
-            }
-        } message: { overwrite in
-            let names = overwrite.conflicting
-            if names.count == 1 {
-                Text("\"\(names[0])\" already exists locally. Do you want to overwrite it?")
-            } else {
-                Text("\(names.count) files already exist locally. Do you want to overwrite them?")
-            }
         }
-        .onChange(of: vm.pendingOverwrite != nil) { _, hasOverwrite in
-            if hasOverwrite { showOverwriteConfirmation = true }
-        }
-        .onChange(of: vm.pendingUploadOverwrite != nil) { _, hasOverwrite in
-            if hasOverwrite { showUploadOverwriteConfirmation = true }
-        }
-        .confirmationDialog("File Already Exists", isPresented: $showUploadOverwriteConfirmation, presenting: vm.pendingUploadOverwrite) { overwrite in
-            Button("Overwrite", role: .destructive) {
-                let urls = overwrite.urls
-                let progress = overwrite.progress
-                vm.pendingUploadOverwrite = nil
-                Task { await vm.uploadFiles(from: urls, progress: progress, overwrite: true) }
-            }
-            Button("Cancel", role: .cancel) {
-                overwrite.progress?.isComplete = true
-                vm.pendingUploadOverwrite = nil
-            }
-        } message: { overwrite in
-            let names = overwrite.conflicting
-            if names.count == 1 {
-                Text("\"\(names[0])\" already exists in the destination. Do you want to overwrite it?")
-            } else {
-                Text("\(names.count) files already exist in the destination. Do you want to overwrite them?")
-            }
+        .onChange(of: vm.pendingConflict != nil) { _, hasConflict in
+            showConflict = hasConflict
         }
         .alert("New Folder", isPresented: $showNewFolderDialog) {
             TextField("Folder name", text: $newFolderName)
@@ -185,12 +156,14 @@ struct CloudFileListView: View {
                 let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
                 appState.addTransfer(transfer, panel: panelSide)
                 pendingUploadURLs = nil
+                vm.conflictDirection = incomingDirection
                 Task { await vm.uploadFiles(from: urls, progress: transfer) }
             }
             Button("Move Here") {
                 let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
                 appState.addTransfer(transfer, panel: panelSide)
                 pendingUploadURLs = nil
+                vm.conflictDirection = incomingDirection
                 Task {
                     await vm.uploadFiles(from: urls, progress: transfer)
                     for url in urls { try? FileManager.default.removeItem(at: url) }
@@ -214,6 +187,8 @@ struct CloudFileListView: View {
                 let sourceAccountId = drop.sourceAccountId
                 pendingCloudToCloudDrop = nil
                 let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                sourceVM.conflictDirection = incomingDirection
+                vm.conflictDirection = incomingDirection
                 let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
                 appState.addTransfer(transfer, panel: panelSide)
                 Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false) }
@@ -223,6 +198,8 @@ struct CloudFileListView: View {
                 let sourceAccountId = drop.sourceAccountId
                 pendingCloudToCloudDrop = nil
                 let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+                sourceVM.conflictDirection = incomingDirection
+                vm.conflictDirection = incomingDirection
                 let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
                 appState.addTransfer(transfer, panel: panelSide)
                 Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true) }
@@ -334,9 +311,10 @@ struct CloudFileListView: View {
                 },
                 onCopyToOtherPanel: { items in
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
+                    vm.conflictDirection = outgoingDirection
                     if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                        // Cloud-to-cloud copy
                         let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
                         Task {
@@ -354,9 +332,10 @@ struct CloudFileListView: View {
                 },
                 onMoveToOtherPanel: { items in
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
+                    vm.conflictDirection = outgoingDirection
                     if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                        // Cloud-to-cloud move
                         let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
                         Task {
@@ -457,6 +436,7 @@ struct CloudFileListView: View {
     }
 
     /// Download items from source cloud to a temp directory, then upload to target cloud.
+    /// Conflicts are resolved BEFORE downloading to avoid wasting bandwidth.
     private static func cloudToCloudTransfer(
         items: [CloudFileItem],
         from sourceVM: CloudFileManagerViewModel,
@@ -464,6 +444,19 @@ struct CloudFileListView: View {
         progress: TransferProgress?,
         deleteFromSource: Bool
     ) async {
+        // Phase 0: Pre-flight conflict resolution (no downloads yet)
+        let resolutions = await targetVM.preFlightConflictCheck(sourceItems: items)
+
+        let itemsToTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
+        guard !itemsToTransfer.isEmpty else {
+            progress?.endTime = Date()
+            progress?.isComplete = true
+            return
+        }
+
+        // Build lookup for resolution per item name
+        let resolutionByName = Dictionary(resolutions.map { ($0.0.name, $0.1) }, uniquingKeysWith: { _, last in last })
+
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("cloud-transfer-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -472,35 +465,61 @@ struct CloudFileListView: View {
             try? FileManager.default.removeItem(at: tempDir)
         }
 
-        // Phase 1: Download
+        // Phase 1: Download only non-skipped items
         if let progress {
             progress.isCloudToCloud = true
             progress.currentPhase = .downloading
             progress.downloadStartTime = Date()
         }
 
-        await sourceVM.downloadItems(items, to: tempDir, progress: progress)
+        await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.downloadEndTime = Date()
             progress.downloadBytes = progress.totalBytes
         }
 
-        // Phase 2: Upload — find downloaded files, including Google Workspace
-        // exports that have an extension appended (e.g. "My Doc" → "My Doc.docx")
-        let localURLs = items.compactMap { item -> URL? in
-            let expected = tempDir.appendingPathComponent(item.name)
-            if FileManager.default.fileExists(atPath: expected.path) {
-                return expected
-            }
-            // Check for converted Google Workspace files with appended extension
-            for ext in ["docx", "xlsx", "pptx", "pdf"] {
-                let converted = expected.appendingPathExtension(ext)
-                if FileManager.default.fileExists(atPath: converted.path) {
-                    return converted
+        // Phase 2: Delete items that need replacing, then upload
+        let provider = await SyncEngine.shared.provider(for: targetVM.accountId)
+        for item in itemsToTransfer {
+            if resolutionByName[item.name] == .replace {
+                // Find and delete existing item on target
+                if let existing = targetVM.items.first(where: { $0.name == item.name }) {
+                    try? await provider?.deleteItem(at: existing.path)
                 }
             }
-            return nil
+        }
+
+        // Build local URLs for upload, renaming "keepBoth" items
+        let existingNames = Set(targetVM.items.map(\.name))
+        let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
+            let expected = tempDir.appendingPathComponent(item.name)
+            var localURL: URL?
+            if FileManager.default.fileExists(atPath: expected.path) {
+                localURL = expected
+            } else {
+                for ext in ["docx", "xlsx", "pptx", "pdf"] {
+                    let converted = expected.appendingPathExtension(ext)
+                    if FileManager.default.fileExists(atPath: converted.path) {
+                        localURL = converted
+                        break
+                    }
+                }
+            }
+            guard let url = localURL else { return nil }
+
+            // For keepBoth, rename the local temp file to a unique name
+            if resolutionByName[item.name] == .keepBoth {
+                let uniqueName = CloudFileManagerViewModel.uniqueCloudName(for: url.lastPathComponent, existing: existingNames)
+                let renamedURL = tempDir.appendingPathComponent(uniqueName)
+                do {
+                    try FileManager.default.moveItem(at: url, to: renamedURL)
+                    return renamedURL
+                } catch {
+                    return url
+                }
+            }
+            return url
         }
 
         if let progress {
@@ -511,7 +530,8 @@ struct CloudFileListView: View {
             progress.uploadStartTime = Date()
         }
 
-        await targetVM.uploadFiles(from: localURLs, progress: progress)
+        // Upload with conflict check skipped — we already handled conflicts
+        await targetVM.uploadFiles(from: localURLs, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.uploadEndTime = Date()
@@ -520,11 +540,10 @@ struct CloudFileListView: View {
         }
 
         if deleteFromSource {
-            await sourceVM.deleteItems(items)
+            await sourceVM.deleteItems(itemsToTransfer)
             await sourceVM.loadDirectory()
         }
 
-        // Mark complete only after both phases are done
         if let progress {
             progress.endTime = Date()
             progress.isComplete = true
