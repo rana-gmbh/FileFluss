@@ -178,6 +178,29 @@ final class SyncViewModel {
         }
     }
 
+    func addMegaAccount(email: String, password: String) async {
+        let account = CloudAccount(providerType: .mega)
+        let provider = MegaProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(email: email, password: password)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addKoofrAccount(email: String, appPassword: String) async {
         let account = CloudAccount(providerType: .koofr)
         let provider = KoofrProvider(accountId: account.id)
@@ -267,6 +290,11 @@ final class SyncViewModel {
                 }
             case .dropbox:
                 let provider = DropboxProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .mega:
+                let provider = MegaProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

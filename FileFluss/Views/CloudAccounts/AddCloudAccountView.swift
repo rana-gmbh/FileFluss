@@ -13,7 +13,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -85,6 +85,8 @@ struct AddCloudAccountView: View {
                 nextCloudFields
             case .koofr:
                 koofrFields
+            case .mega:
+                megaFields
             default:
                 credentialFields
             }
@@ -279,6 +281,26 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var megaFields: some View {
+        VStack(spacing: 12) {
+            Text("Sign in with your Mega email and password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var isLoginDisabled: Bool {
         if isAuthenticating { return true }
         switch selectedProvider {
@@ -288,6 +310,7 @@ struct AddCloudAccountView: View {
         case .dropbox: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
+        case .mega: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -309,6 +332,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
             case .koofr:
                 await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
+            case .mega:
+                await appState.syncManager.addMegaAccount(email: email, password: password)
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }
