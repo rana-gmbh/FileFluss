@@ -13,7 +13,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -87,6 +87,8 @@ struct AddCloudAccountView: View {
                 koofrFields
             case .mega:
                 megaFields
+            case .webDAV:
+                webDAVFields
             default:
                 credentialFields
             }
@@ -281,6 +283,30 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var webDAVFields: some View {
+        VStack(spacing: 12) {
+            Text("Enter your WebDAV server URL, username, and password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("Server URL (e.g. https://dav.example.com/files)", text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var megaFields: some View {
         VStack(spacing: 12) {
             Text("Sign in with your Mega email and password.")
@@ -309,6 +335,7 @@ struct AddCloudAccountView: View {
         case .googleDrive: return false
         case .dropbox: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
@@ -334,6 +361,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
             case .mega:
                 await appState.syncManager.addMegaAccount(email: email, password: password)
+            case .webDAV:
+                await appState.syncManager.addWebDAVAccount(serverURL: serverURL, username: username, password: password)
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }

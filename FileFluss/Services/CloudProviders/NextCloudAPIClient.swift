@@ -488,21 +488,31 @@ private final class WebDAVXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         guard let href else { return }
 
         let decodedHref = href.removingPercentEncoding ?? href
-        // Extract the relative path from the full DAV href
-        let decodedBase = basePath
-            .replacingOccurrences(of: basePath.components(separatedBy: "/remote.php").first ?? "", with: "")
+
+        // Extract the URL path from basePath to strip from href
+        let baseURLPath: String
+        if let url = URL(string: basePath) {
+            baseURLPath = url.path
+        } else {
+            baseURLPath = basePath
+        }
+        let normalizedBase = baseURLPath.hasSuffix("/") ? String(baseURLPath.dropLast()) : baseURLPath
+
+        // Also handle hrefs that are full URLs by extracting the path component
+        let hrefPath: String
+        if decodedHref.hasPrefix("http://") || decodedHref.hasPrefix("https://") {
+            hrefPath = URL(string: decodedHref)?.path ?? decodedHref
+        } else {
+            hrefPath = decodedHref
+        }
 
         var relativePath: String
-        if let range = decodedHref.range(of: "/remote.php/dav/files/") {
-            let afterPrefix = String(decodedHref[range.upperBound...])
-            // Remove the username segment
-            if let slashIndex = afterPrefix.firstIndex(of: "/") {
-                relativePath = String(afterPrefix[slashIndex...])
-            } else {
-                relativePath = "/"
-            }
+        if !normalizedBase.isEmpty && hrefPath.hasPrefix(normalizedBase) {
+            relativePath = String(hrefPath.dropFirst(normalizedBase.count))
+            if relativePath.isEmpty { relativePath = "/" }
+            if !relativePath.hasPrefix("/") { relativePath = "/" + relativePath }
         } else {
-            relativePath = decodedHref
+            relativePath = hrefPath
         }
 
         // Remove trailing slash for directories
@@ -510,7 +520,8 @@ private final class WebDAVXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
             relativePath = String(relativePath.dropLast())
         }
 
-        let name = displayName ?? (relativePath as NSString).lastPathComponent
+        let resolvedName = (displayName?.isEmpty == false) ? displayName! : (relativePath as NSString).lastPathComponent
+        let name = resolvedName.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if name.isEmpty { return }
 
         let size: Int64

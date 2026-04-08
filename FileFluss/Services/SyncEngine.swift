@@ -73,6 +73,7 @@ actor SyncEngine {
         case .koofr: return KoofrProvider()
         case .dropbox: return DropboxProvider()
         case .mega: return MegaProvider()
+        case .webDAV: return WebDAVProvider()
         }
     }
 }
