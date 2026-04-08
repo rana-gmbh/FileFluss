@@ -201,6 +201,29 @@ final class SyncViewModel {
         }
     }
 
+    func addSFTPAccount(host: String, port: Int, username: String, password: String) async {
+        let account = CloudAccount(providerType: .sftp)
+        let provider = SFTPProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(host: host, port: port, username: username, password: password)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addWebDAVAccount(serverURL: String, username: String, password: String) async {
         let account = CloudAccount(providerType: .webDAV)
         let provider = WebDAVProvider(accountId: account.id)
@@ -323,6 +346,11 @@ final class SyncViewModel {
                 }
             case .webDAV:
                 let provider = WebDAVProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .sftp:
+                let provider = SFTPProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

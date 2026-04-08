@@ -10,10 +10,11 @@ struct AddCloudAccountView: View {
     @State private var apiToken = ""
     @State private var serverURL = ""
     @State private var username = ""
+    @State private var port = "22"
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV, .sftp]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -89,6 +90,8 @@ struct AddCloudAccountView: View {
                 megaFields
             case .webDAV:
                 webDAVFields
+            case .sftp:
+                sftpFields
             default:
                 credentialFields
             }
@@ -111,6 +114,7 @@ struct AddCloudAccountView: View {
                     apiToken = ""
                     serverURL = ""
                     username = ""
+                    port = "22"
                 }
                 .disabled(isAuthenticating)
 
@@ -283,6 +287,36 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var sftpFields: some View {
+        VStack(spacing: 12) {
+            Text("Enter your SFTP server hostname, port, username, and password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 8) {
+                TextField("Hostname (e.g. server.example.com)", text: $serverURL)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+
+                TextField("Port", text: $port)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                    .disabled(isAuthenticating)
+            }
+
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var webDAVFields: some View {
         VStack(spacing: 12) {
             Text("Enter your WebDAV server URL, username, and password.")
@@ -336,6 +370,7 @@ struct AddCloudAccountView: View {
         case .dropbox: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .sftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
@@ -363,6 +398,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addMegaAccount(email: email, password: password)
             case .webDAV:
                 await appState.syncManager.addWebDAVAccount(serverURL: serverURL, username: username, password: password)
+            case .sftp:
+                await appState.syncManager.addSFTPAccount(host: serverURL, port: Int(port) ?? 22, username: username, password: password)
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }

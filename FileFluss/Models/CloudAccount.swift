@@ -11,6 +11,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case dropbox
     case mega
     case webDAV
+    case sftp
 
     var id: String { rawValue }
 
@@ -26,6 +27,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .dropbox: return "Dropbox"
         case .mega: return "Mega"
         case .webDAV: return "WebDAV"
+        case .sftp: return "SFTP"
         }
     }
 
@@ -41,6 +43,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .dropbox: return "drop"
         case .mega: return "cloud.bolt.fill"
         case .webDAV: return "externaldrive.badge.wifi"
+        case .sftp: return "terminal"
         }
     }
 
@@ -56,6 +59,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .dropbox: return "DropboxLogo"
         case .mega: return "MegaLogo"
         case .webDAV: return "WebDAVLogo"
+        case .sftp: return "SFTPLogo"
         default: return nil
         }
     }
