@@ -26,6 +26,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onReceiveCloudDrop: (() -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
+    var canCreateFolder: Bool = true
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -128,6 +129,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onReceiveCloudDrop = onReceiveCloudDrop
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
+        coordinator.canCreateFolder = canCreateFolder
         coordinator.selectedIDs = _selectedIDs
 
         let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
@@ -231,6 +233,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onReceiveCloudDrop: (() -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
+    var canCreateFolder: Bool = true
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
     let filePromiseDelegate = CloudFilePromiseDelegate()
@@ -317,11 +320,13 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let clickedRow = tableView.clickedRow
 
-        // Right-click on empty area — show "New Folder" only
+        // Right-click on empty area — show "New Folder" only (if supported)
         if clickedRow < 0 || clickedRow >= items.count {
-            let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
-            newFolderItem.target = self
-            menu.addItem(newFolderItem)
+            if canCreateFolder {
+                let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+                newFolderItem.target = self
+                menu.addItem(newFolderItem)
+            }
             return
         }
 
@@ -358,9 +363,11 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             menu.addItem(renameItem)
         }
 
-        let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
-        newFolderItem.target = self
-        menu.addItem(newFolderItem)
+        if canCreateFolder {
+            let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+            newFolderItem.target = self
+            menu.addItem(newFolderItem)
+        }
 
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
             menu.addItem(.separator())

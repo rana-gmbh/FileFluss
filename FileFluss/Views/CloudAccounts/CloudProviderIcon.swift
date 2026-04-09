@@ -11,7 +11,10 @@ struct CloudProviderIcon: View {
             Image(asset)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
+                .padding(size * 0.1)
                 .frame(width: size, height: size)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.15))
         } else {
             Image(systemName: providerType.icon)
                 .resizable()

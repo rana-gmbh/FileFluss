@@ -14,7 +14,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV, .sftp]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV, .sftp, .wordpress]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -25,7 +25,7 @@ struct AddCloudAccountView: View {
             }
         }
         .padding(24)
-        .frame(width: 380)
+        .frame(width: 560)
     }
 
     private var providerPicker: some View {
@@ -36,10 +36,7 @@ struct AddCloudAccountView: View {
             Text("Select a cloud provider to connect:")
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-            ], spacing: 16) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
                 ForEach(availableProviders) { provider in
                     Button {
                         selectedProvider = provider
@@ -49,9 +46,12 @@ struct AddCloudAccountView: View {
                                 .frame(height: 40)
                             Text(provider.displayName)
                                 .font(.headline)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 12)
                         .background(.quaternary)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
@@ -92,6 +92,8 @@ struct AddCloudAccountView: View {
                 webDAVFields
             case .sftp:
                 sftpFields
+            case .wordpress:
+                wordPressFields
             default:
                 credentialFields
             }
@@ -361,6 +363,30 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var wordPressFields: some View {
+        VStack(spacing: 12) {
+            Text("Enter your WordPress site URL and an Application Password. Create one in WordPress under Users → Profile → Application Passwords.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("Site URL (e.g. https://example.com)", text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField("Application Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var isLoginDisabled: Bool {
         if isAuthenticating { return true }
         switch selectedProvider {
@@ -371,6 +397,7 @@ struct AddCloudAccountView: View {
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .sftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .wordpress: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
@@ -400,6 +427,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addWebDAVAccount(serverURL: serverURL, username: username, password: password)
             case .sftp:
                 await appState.syncManager.addSFTPAccount(host: serverURL, port: Int(port) ?? 22, username: username, password: password)
+            case .wordpress:
+                await appState.syncManager.addWordPressAccount(siteURL: serverURL, username: username, appPassword: password)
             default:
                 await appState.syncManager.addPCloudAccount(email: email, password: password)
             }

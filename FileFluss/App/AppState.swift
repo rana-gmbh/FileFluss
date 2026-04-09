@@ -38,6 +38,20 @@ final class AppState {
         cloudAccountId(for: activePanel) != nil
     }
 
+    /// Returns the provider type of the active cloud panel, if any.
+    var activePanelProviderType: CloudProviderType? {
+        guard let accountId = cloudAccountId(for: activePanel) else { return nil }
+        return syncManager.accountFor(id: accountId)?.providerType
+    }
+
+    /// Whether the active panel supports creating folders (WordPress doesn't).
+    var canCreateFolderInActivePanel: Bool {
+        if let providerType = activePanelProviderType {
+            return providerType != .wordpress
+        }
+        return true // Local file system always supports it
+    }
+
     var hasSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {

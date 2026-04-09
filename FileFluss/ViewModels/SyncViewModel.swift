@@ -224,6 +224,29 @@ final class SyncViewModel {
         }
     }
 
+    func addWordPressAccount(siteURL: String, username: String, appPassword: String) async {
+        let account = CloudAccount(providerType: .wordpress)
+        let provider = WordPressProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(siteURL: siteURL, username: username, appPassword: appPassword)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addWebDAVAccount(serverURL: String, username: String, password: String) async {
         let account = CloudAccount(providerType: .webDAV)
         let provider = WebDAVProvider(accountId: account.id)
@@ -351,6 +374,11 @@ final class SyncViewModel {
                 }
             case .sftp:
                 let provider = SFTPProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .wordpress:
+                let provider = WordPressProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

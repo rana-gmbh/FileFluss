@@ -9,6 +9,7 @@ struct FileCommands: Commands {
                 NotificationCenter.default.post(name: .menuNewFolder, object: nil)
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(!appState.canCreateFolderInActivePanel)
 
             Divider()
 

@@ -75,6 +75,7 @@ actor SyncEngine {
         case .mega: return MegaProvider()
         case .webDAV: return WebDAVProvider()
         case .sftp: return SFTPProvider()
+        case .wordpress: return WordPressProvider()
         }
     }
 }

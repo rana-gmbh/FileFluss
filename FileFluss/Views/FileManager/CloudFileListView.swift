@@ -37,6 +37,7 @@ struct CloudFileListView: View {
         bodyWithDialogs
             .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard appState.canCreateFolderInActivePanel else { return }
                 newFolderName = "New Folder"
                 showNewFolderDialog = true
             }
@@ -412,7 +413,8 @@ struct CloudFileListView: View {
                     renameCloudItem = item
                     renameText = item.name
                     showRenameDialog = true
-                }
+                },
+                canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress
             )
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()
