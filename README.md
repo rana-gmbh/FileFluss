@@ -7,7 +7,7 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 - **Dual-panel file browser** — navigate two directories side by side, copy and move files between panels with keyboard shortcuts
 ![FileFluss Main window](FileFluss%20Screenshot%20Main%20Window.png)
 - **Multi-cloud support** — connect multiple cloud storage accounts and browse them directly alongside your local files
-![FileFluss Cloud Providers new](FileFluss%20Cloud%20Provider2.png)
+![FileFluss Cloud Providers new](FileFluss%20Cloud%20Provider3.png)
 - **Cloud-to-cloud transfers** — conveniently move or copy files between cloud providers
 ![FileFluss transfer details](FileFluss%20Transfer%20Details.png)
 - **Conflict resolution** — when files already exist at the destination, a side-by-side comparison shows both files with dates, sizes, and newer/older labels, plus Apply to All, Stop, Skip, Keep Both, and Replace actions
