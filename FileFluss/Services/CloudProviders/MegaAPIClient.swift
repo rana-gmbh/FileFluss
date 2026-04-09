@@ -516,15 +516,17 @@ actor MegaAPIClient {
 
     private func apiCall(_ commands: [[String: Any]]) async throws -> [Any] {
         let body = try JSONSerialization.data(withJSONObject: commands)
-        return try await Self.apiRequest(session: session, sessionId: credentials.sessionId, body: body)
+        let sess = session
+        let sid = credentials.sessionId
+        return try await Self.apiRequest(session: sess, sessionId: sid, body: body)
     }
 
-    private static func apiRequest(session: URLSession, sessionId: String?, commands: [[String: Any]]) async throws -> [Any] {
+    private static func apiRequest(session: URLSession, sessionId: String?, commands: [[String: Any]]) async throws -> sending [Any] {
         let body = try JSONSerialization.data(withJSONObject: commands)
         return try await apiRequest(session: session, sessionId: sessionId, body: body)
     }
 
-    private static func apiRequest(session: URLSession, sessionId: String?, body: Data) async throws -> [Any] {
+    private static func apiRequest(session: URLSession, sessionId: String?, body: Data) async throws -> sending [Any] {
         let seqNum = Int.random(in: 0..<0x100000000)
         var urlString = "\(apiURL)?id=\(seqNum)"
         if let sessionId {
@@ -631,10 +633,10 @@ actor MegaAPIClient {
         // Solve on background threads
         let solution = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             let workerCount = ProcessInfo.processInfo.activeProcessorCount
-            // Use pointers for shared mutable state (Swift 6 concurrency safe)
-            let stop = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+            // Use pointers for shared mutable state across threads
+            nonisolated(unsafe) let stop = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
             stop.initialize(to: false)
-            let resolved = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+            nonisolated(unsafe) let resolved = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
             resolved.initialize(to: false)
             let group = DispatchGroup()
             let resultLock = NSLock()
