@@ -31,6 +31,7 @@ final class CloudFileManagerViewModel {
     private var pathHistory: [String] = ["/"]
     private var pathHistoryIndex: Int = 0
     private var tempDownloadDir: URL
+    private var quickLookTask: Task<Void, Never>?
 
     enum SortOrder: String, CaseIterable {
         case name, date, size
@@ -405,12 +406,30 @@ final class CloudFileManagerViewModel {
     }
 
     func downloadToTemp(_ item: CloudFileItem) async -> URL? {
-        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return nil }
-        let localURL = tempDownloadDir.appendingPathComponent(item.name)
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            print("[QuickLook] No provider for account \(accountId)")
+            return nil
+        }
 
-        // Use cached version if it exists (check both original and converted names)
+        // Use the parent path as subdirectory to avoid collisions between
+        // files with the same name in different folders
+        let parentPath = (item.path as NSString).deletingLastPathComponent
+        let safeParent = parentPath
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let cacheDir = tempDownloadDir.appendingPathComponent(safeParent, isDirectory: true)
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        let localURL = cacheDir.appendingPathComponent(item.name)
+
+        // Use cached version if it exists and has matching size (to detect stale files)
         if FileManager.default.fileExists(atPath: localURL.path) {
-            return localURL
+            let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
+            let cachedSize = attrs?[.size] as? Int64 ?? -1
+            if item.size == 0 || cachedSize == item.size {
+                return localURL
+            }
+            // Stale cache — remove and re-download
+            try? FileManager.default.removeItem(at: localURL)
         }
         for ext in ["docx", "xlsx", "pptx", "pdf"] {
             let converted = localURL.appendingPathExtension(ext)
@@ -430,8 +449,15 @@ final class CloudFileManagerViewModel {
             }
             return localURL
         } catch {
+            print("[QuickLook] Download failed for \(item.path): \(error)")
             return nil
         }
+    }
+
+    /// Clears the temp download cache for this account.
+    func clearTempCache() {
+        try? FileManager.default.removeItem(at: tempDownloadDir)
+        try? FileManager.default.createDirectory(at: tempDownloadDir, withIntermediateDirectories: true)
     }
 
     // MARK: - Upload
@@ -558,16 +584,25 @@ final class CloudFileManagerViewModel {
     // MARK: - Quick Look
 
     func toggleQuickLook() {
+        // If panel is already visible, close it (instant toggle)
+        if let panel = QLPreviewPanel.shared(), panel.isVisible {
+            panel.orderOut(nil)
+            return
+        }
+
         let fileItems = selectedItems.filter { !$0.isDirectory }
         guard !fileItems.isEmpty else { return }
 
-        Task {
+        quickLookTask?.cancel()
+        quickLookTask = Task {
             var urls: [URL] = []
             for item in fileItems {
+                guard !Task.isCancelled else { return }
                 if let url = await downloadToTemp(item) {
                     urls.append(url)
                 }
             }
+            guard !Task.isCancelled, !urls.isEmpty else { return }
             quickLookController.urls = urls
             quickLookController.toggle()
         }
@@ -580,13 +615,16 @@ final class CloudFileManagerViewModel {
             return
         }
 
-        Task {
+        quickLookTask?.cancel()
+        quickLookTask = Task {
             var urls: [URL] = []
             for item in fileItems {
+                guard !Task.isCancelled else { return }
                 if let url = await downloadToTemp(item) {
                     urls.append(url)
                 }
             }
+            guard !Task.isCancelled else { return }
             quickLookController.updateAndReload(urls: urls)
         }
     }

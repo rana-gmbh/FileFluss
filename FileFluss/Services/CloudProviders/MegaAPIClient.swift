@@ -858,14 +858,17 @@ actor MegaAPIClient {
             return data
         }
 
-        // File content key: words 0-3
-        let fileKey = Array(fullKey.prefix(4))
+        // MEGA stores 8 words: [k0, k1, k2, k3, iv0, iv1, mac0, mac1]
+        // File content AES-CTR key = XOR of first and second halves
+        let fileKey: [UInt32] = [
+            fullKey[0] ^ fullKey[4],
+            fullKey[1] ^ fullKey[5],
+            fullKey[2] ^ fullKey[6],
+            fullKey[3] ^ fullKey[7]
+        ]
 
-        // CTR nonce: words 4-5 in standard MEGA format
-        // Standard MEGA key: [k0, k1, k2, k3, iv0, iv1, mac0, mac1]
+        // CTR nonce: [iv0, iv1] (words 4-5), padded to 16 bytes with zeros
         let iv = [fullKey[4], fullKey[5]]
-
-        megaLog.info("[Mega] Decrypting \(data.count) bytes for handle \(handle)")
 
         // CTR decryption = encryption (XOR with keystream)
         let decrypted = aesCTR(data: data, key: fileKey, iv: iv)
