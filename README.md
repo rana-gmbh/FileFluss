@@ -10,6 +10,8 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 ![FileFluss Cloud Providers new](FileFluss%20Cloud%20Provider2.png)
 - **Cloud-to-cloud transfers** — conveniently move or copy files between cloud providers
 ![FileFluss transfer details](FileFluss%20Transfer%20Details.png)
+- **Conflict resolution** — when files already exist at the destination, a side-by-side comparison shows both files with dates, sizes, and newer/older labels, plus Apply to All, Stop, Skip, Keep Both, and Replace actions
+![Conflict Resolution Dialog](fileflussnewdia.png)
 - **Universal search** — search across all local files and connected cloud accounts at once, with results grouped by source and right-click to open in either panel
 ![FileFluss Search](FileFluss%20Search.png)
 - **Native performance** — built with SwiftUI and AppKit for a fast, responsive experience on macOS
@@ -19,25 +21,22 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 ![FileFluss Folder calculation](FileFluss%20Context%20Menu%20and%20Folder%20size%20calculation.png)
 - **Favorites** — pin frequently accessed local and cloud folders to the sidebar
 - **Hidden files toggle** — show or hide hidden files per panel
+- **Automatic Google Workspace conversion** — Google Docs, Sheets, and Slides are automatically converted to DOCX, XLSX, and PPTX when transferring to local folders or other cloud services
+- **Preserved modification dates** — files transferred from cloud storage retain their original modification dates
 
 ## Supported Cloud Providers
 
 - **pCloud**
 - **kDrive** (Infomaniak)
 - **OneDrive** (Microsoft)
-- **Google Drive** (Google) — *new in 0.4*
-- **Nextcloud** — *new in 0.4*
-- **Dropbox** — *new in 0.4*
+- **Google Drive** (Google)
+- **Nextcloud**
+- **Dropbox**
 - **Koofr**
-
-## What's New in 0.7 Beta
-
-- **Professional conflict resolution dialog** — when files already exist at the destination, a rich side-by-side comparison shows both files with dates, sizes, icons, and newer/older labels, plus Apply to All, Stop, Skip, Keep Both, and Replace actions
-![Conflict Resolution Dialog](fileflussnewdia.png)
-- **Smarter cloud-to-cloud transfers** — conflicts are checked before downloading, saving bandwidth; transferred files retain their original modification dates
-- **Keep Both** — automatically renames incoming files with a numeric suffix (e.g. "report 2.pdf") instead of overwriting
-- **Automatic Google Workspace conversion** — Google Docs, Sheets, and Slides are automatically converted to DOCX, XLSX, and PPTX when transferring to local folders or other cloud services
-- **Universal search** — search across all local files and connected cloud accounts from a single popup (Cmd+F), with results grouped by source and right-click to open in either panel
+- **Mega** — *new in 0.8*
+- **WebDAV** — *new in 0.8*
+- **SFTP** — *new in 0.8*
+- **WordPress** (Media Library) — *new in 0.8*
 
 ## Requirements
 

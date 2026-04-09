@@ -1,5 +1,5 @@
 cask "filefluss" do
-  version "0.7"
+  version "0.8"
   sha256 :no_check
 
   url "https://github.com/rana-gmbh/filefluss/releases/download/v#{version}/FileFluss-#{version}.dmg"
