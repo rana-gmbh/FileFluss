@@ -55,9 +55,11 @@ Never mention Claude or AI in commit messages or Co-Authored-By lines. All commi
 
 ## Releases
 
-Releases are triggered by pushing a `v*` tag. `.github/workflows/release.yml` builds, notarizes, and publishes the DMG, then computes its SHA-256 and commits an updated `Casks/filefluss.rb` (new `version` and `sha256`) back to `main`. Do not leave `sha256 :no_check` in the cask — Homebrew warns on every install when verification is skipped, and the cask URL is pinned per-version so a real hash is required.
+Releases are triggered by pushing a `v*` tag. `.github/workflows/release.yml` builds, notarizes, and publishes the DMG, then computes its SHA-256 and pushes a cask bump to the **separate tap repo** `rana-gmbh/homebrew-filefluss` (this is the repo Homebrew actually reads when users run `brew tap rana-gmbh/filefluss`). The cask file does **not** live in this repo.
 
-If the cask ever drifts from the published DMG (e.g. a manual release), regenerate the hash and update both fields:
+The workflow's tap-update step needs a secret named `HOMEBREW_TAP_TOKEN` — a fine-grained PAT scoped to `rana-gmbh/homebrew-filefluss` with `contents: write`. Without it the step fails; with it, every tagged release lands a matching cask commit automatically.
+
+Never set `sha256 :no_check` in the tap's cask. Homebrew warns on every install when verification is skipped, and the cask URL is pinned per-version so a real hash is required. If the tap ever drifts from the published DMG (e.g. a manual release), regenerate the hash and update both `version` and `sha256` in `rana-gmbh/homebrew-filefluss`:
 
 ```bash
 VERSION=0.8.1

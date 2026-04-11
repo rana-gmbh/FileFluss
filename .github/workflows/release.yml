@@ -122,25 +122,27 @@ jobs:
           prerelease: true
           name: FileFluss ${{ github.ref_name }} Beta
 
-      - name: Update Homebrew cask
+      - name: Update Homebrew tap cask
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
           VERSION="${GITHUB_REF_NAME#v}"
 
+          TAP_DIR="$RUNNER_TEMP/homebrew-filefluss"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/rana-gmbh/homebrew-filefluss.git" "$TAP_DIR"
+
+          cd "$TAP_DIR"
           git config user.name "Robert Rudolph"
           git config user.email "robert.rudolph@mailbox.org"
-
-          git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
 
           sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/filefluss.rb
           sed -i '' -E "s/^  sha256 .*/  sha256 \"${SHA256}\"/" Casks/filefluss.rb
 
           if git diff --quiet Casks/filefluss.rb; then
-            echo "Cask already up to date"
+            echo "Tap cask already up to date"
           else
             git add Casks/filefluss.rb
-            git commit -m "Update Homebrew cask to ${VERSION}"
+            git commit -m "Update cask to ${VERSION}"
             git push origin main
           fi
