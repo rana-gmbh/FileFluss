@@ -47,6 +47,77 @@ struct SidebarView: View {
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
 
+    @ViewBuilder
+    private func cloudAccountRow(_ account: CloudAccount) -> some View {
+        Label {
+            HStack {
+                Text(account.displayName)
+                Spacer()
+                Circle()
+                    .fill(account.isConnected ? .green : .gray)
+                    .frame(width: 8, height: 8)
+            }
+        } icon: {
+            CloudProviderIcon(providerType: account.providerType, size: 16)
+        }
+        .tag(SidebarItem.cloudAccount(account))
+        .contextMenu {
+            Button("Rename...") {
+                renamingAccountId = account.id
+                renameAccountText = account.displayName
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func googleDriveAccountRow(_ account: CloudAccount) -> some View {
+        let picked = appState.googleDrivePicked(for: account.id)
+        DisclosureGroup(isExpanded: .constant(true)) {
+            ForEach(picked) { folder in
+                Label(folder.name, systemImage: "folder.fill")
+                    .tag(SidebarItem.cloudFolder(accountId: account.id, path: "/\(folder.name)"))
+                    .contextMenu {
+                        Button("Remove folder", role: .destructive) {
+                            Task {
+                                await appState.removeGoogleDrivePickedFolder(
+                                    accountId: account.id,
+                                    folderId: folder.id
+                                )
+                            }
+                        }
+                    }
+            }
+            Button {
+                Task {
+                    await appState.presentGoogleDrivePicker(for: account.id)
+                }
+            } label: {
+                Label("Pick more folders…", systemImage: "plus.circle")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        } label: {
+            Label {
+                HStack {
+                    Text(account.displayName)
+                    Spacer()
+                    Circle()
+                        .fill(account.isConnected ? .green : .gray)
+                        .frame(width: 8, height: 8)
+                }
+            } icon: {
+                CloudProviderIcon(providerType: account.providerType, size: 16)
+            }
+            .tag(SidebarItem.cloudAccount(account))
+            .contextMenu {
+                Button("Rename...") {
+                    renamingAccountId = account.id
+                    renameAccountText = account.displayName
+                }
+            }
+        }
+    }
+
     var body: some View {
         List(selection: selection) {
             Section("Favorites") {
@@ -94,23 +165,10 @@ struct SidebarView: View {
 
             Section("Cloud Accounts") {
                     ForEach(appState.syncManager.accounts) { account in
-                        Label {
-                            HStack {
-                                Text(account.displayName)
-                                Spacer()
-                                Circle()
-                                    .fill(account.isConnected ? .green : .gray)
-                                    .frame(width: 8, height: 8)
-                            }
-                        } icon: {
-                            CloudProviderIcon(providerType: account.providerType, size: 16)
-                        }
-                        .tag(SidebarItem.cloudAccount(account))
-                        .contextMenu {
-                            Button("Rename...") {
-                                renamingAccountId = account.id
-                                renameAccountText = account.displayName
-                            }
+                        if account.providerType == .googleDrive {
+                            googleDriveAccountRow(account)
+                        } else {
+                            cloudAccountRow(account)
                         }
                     }
                     .onMove { indices, destination in

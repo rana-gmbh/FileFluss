@@ -24,5 +24,7 @@
 	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Rana GmbH. Licensed under GPL-3.0.</string>
+	<key>GOOGLE_PICKER_API_KEY</key>
+	<string>$(GOOGLE_PICKER_API_KEY)</string>
 </dict>
 </plist>

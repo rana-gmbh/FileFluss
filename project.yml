@@ -19,6 +19,9 @@ targets:
     platform: macOS
     sources:
       - FileFluss
+    configFiles:
+      Debug: FileFluss/Resources/Secrets.xcconfig
+      Release: FileFluss/Resources/Secrets.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rana-gmbh.FileFluss

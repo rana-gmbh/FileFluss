@@ -20,6 +20,18 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Write Secrets.xcconfig
+        env:
+          GOOGLE_PICKER_API_KEY: ${{ secrets.GOOGLE_PICKER_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_PICKER_API_KEY" ]; then
+            echo "::error::GOOGLE_PICKER_API_KEY secret is not set"
+            exit 1
+          fi
+          cat > FileFluss/Resources/Secrets.xcconfig <<EOF
+          GOOGLE_PICKER_API_KEY = ${GOOGLE_PICKER_API_KEY}
+          EOF
+
       - name: Generate Xcode project
         run: xcodegen generate
 

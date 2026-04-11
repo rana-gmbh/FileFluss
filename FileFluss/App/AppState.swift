@@ -118,6 +118,45 @@ final class AppState {
         }
     }
 
+    // Google Drive picked folders (observable mirror of PickedDriveFolderStore) —
+    // keyed by account UUID so the sidebar can render them reactively. Mutations go
+    // through this map AND the store so UserDefaults stays the source of truth.
+    var googleDrivePickedFolders: [UUID: [PickedDriveFolder]] = [:]
+
+    func googleDrivePicked(for accountId: UUID) -> [PickedDriveFolder] {
+        if let cached = googleDrivePickedFolders[accountId] { return cached }
+        let loaded = PickedDriveFolderStore.load(accountId: accountId)
+        googleDrivePickedFolders[accountId] = loaded
+        return loaded
+    }
+
+    func reloadGoogleDrivePicked(for accountId: UUID) {
+        googleDrivePickedFolders[accountId] = PickedDriveFolderStore.load(accountId: accountId)
+    }
+
+    /// Present the Google Drive Picker for an account and persist the results.
+    /// Safe to call from the sidebar, empty state, or onboarding.
+    func presentGoogleDrivePicker(for accountId: UUID) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) as? GoogleDriveProvider else {
+            return
+        }
+        let existing = await provider.pickedFolders()
+        do {
+            _ = try await provider.presentFolderPicker(preselect: existing)
+        } catch {
+            syncManager.authError = error.localizedDescription
+        }
+        reloadGoogleDrivePicked(for: accountId)
+    }
+
+    func removeGoogleDrivePickedFolder(accountId: UUID, folderId: String) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) as? GoogleDriveProvider else {
+            return
+        }
+        await provider.removePickedFolder(id: folderId)
+        reloadGoogleDrivePicked(for: accountId)
+    }
+
     // Cloud favorites
     var cloudFavorites: [CloudFavorite] = []
 

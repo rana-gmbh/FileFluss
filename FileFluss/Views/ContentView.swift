@@ -52,7 +52,12 @@ struct ContentView: View {
         VStack(spacing: 0) {
             switch sidebarItem {
             case .cloudAccount(let account):
-                CloudFileListView(panelSide: side, accountId: account.id)
+                if account.providerType == .googleDrive
+                    && appState.googleDrivePicked(for: account.id).isEmpty {
+                    GoogleDriveEmptyStateView(accountId: account.id)
+                } else {
+                    CloudFileListView(panelSide: side, accountId: account.id)
+                }
             case .cloudFolder(let accountId, _):
                 CloudFileListView(panelSide: side, accountId: accountId)
             default:

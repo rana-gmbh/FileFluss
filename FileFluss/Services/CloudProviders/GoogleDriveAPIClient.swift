@@ -21,15 +21,25 @@ struct GoogleDriveDeviceAuth: Sendable {
 actor GoogleDriveAPIClient {
     static let clientId = "682536313816-j07jrk2kbff3sljb16vfal5soqs8vte9.apps.googleusercontent.com"
     static let clientSecret = "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"
-    static let scopes = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
+    /// Picker API key — set at launch by reading the Info.plist key `GOOGLE_PICKER_API_KEY`
+    /// or via direct assignment in a dev build. Used by the WKWebView-hosted Picker.
+    /// Not secret (Picker keys are visible in browser devtools by design), but should
+    /// be restricted in the Cloud Console to the Google Picker API.
+    nonisolated(unsafe) static var pickerApiKey: String = {
+        (Bundle.main.object(forInfoDictionaryKey: "GOOGLE_PICKER_API_KEY") as? String) ?? ""
+    }()
+    static let scopes = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
 
+    /// Account ID this client belongs to; used to look up picked folders for the virtual root listing.
+    let accountId: UUID
     private(set) var credentials: GoogleDriveCredentials
     private let session: URLSession
     private let apiURL = "https://www.googleapis.com/drive/v3"
     private let uploadURL = "https://www.googleapis.com/upload/drive/v3"
 
-    // Cache path → (file ID, mimeType) lookups to avoid repeated resolution
-    private var pathIdCache: [String: CachedFile] = ["/" : CachedFile(id: "root", mimeType: "application/vnd.google-apps.folder")]
+    /// Cache of path → (file ID, mimeType). No longer seeded with `/` — the virtual root
+    /// has no single file ID under the `drive.file` scope; it is synthesized from picked folders.
+    private var pathIdCache: [String: CachedFile] = [:]
 
     struct CachedFile {
         let id: String
@@ -57,7 +67,8 @@ actor GoogleDriveAPIClient {
         "application/vnd.google-apps.drawing": "pdf",
     ]
 
-    init(credentials: GoogleDriveCredentials) {
+    init(accountId: UUID, credentials: GoogleDriveCredentials) {
+        self.accountId = accountId
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -69,6 +80,8 @@ actor GoogleDriveAPIClient {
 
     /// Start the OAuth flow: opens the user's browser for Google sign-in.
     /// Returns the authorization code via a loopback HTTP server.
+    /// Requests only the narrow `drive.file` scope — access is granted per-file/folder
+    /// via the Google Picker, not to the entire Drive.
     static func startOAuthFlow() async throws -> GoogleDriveCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
@@ -295,6 +308,12 @@ actor GoogleDriveAPIClient {
     // MARK: - File Operations
 
     func listFolder(path: String) async throws -> [CloudFileItem] {
+        // The virtual root under drive.file has no single file ID; it's synthesized
+        // from the per-account picked folders.
+        if path == "/" {
+            return listVirtualRoot()
+        }
+
         let folderId = (try await resolvePathToCachedFile(path)).id
 
         var allItems: [GoogleDriveFile] = []
@@ -323,6 +342,60 @@ actor GoogleDriveAPIClient {
         }
 
         return allItems.map { $0.toCloudFileItem(parentPath: path) }
+    }
+
+    /// Synthesize the virtual root listing from the account's picked folders.
+    /// Also seeds `pathIdCache` so subsequent navigation into each picked folder
+    /// resolves without a Drive API name lookup.
+    private func listVirtualRoot() -> [CloudFileItem] {
+        let folders = PickedDriveFolderStore.load(accountId: accountId)
+        var items: [CloudFileItem] = []
+        items.reserveCapacity(folders.count)
+
+        for folder in folders {
+            let virtualPath = "/\(folder.name)"
+            pathIdCache[virtualPath] = CachedFile(
+                id: folder.id,
+                mimeType: "application/vnd.google-apps.folder"
+            )
+            items.append(
+                CloudFileItem(
+                    id: "d\(folder.id)",
+                    name: folder.name,
+                    path: virtualPath,
+                    isDirectory: true,
+                    size: 0,
+                    modificationDate: folder.addedAt,
+                    checksum: nil
+                )
+            )
+        }
+
+        return items
+    }
+
+    /// Add a folder to the account's picked list. Used when the user picks folders via
+    /// the Google Picker, and when the app creates a new top-level folder via createFolder.
+    func registerPickedFolder(id: String, name: String) {
+        var folders = PickedDriveFolderStore.load(accountId: accountId)
+        if folders.contains(where: { $0.id == id }) { return }
+        folders.append(PickedDriveFolder(id: id, name: name))
+        PickedDriveFolderStore.save(folders, accountId: accountId)
+        pathIdCache["/\(name)"] = CachedFile(id: id, mimeType: "application/vnd.google-apps.folder")
+    }
+
+    func removePickedFolder(id: String) {
+        var folders = PickedDriveFolderStore.load(accountId: accountId)
+        let removed = folders.filter { $0.id == id }
+        folders.removeAll { $0.id == id }
+        PickedDriveFolderStore.save(folders, accountId: accountId)
+        for f in removed {
+            pathIdCache.removeValue(forKey: "/\(f.name)")
+        }
+    }
+
+    func currentPickedFolders() -> [PickedDriveFolder] {
+        PickedDriveFolderStore.load(accountId: accountId)
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -467,8 +540,19 @@ actor GoogleDriveAPIClient {
     func createFolder(at path: String) async throws {
         let parentPath = (path as NSString).deletingLastPathComponent
         let folderName = (path as NSString).lastPathComponent
-        let parentCached = try await resolvePathToCachedFile(parentPath)
-        let parentId = parentCached.id
+
+        // Top-level creation (`/Foo`) under drive.file targets the literal `root`
+        // parent — allowed because the newly created folder is app-created and
+        // becomes accessible to the app regardless of picked state. The folder is
+        // then auto-registered as a picked folder so it appears in the sidebar
+        // and survives across sessions.
+        let parentId: String
+        let isTopLevel = (parentPath == "/" || parentPath.isEmpty)
+        if isTopLevel {
+            parentId = "root"
+        } else {
+            parentId = try await resolvePathToCachedFile(parentPath).id
+        }
 
         struct CreateFolderBody: Encodable {
             let name: String
@@ -484,6 +568,35 @@ actor GoogleDriveAPIClient {
 
         let created: GoogleDriveFile = try await apiRequest(.post, path: "/files", body: body)
         pathIdCache[path] = CachedFile(id: created.id, mimeType: created.mimeType)
+
+        if isTopLevel {
+            registerPickedFolder(id: created.id, name: folderName)
+        }
+    }
+
+    /// Migration helper: list the user's top-level Drive folders using the legacy
+    /// `'root' in parents` query. Only returns useful results if the stored token
+    /// still has the broad `drive` scope (i.e. the account was authorized before
+    /// the drive.file migration). Fresh drive.file tokens will return only
+    /// app-accessible items at root, which is the correct fallback.
+    func listLegacyRootFolders() async throws -> [PickedDriveFolder] {
+        var all: [GoogleDriveFile] = []
+        var pageToken: String?
+        repeat {
+            var queryItems = [
+                URLQueryItem(name: "q", value: "'root' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"),
+                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType)"),
+                URLQueryItem(name: "pageSize", value: "1000"),
+            ]
+            if let pageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
+            all.append(contentsOf: response.files)
+            pageToken = response.nextPageToken
+        } while pageToken != nil
+
+        return all.map { PickedDriveFolder(id: $0.id, name: $0.name) }
     }
 
     func renameItem(at path: String, to newName: String) async throws {
@@ -531,6 +644,14 @@ actor GoogleDriveAPIClient {
     }
 
     func folderSize(at path: String) async throws -> Int64 {
+        if path == "/" {
+            // Virtual root — sum sizes of each picked folder.
+            var total: Int64 = 0
+            for folder in PickedDriveFolderStore.load(accountId: accountId) {
+                total += (try? await calculateFolderSizeRecursively(path: "/\(folder.name)")) ?? 0
+            }
+            return total
+        }
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -549,8 +670,10 @@ actor GoogleDriveAPIClient {
 
     // MARK: - Path Resolution
 
-    /// Google Drive uses file IDs, not paths. This resolves a POSIX-style path to a cached file entry
-    /// by walking each path component and querying for it by name within the parent.
+    /// Google Drive uses file IDs, not paths. Under the `drive.file` scope, the first
+    /// path component must be a picked folder — the app has no access to Drive's real
+    /// root. Subsequent components are resolved by name-lookup queries inside that
+    /// picked folder's subtree, exactly as before.
     private func resolvePathToCachedFile(_ path: String) async throws -> CachedFile {
         if let cached = pathIdCache[path] {
             return cached
@@ -558,13 +681,31 @@ actor GoogleDriveAPIClient {
 
         let components = path.split(separator: "/", omittingEmptySubsequences: true)
         if components.isEmpty {
-            return pathIdCache["/"]!
+            // The virtual root has no single file ID; callers that need a parent ID
+            // for root-level operations should use "root" directly (e.g. createFolder).
+            throw CloudProviderError.notFound("/")
         }
 
-        var currentCached = pathIdCache["/"]!
-        var currentPath = ""
+        // The first component must be a picked folder. Seed the cache from the
+        // picked list so we don't need a Drive API call to resolve it.
+        let firstName = String(components[0])
+        let firstPath = "/\(firstName)"
 
-        for component in components {
+        var currentCached: CachedFile
+        if let cached = pathIdCache[firstPath] {
+            currentCached = cached
+        } else {
+            let picked = PickedDriveFolderStore.load(accountId: accountId)
+            guard let folder = picked.first(where: { $0.name == firstName }) else {
+                throw CloudProviderError.notFound(firstPath)
+            }
+            currentCached = CachedFile(id: folder.id, mimeType: "application/vnd.google-apps.folder")
+            pathIdCache[firstPath] = currentCached
+        }
+
+        // Walk any remaining components with normal name-lookup queries.
+        var currentPath = firstPath
+        for component in components.dropFirst() {
             let name = String(component)
             currentPath += "/\(name)"
 

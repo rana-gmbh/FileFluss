@@ -408,6 +408,9 @@ struct AddCloudAccountView: View {
         guard !isAuthenticating else { return }
         isAuthenticating = true
         Task {
+            let googleDriveIdsBefore = Set(appState.syncManager.accounts
+                .filter { $0.providerType == .googleDrive }
+                .map(\.id))
             switch selectedProvider {
             case .kDrive:
                 await appState.syncManager.addKDriveAccount(apiToken: apiToken)
@@ -415,6 +418,11 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addOneDriveAccount()
             case .googleDrive:
                 await appState.syncManager.addGoogleDriveAccount()
+                if appState.syncManager.authError == nil,
+                   let newId = appState.syncManager.accounts
+                    .first(where: { $0.providerType == .googleDrive && !googleDriveIdsBefore.contains($0.id) })?.id {
+                    await appState.presentGoogleDrivePicker(for: newId)
+                }
             case .dropbox:
                 await appState.syncManager.addDropboxAccount()
             case .nextCloud:
