@@ -53,6 +53,17 @@ Uses only Apple frameworks (SwiftUI, AppKit, Foundation, QuickLookUI, UniformTyp
 
 Never mention Claude or AI in commit messages or Co-Authored-By lines. All commits are authored by Robert Rudolph from Rana GmbH.
 
+## Releases
+
+Releases are triggered by pushing a `v*` tag. `.github/workflows/release.yml` builds, notarizes, and publishes the DMG, then computes its SHA-256 and commits an updated `Casks/filefluss.rb` (new `version` and `sha256`) back to `main`. Do not leave `sha256 :no_check` in the cask — Homebrew warns on every install when verification is skipped, and the cask URL is pinned per-version so a real hash is required.
+
+If the cask ever drifts from the published DMG (e.g. a manual release), regenerate the hash and update both fields:
+
+```bash
+VERSION=0.8.1
+curl -fL "https://github.com/rana-gmbh/filefluss/releases/download/v${VERSION}/FileFluss-v${VERSION}.dmg" | shasum -a 256
+```
+
 ## Design Philosophy
 
 Speed and snappiness are top priorities. Prefer lazy loading, background processing, and non-blocking UI patterns. Avoid synchronous work on the main thread. Every interaction should feel instant.

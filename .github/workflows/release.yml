@@ -121,3 +121,26 @@ jobs:
           body_path: RELEASE_NOTES.md
           prerelease: true
           name: FileFluss ${{ github.ref_name }} Beta
+
+      - name: Update Homebrew cask
+        run: |
+          SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          git config user.name "Robert Rudolph"
+          git config user.email "robert.rudolph@mailbox.org"
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/filefluss.rb
+          sed -i '' -E "s/^  sha256 .*/  sha256 \"${SHA256}\"/" Casks/filefluss.rb
+
+          if git diff --quiet Casks/filefluss.rb; then
+            echo "Cask already up to date"
+          else
+            git add Casks/filefluss.rb
+            git commit -m "Update Homebrew cask to ${VERSION}"
+            git push origin main
+          fi
