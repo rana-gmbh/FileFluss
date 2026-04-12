@@ -1,23 +1,21 @@
 import AppKit
-import WebKit
+import Network
+import Foundation
 import os
 
 private let pickerLog = Logger(subsystem: "com.rana.FileFluss", category: "googleDrivePicker")
 
-/// Presents the Google Drive Picker in a native macOS window hosting a WKWebView.
-/// The web page bootstraps Google's Picker JS SDK, and selected folders are
-/// returned to Swift via a `WKScriptMessageHandler` bridge.
+/// Opens the Google Drive Picker in the user's system browser and captures the
+/// result via a localhost HTTP callback — the same pattern used for OAuth.
 ///
-/// Under the `drive.file` OAuth scope, this is the only way to give FileFluss
-/// access to folders in the user's Drive — the app cannot enumerate Drive
-/// content on its own.
+/// WKWebView cannot host the Picker because WebKit's ITP blocks the third-party
+/// cookies Google's Picker iframe requires. The system browser already has the
+/// user's Google session cookies, so the Picker works out of the box.
 @MainActor
 final class GoogleDrivePickerWindow: NSObject {
-    private var window: NSWindow?
-    private var webView: WKWebView?
+    private var listener: NWListener?
     private var continuation: CheckedContinuation<[PickedDriveFolder], Error>?
-    private var isReady = false
-    private var pendingInitScript: String?
+    private var htmlData: Data?
 
     private let accessToken: String
     private let apiKey: String
@@ -29,194 +27,165 @@ final class GoogleDrivePickerWindow: NSObject {
         self.preselectFileIds = preselectFileIds
     }
 
-    /// Presents the picker window and suspends until the user picks folders,
-    /// cancels, or closes the window. Returns an empty array on cancel.
     func present() async throws -> [PickedDriveFolder] {
         if apiKey.isEmpty {
             throw GoogleDrivePickerError.missingApiKey
         }
 
-        return try await withCheckedThrowingContinuation { cont in
-            self.continuation = cont
-            self.showWindow()
-        }
-    }
-
-    private func showWindow() {
-        let config = WKWebViewConfiguration()
-        let bridge = PickerBridge(owner: self)
-        config.userContentController.add(bridge, name: "picker")
-        config.preferences.javaScriptCanOpenWindowsAutomatically = true
-
-        let webView = WKWebView(
-            frame: NSRect(x: 0, y: 0, width: 960, height: 680),
-            configuration: config
-        )
-        webView.navigationDelegate = self
-        self.webView = webView
-
         guard let htmlURL = Bundle.main.url(
             forResource: "picker",
             withExtension: "html",
             subdirectory: "GoogleDrivePicker"
-        ) ?? Bundle.main.url(forResource: "picker", withExtension: "html") else {
-            finishWithError(GoogleDrivePickerError.bundleResourceMissing)
-            return
+        ) ?? Bundle.main.url(forResource: "picker", withExtension: "html"),
+              let data = try? Data(contentsOf: htmlURL) else {
+            throw GoogleDrivePickerError.bundleResourceMissing
         }
+        self.htmlData = data
 
-        // allowingReadAccessTo the parent dir so Picker JS's iframe can resolve.
-        webView.loadFileURL(htmlURL, allowingReadAccessTo: htmlURL.deletingLastPathComponent())
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 680),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Choose Google Drive folders"
-        window.contentView = webView
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.makeKeyAndOrderFront(nil)
-        self.window = window
+        return try await withCheckedThrowingContinuation { cont in
+            self.continuation = cont
+            self.startServer()
+        }
     }
 
-    fileprivate func handleBridgeMessage(_ body: Any) {
-        guard let dict = body as? [String: Any],
-              let action = dict["action"] as? String else {
-            pickerLog.error("Picker bridge received malformed message: \(String(describing: body))")
-            return
-        }
+    private func startServer() {
+        do {
+            let listener = try NWListener(using: .tcp, on: .any)
+            self.listener = listener
 
-        switch action {
-        case "ready":
-            isReady = true
-            runInitScript()
-
-        case "picked":
-            let rawFolders = (dict["folders"] as? [[String: Any]]) ?? []
-            let folders: [PickedDriveFolder] = rawFolders.compactMap { d in
-                guard let id = d["id"] as? String,
-                      let name = d["name"] as? String,
-                      (d["mimeType"] as? String) == "application/vnd.google-apps.folder" else {
-                    return nil
+            listener.newConnectionHandler = { [weak self] connection in
+                self?.handleConnection(connection)
+            }
+            listener.stateUpdateHandler = { [weak self] state in
+                switch state {
+                case .ready:
+                    guard let port = listener.port?.rawValue else { return }
+                    Task { @MainActor in
+                        self?.openBrowser(port: port)
+                    }
+                case .failed(let error):
+                    Task { @MainActor in
+                        self?.finish(throwing: error)
+                    }
+                default:
+                    break
                 }
-                return PickedDriveFolder(id: id, name: name)
             }
-            pickerLog.info("Picker returned \(folders.count) folder(s)")
-            finishWithResult(folders)
-
-        case "cancel":
-            pickerLog.info("Picker cancelled by user")
-            finishWithResult([])
-
-        case "error":
-            let msg = (dict["message"] as? String) ?? "Unknown picker error"
-            pickerLog.error("Picker JS error: \(msg)")
-            finishWithError(GoogleDrivePickerError.jsError(msg))
-
-        default:
-            break
+            listener.start(queue: .global(qos: .userInitiated))
+        } catch {
+            finish(throwing: error)
         }
     }
 
-    private func runInitScript() {
-        let payload: [String: Any] = [
-            "accessToken": accessToken,
-            "apiKey": apiKey,
-            "preselectFileIds": preselectFileIds,
+    private func openBrowser(port: UInt16) {
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = "127.0.0.1"
+        components.port = Int(port)
+        components.path = "/picker"
+        let projectNumber = GoogleDriveAPIClient.clientId.components(separatedBy: "-").first ?? ""
+        components.queryItems = [
+            URLQueryItem(name: "token", value: accessToken),
+            URLQueryItem(name: "apiKey", value: apiKey),
+            URLQueryItem(name: "appId", value: projectNumber),
+            URLQueryItem(name: "port", value: String(port)),
         ]
-        guard let json = try? JSONSerialization.data(withJSONObject: payload),
-              let jsonString = String(data: json, encoding: .utf8) else {
-            finishWithError(GoogleDrivePickerError.serializationFailed)
-            return
+        if !preselectFileIds.isEmpty {
+            components.queryItems?.append(
+                URLQueryItem(name: "preselect", value: preselectFileIds.joined(separator: ","))
+            )
         }
-        let js = "window.__fileflussInit(\(jsonString));"
-        webView?.evaluateJavaScript(js) { [weak self] _, error in
-            if let error {
-                self?.finishWithError(error)
+        if let url = components.url {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private nonisolated func handleConnection(_ connection: NWConnection) {
+        connection.start(queue: .global(qos: .userInitiated))
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, _ in
+            guard let self, let data, let request = String(data: data, encoding: .utf8) else {
+                connection.cancel()
+                return
+            }
+
+            guard let firstLine = request.components(separatedBy: "\r\n").first,
+                  let urlPart = firstLine.split(separator: " ").dropFirst().first,
+                  let components = URLComponents(string: "http://localhost\(urlPart)") else {
+                connection.cancel()
+                return
+            }
+
+            let path = components.path
+
+            if path == "/callback" {
+                let params = components.queryItems ?? []
+                let action = params.first(where: { $0.name == "action" })?.value ?? ""
+                let foldersJSON = params.first(where: { $0.name == "folders" })?.value
+
+                let doneHTML = Data("""
+                <!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f7">
+                <div style="text-align:center"><div style="font-size:48px;color:#34c759">&#10003;</div><p>Done &#8212; you can close this tab.</p></div>
+                </body></html>
+                """.utf8)
+                let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(doneHTML.count)\r\nConnection: close\r\n\r\n"
+                var responseData = Data(response.utf8)
+                responseData.append(doneHTML)
+                connection.send(content: responseData, completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
+
+                Task { @MainActor in
+                    if action == "picked", let json = foldersJSON,
+                       let jsonData = json.removingPercentEncoding?.data(using: .utf8),
+                       let raw = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] {
+                        let folders: [PickedDriveFolder] = raw.compactMap { d in
+                            guard let id = d["id"] as? String,
+                                  let name = d["name"] as? String,
+                                  (d["mimeType"] as? String) == "application/vnd.google-apps.folder" else {
+                                return nil
+                            }
+                            return PickedDriveFolder(id: id, name: name)
+                        }
+                        pickerLog.info("Picker returned \(folders.count) folder(s)")
+                        self.finish(returning: folders)
+                    } else {
+                        pickerLog.info("Picker cancelled by user")
+                        self.finish(returning: [])
+                    }
+                }
+            } else {
+                guard let htmlData = self.htmlData else {
+                    connection.cancel()
+                    return
+                }
+                let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(htmlData.count)\r\nConnection: close\r\n\r\n"
+                var responseData = Data(response.utf8)
+                responseData.append(htmlData)
+                connection.send(content: responseData, completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
             }
         }
     }
 
-    private func finishWithResult(_ folders: [PickedDriveFolder]) {
+    private func finish(returning folders: [PickedDriveFolder]) {
         guard let cont = continuation else { return }
         continuation = nil
         cont.resume(returning: folders)
-        closeWindow()
+        stopServer()
     }
 
-    private func finishWithError(_ error: Error) {
+    private func finish(throwing error: Error) {
         guard let cont = continuation else { return }
         continuation = nil
         cont.resume(throwing: error)
-        closeWindow()
+        stopServer()
     }
 
-    private func closeWindow() {
-        window?.delegate = nil
-        window?.close()
-        window = nil
-        webView = nil
-    }
-}
-
-// MARK: - WKNavigationDelegate
-
-extension GoogleDrivePickerWindow: WKNavigationDelegate {
-    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            if self.isReady {
-                self.runInitScript()
-            }
-            // If the JS hasn't posted "ready" yet, runInitScript will fire from
-            // handleBridgeMessage once it does.
-        }
-    }
-
-    nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor [weak self] in
-            self?.finishWithError(error)
-        }
-    }
-
-    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor [weak self] in
-            self?.finishWithError(error)
-        }
-    }
-}
-
-// MARK: - NSWindowDelegate
-
-extension GoogleDrivePickerWindow: NSWindowDelegate {
-    nonisolated func windowWillClose(_ notification: Notification) {
-        Task { @MainActor [weak self] in
-            // User closed the window without picking — treat as cancel.
-            self?.finishWithResult([])
-        }
-    }
-}
-
-// MARK: - Bridge (separate object to avoid retain cycles via WKUserContentController)
-
-private final class PickerBridge: NSObject, WKScriptMessageHandler {
-    private weak var owner: GoogleDrivePickerWindow?
-
-    init(owner: GoogleDrivePickerWindow) {
-        self.owner = owner
-    }
-
-    nonisolated func userContentController(
-        _ userContentController: WKUserContentController,
-        didReceive message: WKScriptMessage
-    ) {
-        let body = message.body
-        Task { @MainActor [weak owner] in
-            owner?.handleBridgeMessage(body)
-        }
+    private func stopServer() {
+        listener?.cancel()
+        listener = nil
+        htmlData = nil
     }
 }
 

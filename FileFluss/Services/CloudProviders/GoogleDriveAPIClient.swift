@@ -315,6 +315,18 @@ actor GoogleDriveAPIClient {
         }
 
         let folderId = (try await resolvePathToCachedFile(path)).id
+        let debugLog = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/filefluss-debug.log")
+        func debugWrite(_ msg: String) {
+            let line = "\(Date()): \(msg)\n"
+            if let handle = try? FileHandle(forWritingTo: debugLog) {
+                handle.seekToEndOfFile()
+                handle.write(Data(line.utf8))
+                handle.closeFile()
+            } else {
+                try? Data(line.utf8).write(to: debugLog)
+            }
+        }
+        debugWrite("listFolder path=\(path) folderId=\(folderId)")
 
         var allItems: [GoogleDriveFile] = []
         var pageToken: String?
@@ -331,6 +343,10 @@ actor GoogleDriveAPIClient {
             }
 
             let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
+            debugWrite("listFolder returned \(response.files.count) items for \(path)")
+            for file in response.files {
+                debugWrite("  - \(file.name) (\(file.mimeType)) id=\(file.id)")
+            }
             allItems.append(contentsOf: response.files)
             pageToken = response.nextPageToken
         } while pageToken != nil

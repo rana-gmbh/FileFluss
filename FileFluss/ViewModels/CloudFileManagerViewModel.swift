@@ -152,6 +152,8 @@ final class CloudFileManagerViewModel {
     func navigateTo(_ path: String) async {
         if path != currentPath {
             await loadDirectory(at: path)
+        } else {
+            await loadDirectory()
         }
     }
 

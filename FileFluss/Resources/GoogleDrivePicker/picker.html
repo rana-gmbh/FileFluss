@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Choose Google Drive folders</title>
+  <title>Choose Google Drive folders — FileFluss</title>
   <style>
     html, body {
       margin: 0;
@@ -36,6 +36,19 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    #done {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 16px;
+    }
+    #done .checkmark {
+      font-size: 48px;
+    }
     #error {
       display: none;
       padding: 24px;
@@ -50,119 +63,102 @@
     <div class="spinner"></div>
     <div>Loading Google Picker…</div>
   </div>
+  <div id="done">
+    <div class="checkmark">✓</div>
+    <div>Folders selected. You can close this tab.</div>
+  </div>
   <div id="error"></div>
 
-  <script src="https://apis.google.com/js/api.js"></script>
   <script>
     (function() {
-      let pickerApiLoaded = false;
-      let token = null;
-      let apiKey = null;
-      let preselectFileIds = [];
+      // Parse init parameters from the URL query string, set by the local server.
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var apiKey = params.get('apiKey');
+      var appId = params.get('appId');
+      var callbackPort = params.get('port');
+      var preselectRaw = params.get('preselect');
+      var preselectFileIds = preselectRaw ? preselectRaw.split(',').filter(Boolean) : [];
 
-      function postToNative(payload) {
-        try {
-          window.webkit.messageHandlers.picker.postMessage(payload);
-        } catch (e) {
-          // Running outside WKWebView — log to console for dev.
-          console.log("picker postMessage:", payload);
-        }
+      function callbackURL(path) {
+        return 'http://127.0.0.1:' + callbackPort + path;
       }
 
       function showError(msg) {
         document.getElementById('loading').style.display = 'none';
-        const el = document.getElementById('error');
+        var el = document.getElementById('error');
         el.textContent = msg;
         el.style.display = 'block';
-        postToNative({ action: 'error', message: msg });
+      }
+
+      function showDone() {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('done').style.display = 'flex';
+      }
+
+      if (!token || !apiKey || !callbackPort) {
+        showError('Missing parameters. Please retry from FileFluss.');
+        return;
       }
 
       function onPickerApiLoaded() {
-        pickerApiLoaded = true;
-        maybeShow();
-      }
-
-      function loadPicker() {
-        if (typeof gapi === 'undefined') {
-          showError("Failed to load Google API client (apis.google.com). Check your network connection.");
-          return;
-        }
-        gapi.load('picker', { 'callback': onPickerApiLoaded });
-      }
-
-      function maybeShow() {
-        if (!pickerApiLoaded || !token || !apiKey) return;
-
         document.getElementById('loading').style.display = 'none';
 
-        // "My Drive" folders view, folder selection enabled.
-        const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+        var myDriveView = new google.picker.DocsView()
           .setIncludeFolders(true)
           .setSelectFolderEnabled(true)
           .setMimeTypes('application/vnd.google-apps.folder')
-          .setOwnedByMe(true)
+          .setParent('root')
           .setLabel('My Drive');
 
-        // Shared Drives folders view.
-        const sharedDrivesView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+        var sharedDrivesView = new google.picker.DocsView()
           .setIncludeFolders(true)
           .setSelectFolderEnabled(true)
           .setMimeTypes('application/vnd.google-apps.folder')
           .setEnableDrives(true)
           .setLabel('Shared Drives');
 
-        // Shared with me — folders only.
-        const sharedWithMeView = new google.picker.DocsView(google.picker.ViewId.FOLDERS_SHARED_WITH_ME)
-          .setIncludeFolders(true)
-          .setSelectFolderEnabled(true)
-          .setMimeTypes('application/vnd.google-apps.folder')
-          .setLabel('Shared with me');
-
-        // Pre-navigate to previously picked folders if the native side asked us to.
-        if (preselectFileIds && preselectFileIds.length > 0 && typeof myDriveView.setFileIds === 'function') {
+        if (preselectFileIds.length > 0 && typeof myDriveView.setFileIds === 'function') {
           try { myDriveView.setFileIds(preselectFileIds.join(',')); } catch (e) { /* ignore */ }
         }
 
-        const builder = new google.picker.PickerBuilder()
+        var builder = new google.picker.PickerBuilder()
           .addView(myDriveView)
           .addView(sharedDrivesView)
-          .addView(sharedWithMeView)
           .setOAuthToken(token)
           .setDeveloperKey(apiKey)
+          .setAppId(appId)
           .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
           .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
           .setTitle('Choose folders to connect to FileFluss')
           .setCallback(function(data) {
             if (data.action === google.picker.Action.PICKED) {
-              const folders = (data.docs || []).map(function(d) {
+              var folders = (data.docs || []).map(function(d) {
                 return { id: d.id, name: d.name, mimeType: d.mimeType };
               });
-              postToNative({ action: 'picked', folders: folders });
+              var encoded = encodeURIComponent(JSON.stringify(folders));
+              showDone();
+              window.location.href = callbackURL('/callback?action=picked&folders=' + encoded);
             } else if (data.action === google.picker.Action.CANCEL) {
-              postToNative({ action: 'cancel' });
+              showDone();
+              window.location.href = callbackURL('/callback?action=cancel');
             }
           });
 
-        const picker = builder.build();
+        var picker = builder.build();
         picker.setVisible(true);
       }
 
-      // Entry point called by native code after the page loads.
-      window.__fileflussInit = function(opts) {
-        try {
-          token = opts.accessToken || null;
-          apiKey = opts.apiKey || null;
-          preselectFileIds = opts.preselectFileIds || [];
-          if (!token) { showError("Missing access token."); return; }
-          if (!apiKey) { showError("Missing Picker API key. Configure GOOGLE_PICKER_API_KEY in Info.plist."); return; }
-          loadPicker();
-        } catch (e) {
-          showError("Init failed: " + (e && e.message ? e.message : String(e)));
-        }
+      // Load the Picker JS SDK.
+      var script = document.createElement('script');
+      script.src = 'https://apis.google.com/js/api.js';
+      script.onload = function() {
+        gapi.load('picker', { callback: onPickerApiLoaded });
       };
-
-      // Tell native we're ready for __fileflussInit.
-      postToNative({ action: 'ready' });
+      script.onerror = function() {
+        showError('Failed to load Google API client. Check your network connection.');
+      };
+      document.head.appendChild(script);
     })();
   </script>
 </body>
