@@ -161,6 +161,10 @@ actor WebDAVAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -170,15 +174,20 @@ actor WebDAVAPIClient {
         request.httpMethod = "GET"
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -189,9 +198,8 @@ actor WebDAVAPIClient {
         request.httpMethod = "PUT"
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.httpBody = fileData
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let bodyStr = String(data: data, encoding: .utf8) ?? ""

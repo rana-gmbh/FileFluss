@@ -302,6 +302,10 @@ actor DropboxAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
 
         struct DownloadArg: Encodable {
@@ -319,7 +323,7 @@ actor DropboxAPIClient {
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(argString, forHTTPHeaderField: "Dropbox-API-Arg")
 
-        var (data, response) = try await session.data(for: request)
+        var (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         if let http = response as? HTTPURLResponse, http.statusCode == 401 {
             dropboxLog.info("[Dropbox] Got 401 on download, refreshing token and retrying")
             let newCreds = try await forceRefreshToken()
@@ -327,30 +331,36 @@ actor DropboxAPIClient {
             retryRequest.httpMethod = "POST"
             retryRequest.setValue("Bearer \(newCreds.accessToken)", forHTTPHeaderField: "Authorization")
             retryRequest.setValue(argString, forHTTPHeaderField: "Dropbox-API-Arg")
-            (data, response) = try await session.data(for: retryRequest)
+            (tempURL, response) = try await session.downloadReportingProgress(for: retryRequest, onBytes: onBytes)
         }
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
-            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            let errorData = (try? Data(contentsOf: tempURL)) ?? Data()
+            let bodyStr = String(data: errorData, encoding: .utf8) ?? ""
             dropboxLog.error("[Dropbox] Download failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: data)
+            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: errorData)
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
         let fileData = try Data(contentsOf: localURL)
 
         if fileData.count <= 150_000_000 {
-            try await simpleUpload(data: fileData, path: dbPath)
+            try await simpleUpload(data: fileData, path: dbPath, onBytes: onBytes)
         } else {
-            try await sessionUpload(from: localURL, fileSize: fileData.count, path: dbPath)
+            try await sessionUpload(from: localURL, fileSize: fileData.count, path: dbPath, onBytes: onBytes)
         }
     }
 
-    private func simpleUpload(data: Data, path: String) async throws {
+    private func simpleUpload(data: Data, path: String, onBytes: ByteProgressHandler? = nil) async throws {
         struct UploadArg: Encodable {
             let path: String
             let mode: String
@@ -369,9 +379,8 @@ actor DropboxAPIClient {
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.setValue(argString, forHTTPHeaderField: "Dropbox-API-Arg")
-        request.httpBody = data
 
-        var (responseData, response) = try await session.data(for: request)
+        var (responseData, response) = try await session.uploadReportingProgress(for: request, body: data, onBytes: onBytes)
         if let http = response as? HTTPURLResponse, http.statusCode == 401 {
             dropboxLog.info("[Dropbox] Got 401 on upload, refreshing token and retrying")
             let newCreds = try await forceRefreshToken()
@@ -380,8 +389,7 @@ actor DropboxAPIClient {
             retryRequest.setValue("Bearer \(newCreds.accessToken)", forHTTPHeaderField: "Authorization")
             retryRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             retryRequest.setValue(argString, forHTTPHeaderField: "Dropbox-API-Arg")
-            retryRequest.httpBody = data
-            (responseData, response) = try await session.data(for: retryRequest)
+            (responseData, response) = try await session.uploadReportingProgress(for: retryRequest, body: data, onBytes: onBytes)
         }
 
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -392,7 +400,7 @@ actor DropboxAPIClient {
         }
     }
 
-    private func sessionUpload(from localURL: URL, fileSize: Int, path: String) async throws {
+    private func sessionUpload(from localURL: URL, fileSize: Int, path: String, onBytes: ByteProgressHandler? = nil) async throws {
         let chunkSize = 150_000_000 // 150MB
         let fileData = try Data(contentsOf: localURL)
 
@@ -463,9 +471,8 @@ actor DropboxAPIClient {
                 finishRequest.setValue("Bearer \(finishCreds.accessToken)", forHTTPHeaderField: "Authorization")
                 finishRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
                 finishRequest.setValue(finishArgString, forHTTPHeaderField: "Dropbox-API-Arg")
-                finishRequest.httpBody = chunk
 
-                let (finishData, finishResponse) = try await session.data(for: finishRequest)
+                let (finishData, finishResponse) = try await session.uploadReportingProgress(for: finishRequest, body: Data(chunk), onBytes: onBytes)
                 guard let finishHttp = finishResponse as? HTTPURLResponse, (200...299).contains(finishHttp.statusCode) else {
                     let finishHttp = finishResponse as? HTTPURLResponse
                     throw Self.mapHTTPError(statusCode: finishHttp?.statusCode ?? 0, responseBody: finishData)
@@ -495,9 +502,8 @@ actor DropboxAPIClient {
                 appendRequest.setValue("Bearer \(appendCreds.accessToken)", forHTTPHeaderField: "Authorization")
                 appendRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
                 appendRequest.setValue(appendArgString, forHTTPHeaderField: "Dropbox-API-Arg")
-                appendRequest.httpBody = chunk
 
-                let (appendData, appendResponse) = try await session.data(for: appendRequest)
+                let (appendData, appendResponse) = try await session.uploadReportingProgress(for: appendRequest, body: Data(chunk), onBytes: onBytes)
                 guard let appendHttp = appendResponse as? HTTPURLResponse, (200...299).contains(appendHttp.statusCode) else {
                     let appendHttp = appendResponse as? HTTPURLResponse
                     throw Self.mapHTTPError(statusCode: appendHttp?.statusCode ?? 0, responseBody: appendData)

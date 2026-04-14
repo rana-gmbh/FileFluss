@@ -180,6 +180,11 @@ final class AppState {
         }
     }
 
+    func startTransfer(_ transfer: TransferProgress, panel: PanelSide, operation: @escaping @Sendable () async -> Void) {
+        addTransfer(transfer, panel: panel)
+        transfer.task = Task { await operation() }
+    }
+
     func removeTransfer(id: UUID, panel: PanelSide) {
         if panel == .left {
             leftTransfers.removeAll { $0.id == id }
@@ -339,6 +344,24 @@ final class TransferProgress: Identifiable {
     let startTime = Date()
     var endTime: Date?
 
+    // Byte-weighted progress
+    /// Expected bytes for the download phase (local→cloud uploads: 0; cloud→cloud: source bytes).
+    var expectedBytesDownload: Int64 = 0
+    /// Expected bytes for the upload phase (cloud→local downloads: 0; cloud→cloud: source bytes).
+    var expectedBytesUpload: Int64 = 0
+    /// Expected bytes for a single-phase transfer (download OR upload).
+    var expectedBytesSingle: Int64 = 0
+
+    /// Task running this transfer, set by the caller after `Task { ... }` is created.
+    /// Call `cancel()` to request cancellation.
+    var task: Task<Void, Never>?
+    var isCancelled: Bool = false
+
+    func cancel() {
+        isCancelled = true
+        task?.cancel()
+    }
+
     // Cloud-to-cloud phase tracking
     var isCloudToCloud: Bool = false
     var currentPhase: TransferPhase = .downloading
@@ -363,22 +386,54 @@ final class TransferProgress: Identifiable {
     }
 
     var fraction: Double {
-        let effectiveTotal = totalFiles > 0 ? totalFiles : totalItems
-        guard effectiveTotal > 0 else { return 0 }
         if isCloudToCloud {
+            let totalExpected = expectedBytesDownload + expectedBytesUpload
+            if totalExpected > 0 {
+                let transferred = min(downloadBytes + uploadBytes, totalExpected)
+                return Double(transferred) / Double(totalExpected)
+            }
+            // Fall back to file-count halves until sizes are known
+            let effectiveTotal = totalFiles > 0 ? totalFiles : totalItems
+            guard effectiveTotal > 0 else { return 0 }
             let half = Double(effectiveTotal)
             switch currentPhase {
-            case .downloading:
-                return Double(completedItems) / (half * 2)
-            case .uploading:
-                return (half + Double(completedItems)) / (half * 2)
+            case .downloading: return Double(completedItems) / (half * 2)
+            case .uploading: return (half + Double(completedItems)) / (half * 2)
             }
         }
+
+        // Single-phase transfer — prefer byte-weighted if we have expected bytes.
+        if expectedBytesSingle > 0 {
+            let transferred = isCloudUpload ? uploadBytes : downloadBytes
+            let clamped = min(transferred, expectedBytesSingle)
+            return Double(clamped) / Double(expectedBytesSingle)
+        }
+
+        let effectiveTotal = totalFiles > 0 ? totalFiles : totalItems
+        guard effectiveTotal > 0 else { return 0 }
         return Double(completedItems) / Double(effectiveTotal)
+    }
+
+    /// Percentage string for display inside the progress bar (e.g. "42%").
+    var percentText: String {
+        "\(Int((fraction * 100).rounded()))%"
+    }
+
+    /// Thread-safe-ish byte accumulator for the current phase.
+    /// Call from @MainActor contexts only.
+    func addDownloadBytes(_ delta: Int64) {
+        guard delta > 0 else { return }
+        downloadBytes += delta
+    }
+
+    func addUploadBytes(_ delta: Int64) {
+        guard delta > 0 else { return }
+        uploadBytes += delta
     }
 
     var statusText: String {
         if isComplete { return completionSummary }
+        if isCancelled { return "Cancelling…" }
         if isCloudToCloud {
             let names = transferredFileNames
             let label = names.count == 1 ? names[0] : "\(names.count) items"
@@ -425,6 +480,11 @@ final class TransferProgress: Identifiable {
     var completionSummary: String {
         let names = transferredFileNames
         let pastTense = pastTenseOperation
+
+        if isCancelled {
+            let label = names.count == 1 ? names[0] : "\(names.count) items"
+            return "Cancelled: \(operation) \(label)"
+        }
 
         if let errorMessage {
             let label = names.count == 1 ? names[0] : "\(names.count) items"

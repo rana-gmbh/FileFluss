@@ -52,11 +52,26 @@ actor SFTPAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         _ = try await runBatch(commands: ["get \(shellEscape(remotePath)) \(shellEscape(localURL.path))"])
+        if let onBytes,
+           let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path),
+           let size = attrs[.size] as? Int64 {
+            onBytes(size)
+        }
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+        let fileSize: Int64 = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
         _ = try await runBatch(commands: ["put \(shellEscape(localURL.path)) \(shellEscape(remotePath))"])
+        onBytes?(fileSize)
     }
 
     func deleteItem(at path: String, isDirectory: Bool) async throws {

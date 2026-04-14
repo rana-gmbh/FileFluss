@@ -191,21 +191,28 @@ actor WordPressAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
-        // remotePath is like /2026/04/filename.jpg — find the source_url from cache or fetch
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let sourceURL = try await resolveSourceURL(for: remotePath)
 
         var request = URLRequest(url: URL(string: sourceURL)!)
         request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw CloudProviderError.serverError((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileName = localURL.lastPathComponent
         let fileData = try Data(contentsOf: localURL)
 
@@ -225,9 +232,8 @@ actor WordPressAPIClient {
         var request = try makeRequest(path: "/media", query: [])
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse else {
             throw CloudProviderError.invalidResponse
         }

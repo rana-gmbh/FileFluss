@@ -326,6 +326,10 @@ actor GoogleDriveAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let cached = try await resolvePathToCachedFile(remotePath)
         let creds = try await refreshTokenIfNeeded()
 
@@ -348,17 +352,23 @@ actor GoogleDriveAPIClient {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
-            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            let errorData = (try? Data(contentsOf: tempURL)) ?? Data()
+            let bodyStr = String(data: errorData, encoding: .utf8) ?? ""
             googleLog.error("[Google] Download failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: data)
+            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: errorData)
         }
-        try data.write(to: actualLocalURL)
+        try? FileManager.default.removeItem(at: actualLocalURL)
+        try FileManager.default.moveItem(at: tempURL, to: actualLocalURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
         let parentId = (try await resolvePathToCachedFile(parentPath)).id
@@ -366,13 +376,13 @@ actor GoogleDriveAPIClient {
         let fileData = try Data(contentsOf: localURL)
 
         if fileData.count <= 5_000_000 {
-            try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId)
+            try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, onBytes: onBytes)
         } else {
-            try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId)
+            try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, onBytes: onBytes)
         }
     }
 
-    private func simpleUpload(data: Data, fileName: String, parentId: String) async throws {
+    private func simpleUpload(data: Data, fileName: String, parentId: String, onBytes: ByteProgressHandler?) async throws {
         let creds = try await refreshTokenIfNeeded()
         let boundary = UUID().uuidString
 
@@ -394,9 +404,8 @@ actor GoogleDriveAPIClient {
         body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let bodyStr = String(data: responseData, encoding: .utf8) ?? ""
@@ -405,7 +414,7 @@ actor GoogleDriveAPIClient {
         }
     }
 
-    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String) async throws {
+    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String, onBytes: ByteProgressHandler?) async throws {
         let creds = try await refreshTokenIfNeeded()
 
         // Step 1: Initiate resumable upload
@@ -445,9 +454,8 @@ actor GoogleDriveAPIClient {
             chunkRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             chunkRequest.setValue("bytes \(offset)-\(end - 1)/\(fileSize)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
-            chunkRequest.httpBody = chunk
 
-            let (_, chunkResponse) = try await session.data(for: chunkRequest)
+            let (_, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
             guard let chunkHttp = chunkResponse as? HTTPURLResponse,
                   (200...299).contains(chunkHttp.statusCode) || chunkHttp.statusCode == 308 else {
                 let chunkHttp = chunkResponse as? HTTPURLResponse

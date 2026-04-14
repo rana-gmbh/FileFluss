@@ -245,10 +245,11 @@ private struct TransferRow: View {
     let panelSide: PanelSide
     @Environment(AppState.self) private var appState
     @State private var showDetails = false
+    @State private var showCancelConfirmation = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 if let details = transfer.completionDetailNames, transfer.isComplete {
                     Text(transfer.statusText)
                         .font(.caption)
@@ -274,10 +275,22 @@ private struct TransferRow: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
+                } else if !transfer.isCancelled {
+                    Button {
+                        showCancelConfirmation = true
+                    } label: {
+                        Text("Cancel")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Cancel this transfer")
                 }
             }
-            ProgressView(value: transfer.fraction)
-                .progressViewStyle(.linear)
+
+            CapsuleProgressBar(transfer: transfer)
+                .frame(height: 18)
+
             if !transfer.currentFileName.isEmpty && !transfer.isComplete {
                 Text(transfer.currentFileName)
                     .font(.caption2)
@@ -287,6 +300,73 @@ private struct TransferRow: View {
         }
         .popover(isPresented: $showDetails) {
             TransferDetailsView(transfer: transfer)
+        }
+        .confirmationDialog(
+            "Cancel this transfer?",
+            isPresented: $showCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Cancel Transfer", role: .destructive) {
+                transfer.cancel()
+            }
+            Button("Keep Running", role: .cancel) {}
+        } message: {
+            Text("Files already transferred will remain. Any partial file currently in flight will be discarded.")
+        }
+    }
+}
+
+// MARK: - Capsule Progress Bar
+
+private struct CapsuleProgressBar: View {
+    let transfer: TransferProgress
+
+    private var tintGradient: LinearGradient {
+        let colors: [Color]
+        if transfer.isComplete {
+            colors = transfer.errorMessage == nil
+                ? [Color.green.opacity(0.85), Color.green]
+                : [Color.red.opacity(0.85), Color.red]
+        } else if transfer.isCloudToCloud {
+            colors = transfer.currentPhase == .downloading
+                ? [Color.blue.opacity(0.85), Color.cyan]
+                : [Color.purple.opacity(0.85), Color.pink.opacity(0.9)]
+        } else if transfer.isCloudUpload {
+            colors = [Color.purple.opacity(0.85), Color.pink.opacity(0.9)]
+        } else {
+            colors = [Color.blue.opacity(0.85), Color.cyan]
+        }
+        return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let fraction = max(0, min(1, transfer.fraction))
+            let filledWidth = geo.size.width * fraction
+
+            ZStack(alignment: .leading) {
+                // Track
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                    )
+
+                // Fill
+                Capsule()
+                    .fill(tintGradient)
+                    .frame(width: filledWidth)
+                    .animation(.easeOut(duration: 0.15), value: fraction)
+
+                // Percentage label, centered in the bar
+                Text(transfer.percentText)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(fraction > 0.55 ? Color.white : Color.primary.opacity(0.75))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .shadow(color: fraction > 0.55 ? .black.opacity(0.15) : .clear, radius: 0.5, y: 0.5)
+            }
         }
     }
 }

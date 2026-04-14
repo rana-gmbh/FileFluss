@@ -92,25 +92,30 @@ actor KDriveAPIClient {
 
     // MARK: - File Operations
 
-    func downloadFile(fileId: Int, to localURL: URL) async throws {
+    func downloadFile(fileId: Int, to localURL: URL, onBytes: ByteProgressHandler? = nil) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/download")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
-        let fileId = try await resolvePathToId(remotePath)
-        try await downloadFile(fileId: fileId, to: localURL)
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, toFolderId folderId: Int, fileName: String) async throws {
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+        let fileId = try await resolvePathToId(remotePath)
+        try await downloadFile(fileId: fileId, to: localURL, onBytes: onBytes)
+    }
+
+    func uploadFile(from localURL: URL, toFolderId folderId: Int, fileName: String, onBytes: ByteProgressHandler? = nil) async throws {
         let fileData = try Data(contentsOf: localURL)
 
         var components = URLComponents(string: "\(baseURL)/3/drive/\(credentials.driveId)/upload")!
@@ -128,10 +133,9 @@ actor KDriveAPIClient {
         request.httpMethod = "POST"
         request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.httpBody = fileData
 
         KDriveProvider.log("[kDrive API] POST upload → folderId=\(folderId), fileName=\(fileName), size=\(fileData.count)")
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
         let http = response as? HTTPURLResponse
         let bodyStr = String(data: data, encoding: .utf8) ?? ""
         KDriveProvider.log("[kDrive API] POST upload → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")

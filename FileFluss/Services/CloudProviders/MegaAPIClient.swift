@@ -236,6 +236,10 @@ actor MegaAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -266,10 +270,15 @@ actor MegaAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        let (data, response) = try await session.data(from: downloadURL)
+        var request = URLRequest(url: downloadURL)
+        request.httpMethod = "GET"
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw CloudProviderError.invalidResponse
         }
+
+        let data = try Data(contentsOf: tempURL)
+        try? FileManager.default.removeItem(at: tempURL)
 
         // Decrypt the downloaded file using the node key
         let decryptedData = try decryptFileData(data, handle: handle)
@@ -277,6 +286,10 @@ actor MegaAPIClient {
     }
 
     func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+        try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -308,10 +321,9 @@ actor MegaAPIClient {
         // Step 3: Upload encrypted data
         var request = URLRequest(url: uploadURL)
         request.httpMethod = "POST"
-        request.httpBody = encryptedData
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
 
-        let (responseData, uploadResponse) = try await session.data(for: request)
+        let (responseData, uploadResponse) = try await session.uploadReportingProgress(for: request, body: encryptedData, onBytes: onBytes)
         guard let http = uploadResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw CloudProviderError.invalidResponse
         }

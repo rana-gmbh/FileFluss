@@ -108,6 +108,10 @@ actor KoofrAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
         let urlString = "\(contentURL)/mounts/\(mountId)/files/get?path=\(encodedPath)"
         guard let url = URL(string: urlString) else {
@@ -117,15 +121,20 @@ actor KoofrAPIClient {
         var request = URLRequest(url: url)
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+        try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath
         let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName
         let urlString = "\(contentURL)/mounts/\(mountId)/files/put?path=\(encodedPath)&filename=\(encodedName)&autorename=false&overwrite=true"
@@ -146,9 +155,8 @@ actor KoofrAPIClient {
         body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let bodyStr = String(data: responseData, encoding: .utf8) ?? ""

@@ -53,6 +53,15 @@ protocol CloudProvider: Sendable {
     func listDirectory(at path: String) async throws -> [CloudFileItem]
     func downloadFile(remotePath: String, to localURL: URL) async throws
     func uploadFile(from localURL: URL, to remotePath: String) async throws
+
+    /// Download with byte-level progress. Default implementation forwards to the
+    /// non-progress variant; providers that can stream should override to emit deltas.
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws
+
+    /// Upload with byte-level progress. Default implementation forwards to the
+    /// non-progress variant; providers that can stream should override to emit deltas.
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws
+
     func deleteItem(at path: String) async throws
     func createDirectory(at path: String) async throws
     func renameItem(at path: String, to newName: String) async throws
@@ -66,5 +75,13 @@ protocol CloudProvider: Sendable {
 extension CloudProvider {
     func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         nil
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+        try await uploadFile(from: localURL, to: remotePath)
     }
 }

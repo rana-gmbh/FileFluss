@@ -304,11 +304,31 @@ final class CloudFileManagerViewModel {
         progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
         progress?.isCloudDownload = true
 
+        // Pre-compute expected bytes for byte-weighted progress.
+        // For cloud-to-cloud transfers, expectedBytesDownload is already set by the caller.
+        if progress?.isCloudToCloud != true {
+            var expected: Int64 = 0
+            for item in items {
+                if item.isDirectory {
+                    expected += (try? await provider.folderSize(at: item.path)) ?? 0
+                } else {
+                    expected += item.size
+                }
+            }
+            progress?.expectedBytesSingle = expected
+        }
+
         let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
         var applyToAllChoice: ConflictChoice?
         var downloadedCount = 0
 
         for (index, item) in items.enumerated() {
+            if progress?.isCancelled == true || Task.isCancelled {
+                if !(progress?.isCloudToCloud ?? false) {
+                    progress?.endTime = Date(); progress?.isComplete = true
+                }
+                return
+            }
             var base = localDirectory.appendingPathComponent(item.name)
             let existingURL = Self.findExistingFile(base: base, convertedExtensions: convertedExtensions)
             let exists = existingURL != nil
@@ -383,7 +403,10 @@ final class CloudFileManagerViewModel {
         } else {
             let localURL = localDirectory.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
-            try await provider.downloadFile(remotePath: item.path, to: localURL)
+            let progressRef = progress
+            try await provider.downloadFile(remotePath: item.path, to: localURL, onBytes: { bytes in
+                Task { @MainActor in progressRef?.addDownloadBytes(bytes) }
+            })
             // Preserve original cloud modification date on the local file
             // so conflict dialogs and file listings show the correct date
             let finalURL: URL
@@ -476,10 +499,25 @@ final class CloudFileManagerViewModel {
         progress?.transferredFolderNames = Set(urls.filter { var isDir: ObjCBool = false; return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue }.map(\.lastPathComponent))
         progress?.isCloudUpload = true
 
+        // Pre-compute expected upload bytes for byte-weighted progress.
+        if progress?.isCloudToCloud != true {
+            var expected: Int64 = 0
+            for url in urls {
+                expected += Self.localSizeRecursively(url: url)
+            }
+            progress?.expectedBytesSingle = expected
+        }
+
         var applyToAllChoice: ConflictChoice?
         var uploadedCount = 0
 
         for (index, url) in urls.enumerated() {
+            if progress?.isCancelled == true || Task.isCancelled {
+                if !(progress?.isCloudToCloud ?? false) {
+                    progress?.endTime = Date(); progress?.isComplete = true
+                }
+                return
+            }
             var uploadURL = url
             let name = url.lastPathComponent
             if let existing = existingByName[name], !skipConflictCheck {
@@ -571,7 +609,10 @@ final class CloudFileManagerViewModel {
                 progress?.currentFileName = url.lastPathComponent
                 let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 print("[Upload] Uploading file: \(url.lastPathComponent) (\(fileSize) bytes) to \(itemRemotePath)")
-                try await provider.uploadFile(from: url, to: itemRemotePath)
+                let progressRef = progress
+                try await provider.uploadFile(from: url, to: itemRemotePath, onBytes: { bytes in
+                    Task { @MainActor in progressRef?.addUploadBytes(bytes) }
+                })
                 print("[Upload] Success: \(url.lastPathComponent)")
                 progress?.totalBytes += Int64(fileSize)
                 uploadedCount += 1
@@ -640,6 +681,27 @@ final class CloudFileManagerViewModel {
             let candidate = ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)"
             if !existing.contains(candidate) { return candidate }
             counter += 1
+        }
+    }
+
+    /// Recursively sums up the total byte size of a local file or directory.
+    static func localSizeRecursively(url: URL) -> Int64 {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return 0 }
+        if isDir.boolValue {
+            var total: Int64 = 0
+            guard let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) else { return 0 }
+            for case let fileURL as URL in enumerator {
+                let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                if values?.isRegularFile == true {
+                    total += Int64(values?.fileSize ?? 0)
+                }
+            }
+            return total
+        } else {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+            return Int64(values?.fileSize ?? 0)
         }
     }
 

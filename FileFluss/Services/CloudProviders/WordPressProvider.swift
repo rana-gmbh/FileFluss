@@ -53,13 +53,21 @@ final class WordPressProvider: CloudProvider, @unchecked Sendable {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
-        try await client.downloadFile(remotePath: remotePath, to: localURL)
+        try await client.downloadFile(remotePath: remotePath, to: localURL, onBytes: onBytes)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
-        try await client.uploadFile(from: localURL, to: remotePath)
+        try await client.uploadFile(from: localURL, to: remotePath, onBytes: onBytes)
     }
 
     func deleteItem(at path: String) async throws {

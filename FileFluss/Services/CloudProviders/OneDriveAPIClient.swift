@@ -213,6 +213,10 @@ actor OneDriveAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
         let endpoint = "/me/drive/root:\(encodedPath):/content"
 
@@ -221,27 +225,32 @@ actor OneDriveAPIClient {
         let creds = try await refreshTokenIfNeeded()
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await session.data(for: request)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...399).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
+        try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileData = try Data(contentsOf: localURL)
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
 
         // Files up to 4MB use simple upload; larger files use upload session
         if fileData.count <= 4_000_000 {
-            try await simpleUpload(data: fileData, remotePath: encodedPath)
+            try await simpleUpload(data: fileData, remotePath: encodedPath, onBytes: onBytes)
         } else {
-            try await largeFileUpload(from: localURL, fileSize: fileData.count, remotePath: encodedPath)
+            try await largeFileUpload(from: localURL, fileSize: fileData.count, remotePath: encodedPath, onBytes: onBytes)
         }
     }
 
-    private func simpleUpload(data: Data, remotePath: String) async throws {
+    private func simpleUpload(data: Data, remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let endpoint = "/me/drive/root:\(remotePath):/content"
         let url = URL(string: "\(graphURL)\(endpoint)")!
         var request = URLRequest(url: url)
@@ -249,9 +258,8 @@ actor OneDriveAPIClient {
         let creds = try await refreshTokenIfNeeded()
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.httpBody = data
 
-        let (responseData, response) = try await session.data(for: request)
+        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: data, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let bodyStr = String(data: responseData, encoding: .utf8) ?? ""
@@ -260,7 +268,7 @@ actor OneDriveAPIClient {
         }
     }
 
-    private func largeFileUpload(from localURL: URL, fileSize: Int, remotePath: String) async throws {
+    private func largeFileUpload(from localURL: URL, fileSize: Int, remotePath: String, onBytes: ByteProgressHandler?) async throws {
         // Create upload session
         let endpoint = "/me/drive/root:\(remotePath):/createUploadSession"
         let url = URL(string: "\(graphURL)\(endpoint)")!
@@ -299,9 +307,8 @@ actor OneDriveAPIClient {
             chunkRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             chunkRequest.setValue("bytes \(offset)-\(end - 1)/\(fileSize)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
-            chunkRequest.httpBody = chunk
 
-            let (_, chunkResponse) = try await session.data(for: chunkRequest)
+            let (_, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
             guard let chunkHttp = chunkResponse as? HTTPURLResponse,
                   (200...299).contains(chunkHttp.statusCode) || chunkHttp.statusCode == 308 else {
                 let chunkHttp = chunkResponse as? HTTPURLResponse

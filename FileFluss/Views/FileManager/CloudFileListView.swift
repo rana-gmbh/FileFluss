@@ -65,12 +65,12 @@ struct CloudFileListView: View {
                     otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
-                    Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
+                    transfer.task = Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false) }
                 } else {
                     let otherFM = appState.fileManager(for: otherSide)
                     let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
-                    Task {
+                    transfer.task = Task {
                         await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
                         await otherFM.refresh()
                     }
@@ -87,12 +87,12 @@ struct CloudFileListView: View {
                     otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
-                    Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
+                    transfer.task = Task { await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true) }
                 } else {
                     let otherFM = appState.fileManager(for: otherSide)
                     let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
-                    Task {
+                    transfer.task = Task {
                         await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
                         await vm.deleteItems(items)
                         await otherFM.refresh()
@@ -158,14 +158,14 @@ struct CloudFileListView: View {
                 appState.addTransfer(transfer, panel: panelSide)
                 pendingUploadURLs = nil
                 vm.conflictDirection = incomingDirection
-                Task { await vm.uploadFiles(from: urls, progress: transfer) }
+                transfer.task = Task { await vm.uploadFiles(from: urls, progress: transfer) }
             }
             Button("Move Here") {
                 let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
                 appState.addTransfer(transfer, panel: panelSide)
                 pendingUploadURLs = nil
                 vm.conflictDirection = incomingDirection
-                Task {
+                transfer.task = Task {
                     await vm.uploadFiles(from: urls, progress: transfer)
                     for url in urls { try? FileManager.default.removeItem(at: url) }
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
@@ -192,7 +192,7 @@ struct CloudFileListView: View {
                 vm.conflictDirection = incomingDirection
                 let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
                 appState.addTransfer(transfer, panel: panelSide)
-                Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false) }
+                transfer.task = Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: false) }
             }
             Button("Move Here") {
                 let sourceItems = drop.sourceItems
@@ -203,7 +203,7 @@ struct CloudFileListView: View {
                 vm.conflictDirection = incomingDirection
                 let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
                 appState.addTransfer(transfer, panel: panelSide)
-                Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true) }
+                transfer.task = Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, progress: transfer, deleteFromSource: true) }
             }
             Button("Cancel", role: .cancel) { pendingCloudToCloudDrop = nil }
         } message: { drop in
@@ -318,14 +318,14 @@ struct CloudFileListView: View {
                         otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
-                        Task {
+                        transfer.task = Task {
                             await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: false)
                         }
                     } else {
                         let otherFM = appState.fileManager(for: otherSide)
                         let transfer = TransferProgress(operation: "Downloading", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
-                        Task {
+                        transfer.task = Task {
                             await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
                             await otherFM.refresh()
                         }
@@ -339,14 +339,14 @@ struct CloudFileListView: View {
                         otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
-                        Task {
+                        transfer.task = Task {
                             await Self.cloudToCloudTransfer(items: items, from: vm, to: otherCloudVM, progress: transfer, deleteFromSource: true)
                         }
                     } else {
                         let otherFM = appState.fileManager(for: otherSide)
                         let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
-                        Task {
+                        transfer.task = Task {
                             await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
                             await vm.deleteItems(items)
                             await otherFM.refresh()
@@ -467,18 +467,33 @@ struct CloudFileListView: View {
             try? FileManager.default.removeItem(at: tempDir)
         }
 
+        // Pre-compute expected bytes across both phases for byte-weighted progress.
+        // Source bytes = upload bytes (since we upload what we downloaded).
+        let sourceProvider = await SyncEngine.shared.provider(for: sourceVM.accountId)
+        var expectedBytes: Int64 = 0
+        if let sourceProvider {
+            for item in itemsToTransfer {
+                if item.isDirectory {
+                    expectedBytes += (try? await sourceProvider.folderSize(at: item.path)) ?? 0
+                } else {
+                    expectedBytes += item.size
+                }
+            }
+        }
+
         // Phase 1: Download only non-skipped items
         if let progress {
             progress.isCloudToCloud = true
             progress.currentPhase = .downloading
             progress.downloadStartTime = Date()
+            progress.expectedBytesDownload = expectedBytes
+            progress.expectedBytesUpload = expectedBytes
         }
 
         await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.downloadEndTime = Date()
-            progress.downloadBytes = progress.totalBytes
         }
 
         // Phase 2: Delete items that need replacing, then upload
@@ -528,7 +543,6 @@ struct CloudFileListView: View {
             progress.currentPhase = .uploading
             progress.completedItems = 0
             progress.currentFileName = ""
-            progress.totalBytes = 0
             progress.uploadStartTime = Date()
         }
 
@@ -537,7 +551,6 @@ struct CloudFileListView: View {
 
         if let progress {
             progress.uploadEndTime = Date()
-            progress.uploadBytes = progress.totalBytes
             progress.totalBytes = progress.downloadBytes + progress.uploadBytes
         }
 

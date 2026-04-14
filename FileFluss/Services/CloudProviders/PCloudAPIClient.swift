@@ -107,16 +107,26 @@ actor PCloudAPIClient {
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
+        try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
+    }
+
+    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let downloadURL = try await getFileLink(path: remotePath)
-        let (data, response) = try await session.data(from: downloadURL)
+        let request = URLRequest(url: downloadURL)
+        let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             throw CloudProviderError.invalidResponse
         }
-        try data.write(to: localURL)
+        try? FileManager.default.removeItem(at: localURL)
+        try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
     func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+        try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
+    }
+
+    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         let urlString = "\(baseURL)/uploadfile?auth=\(credentials.accessToken)&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
 
         guard let url = URL(string: urlString) else {
@@ -135,9 +145,8 @@ actor PCloudAPIClient {
         body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
 
-        let (responseData, httpResponse) = try await session.data(for: request)
+        let (responseData, httpResponse) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
         guard let http = httpResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw CloudProviderError.invalidResponse
         }
