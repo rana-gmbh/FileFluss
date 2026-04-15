@@ -24,26 +24,56 @@ actor FileSystemService {
     }
 
     func createDirectory(at url: URL) throws {
-        try Foundation.FileManager.default.createDirectory(
-            at: url,
-            withIntermediateDirectories: true
-        )
+        do {
+            try Foundation.FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: true
+            )
+            SupportLogger.shared.log("createDirectory: \(url.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("createDirectory FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
     }
 
     func deleteItem(at url: URL) throws {
-        try Foundation.FileManager.default.removeItem(at: url)
+        do {
+            try Foundation.FileManager.default.removeItem(at: url)
+            SupportLogger.shared.log("deleteItem: \(url.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("deleteItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
     }
 
     func trashItem(at url: URL) throws {
-        try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        do {
+            try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            SupportLogger.shared.log("trashItem: \(url.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("trashItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
     }
 
     func moveItem(from source: URL, to destination: URL) throws {
-        try Foundation.FileManager.default.moveItem(at: source, to: destination)
+        do {
+            try Foundation.FileManager.default.moveItem(at: source, to: destination)
+            SupportLogger.shared.log("moveItem: \(source.path) → \(destination.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("moveItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
     }
 
     func copyItem(from source: URL, to destination: URL) throws {
-        try Foundation.FileManager.default.copyItem(at: source, to: destination)
+        do {
+            try Foundation.FileManager.default.copyItem(at: source, to: destination)
+            SupportLogger.shared.log("copyItem: \(source.path) → \(destination.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("copyItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
     }
 
     func itemExists(at url: URL) -> Bool {

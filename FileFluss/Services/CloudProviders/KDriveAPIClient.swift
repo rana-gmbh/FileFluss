@@ -44,15 +44,28 @@ actor KDriveAPIClient {
     // MARK: - Folder Operations
 
     func listFolder(fileId: Int) async throws -> [KDriveFileMetadata] {
-        let response: KDriveResponse<[KDriveFileMetadata]> = try await request(
-            .get,
-            path: "/2/drive/\(credentials.driveId)/files/\(fileId)/files",
-            queryItems: [
-                URLQueryItem(name: "order_by", value: "name"),
-                URLQueryItem(name: "order", value: "asc"),
-            ]
-        )
-        return response.data
+        // kDrive's default per_page on this endpoint is small (10), so a single
+        // unpaginated call silently truncates folders with more entries. Loop
+        // until a page returns fewer items than per_page.
+        let perPage = 500
+        var page = 1
+        var allItems: [KDriveFileMetadata] = []
+        while true {
+            let response: KDriveResponse<[KDriveFileMetadata]> = try await request(
+                .get,
+                path: "/2/drive/\(credentials.driveId)/files/\(fileId)/files",
+                queryItems: [
+                    URLQueryItem(name: "order_by", value: "name"),
+                    URLQueryItem(name: "order", value: "asc"),
+                    URLQueryItem(name: "per_page", value: "\(perPage)"),
+                    URLQueryItem(name: "page", value: "\(page)"),
+                ]
+            )
+            allItems.append(contentsOf: response.data)
+            if response.data.count < perPage { break }
+            page += 1
+        }
+        return allItems
     }
 
     func listFolder(path: String) async throws -> [CloudFileItem] {
@@ -79,6 +92,8 @@ actor KDriveAPIClient {
     }
 
     func createFolder(path: String) async throws {
+        if (try? await resolvePathToId(path)) != nil { return }
+
         let parentPath = (path as NSString).deletingLastPathComponent
         let folderName = (path as NSString).lastPathComponent
         let parentId = try await resolvePathToId(parentPath)

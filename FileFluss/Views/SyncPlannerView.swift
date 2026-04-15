@@ -51,12 +51,22 @@ struct SyncPlannerView: View {
     }
 
     private func endpointCard(title: String, endpoint: SyncEndpoint?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption).foregroundStyle(.secondary)
             if let endpoint {
+                if case .cloud(let accountId, _) = endpoint,
+                   let account = appState.syncManager.accounts.first(where: { $0.id == accountId }) {
+                    HStack(spacing: 6) {
+                        CloudProviderIcon(providerType: account.providerType, size: 16)
+                        Text(account.displayName)
+                            .font(.callout).bold()
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
                 HStack(spacing: 6) {
-                    Image(systemName: endpoint.isCloud ? "cloud.fill" : "folder.fill")
+                    Image(systemName: endpoint.isCloud ? "folder.fill" : "folder.fill")
                         .foregroundStyle(.secondary)
                     Text(endpoint.displayPath)
                         .lineLimit(2)

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @State private var supportLog = SupportLogService.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -16,6 +17,14 @@ struct ContentView: View {
         .toolbar {
             FileToolbar()
         }
+        .overlay(alignment: .top) {
+            if supportLog.isRecording {
+                supportLogBanner
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: supportLog.isRecording)
         .sheet(isPresented: Bindable(appState).showSearchPopup) {
             SearchPopupView()
                 .environment(appState)
@@ -24,6 +33,24 @@ struct ContentView: View {
             SyncPlannerView()
                 .environment(appState)
         }
+    }
+
+    private var supportLogBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "record.circle.fill")
+                .foregroundStyle(.red)
+                .symbolEffect(.pulse)
+            Text("Recording support log — reproduce the issue now")
+                .font(.callout)
+            Text("\(supportLog.secondsRemaining)s")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(.secondary.opacity(0.2)))
+        .shadow(radius: 4, y: 2)
     }
 
     @ViewBuilder

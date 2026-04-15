@@ -183,12 +183,22 @@ actor NextCloudAPIClient {
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) || http.statusCode == 201 else {
-            let http = response as? HTTPURLResponse
-            let bodyStr = String(data: data, encoding: .utf8) ?? ""
-            nextCloudLog.error("[NextCloud] MKCOL \(path) → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
         }
+        if (200...299).contains(http.statusCode) || http.statusCode == 201 {
+            return
+        }
+        // 405 Method Not Allowed typically means the collection already exists.
+        // WebDAV MKCOL is spec'd to return 405 when the resource is already present,
+        // so treat it as idempotent success (matches WebDAV/MEGA/Google Drive behaviour).
+        if http.statusCode == 405 {
+            nextCloudLog.info("[NextCloud] MKCOL \(path) → HTTP 405 (folder already exists, treating as success)")
+            return
+        }
+        let bodyStr = String(data: data, encoding: .utf8) ?? ""
+        nextCloudLog.error("[NextCloud] MKCOL \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+        throw Self.mapHTTPError(statusCode: http.statusCode)
     }
 
     func renameItem(at path: String, to newName: String) async throws {

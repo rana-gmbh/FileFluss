@@ -4,6 +4,7 @@ import QuickLookUI
 @Observable @MainActor
 final class CloudFileManagerViewModel {
     let accountId: UUID
+    let providerType: CloudProviderType?
     var currentPath: String = "/"
     var items: [CloudFileItem] = []
     var selectedItemIDs: Set<String> = []
@@ -45,8 +46,9 @@ final class CloudFileManagerViewModel {
         }
     }
 
-    init(accountId: UUID) {
+    init(accountId: UUID, providerType: CloudProviderType? = nil) {
         self.accountId = accountId
+        self.providerType = providerType
         self.tempDownloadDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("FileFluss-cloud-\(accountId.uuidString)", isDirectory: true)
         // Purge cache on launch so stale/corrupt previews from earlier builds
@@ -199,8 +201,10 @@ final class CloudFileManagerViewModel {
         let folderPath = currentPath == "/" ? "/\(name)" : "\(currentPath)/\(name)"
         do {
             try await provider.createDirectory(at: folderPath)
+            SupportLogger.shared.log("createDirectory \(folderPath)", category: cloudCategory)
             await loadDirectory()
         } catch {
+            SupportLogger.shared.log("createDirectory FAILED \(folderPath) — \(error.localizedDescription)", category: cloudCategory, level: .error)
             self.error = "Failed to create folder: \(error.localizedDescription)"
         }
     }
@@ -209,10 +213,20 @@ final class CloudFileManagerViewModel {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
         do {
             try await provider.renameItem(at: item.path, to: newName)
+            SupportLogger.shared.log("renameItem \(item.path) → \(newName)", category: cloudCategory)
             await loadDirectory()
         } catch {
+            SupportLogger.shared.log("renameItem FAILED \(item.path) → \(newName) — \(error.localizedDescription)", category: cloudCategory, level: .error)
             self.error = "Failed to rename: \(error.localizedDescription)"
         }
+    }
+
+    private var cloudCategory: String {
+        let short = accountId.uuidString.prefix(8)
+        if let providerType {
+            return "cloud[\(providerType.rawValue):\(short)]"
+        }
+        return "cloud[\(short)]"
     }
 
     // MARK: - Delete
@@ -223,7 +237,9 @@ final class CloudFileManagerViewModel {
         for item in selectedItems {
             do {
                 try await provider.deleteItem(at: item.path)
+                SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
+                SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
                 self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
                 return
             }
@@ -238,7 +254,9 @@ final class CloudFileManagerViewModel {
         for item in items {
             do {
                 try await provider.deleteItem(at: item.path)
+                SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
+                SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
                 self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
                 return
             }
@@ -304,7 +322,11 @@ final class CloudFileManagerViewModel {
     // MARK: - Download
 
     func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
-        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return }
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            SupportLogger.shared.log("downloadItems aborted: provider unavailable", category: cloudCategory, level: .error)
+            return
+        }
+        SupportLogger.shared.log("downloadItems start: \(items.count) item(s) → \(localDirectory.path)", category: cloudCategory)
 
         progress?.transferredFileNames = items.map(\.name)
         progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
@@ -505,10 +527,12 @@ final class CloudFileManagerViewModel {
 
     func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            SupportLogger.shared.log("uploadFiles aborted: provider unavailable", category: cloudCategory, level: .error)
             self.error = "Cloud account not connected"
             progress?.isComplete = true
             return
         }
+        SupportLogger.shared.log("uploadFiles start: \(urls.count) item(s) → \(toPath ?? currentPath)", category: cloudCategory)
 
         let remoteBase = toPath ?? currentPath
         let existingItems: [CloudFileItem]
@@ -658,8 +682,10 @@ final class CloudFileManagerViewModel {
         progress: TransferProgress?
     ) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            SupportLogger.shared.log("transferItemsToSubfolder aborted: provider unavailable", category: cloudCategory, level: .error)
             progress?.endTime = Date(); progress?.isComplete = true; return
         }
+        SupportLogger.shared.log("transferItemsToSubfolder \(sourceItems.count) item(s) → \(targetPath) (deleteSource=\(deleteFromSource))", category: cloudCategory)
 
         let targetSiblings = (try? await provider.listDirectory(at: targetPath)) ?? []
         let resolutions = await preFlightConflictCheck(sourceItems: sourceItems, against: targetSiblings)

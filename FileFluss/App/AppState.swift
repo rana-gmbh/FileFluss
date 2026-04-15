@@ -152,7 +152,8 @@ final class AppState {
         if let existing = cloudFileManagers[accountId] {
             return existing
         }
-        let vm = CloudFileManagerViewModel(accountId: accountId)
+        let providerType = syncManager.accountFor(id: accountId)?.providerType
+        let vm = CloudFileManagerViewModel(accountId: accountId, providerType: providerType)
         cloudFileManagers[accountId] = vm
         return vm
     }

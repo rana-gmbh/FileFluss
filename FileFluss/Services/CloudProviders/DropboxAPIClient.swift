@@ -528,6 +528,8 @@ actor DropboxAPIClient {
     }
 
     func createFolder(at path: String) async throws {
+        if (try? await getFileMetadata(at: path)) != nil { return }
+
         let dbPath = dropboxPath(path)
 
         struct CreateFolderArg: Encodable {

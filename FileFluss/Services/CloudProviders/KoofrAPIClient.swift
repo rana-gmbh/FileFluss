@@ -171,6 +171,9 @@ actor KoofrAPIClient {
     }
 
     func createFolder(parentPath: String, name: String) async throws {
+        let fullPath = parentPath == "/" ? "/\(name)" : "\(parentPath)/\(name)"
+        if (try? await getFileInfo(at: fullPath)) != nil { return }
+
         let encodedPath = parentPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? parentPath
         struct CreateBody: Encodable { let name: String }
         try await requestVoidWithBody(

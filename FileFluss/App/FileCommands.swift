@@ -49,6 +49,13 @@ struct FileCommands: Commands {
             .keyboardShortcut("r", modifiers: .command)
         }
 
+        CommandMenu("Sync") {
+            Button("Sync Left and Right Panels…") {
+                appState.showSyncSheet = true
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+        }
+
         CommandGroup(replacing: .appInfo) {
             Button("About FileFluss") {
                 NSApplication.shared.orderFrontStandardAboutPanel(options: [
@@ -73,6 +80,13 @@ struct FileCommands: Commands {
             Button("Support the FileFluss Project") {
                 NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
             }
+        }
+
+        CommandGroup(after: .help) {
+            Button(SupportLogService.shared.isRecording ? "Support Log (Recording…)" : "Support Log") {
+                SupportLogService.shared.start()
+            }
+            .disabled(SupportLogService.shared.isRecording)
         }
     }
 }

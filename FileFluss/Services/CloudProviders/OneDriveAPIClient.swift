@@ -204,12 +204,17 @@ actor OneDriveAPIClient {
             endpoint = "/me/drive/root:\(encodedPath):/children"
         }
 
-        let response: GraphListResponse = try await graphRequest(.get, path: endpoint, queryItems: [
+        var response: GraphListResponse = try await graphRequest(.get, path: endpoint, queryItems: [
             URLQueryItem(name: "$top", value: "1000"),
             URLQueryItem(name: "$orderby", value: "name asc"),
         ])
+        var all = response.value
+        while let nextURL = response.nextLink {
+            response = try await graphRequestAbsolute(url: nextURL)
+            all.append(contentsOf: response.value)
+        }
 
-        return response.value.map { $0.toCloudFileItem(parentPath: path) }
+        return all.map { $0.toCloudFileItem(parentPath: path) }
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -326,6 +331,8 @@ actor OneDriveAPIClient {
     }
 
     func createFolder(at path: String) async throws {
+        if (try? await getFileMetadata(at: path)) != nil { return }
+
         let parentPath = (path as NSString).deletingLastPathComponent
         let folderName = (path as NSString).lastPathComponent
 
@@ -442,6 +449,28 @@ actor OneDriveAPIClient {
         case delete = "DELETE"
     }
 
+    /// Follows an absolute URL (e.g. Graph's `@odata.nextLink`) with auth refresh.
+    private func graphRequestAbsolute<T: Decodable>(url absoluteURL: String) async throws -> T {
+        guard let url = URL(string: absoluteURL) else {
+            throw CloudProviderError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let creds = try await refreshTokenIfNeeded()
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            oneDriveLog.error("[OneDrive] GET \(absoluteURL) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
     private func graphRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil) async throws -> T {
         var components = URLComponents(string: "\(graphURL)\(path)")!
         if !queryItems.isEmpty {
@@ -523,6 +552,12 @@ private struct TokenResponse: Decodable {
 
 struct GraphListResponse: Decodable {
     let value: [GraphDriveItem]
+    let nextLink: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case value
+        case nextLink = "@odata.nextLink"
+    }
 }
 
 struct GraphDriveItem: Decodable {

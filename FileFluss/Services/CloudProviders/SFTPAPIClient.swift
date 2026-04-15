@@ -88,6 +88,7 @@ actor SFTPAPIClient {
     }
 
     func createFolder(at path: String) async throws {
+        if (try? await getFileInfo(at: path)) != nil { return }
         _ = try await runBatch(commands: ["mkdir \(shellEscape(path))"])
     }
 
