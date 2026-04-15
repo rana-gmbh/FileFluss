@@ -20,6 +20,7 @@ final class AppState {
     var syncManager: SyncViewModel
     var searchVM = SearchViewModel()
     var showSearchPopup = false
+    var showSyncSheet = false
 
     var selectedLeftSidebarItem: SidebarItem? = .location(
         FileManager.default.homeDirectoryForCurrentUser

@@ -473,6 +473,11 @@ actor GoogleDriveAPIClient {
     }
 
     func createFolder(at path: String) async throws {
+        // Idempotent: Google Drive allows duplicate folder names under the same
+        // parent, so a naive create multiplies folders on each retry. Short-
+        // circuit when the folder already exists at this path.
+        if (try? await resolvePathToCachedFile(path)) != nil { return }
+
         let parentPath = (path as NSString).deletingLastPathComponent
         let folderName = (path as NSString).lastPathComponent
         let parentCached = try await resolvePathToCachedFile(parentPath)

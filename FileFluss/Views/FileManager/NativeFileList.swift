@@ -456,6 +456,10 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         // Accept file promises from cloud panels
         let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
         if hasPromises {
+            // Allow drop onto a specific subfolder row; otherwise target the current directory.
+            if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
+                return .copy
+            }
             tableView.setDropRow(-1, dropOperation: .on)
             return .copy
         }

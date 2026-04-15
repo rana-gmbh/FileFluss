@@ -11,7 +11,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     @Binding var selectedIDs: Set<String>
     var quickLookController: QuickLookController?
     var onDoubleClick: (CloudFileItem) -> Void
-    var onDrop: (([URL]) -> Void)?
+    var onDrop: (([URL], CloudFileItem?) -> Void)?
     var onKeySpace: () -> Void
     var onDelete: (() -> Void)?
     var onCopyToOtherPanel: (([CloudFileItem]) -> Void)?
@@ -23,7 +23,8 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
-    var onReceiveCloudDrop: (() -> Void)?
+    var onReceiveCloudDrop: ((CloudFileItem?) -> Void)?
+    var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
@@ -127,6 +128,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onDragSessionStarted = onDragSessionStarted
         coordinator.onDragSessionEnded = onDragSessionEnded
         coordinator.onReceiveCloudDrop = onReceiveCloudDrop
+        coordinator.onInternalCloudDrop = onInternalCloudDrop
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.canCreateFolder = canCreateFolder
@@ -218,7 +220,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var selectedIDs: Binding<Set<String>>?
     var panelSide: PanelSide = .left
     var onDoubleClick: ((CloudFileItem) -> Void)?
-    var onDrop: (([URL]) -> Void)?
+    var onDrop: (([URL], CloudFileItem?) -> Void)?
     var onKeySpace: (() -> Void)?
     var onDelete: (() -> Void)?
     var onCopyToOtherPanel: (([CloudFileItem]) -> Void)?
@@ -230,7 +232,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
-    var onReceiveCloudDrop: (() -> Void)?
+    var onReceiveCloudDrop: ((CloudFileItem?) -> Void)?
+    var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
@@ -453,30 +456,53 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     // MARK: - Drop Destination (accept local files for upload)
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        // Accept file promises from other cloud panels
-        if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
+        // Internal drag from the same cloud panel: allow drop onto a subfolder row
+        if !currentDragItems.isEmpty, dropOperation == .on, row >= 0, row < items.count {
+            let target = items[row]
+            if target.isDirectory, !currentDragItems.contains(where: { $0.id == target.id }) {
+                return .generic
+            }
+        }
+
+        let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
+        let hasURLs = info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+
+        if hasPromises || hasURLs {
+            // Allow dropping onto a specific subfolder row
+            if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
+                return hasPromises ? .copy : .generic
+            }
+            // Fall back to dropping on the background (current directory)
             tableView.setDropRow(-1, dropOperation: .on)
-            return .copy
+            return hasPromises ? .copy : .generic
         }
-        // Accept file URLs from local panels
-        guard info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else {
-            return []
-        }
-        tableView.setDropRow(-1, dropOperation: .on)
-        return .generic
+        return []
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        // Resolve an optional subfolder target from the drop row
+        var targetFolder: CloudFileItem?
+        if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
+            targetFolder = items[row]
+        }
+
+        // Internal drag: drop onto a subfolder in the same panel
+        if !currentDragItems.isEmpty, let target = targetFolder,
+           !currentDragItems.contains(where: { $0.id == target.id }) {
+            onInternalCloudDrop?(currentDragItems, target)
+            return true
+        }
+
         // Handle file promises from other cloud panels — call immediately before drag session ends
         if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
-            onReceiveCloudDrop?()
+            onReceiveCloudDrop?(targetFolder)
             return true
         }
 
         guard let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty else {
             return false
         }
-        onDrop?(urls)
+        onDrop?(urls, targetFolder)
         return true
     }
 

@@ -20,6 +20,10 @@ struct ContentView: View {
             SearchPopupView()
                 .environment(appState)
         }
+        .sheet(isPresented: Bindable(appState).showSyncSheet) {
+            SyncPlannerView()
+                .environment(appState)
+        }
     }
 
     @ViewBuilder

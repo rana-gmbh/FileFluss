@@ -30,6 +30,13 @@ struct FileToolbar: ToolbarContent {
             .keyboardShortcut("f", modifiers: .command)
 
             Button {
+                appState.showSyncSheet = true
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+            }
+            .help("Sync left and right panels")
+
+            Button {
                 Task { await appState.refreshAllPanels() }
             } label: {
                 Image(systemName: "arrow.clockwise")

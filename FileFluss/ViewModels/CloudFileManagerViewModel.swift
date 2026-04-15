@@ -49,6 +49,11 @@ final class CloudFileManagerViewModel {
         self.accountId = accountId
         self.tempDownloadDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("FileFluss-cloud-\(accountId.uuidString)", isDirectory: true)
+        // Purge cache on launch so stale/corrupt previews from earlier builds
+        // aren't served. The cache is keyed by size only, so a file that was
+        // decrypted incorrectly by a previous build would otherwise be returned
+        // on every subsequent preview request.
+        try? FileManager.default.removeItem(at: tempDownloadDir)
         try? FileManager.default.createDirectory(at: tempDownloadDir, withIntermediateDirectories: true)
     }
 
@@ -252,8 +257,9 @@ final class CloudFileManagerViewModel {
 
     /// Check source items against this VM's current items and resolve conflicts
     /// before any downloads happen. Returns a resolution for each source item.
-    func preFlightConflictCheck(sourceItems: [CloudFileItem]) async -> [(CloudFileItem, PreFlightResult)] {
-        let existingByName = Dictionary(items.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+    func preFlightConflictCheck(sourceItems: [CloudFileItem], against existingItems: [CloudFileItem]? = nil) async -> [(CloudFileItem, PreFlightResult)] {
+        let target = existingItems ?? items
+        let existingByName = Dictionary(target.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         var results: [(CloudFileItem, PreFlightResult)] = []
         var applyToAllChoice: ConflictChoice?
 
@@ -444,14 +450,18 @@ final class CloudFileManagerViewModel {
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         let localURL = cacheDir.appendingPathComponent(item.name)
 
-        // Use cached version if it exists and has matching size (to detect stale files)
+        // Use cached version if size AND modification date match — size alone
+        // isn't enough, since a re-uploaded file with identical bytes would
+        // return stale-decrypted content from a prior build.
         if FileManager.default.fileExists(atPath: localURL.path) {
             let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
             let cachedSize = attrs?[.size] as? Int64 ?? -1
-            if item.size == 0 || cachedSize == item.size {
+            let cachedModDate = attrs?[.modificationDate] as? Date
+            let sizeOK = item.size == 0 || cachedSize == item.size
+            let dateOK = cachedModDate.map { abs($0.timeIntervalSince(item.modificationDate)) < 1.0 } ?? false
+            if sizeOK && dateOK {
                 return localURL
             }
-            // Stale cache — remove and re-download
             try? FileManager.default.removeItem(at: localURL)
         }
         for ext in ["docx", "xlsx", "pptx", "pdf"] {
@@ -467,9 +477,17 @@ final class CloudFileManagerViewModel {
             for ext in ["docx", "xlsx", "pptx", "pdf"] {
                 let converted = localURL.appendingPathExtension(ext)
                 if FileManager.default.fileExists(atPath: converted.path) {
+                    try? FileManager.default.setAttributes(
+                        [.modificationDate: item.modificationDate],
+                        ofItemAtPath: converted.path
+                    )
                     return converted
                 }
             }
+            try? FileManager.default.setAttributes(
+                [.modificationDate: item.modificationDate],
+                ofItemAtPath: localURL.path
+            )
             return localURL
         } catch {
             print("[QuickLook] Download failed for \(item.path): \(error)")
@@ -485,14 +503,21 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Upload
 
-    func uploadFiles(from urls: [URL], progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
+    func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             self.error = "Cloud account not connected"
             progress?.isComplete = true
             return
         }
 
-        let existingByName = Dictionary(items.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        let remoteBase = toPath ?? currentPath
+        let existingItems: [CloudFileItem]
+        if let toPath, toPath != currentPath {
+            existingItems = (try? await provider.listDirectory(at: toPath)) ?? []
+        } else {
+            existingItems = items
+        }
+        let existingByName = Dictionary(existingItems.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
         let fm = FileManager.default
@@ -561,7 +586,7 @@ final class CloudFileManagerViewModel {
             }
 
             do {
-                try await uploadRecursively(urls: [uploadURL], toRemotePath: currentPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                try await uploadRecursively(urls: [uploadURL], toRemotePath: remoteBase, provider: provider, progress: progress, uploadedCount: &uploadedCount)
                 if uploadURL != url { try? FileManager.default.removeItem(at: uploadURL) }
             } catch {
                 self.error = error.localizedDescription
@@ -620,6 +645,119 @@ final class CloudFileManagerViewModel {
                 progress?.completedItems = uploadedCount
             }
         }
+    }
+
+    // MARK: - Intra-cloud transfer (drag/drop onto subfolder of same account)
+
+    /// Move or copy items from the current folder into another folder of the same cloud account.
+    /// Mirrors the cross-cloud pattern: pre-flight conflict check, download to temp, upload, optionally delete source.
+    func transferItemsToSubfolder(
+        _ sourceItems: [CloudFileItem],
+        targetPath: String,
+        deleteFromSource: Bool,
+        progress: TransferProgress?
+    ) async {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            progress?.endTime = Date(); progress?.isComplete = true; return
+        }
+
+        let targetSiblings = (try? await provider.listDirectory(at: targetPath)) ?? []
+        let resolutions = await preFlightConflictCheck(sourceItems: sourceItems, against: targetSiblings)
+        let itemsToTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
+        guard !itemsToTransfer.isEmpty else {
+            progress?.endTime = Date(); progress?.isComplete = true; return
+        }
+        let resolutionByName = Dictionary(resolutions.map { ($0.0.name, $0.1) }, uniquingKeysWith: { _, last in last })
+
+        var expectedBytes: Int64 = 0
+        for item in itemsToTransfer {
+            if item.isDirectory {
+                expectedBytes += (try? await provider.folderSize(at: item.path)) ?? 0
+            } else {
+                expectedBytes += item.size
+            }
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("intra-cloud-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        if let progress {
+            progress.isCloudToCloud = true
+            progress.currentPhase = .downloading
+            progress.downloadStartTime = Date()
+            progress.expectedBytesDownload = expectedBytes
+            progress.expectedBytesUpload = expectedBytes
+        }
+
+        await downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        progress?.downloadEndTime = Date()
+
+        // Delete items flagged as replace on the target
+        for item in itemsToTransfer {
+            if resolutionByName[item.name] == .replace,
+               let existing = targetSiblings.first(where: { $0.name == item.name }) {
+                try? await provider.deleteItem(at: existing.path)
+            }
+        }
+
+        let existingNames = Set(targetSiblings.map(\.name))
+        let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
+            let expected = tempDir.appendingPathComponent(item.name)
+            var localURL: URL?
+            if FileManager.default.fileExists(atPath: expected.path) {
+                localURL = expected
+            } else {
+                for ext in ["docx", "xlsx", "pptx", "pdf"] {
+                    let converted = expected.appendingPathExtension(ext)
+                    if FileManager.default.fileExists(atPath: converted.path) {
+                        localURL = converted
+                        break
+                    }
+                }
+            }
+            guard let url = localURL else { return nil }
+
+            if resolutionByName[item.name] == .keepBoth {
+                let uniqueName = Self.uniqueCloudName(for: url.lastPathComponent, existing: existingNames)
+                let renamed = tempDir.appendingPathComponent(uniqueName)
+                do {
+                    try FileManager.default.moveItem(at: url, to: renamed)
+                    return renamed
+                } catch {
+                    return url
+                }
+            }
+            return url
+        }
+
+        if let progress {
+            progress.currentPhase = .uploading
+            progress.completedItems = 0
+            progress.currentFileName = ""
+            progress.uploadStartTime = Date()
+        }
+
+        var uploadedCount = 0
+        do {
+            try await uploadRecursively(urls: localURLs, toRemotePath: targetPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+        } catch {
+            self.error = error.localizedDescription
+            progress?.errorMessage = error.localizedDescription
+        }
+
+        progress?.uploadEndTime = Date()
+        progress?.totalBytes = (progress?.downloadBytes ?? 0) + (progress?.uploadBytes ?? 0)
+
+        if deleteFromSource {
+            await deleteItems(itemsToTransfer)
+        }
+
+        await loadDirectory()
+
+        progress?.endTime = Date()
+        progress?.isComplete = true
     }
 
     // MARK: - Quick Look

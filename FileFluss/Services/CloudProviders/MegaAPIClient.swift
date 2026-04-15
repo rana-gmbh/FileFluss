@@ -363,9 +363,15 @@ actor MegaAPIClient {
                     timestamp: Date().timeIntervalSince1970
                 )
                 nodes[handle] = node
-                // Cache the decryption key: [k0..k3, iv0, iv1, 0, 0]
+                // Cache the decryption key in MEGA's XOR-obfuscated form so
+                // decryptFileData (which un-XORs words 0..3 with 4..7 to
+                // recover the content key) produces the original fileKey.
                 if type == 0 {
-                    nodeKeys[handle] = fileKey + iv + [0, 0]
+                    nodeKeys[handle] = [
+                        fileKey[0] ^ iv[0], fileKey[1] ^ iv[1],
+                        fileKey[2], fileKey[3],
+                        iv[0], iv[1], 0, 0
+                    ]
                 }
             }
         }
@@ -388,6 +394,11 @@ actor MegaAPIClient {
         if nodes.isEmpty {
             try await fetchNodes()
         }
+
+        // Idempotent: MEGA allows duplicate folder names, so a naive create
+        // produces many siblings with the same name. Short-circuit when the
+        // folder already exists at this path.
+        if (try? resolveHandle(for: path)) != nil { return }
 
         let parentPath = (path as NSString).deletingLastPathComponent
         let folderName = (path as NSString).lastPathComponent
@@ -937,10 +948,14 @@ actor MegaAPIClient {
     }
 
     private func encryptNodeKey(fileKey: [UInt32], iv: [UInt32], masterKey: [UInt32]) -> String {
-        // MEGA file node key: [k0, k1, k2, k3, iv0, iv1, mac0, mac1]
-        // mac is set to 0 for simplicity (integrity checked separately by MEGA)
+        // MEGA stores file node keys as the XOR of the content key with the
+        // nonce+MAC halves: [k0^n0, k1^n1, k2^m0, k3^m1, n0, n1, m0, m1].
+        // MAC is left as zero here; MEGA still accepts the upload, and the
+        // download path reconstructs the content key by XORing words 0..3
+        // with 4..7 (see decryptFileData / decryptNodeName).
         let compositeKey: [UInt32] = [
-            fileKey[0], fileKey[1], fileKey[2], fileKey[3],
+            fileKey[0] ^ iv[0], fileKey[1] ^ iv[1],
+            fileKey[2], fileKey[3],
             iv[0], iv[1], 0, 0
         ]
         let encrypted = encryptECB(data: compositeKey, key: masterKey)
