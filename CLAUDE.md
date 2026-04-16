@@ -66,6 +66,10 @@ VERSION=0.8.1
 curl -fL "https://github.com/rana-gmbh/filefluss/releases/download/v${VERSION}/FileFluss-v${VERSION}.dmg" | shasum -a 256
 ```
 
+## Version test (debug builds only)
+
+Debug builds must expose the **Run Version Test…** menu item (File → Support Log submenu), which invokes `VersionTestRunner` to exercise every connected cloud account and write a report to `Testfiles/`. Release builds must **not** show this option — gate it with `#if DEBUG` in `FileFluss/App/FileCommands.swift`. Never ship the version test runner to end users.
+
 ## Design Philosophy
 
 Speed and snappiness are top priorities. Prefer lazy loading, background processing, and non-blocking UI patterns. Avoid synchronous work on the main thread. Every interaction should feel instant.

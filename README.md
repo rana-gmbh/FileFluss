@@ -10,6 +10,10 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 ![FileFluss Cloud Providers new](FileFluss%20Cloud%20Provider3.png)
 - **Cloud-to-cloud transfers** — conveniently move or copy files between cloud providers
 ![FileFluss transfer details](FileFluss%20Transfer%20Details.png)
+- **Sync Mode** — *new in 0.9* — mirror, newer-only, or additive sync between any two folders (local or cloud), with a pre-flight plan that calculates file counts, total size, and direction before a single byte moves
+![FileFluss Sync Mirror with calculation](FileFluss%20Sync%20Mirror%20with%20calculation.png)
+- **Byte-level progress bar** — *new in 0.9* — transfer progress is weighted by bytes rather than file count, so a single large file doesn't stall the bar; every active transfer has a Cancel button with confirmation
+![FileFluss Progress bar](FileFluss%20Progress%20bar.png)
 - **Conflict resolution** — when files already exist at the destination, a side-by-side comparison shows both files with dates, sizes, and newer/older labels, plus Apply to All, Stop, Skip, Keep Both, and Replace actions
 ![Conflict Resolution Dialog](fileflussnewdia.png)
 - **Universal search** — search across all local files and connected cloud accounts at once, with results grouped by source and right-click to open in either panel
