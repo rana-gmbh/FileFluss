@@ -87,6 +87,12 @@ struct FileCommands: Commands {
                 SupportLogService.shared.start()
             }
             .disabled(SupportLogService.shared.isRecording)
+
+            #if DEBUG
+            Button("Run Version Test…") {
+                Task { await VersionTestRunner.run(appState: appState) }
+            }
+            #endif
         }
     }
 }

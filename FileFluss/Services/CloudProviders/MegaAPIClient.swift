@@ -349,6 +349,7 @@ actor MegaAPIClient {
         ]])
 
         // Refresh node tree and cache key for the uploaded file
+        var newHandles: [String] = []
         if let putData = putResult.first as? [String: Any],
            let newNodes = putData["f"] as? [[String: Any]] {
             for nodeData in newNodes {
@@ -363,6 +364,7 @@ actor MegaAPIClient {
                     timestamp: Date().timeIntervalSince1970
                 )
                 nodes[handle] = node
+                newHandles.append(handle)
                 // Cache the decryption key in MEGA's XOR-obfuscated form so
                 // decryptFileData (which un-XORs words 0..3 with 4..7 to
                 // recover the content key) produces the original fileKey.
@@ -374,6 +376,24 @@ actor MegaAPIClient {
                     ]
                 }
             }
+        }
+
+        // MEGA's `a: p` always creates a new node even when a sibling with the
+        // same name exists; without cleanup, a "replace" leaves two files in
+        // the folder (and delete only removes one). After the new node is
+        // committed, remove any older siblings with the same parent+name.
+        let staleHandles = nodes
+            .filter { entry in
+                !newHandles.contains(entry.key)
+                    && entry.value.parentHandle == parentHandle
+                    && entry.value.name == fileName
+                    && entry.value.type == 0
+            }
+            .map(\.key)
+        for stale in staleHandles {
+            _ = try? await apiCall([["a": "d", "n": stale]])
+            nodes.removeValue(forKey: stale)
+            nodeKeys.removeValue(forKey: stale)
         }
     }
 

@@ -373,29 +373,72 @@ actor GoogleDriveAPIClient {
         let fileName = (remotePath as NSString).lastPathComponent
         let parentId = (try await resolvePathToCachedFile(parentPath)).id
 
+        // Prefer a cached ID (populated by listFolder). A Drive query for a
+        // just-uploaded file can miss due to index lag, which would cause us
+        // to POST a duplicate on the next replace. Only fall back to a query
+        // when the file isn't in our cache at all.
+        let existingId: String?
+        if let cached = pathIdCache[remotePath] {
+            existingId = cached.id
+        } else {
+            existingId = try? await findFileId(parentId: parentId, name: fileName)
+        }
+
         let fileData = try Data(contentsOf: localURL)
 
+        let uploaded: GoogleDriveFile
         if fileData.count <= 5_000_000 {
-            try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, onBytes: onBytes)
+            uploaded = try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, onBytes: onBytes)
         } else {
-            try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, onBytes: onBytes)
+            uploaded = try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, existingId: existingId, onBytes: onBytes)
         }
+
+        // Cache the uploaded file's ID so subsequent replace/delete don't need
+        // to re-query Drive (avoiding index-lag races).
+        pathIdCache[remotePath] = CachedFile(id: uploaded.id, mimeType: uploaded.mimeType)
     }
 
-    private func simpleUpload(data: Data, fileName: String, parentId: String, onBytes: ByteProgressHandler?) async throws {
+    /// Look up a file's ID by name within a parent folder, without populating
+    /// the full-folder cache. Returns nil when the file doesn't exist.
+    private func findFileId(parentId: String, name: String) async throws -> String? {
+        let escaped = name.replacingOccurrences(of: "'", with: "\\'")
+        let query = "'\(parentId)' in parents and name = '\(escaped)' and trashed = false"
+        let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "fields", value: "files(id)"),
+            URLQueryItem(name: "pageSize", value: "1"),
+        ])
+        return response.files.first?.id
+    }
+
+    private func simpleUpload(data: Data, fileName: String, parentId: String, existingId: String?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
         let creds = try await refreshTokenIfNeeded()
         let boundary = UUID().uuidString
 
-        guard let url = URL(string: "\(uploadURL)/files?uploadType=multipart") else {
+        // POST creates a new file; PATCH replaces the content of an existing one.
+        // fields= ensures the response contains id/name/mimeType for decoding.
+        let urlString: String
+        let method: String
+        let metadata: String
+        if let existingId {
+            urlString = "\(uploadURL)/files/\(existingId)?uploadType=multipart&fields=id,name,mimeType"
+            method = "PATCH"
+            metadata = "{}"
+        } else {
+            urlString = "\(uploadURL)/files?uploadType=multipart&fields=id,name,mimeType"
+            method = "POST"
+            metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
+        }
+
+        guard let url = URL(string: urlString) else {
             throw CloudProviderError.invalidResponse
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        let metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Type: application/json; charset=UTF-8\r\n\r\n".data(using: .utf8)!)
@@ -405,31 +448,57 @@ actor GoogleDriveAPIClient {
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
 
-        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let http = response as? HTTPURLResponse
+        // Retry on 404 — Drive's upload service occasionally doesn't yet see a
+        // just-created parent folder (see createFolder's propagation-poll).
+        var attempt = 0
+        while true {
+            let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
+            guard let http = response as? HTTPURLResponse else {
+                throw CloudProviderError.invalidResponse
+            }
+            if (200...299).contains(http.statusCode) {
+                return try JSONDecoder().decode(GoogleDriveFile.self, from: responseData)
+            }
             let bodyStr = String(data: responseData, encoding: .utf8) ?? ""
-            googleLog.error("[Google] Upload failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+            googleLog.error("[Google] Upload failed: HTTP \(http.statusCode) (parentId=\(parentId), existingId=\(existingId ?? "none"), attempt=\(attempt + 1)): \(bodyStr.prefix(500))")
+            if http.statusCode == 404 && attempt < 3 {
+                attempt += 1
+                try? await Task.sleep(nanoseconds: UInt64(attempt * 500_000_000))
+                continue
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: responseData)
         }
     }
 
-    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String, onBytes: ByteProgressHandler?) async throws {
+    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String, existingId: String?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
         let creds = try await refreshTokenIfNeeded()
 
-        // Step 1: Initiate resumable upload
-        guard let initURL = URL(string: "\(uploadURL)/files?uploadType=resumable") else {
+        // POST to create a new file; PATCH to replace an existing file's content.
+        // fields= ensures the final chunk's response contains id/name/mimeType.
+        let initURLString: String
+        let initMethod: String
+        let metadata: String
+        if let existingId {
+            initURLString = "\(uploadURL)/files/\(existingId)?uploadType=resumable&fields=id,name,mimeType"
+            initMethod = "PATCH"
+            metadata = "{}"
+        } else {
+            initURLString = "\(uploadURL)/files?uploadType=resumable&fields=id,name,mimeType"
+            initMethod = "POST"
+            metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
+        }
+
+        guard let initURL = URL(string: initURLString) else {
             throw CloudProviderError.invalidResponse
         }
 
         var initRequest = URLRequest(url: initURL)
-        initRequest.httpMethod = "POST"
+        initRequest.httpMethod = initMethod
         initRequest.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         initRequest.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         initRequest.setValue("application/octet-stream", forHTTPHeaderField: "X-Upload-Content-Type")
         initRequest.setValue("\(fileSize)", forHTTPHeaderField: "X-Upload-Content-Length")
 
-        let metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
         initRequest.httpBody = metadata.data(using: .utf8)
 
         let (_, initResponse) = try await session.data(for: initRequest)
@@ -440,10 +509,12 @@ actor GoogleDriveAPIClient {
             throw Self.mapHTTPError(statusCode: initHttp?.statusCode ?? 0)
         }
 
-        // Step 2: Upload in 10MB chunks
+        // Step 2: Upload in 10MB chunks. The final chunk's 200/201 response
+        // contains the file JSON; earlier chunks return 308 Resume Incomplete.
         let chunkSize = 10 * 1024 * 1024
         let fileData = try Data(contentsOf: localURL)
         var offset = 0
+        var finalResponseData: Data?
 
         while offset < fileSize {
             let end = min(offset + chunkSize, fileSize)
@@ -455,15 +526,24 @@ actor GoogleDriveAPIClient {
             chunkRequest.setValue("bytes \(offset)-\(end - 1)/\(fileSize)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
 
-            let (_, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
+            let (chunkData, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
             guard let chunkHttp = chunkResponse as? HTTPURLResponse,
                   (200...299).contains(chunkHttp.statusCode) || chunkHttp.statusCode == 308 else {
                 let chunkHttp = chunkResponse as? HTTPURLResponse
                 throw Self.mapHTTPError(statusCode: chunkHttp?.statusCode ?? 0)
             }
 
+            if (200...299).contains(chunkHttp.statusCode) {
+                finalResponseData = chunkData
+            }
+
             offset = end
         }
+
+        guard let finalResponseData else {
+            throw CloudProviderError.invalidResponse
+        }
+        return try JSONDecoder().decode(GoogleDriveFile.self, from: finalResponseData)
     }
 
     func deleteItem(at path: String) async throws {
@@ -497,6 +577,24 @@ actor GoogleDriveAPIClient {
 
         let created: GoogleDriveFile = try await apiRequest(.post, path: "/files", body: body)
         pathIdCache[path] = CachedFile(id: created.id, mimeType: created.mimeType)
+
+        // Drive occasionally hands back a folder ID that isn't yet usable as
+        // an upload parent — subsequent POST /upload returns 404 "File not
+        // found: <id>". Poll the get endpoint until the new folder is
+        // queryable (or we've waited ~1.5s total).
+        for attempt in 0..<4 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt * 400_000_000))
+            }
+            do {
+                let _: GoogleDriveFile = try await apiRequest(.get, path: "/files/\(created.id)", queryItems: [
+                    URLQueryItem(name: "fields", value: "id,name,mimeType"),
+                ])
+                return
+            } catch CloudProviderError.notFound {
+                continue
+            }
+        }
     }
 
     func renameItem(at path: String, to newName: String) async throws {

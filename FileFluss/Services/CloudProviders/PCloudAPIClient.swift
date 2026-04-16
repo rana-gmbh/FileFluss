@@ -90,8 +90,40 @@ actor PCloudAPIClient {
     }
 
     func deleteFile(path: String) async throws {
-        let params = ["path": path]
-        let _: PCloudBasicResponse = try await request("deletefile", params: params)
+        // pCloud quirks this handles:
+        //   * Error 2055 on the first deletes after a bulk upload — the
+        //     file's metadata is briefly locked while pCloud processes the
+        //     upload. Transient; retry with backoff.
+        //   * notFound on attempt 0 when the path is actually a folder —
+        //     must propagate so PCloudProvider.deleteItem can fall through
+        //     to deleteFolder.
+        //   * Shadow duplicates occasionally left after rapid upload+replace
+        //     cycles — loop the path-based delete until notFound.
+        var deletedOnce = false
+        for attempt in 0..<6 {
+            do {
+                let _: PCloudBasicResponse = try await request("deletefile", params: ["path": path])
+                deletedOnce = true
+            } catch CloudProviderError.notFound {
+                if !deletedOnce && attempt == 0 {
+                    throw CloudProviderError.notFound("File not found: \(path)")
+                }
+                return
+            } catch CloudProviderError.serverError(let code) where code == 2055 {
+                // Metadata locked — back off and retry (250ms, 500ms, … up to ~3.75s).
+                try? await Task.sleep(nanoseconds: UInt64(250_000_000) * UInt64(attempt + 1))
+                continue
+            } catch {
+                if !deletedOnce { throw error }
+                break
+            }
+        }
+        do {
+            let _: PCloudStatResponse = try await request("stat", params: ["path": path])
+            throw CloudProviderError.serverError(0)
+        } catch CloudProviderError.notFound {
+            return
+        }
     }
 
     func getFileLink(path: String) async throws -> URL {

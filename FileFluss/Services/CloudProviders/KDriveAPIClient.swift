@@ -144,18 +144,31 @@ actor KDriveAPIClient {
         guard let url = components.url else {
             throw CloudProviderError.invalidResponse
         }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
 
-        KDriveProvider.log("[kDrive API] POST upload → folderId=\(folderId), fileName=\(fileName), size=\(fileData.count)")
-        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
-        let http = response as? HTTPURLResponse
-        let bodyStr = String(data: data, encoding: .utf8) ?? ""
-        KDriveProvider.log("[kDrive API] POST upload → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-        guard let http, (200...299).contains(http.statusCode) else {
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+        // Infomaniak's upload service is on a separate subsystem from the
+        // Drive metadata API. A freshly-created folder is visible to listing
+        // immediately but the upload endpoint occasionally 404s for ~1s
+        // afterwards. Retry a small number of times before giving up.
+        var attempt = 0
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+
+            KDriveProvider.log("[kDrive API] POST upload → folderId=\(folderId), fileName=\(fileName), size=\(fileData.count), attempt=\(attempt + 1)")
+            let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
+            let http = response as? HTTPURLResponse
+            let status = http?.statusCode ?? 0
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] POST upload → HTTP \(status): \(bodyStr.prefix(500))")
+            if let http, (200...299).contains(http.statusCode) { return }
+            if status == 404 && attempt < 3 {
+                attempt += 1
+                try? await Task.sleep(nanoseconds: UInt64(attempt * 500_000_000))
+                continue
+            }
+            throw Self.mapHTTPError(statusCode: status)
         }
     }
 
