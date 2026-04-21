@@ -19,6 +19,9 @@ final class SyncViewModel {
     // Dropbox OAuth state
     var isAuthenticatingDropbox: Bool = false
 
+    // HiDrive OAuth state
+    var isAuthenticatingHiDrive: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -93,6 +96,54 @@ final class SyncViewModel {
             saveAccounts()
         } catch {
             isAuthenticatingGoogleDrive = false
+            authError = error.localizedDescription
+        }
+    }
+
+    func addGMXCloudAccount(email: String, password: String) async {
+        let account = CloudAccount(providerType: .gmxCloud)
+        let provider = GMXCloudProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(email: email, password: password)
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addHiDriveAccount() async {
+        let account = CloudAccount(providerType: .hiDrive)
+        let provider = HiDriveProvider(accountId: account.id)
+        authError = nil
+        isAuthenticatingHiDrive = true
+
+        do {
+            let credentials = try await provider.startOAuthFlow()
+            isAuthenticatingHiDrive = false
+
+            var connectedAccount = account
+            if !credentials.displayName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.displayName))"
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isAuthenticatingHiDrive = false
             authError = error.localizedDescription
         }
     }
@@ -379,6 +430,16 @@ final class SyncViewModel {
                 }
             case .wordpress:
                 let provider = WordPressProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .hiDrive:
+                let provider = HiDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .gmxCloud:
+                let provider = GMXCloudProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

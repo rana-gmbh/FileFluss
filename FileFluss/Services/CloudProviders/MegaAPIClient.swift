@@ -561,7 +561,19 @@ actor MegaAPIClient {
         let body = try JSONSerialization.data(withJSONObject: commands)
         let sess = session
         let sid = credentials.sessionId
-        return try await Self.apiRequest(session: sess, sessionId: sid, body: body)
+        // Retry on EAGAIN (-3) with exponential backoff — MEGA commonly returns
+        // this as a bare integer on transient overload, and the request is safe
+        // to retry for our idempotent ops (delete, fetch, etc.).
+        var attempt = 0
+        while true {
+            do {
+                return try await Self.apiRequest(session: sess, sessionId: sid, body: body)
+            } catch CloudProviderError.serverError(let code) where code == -3 && attempt < 4 {
+                attempt += 1
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
+                continue
+            }
+        }
     }
 
     private static func apiRequest(session: URLSession, sessionId: String?, commands: [[String: Any]]) async throws -> sending [Any] {
@@ -621,10 +633,17 @@ actor MegaAPIClient {
     }
 
     private static func parseAPIResponse(_ data: Data) throws -> [Any] {
-        guard let result = try JSONSerialization.jsonObject(with: data) as? [Any] else {
-            if let errorCode = try JSONSerialization.jsonObject(with: data) as? Int {
-                throw mapError(code: errorCode)
-            }
+        // MEGA can return a bare integer error code (e.g. -3 EAGAIN) as the
+        // entire body. Without .allowFragments, JSONSerialization rejects
+        // top-level scalars with NSCocoaErrorDomain 3840 — masking the real
+        // (often transient) error code.
+        let parsed = try JSONSerialization.jsonObject(with: data, options: [.allowFragments])
+
+        if let errorCode = parsed as? Int {
+            throw mapError(code: errorCode)
+        }
+
+        guard let result = parsed as? [Any] else {
             throw CloudProviderError.invalidResponse
         }
 

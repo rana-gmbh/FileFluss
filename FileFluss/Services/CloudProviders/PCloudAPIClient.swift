@@ -159,7 +159,14 @@ actor PCloudAPIClient {
     }
 
     func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
-        let urlString = "\(baseURL)/uploadfile?auth=\(credentials.accessToken)&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
+        var urlString = "\(baseURL)/uploadfile?auth=\(credentials.accessToken)&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
+
+        if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
+            urlString += "&mtime=\(Int64(modDate.timeIntervalSince1970))"
+        }
+        if let createdDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.creationDate]) as? Date {
+            urlString += "&ctime=\(Int64(createdDate.timeIntervalSince1970))"
+        }
 
         guard let url = URL(string: urlString) else {
             throw CloudProviderError.invalidResponse

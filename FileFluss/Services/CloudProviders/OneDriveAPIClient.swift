@@ -246,13 +246,44 @@ actor OneDriveAPIClient {
     func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileData = try Data(contentsOf: localURL)
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
+        let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
+        let modDate = attrs?[.modificationDate] as? Date
+        let createdDate = attrs?[.creationDate] as? Date
 
         // Files up to 4MB use simple upload; larger files use upload session
         if fileData.count <= 4_000_000 {
             try await simpleUpload(data: fileData, remotePath: encodedPath, onBytes: onBytes)
         } else {
-            try await largeFileUpload(from: localURL, fileSize: fileData.count, remotePath: encodedPath, onBytes: onBytes)
+            try await largeFileUpload(from: localURL, fileSize: fileData.count, remotePath: encodedPath, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         }
+
+        // OneDrive has no upload-time parameter for simple uploads, so we PATCH
+        // the fileSystemInfo afterwards. For large uploads we pass the info via
+        // the upload session, but a follow-up PATCH is still a no-op if ignored.
+        if modDate != nil || createdDate != nil {
+            try? await patchFileSystemInfo(remotePath: encodedPath, modDate: modDate, createdDate: createdDate)
+        }
+    }
+
+    private func patchFileSystemInfo(remotePath: String, modDate: Date?, createdDate: Date?) async throws {
+        let endpoint = "/me/drive/root:\(remotePath):"
+        let url = URL(string: "\(graphURL)\(endpoint)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        let creds = try await refreshTokenIfNeeded()
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        var info: [String: String] = [:]
+        if let modDate { info["lastModifiedDateTime"] = formatter.string(from: modDate) }
+        if let createdDate { info["createdDateTime"] = formatter.string(from: createdDate) }
+        request.httpBody = try JSONEncoder().encode(["fileSystemInfo": info])
+
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return }
     }
 
     private func simpleUpload(data: Data, remotePath: String, onBytes: ByteProgressHandler?) async throws {
@@ -273,7 +304,7 @@ actor OneDriveAPIClient {
         }
     }
 
-    private func largeFileUpload(from localURL: URL, fileSize: Int, remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    private func largeFileUpload(from localURL: URL, fileSize: Int, remotePath: String, modDate: Date?, createdDate: Date?, onBytes: ByteProgressHandler?) async throws {
         // Create upload session
         let endpoint = "/me/drive/root:\(remotePath):/createUploadSession"
         let url = URL(string: "\(graphURL)\(endpoint)")!
@@ -282,7 +313,20 @@ actor OneDriveAPIClient {
         let creds = try await refreshTokenIfNeeded()
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(["item": ["@microsoft.graph.conflictBehavior": "replace"]])
+
+        // Timestamps are applied by the caller via patchFileSystemInfo after
+        // upload. Including fileSystemInfo in the session payload caused HTTP
+        // 400 on some file types (e.g. large MOV uploads).
+        struct SessionItem: Encodable {
+            let conflictBehavior: String
+            enum CodingKeys: String, CodingKey {
+                case conflictBehavior = "@microsoft.graph.conflictBehavior"
+            }
+        }
+        struct SessionBody: Encodable {
+            let item: SessionItem
+        }
+        request.httpBody = try JSONEncoder().encode(SessionBody(item: SessionItem(conflictBehavior: "replace")))
 
         let (sessionData, sessionResponse) = try await session.data(for: request)
         guard let http = sessionResponse as? HTTPURLResponse, (200...299).contains(http.statusCode) else {

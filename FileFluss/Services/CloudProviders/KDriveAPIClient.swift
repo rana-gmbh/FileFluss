@@ -133,13 +133,25 @@ actor KDriveAPIClient {
     func uploadFile(from localURL: URL, toFolderId folderId: Int, fileName: String, onBytes: ByteProgressHandler? = nil) async throws {
         let fileData = try Data(contentsOf: localURL)
 
-        var components = URLComponents(string: "\(baseURL)/3/drive/\(credentials.driveId)/upload")!
-        components.queryItems = [
+        var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "directory_id", value: "\(folderId)"),
             URLQueryItem(name: "file_name", value: fileName),
             URLQueryItem(name: "total_size", value: "\(fileData.count)"),
             URLQueryItem(name: "conflict", value: "version"),
         ]
+
+        // Preserve the local file's timestamps on the cloud side so sync
+        // diffs stay stable and Finder-style drags don't reset mod dates.
+        let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
+        if let modDate = attrs?[.modificationDate] as? Date {
+            queryItems.append(URLQueryItem(name: "last_modified_at", value: "\(Int64(modDate.timeIntervalSince1970))"))
+        }
+        if let createdDate = attrs?[.creationDate] as? Date {
+            queryItems.append(URLQueryItem(name: "created_at", value: "\(Int64(createdDate.timeIntervalSince1970))"))
+        }
+
+        var components = URLComponents(string: "\(baseURL)/3/drive/\(credentials.driveId)/upload")!
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             throw CloudProviderError.invalidResponse

@@ -36,7 +36,21 @@ struct SidebarView: View {
     private var selection: Binding<SidebarItem?> {
         Binding(
             get: { appState.sidebarSelection(for: panelSide) },
-            set: { appState.setSidebarSelection($0, for: panelSide) }
+            set: { newValue in
+                let previous = appState.sidebarSelection(for: panelSide)
+                appState.setSidebarSelection(newValue, for: panelSide)
+                // Selecting a cloud account in the sidebar should always land
+                // at the account root. Without this, re-clicking the account
+                // keeps the last-opened folder (SwiftUI skips onChange when
+                // the value is unchanged, so we handle the same-click case
+                // here explicitly).
+                if case .cloudAccount(let account) = newValue, previous == newValue {
+                    Task {
+                        let cloudFM = appState.cloudFileManager(for: account.id)
+                        await cloudFM.navigateTo("/")
+                    }
+                }
+            }
         )
     }
 
@@ -176,6 +190,11 @@ struct SidebarView: View {
                 Task {
                     let cloudFM = appState.cloudFileManager(for: accountId)
                     await cloudFM.navigateTo(path)
+                }
+            case .cloudAccount(let account):
+                Task {
+                    let cloudFM = appState.cloudFileManager(for: account.id)
+                    await cloudFM.navigateTo("/")
                 }
             default:
                 break

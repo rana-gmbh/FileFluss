@@ -352,23 +352,25 @@ actor DropboxAPIClient {
     func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
         let fileData = try Data(contentsOf: localURL)
+        let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date
 
         if fileData.count <= 150_000_000 {
-            try await simpleUpload(data: fileData, path: dbPath, onBytes: onBytes)
+            try await simpleUpload(data: fileData, path: dbPath, clientModified: modDate, onBytes: onBytes)
         } else {
-            try await sessionUpload(from: localURL, fileSize: fileData.count, path: dbPath, onBytes: onBytes)
+            try await sessionUpload(from: localURL, fileSize: fileData.count, path: dbPath, clientModified: modDate, onBytes: onBytes)
         }
     }
 
-    private func simpleUpload(data: Data, path: String, onBytes: ByteProgressHandler? = nil) async throws {
+    private func simpleUpload(data: Data, path: String, clientModified: Date?, onBytes: ByteProgressHandler? = nil) async throws {
         struct UploadArg: Encodable {
             let path: String
             let mode: String
             let autorename: Bool
             let mute: Bool
+            let client_modified: String?
         }
 
-        let arg = UploadArg(path: path, mode: "add", autorename: false, mute: false)
+        let arg = UploadArg(path: path, mode: "add", autorename: false, mute: false, client_modified: Self.dropboxDateString(clientModified))
         let argData = try JSONEncoder().encode(arg)
         let argString = Self.escapeNonASCII(String(data: argData, encoding: .utf8) ?? "")
 
@@ -400,7 +402,15 @@ actor DropboxAPIClient {
         }
     }
 
-    private func sessionUpload(from localURL: URL, fileSize: Int, path: String, onBytes: ByteProgressHandler? = nil) async throws {
+    private static func dropboxDateString(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
+    }
+
+    private func sessionUpload(from localURL: URL, fileSize: Int, path: String, clientModified: Date?, onBytes: ByteProgressHandler? = nil) async throws {
         let chunkSize = 150_000_000 // 150MB
         let fileData = try Data(contentsOf: localURL)
 
@@ -455,11 +465,12 @@ actor DropboxAPIClient {
                     let mode: String
                     let autorename: Bool
                     let mute: Bool
+                    let client_modified: String?
                 }
 
                 let finishArg = FinishArg(
                     cursor: SessionCursor(session_id: sessionId, offset: offset),
-                    commit: CommitInfo(path: path, mode: "add", autorename: false, mute: false)
+                    commit: CommitInfo(path: path, mode: "add", autorename: false, mute: false, client_modified: Self.dropboxDateString(clientModified))
                 )
                 let finishArgData = try JSONEncoder().encode(finishArg)
                 let finishArgString = Self.escapeNonASCII(String(data: finishArgData, encoding: .utf8) ?? "")

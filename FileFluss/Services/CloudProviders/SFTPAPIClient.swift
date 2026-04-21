@@ -70,7 +70,9 @@ actor SFTPAPIClient {
 
     func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileSize: Int64 = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
-        _ = try await runBatch(commands: ["put \(shellEscape(localURL.path)) \(shellEscape(remotePath))"])
+        // `put -p` preserves the source file's modification time and perms so
+        // sync diffs stay stable across re-uploads.
+        _ = try await runBatch(commands: ["put -p \(shellEscape(localURL.path)) \(shellEscape(remotePath))"])
         onBytes?(fileSize)
     }
 

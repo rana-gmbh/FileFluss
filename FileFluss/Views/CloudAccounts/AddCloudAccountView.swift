@@ -14,7 +14,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .mega, .webDAV, .sftp, .wordpress]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .hiDrive, .gmxCloud, .mega, .webDAV, .sftp, .wordpress]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -82,6 +82,10 @@ struct AddCloudAccountView: View {
                 googleDriveFields
             case .dropbox:
                 dropboxFields
+            case .hiDrive:
+                hiDriveFields
+            case .gmxCloud:
+                gmxCloudFields
             case .nextCloud:
                 nextCloudFields
             case .koofr:
@@ -127,7 +131,7 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
+                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingHiDrive && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -220,6 +224,45 @@ struct AddCloudAccountView: View {
                 }
             } else {
                 Text("Click Connect to sign in with your Google account. Your browser will open for authentication.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var gmxCloudFields: some View {
+        VStack(spacing: 12) {
+            Text("Sign in with your GMX email and password. GMX Cloud is accessed over WebDAV; this may not work with GMX accounts that have two-factor authentication enabled.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextField("GMX Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
+    private var hiDriveFields: some View {
+        VStack(spacing: 12) {
+            if appState.syncManager.isAuthenticatingHiDrive {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Waiting for sign-in in browser…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Click Connect to sign in with your HiDrive account. Your browser will open for authentication.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -394,12 +437,14 @@ struct AddCloudAccountView: View {
         case .oneDrive: return false
         case .googleDrive: return false
         case .dropbox: return false
+        case .hiDrive: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .sftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .wordpress: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
+        case .gmxCloud: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -417,6 +462,10 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addGoogleDriveAccount()
             case .dropbox:
                 await appState.syncManager.addDropboxAccount()
+            case .hiDrive:
+                await appState.syncManager.addHiDriveAccount()
+            case .gmxCloud:
+                await appState.syncManager.addGMXCloudAccount(email: email, password: password)
             case .nextCloud:
                 await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
             case .koofr:

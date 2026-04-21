@@ -124,11 +124,15 @@ actor SyncPlanner {
                 if entry.isDirectory { continue }
                 switch mode {
                 case .mirror:
+                    // Skip when source and destination look identical. Cloud
+                    // providers often quantize mod dates to whole seconds, so
+                    // use a small tolerance to avoid re-uploading every file.
+                    if Self.filesLookIdentical(entry, existing) { continue }
                     ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                     replaces += 1
                     bytesMoved += entry.size
                 case .newer:
-                    if entry.modificationDate > existing.modificationDate {
+                    if entry.modificationDate.timeIntervalSince(existing.modificationDate) > Self.modDateTolerance {
                         ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                         replaces += 1
                         bytesMoved += entry.size
@@ -171,6 +175,19 @@ actor SyncPlanner {
             uploadBytes: upload,
             totalBytes: bytesMoved
         )
+    }
+
+    /// Tolerance used when comparing modification dates across endpoints.
+    /// Cloud APIs typically truncate timestamps to whole seconds, and FAT-like
+    /// filesystems have 2-second granularity — so anything within this window
+    /// should be treated as equal.
+    private static let modDateTolerance: TimeInterval = 2.0
+
+    /// Returns true when the two entries look byte-identical for sync purposes:
+    /// same size and mod date within the tolerance above.
+    private static func filesLookIdentical(_ a: SyncEntry, _ b: SyncEntry) -> Bool {
+        guard a.size == b.size else { return false }
+        return abs(a.modificationDate.timeIntervalSince(b.modificationDate)) <= modDateTolerance
     }
 
     private func uniqueName(for relativePath: String, existing: [String: SyncEntry]) -> String {

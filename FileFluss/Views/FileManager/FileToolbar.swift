@@ -3,21 +3,42 @@ import SwiftUI
 struct FileToolbar: ToolbarContent {
     @Environment(AppState.self) private var appState
 
+    private var activeCloudVM: CloudFileManagerViewModel? {
+        guard let id = appState.cloudAccountId(for: appState.activePanel) else { return nil }
+        return appState.cloudFileManager(for: id)
+    }
+
+    private var canGoBack: Bool {
+        activeCloudVM?.canGoBack ?? appState.activeFileManager.canGoBack
+    }
+
+    private var canGoForward: Bool {
+        activeCloudVM?.canGoForward ?? appState.activeFileManager.canGoForward
+    }
+
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             Button {
-                Task { await appState.activeFileManager.navigateBack() }
+                if let cloudVM = activeCloudVM {
+                    Task { await cloudVM.navigateBack() }
+                } else {
+                    Task { await appState.activeFileManager.navigateBack() }
+                }
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .disabled(!appState.activeFileManager.canGoBack)
+            .disabled(!canGoBack)
 
             Button {
-                Task { await appState.activeFileManager.navigateForward() }
+                if let cloudVM = activeCloudVM {
+                    Task { await cloudVM.navigateForward() }
+                } else {
+                    Task { await appState.activeFileManager.navigateForward() }
+                }
             } label: {
                 Image(systemName: "chevron.right")
             }
-            .disabled(!appState.activeFileManager.canGoForward)
+            .disabled(!canGoForward)
         }
 
         ToolbarItemGroup(placement: .primaryAction) {

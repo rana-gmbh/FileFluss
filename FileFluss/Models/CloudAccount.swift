@@ -13,6 +13,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case webDAV
     case sftp
     case wordpress
+    case hiDrive
+    case gmxCloud
 
     var id: String { rawValue }
 
@@ -30,6 +32,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .webDAV: return "WebDAV"
         case .sftp: return "SFTP"
         case .wordpress: return "WordPress"
+        case .hiDrive: return "HiDrive"
+        case .gmxCloud: return "GMX Cloud"
         }
     }
 
@@ -47,6 +51,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .webDAV: return "externaldrive.badge.wifi"
         case .sftp: return "terminal"
         case .wordpress: return "w.square"
+        case .hiDrive: return "externaldrive.fill.badge.person.crop"
+        case .gmxCloud: return "envelope.badge.shield.half.filled"
         }
     }
 
@@ -64,6 +70,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .webDAV: return "WebDAVLogo"
         case .sftp: return "SFTPLogo"
         case .wordpress: return "WordPressLogo"
+        case .hiDrive: return "HiDriveLogo"
+        case .gmxCloud: return "GMXCloudLogo"
         default: return nil
         }
     }

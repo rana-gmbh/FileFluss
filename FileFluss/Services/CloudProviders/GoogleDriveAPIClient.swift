@@ -368,6 +368,25 @@ actor GoogleDriveAPIClient {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
+    /// Builds a Drive v3 metadata JSON body, preserving modified/created times
+    /// when available. Google accepts modifiedTime/createdTime in RFC3339
+    /// format; omit fields whose value is nil.
+    private static func buildMetadata(name: String?, parentId: String?, modDate: Date?, createdDate: Date?) -> String {
+        var obj: [String: Any] = [:]
+        if let name { obj["name"] = name }
+        if let parentId { obj["parents"] = [parentId] }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        if let modDate { obj["modifiedTime"] = formatter.string(from: modDate) }
+        if let createdDate { obj["createdTime"] = formatter.string(from: createdDate) }
+        if let data = try? JSONSerialization.data(withJSONObject: obj),
+           let str = String(data: data, encoding: .utf8) {
+            return str
+        }
+        return "{}"
+    }
+
     func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
@@ -385,17 +404,51 @@ actor GoogleDriveAPIClient {
         }
 
         let fileData = try Data(contentsOf: localURL)
+        let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
+        let modDate = attrs?[.modificationDate] as? Date
+        let createdDate = attrs?[.creationDate] as? Date
 
         let uploaded: GoogleDriveFile
         if fileData.count <= 5_000_000 {
-            uploaded = try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, onBytes: onBytes)
+            uploaded = try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         } else {
-            uploaded = try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, existingId: existingId, onBytes: onBytes)
+            uploaded = try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         }
 
         // Cache the uploaded file's ID so subsequent replace/delete don't need
         // to re-query Drive (avoiding index-lag races).
         pathIdCache[remotePath] = CachedFile(id: uploaded.id, mimeType: uploaded.mimeType)
+
+        // When replacing an existing file, Drive's upload endpoint rejects
+        // PATCH bodies that include modifiedTime/createdTime (HTTP 403). Apply
+        // timestamps via a separate metadata-only PATCH instead.
+        if existingId != nil, (modDate != nil || createdDate != nil) {
+            try? await patchFileTimestamps(fileId: uploaded.id, modDate: modDate, createdDate: createdDate)
+        }
+    }
+
+    private func patchFileTimestamps(fileId: String, modDate: Date?, createdDate: Date?) async throws {
+        let creds = try await refreshTokenIfNeeded()
+        guard let url = URL(string: "\(apiURL)/files/\(fileId)") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        var obj: [String: Any] = [:]
+        if let modDate { obj["modifiedTime"] = formatter.string(from: modDate) }
+        if let createdDate { obj["createdTime"] = formatter.string(from: createdDate) }
+        request.httpBody = try JSONSerialization.data(withJSONObject: obj)
+
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            let http = response as? HTTPURLResponse
+            googleLog.debug("[Google] Timestamp PATCH ignored: HTTP \(http?.statusCode ?? 0)")
+            return
+        }
     }
 
     /// Look up a file's ID by name within a parent folder, without populating
@@ -411,7 +464,7 @@ actor GoogleDriveAPIClient {
         return response.files.first?.id
     }
 
-    private func simpleUpload(data: Data, fileName: String, parentId: String, existingId: String?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
+    private func simpleUpload(data: Data, fileName: String, parentId: String, existingId: String?, modDate: Date?, createdDate: Date?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
         let creds = try await refreshTokenIfNeeded()
         let boundary = UUID().uuidString
 
@@ -423,11 +476,14 @@ actor GoogleDriveAPIClient {
         if let existingId {
             urlString = "\(uploadURL)/files/\(existingId)?uploadType=multipart&fields=id,name,mimeType"
             method = "PATCH"
-            metadata = "{}"
+            // Drive rejects modifiedTime/createdTime on upload-endpoint PATCH
+            // with HTTP 403. Apply timestamps via a separate metadata PATCH
+            // after the upload completes (see patchFileTimestamps).
+            metadata = Self.buildMetadata(name: nil, parentId: nil, modDate: nil, createdDate: nil)
         } else {
             urlString = "\(uploadURL)/files?uploadType=multipart&fields=id,name,mimeType"
             method = "POST"
-            metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
+            metadata = Self.buildMetadata(name: fileName, parentId: parentId, modDate: modDate, createdDate: createdDate)
         }
 
         guard let url = URL(string: urlString) else {
@@ -470,7 +526,7 @@ actor GoogleDriveAPIClient {
         }
     }
 
-    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String, existingId: String?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
+    private func resumableUpload(from localURL: URL, fileSize: Int, fileName: String, parentId: String, existingId: String?, modDate: Date?, createdDate: Date?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
         let creds = try await refreshTokenIfNeeded()
 
         // POST to create a new file; PATCH to replace an existing file's content.
@@ -481,11 +537,12 @@ actor GoogleDriveAPIClient {
         if let existingId {
             initURLString = "\(uploadURL)/files/\(existingId)?uploadType=resumable&fields=id,name,mimeType"
             initMethod = "PATCH"
-            metadata = "{}"
+            // See simpleUpload: timestamps applied via separate PATCH after upload.
+            metadata = Self.buildMetadata(name: nil, parentId: nil, modDate: nil, createdDate: nil)
         } else {
             initURLString = "\(uploadURL)/files?uploadType=resumable&fields=id,name,mimeType"
             initMethod = "POST"
-            metadata = "{\"name\": \"\(fileName)\", \"parents\": [\"\(parentId)\"]}"
+            metadata = Self.buildMetadata(name: fileName, parentId: parentId, modDate: modDate, createdDate: createdDate)
         }
 
         guard let initURL = URL(string: initURLString) else {

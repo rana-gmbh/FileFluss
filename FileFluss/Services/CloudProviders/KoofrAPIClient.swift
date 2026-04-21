@@ -137,7 +137,14 @@ actor KoofrAPIClient {
     func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath
         let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName
-        let urlString = "\(contentURL)/mounts/\(mountId)/files/put?path=\(encodedPath)&filename=\(encodedName)&autorename=false&overwrite=true"
+        var urlString = "\(contentURL)/mounts/\(mountId)/files/put?path=\(encodedPath)&filename=\(encodedName)&autorename=false&overwrite=true"
+
+        // Koofr's put endpoint takes `modified` in milliseconds since the
+        // Unix epoch to preserve the client's modification time.
+        if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
+            urlString += "&modified=\(Int64(modDate.timeIntervalSince1970 * 1000))"
+        }
+
         guard let url = URL(string: urlString) else {
             throw CloudProviderError.invalidResponse
         }

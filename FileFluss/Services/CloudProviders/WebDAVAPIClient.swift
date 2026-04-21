@@ -199,6 +199,13 @@ actor WebDAVAPIClient {
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
 
+        // Many WebDAV servers (Nextcloud, ownCloud, Seafile, …) honor the
+        // X-OC-Mtime header to preserve the client's modification time.
+        // Servers that don't support it simply ignore it.
+        if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
+            request.setValue("\(Int64(modDate.timeIntervalSince1970))", forHTTPHeaderField: "X-OC-Mtime")
+        }
+
         let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
