@@ -76,7 +76,6 @@ actor SyncEngine {
         case .webDAV: return WebDAVProvider()
         case .sftp: return SFTPProvider()
         case .wordpress: return WordPressProvider()
-        case .hiDrive: return HiDriveProvider()
         case .gmxCloud: return GMXCloudProvider()
         }
     }
