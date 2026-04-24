@@ -27,12 +27,24 @@ final class SyncViewModel {
     }
 
     func addPCloudAccount(email: String, password: String) async {
+        await connectPCloud { provider in
+            try await provider.authenticate(email: email, password: password)
+        }
+    }
+
+    func addPCloudAccount(accessToken: String) async {
+        await connectPCloud { provider in
+            try await provider.authenticate(accessToken: accessToken)
+        }
+    }
+
+    private func connectPCloud(_ authenticate: (PCloudProvider) async throws -> Void) async {
         let account = CloudAccount(providerType: .pCloud)
         let provider = PCloudProvider(accountId: account.id)
         authError = nil
 
         do {
-            try await provider.authenticate(email: email, password: password)
+            try await authenticate(provider)
             var connectedAccount = account
 
             let userName = try? await provider.userDisplayName()
@@ -44,6 +56,8 @@ final class SyncViewModel {
             accounts.append(connectedAccount)
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
+        } catch CloudProviderError.serverError(1022) {
+            authError = "pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field."
         } catch {
             authError = error.localizedDescription
         }
