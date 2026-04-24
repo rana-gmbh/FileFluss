@@ -175,8 +175,9 @@ jobs:
         with:
           files: ${{ env.DMG_PATH }}
           body_path: RELEASE_NOTES.md
-          prerelease: true
-          name: FileFluss ${{ github.ref_name }} Beta
+          prerelease: false
+          make_latest: true
+          name: FileFluss ${{ github.ref_name }}
 
       - name: Update Homebrew tap cask
         env:

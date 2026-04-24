@@ -37,10 +37,11 @@ A dual-panel file manager for macOS that lets you conveniently handle files acro
 - **Nextcloud**
 - **Dropbox**
 - **Koofr**
-- **Mega** — *new in 0.8*
-- **WebDAV** — *new in 0.8*
-- **SFTP** — *new in 0.8*
-- **WordPress** (Media Library) — *new in 0.8*
+- **Mega**
+- **WebDAV**
+- **SFTP**
+- **WordPress** (Media Library)
+- **GMX Cloud** (MediaCenter) — *new in 0.10*
 
 ## Requirements
 
