@@ -14,7 +14,7 @@ struct ContentView: View {
             // Right panel: file list + sidebar
             panelView(side: .right)
         }
-        .toolbar {
+        .toolbar(id: "main") {
             FileToolbar()
         }
         .overlay(alignment: .top) {

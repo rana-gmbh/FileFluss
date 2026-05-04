@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct FileToolbar: ToolbarContent {
+struct FileToolbar: CustomizableToolbarContent {
     @Environment(AppState.self) private var appState
 
     private var activeCloudVM: CloudFileManagerViewModel? {
@@ -16,8 +16,10 @@ struct FileToolbar: ToolbarContent {
         activeCloudVM?.canGoForward ?? appState.activeFileManager.canGoForward
     }
 
-    var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
+    var body: some CustomizableToolbarContent {
+        // Navigation buttons stay pinned — they're effectively a back/forward
+        // pair, not a customizable widget.
+        ToolbarItem(id: "navigation.back", placement: .navigation) {
             Button {
                 if let cloudVM = activeCloudVM {
                     Task { await cloudVM.navigateBack() }
@@ -28,7 +30,10 @@ struct FileToolbar: ToolbarContent {
                 Image(systemName: "chevron.left")
             }
             .disabled(!canGoBack)
+        }
+        .customizationBehavior(.disabled)
 
+        ToolbarItem(id: "navigation.forward", placement: .navigation) {
             Button {
                 if let cloudVM = activeCloudVM {
                     Task { await cloudVM.navigateForward() }
@@ -40,32 +45,39 @@ struct FileToolbar: ToolbarContent {
             }
             .disabled(!canGoForward)
         }
+        .customizationBehavior(.disabled)
 
-        ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarItem(id: "search", placement: .primaryAction) {
             Button {
                 appState.showSearchPopup = true
             } label: {
-                Image(systemName: "magnifyingglass")
+                Label("Search", systemImage: "magnifyingglass")
             }
             .help("Search all sources (⌘F)")
             .keyboardShortcut("f", modifiers: .command)
+        }
 
+        ToolbarItem(id: "sync", placement: .primaryAction) {
             Button {
                 appState.showSyncSheet = true
             } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
+                Label("Sync", systemImage: "arrow.triangle.2.circlepath")
             }
             .help("Sync left and right panels")
+        }
 
+        ToolbarItem(id: "refresh", placement: .primaryAction) {
             Button {
                 Task { await appState.refreshAllPanels() }
             } label: {
-                Image(systemName: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
             }
             .help("Refresh both panels")
+        }
 
+        ToolbarItem(id: "hiddenFiles", placement: .primaryAction) {
             Toggle(isOn: Bindable(appState.activeFileManager).showHiddenFiles) {
-                Image(systemName: "eye")
+                Label("Hidden Files", systemImage: "eye")
             }
             .help("Show hidden files")
             .onChange(of: appState.activeFileManager.showHiddenFiles) { _, _ in
