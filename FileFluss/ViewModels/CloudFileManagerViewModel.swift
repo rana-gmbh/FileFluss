@@ -919,8 +919,10 @@ final class CloudFileManagerViewModel {
 
             do {
                 if deleteFromSource {
+                    SupportLogger.shared.log("server-side move \(item.path) → \(destPath)", category: cloudCategory)
                     try await provider.moveItem(at: item.path, toPath: destPath)
                 } else {
+                    SupportLogger.shared.log("server-side copy \(item.path) → \(destPath)", category: cloudCategory)
                     try await provider.copyItem(at: item.path, toPath: destPath)
                 }
                 progress?.recordSuccess(item.name)
@@ -929,6 +931,7 @@ final class CloudFileManagerViewModel {
             } catch CloudProviderError.notImplemented {
                 if index == 0 {
                     // Provider can't do server-side at all — let caller fall back.
+                    SupportLogger.shared.log("server-side move not supported, falling back to download+upload", category: cloudCategory)
                     providerSupports = false
                     return false
                 }
@@ -936,6 +939,11 @@ final class CloudFileManagerViewModel {
                 // record it as a failure for that item and keep going.
                 progress?.recordFailure(item.name, error: "Server-side move not supported for this item.")
             } catch {
+                SupportLogger.shared.log(
+                    "server-side \(deleteFromSource ? "move" : "copy") FAILED \(item.path) → \(destPath) — \(error.localizedDescription)",
+                    category: cloudCategory,
+                    level: .error
+                )
                 progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }

@@ -315,11 +315,18 @@ struct CloudFileListView: View {
                 }
 
                 ForEach(pathComponents, id: \.path) { component in
-                    Button(component.name) {
-                        Task { await vm.navigateTo(component.path) }
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(.body, design: .default, weight: .medium))
+                    PathComponentButton(
+                        title: component.name,
+                        onClick: {
+                            Task { await vm.navigateTo(component.path) }
+                        },
+                        onDropURLs: { urls in
+                            handleCloudPathDropURLs(urls, target: component)
+                        },
+                        onDropCloudPromise: {
+                            handleCloudPathDropCloudPromise(target: component)
+                        }
+                    )
 
                     if component.path != vm.currentPath {
                         Image(systemName: "chevron.right")
@@ -332,6 +339,60 @@ struct CloudFileListView: View {
             .padding(.vertical, 6)
         }
         .background(.bar)
+    }
+
+    /// Build a synthetic `CloudFileItem` for a breadcrumb component. The
+    /// existing pending* flows expect a `CloudFileItem?` target; the path
+    /// bar only knows (path, name) so we fabricate one with isDirectory=true.
+    private func cloudFolder(forPath path: String, name: String) -> CloudFileItem {
+        CloudFileItem(
+            id: "pathcomp:\(path)",
+            name: name,
+            path: path,
+            isDirectory: true,
+            size: 0,
+            modificationDate: .distantPast,
+            checksum: nil
+        )
+    }
+
+    private func handleCloudPathDropURLs(_ urls: [URL], target: (name: String, path: String)) -> Bool {
+        // Don't trigger when the drop is the cloud panel's own drag
+        // (cloud drags don't put fileURLs on the pasteboard, but be safe).
+        guard !urls.isEmpty else { return false }
+        let folder = cloudFolder(forPath: target.path, name: target.name)
+        pendingUpload = PendingUpload(urls: urls, targetFolder: folder)
+        showDropConfirmation = true
+        return true
+    }
+
+    private func handleCloudPathDropCloudPromise(target: (name: String, path: String)) -> Bool {
+        guard !appState.cloudDragSourceItems.isEmpty,
+              let sourceAccountId = appState.cloudDragSourceAccountId else { return false }
+        let folder = cloudFolder(forPath: target.path, name: target.name)
+
+        if sourceAccountId == accountId {
+            // Same-account drag: skip when targeting the source folder itself
+            // or the directory the items already live in.
+            let currentParents = Set(appState.cloudDragSourceItems.map {
+                ($0.path as NSString).deletingLastPathComponent
+            })
+            if currentParents.contains(target.path) { return false }
+            if appState.cloudDragSourceItems.contains(where: { $0.path == target.path }) { return false }
+            pendingInternalCloudDrop = PendingInternalCloudDrop(
+                sourceItems: appState.cloudDragSourceItems,
+                targetFolder: folder
+            )
+            showInternalCloudDropConfirmation = true
+        } else {
+            pendingCloudToCloudDrop = PendingCloudToCloudDrop(
+                sourceItems: appState.cloudDragSourceItems,
+                sourceAccountId: sourceAccountId,
+                targetFolder: folder
+            )
+            showCloudToCloudDropConfirmation = true
+        }
+        return true
     }
 
     @ViewBuilder

@@ -137,15 +137,12 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         try await client.renameFile(path: path, to: newName)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
-        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
-        try await client.moveItem(path: path, toPath: newPath)
-    }
-
-    func copyItem(at path: String, toPath newPath: String) async throws {
-        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
-        try await client.copyItem(path: path, toPath: newPath)
-    }
+    // kDrive's v2 `POST /files/{fileId}/move/{destDirId}` endpoint returns 404
+    // for Infomaniak's current API surface (verified against a live account).
+    // The exact shape Infomaniak now accepts isn't documented publicly, so we
+    // bail to `.notImplemented` here and let the caller fall back to the
+    // download+upload path. The API client retains the method implementations
+    // so the fix is a one-liner once the correct endpoint is confirmed.
 
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }

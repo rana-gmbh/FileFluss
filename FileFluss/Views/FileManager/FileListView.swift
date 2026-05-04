@@ -240,11 +240,18 @@ struct FileListView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(pathComponents, id: \.url) { component in
-                    Button(component.name) {
-                        Task { await fm.navigateTo(component.url) }
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(.body, design: .default, weight: .medium))
+                    PathComponentButton(
+                        title: component.name,
+                        onClick: {
+                            Task { await fm.navigateTo(component.url) }
+                        },
+                        onDropURLs: { urls in
+                            handlePathDropURLs(urls, target: component.url)
+                        },
+                        onDropCloudPromise: {
+                            handlePathDropCloudPromise(target: component.url)
+                        }
+                    )
 
                     if component.url != fm.currentDirectory {
                         Image(systemName: "chevron.right")
@@ -257,6 +264,52 @@ struct FileListView: View {
             .padding(.vertical, 6)
         }
         .background(.bar)
+    }
+
+    /// Map a drop of file URLs onto a breadcrumb component into the existing
+    /// "Move or Copy?" confirmation flow. Resolves URLs against the current
+    /// items first (covers same-panel drags) and falls back to building
+    /// `FileItem`s from disk for Finder/cross-panel sources.
+    private func handlePathDropURLs(_ urls: [URL], target: URL) -> Bool {
+        let urlPaths = Set(urls.map { $0.standardizedFileURL.path() })
+        let matched = fm.items.filter { urlPaths.contains($0.url.standardizedFileURL.path()) }
+        let droppedItems: [FileItem]
+        if !matched.isEmpty {
+            droppedItems = matched
+        } else {
+            droppedItems = urls.compactMap { url -> FileItem? in
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                return FileItem(url: url)
+            }
+        }
+        guard !droppedItems.isEmpty else { return false }
+
+        // Don't drop a folder onto itself or into the directory it already lives in.
+        if droppedItems.contains(where: { $0.url.standardizedFileURL == target.standardizedFileURL }) {
+            return false
+        }
+        let allInSameDir = droppedItems.allSatisfy {
+            $0.url.deletingLastPathComponent().standardizedFileURL == target.standardizedFileURL
+        }
+        guard !allInSameDir else { return false }
+
+        fm.pendingDrop = FileManagerViewModel.PendingDrop(items: droppedItems, destinationFolder: target)
+        showDropConfirmation = true
+        return true
+    }
+
+    /// Drop a cloud-panel drag onto a breadcrumb component. Reuses
+    /// `cloudDragSource*` state set by the cloud panel's drag-start hook.
+    private func handlePathDropCloudPromise(target: URL) -> Bool {
+        guard !appState.cloudDragSourceItems.isEmpty,
+              let sourceAccountId = appState.cloudDragSourceAccountId else { return false }
+        pendingCloudDrop = PendingCloudDrop(
+            sourceItems: appState.cloudDragSourceItems,
+            sourceAccountId: sourceAccountId,
+            targetDirectory: target
+        )
+        showCloudDropConfirmation = true
+        return true
     }
 
     private var fileArea: some View {
