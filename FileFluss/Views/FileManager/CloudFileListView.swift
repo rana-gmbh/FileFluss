@@ -4,6 +4,7 @@ struct CloudFileListView: View {
     let panelSide: PanelSide
     let accountId: UUID
     @Environment(AppState.self) private var appState
+    @AppStorage("showStatusBar") private var showStatusBar = true
     @State private var showDeleteConfirmation = false
     @State private var showConflict = false
     @State private var showDropConfirmation = false
@@ -272,8 +273,10 @@ struct CloudFileListView: View {
             cloudPathBar
             Divider()
             cloudFileArea
-            Divider()
-            cloudStatusFooter
+            if showStatusBar {
+                Divider()
+                cloudStatusFooter
+            }
         }
     }
 

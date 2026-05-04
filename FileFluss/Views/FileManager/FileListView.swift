@@ -3,6 +3,7 @@ import SwiftUI
 struct FileListView: View {
     let panelSide: PanelSide
     @Environment(AppState.self) private var appState
+    @AppStorage("showStatusBar") private var showStatusBar = true
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var showConflict: Bool = false
@@ -40,8 +41,10 @@ struct FileListView: View {
             pathBar
             Divider()
             fileArea
-            Divider()
-            statusFooter
+            if showStatusBar {
+                Divider()
+                statusFooter
+            }
         }
         .confirmationDialog(
             "Move or Copy?",

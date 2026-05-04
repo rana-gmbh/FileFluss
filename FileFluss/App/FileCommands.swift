@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FileCommands: Commands {
     let appState: AppState
+    @AppStorage("showStatusBar") private var showStatusBar = true
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -47,6 +48,11 @@ struct FileCommands: Commands {
                 Task { await appState.refreshAllPanels() }
             }
             .keyboardShortcut("r", modifiers: .command)
+
+            Divider()
+
+            Toggle("Show Status Bar", isOn: $showStatusBar)
+                .keyboardShortcut("/", modifiers: [.command, .shift])
         }
 
         CommandMenu("Sync") {
