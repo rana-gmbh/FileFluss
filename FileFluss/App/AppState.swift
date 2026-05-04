@@ -331,6 +331,15 @@ struct CloudFavorite: Identifiable {
     let icon: String = "cloud.fill"
 }
 
+struct TransferItemResult: Identifiable, Hashable {
+    enum Status: Hashable { case succeeded, failed, skipped, cancelled }
+
+    let id = UUID()
+    let name: String
+    let status: Status
+    let errorMessage: String?
+}
+
 @Observable @MainActor
 final class TransferProgress: Identifiable {
     let id = UUID()
@@ -340,11 +349,37 @@ final class TransferProgress: Identifiable {
     var totalFiles: Int = 0 // actual file count discovered during recursive traversal
     var currentFileName: String = ""
     var isComplete: Bool = false
+    /// Set when the entire transfer fails before any per-item work could be
+    /// done (e.g. provider unavailable). For per-item failures during the
+    /// loop, use `itemResults` instead.
     var errorMessage: String?
+    /// Per-item outcomes (one entry per top-level item attempted).
+    var itemResults: [TransferItemResult] = []
     var transferredFileNames: [String] = []
     var totalBytes: Int64 = 0
     let startTime = Date()
     var endTime: Date?
+
+    func recordSuccess(_ name: String) {
+        itemResults.append(TransferItemResult(name: name, status: .succeeded, errorMessage: nil))
+    }
+
+    func recordFailure(_ name: String, error: String) {
+        itemResults.append(TransferItemResult(name: name, status: .failed, errorMessage: error))
+    }
+
+    func recordSkip(_ name: String) {
+        itemResults.append(TransferItemResult(name: name, status: .skipped, errorMessage: nil))
+    }
+
+    var successCount: Int { itemResults.lazy.filter { $0.status == .succeeded }.count }
+    var failureCount: Int { itemResults.lazy.filter { $0.status == .failed }.count }
+    var skippedCount: Int { itemResults.lazy.filter { $0.status == .skipped }.count }
+
+    /// True when the transfer ended with at least one item failing. Reflects
+    /// both fatal `errorMessage` failures and per-item failures recorded via
+    /// `recordFailure`.
+    var hasErrors: Bool { errorMessage != nil || failureCount > 0 }
 
     // Byte-weighted progress
     /// Expected bytes for the download phase (local→cloud uploads: 0; cloud→cloud: source bytes).
@@ -488,9 +523,24 @@ final class TransferProgress: Identifiable {
             return "Cancelled: \(operation) \(label)"
         }
 
-        if let errorMessage {
-            let label = names.count == 1 ? names[0] : "\(names.count) items"
-            return "Failed: \(operation) \(label) — \(errorMessage)"
+        // Partial success: some items succeeded, some failed. Surface a
+        // mixed summary so the user knows to check the details popover.
+        if failureCount > 0 && successCount > 0 {
+            let total = successCount + failureCount + skippedCount
+            return "\(pastTense) \(successCount) of \(total) — \(failureCount) failed"
+        }
+
+        // Whole-transfer failure (either a fatal errorMessage with no
+        // per-item progress, or every per-item attempt failed).
+        if errorMessage != nil || (failureCount > 0 && successCount == 0) {
+            let label: String
+            if failureCount > 0 {
+                label = failureCount == 1 ? itemResults.first(where: { $0.status == .failed })?.name ?? "1 item" : "\(failureCount) items"
+            } else {
+                label = names.count == 1 ? names[0] : "\(names.count) items"
+            }
+            let detail = errorMessage ?? itemResults.first(where: { $0.status == .failed })?.errorMessage ?? "Unknown error"
+            return "Failed: \(operation) \(label) — \(detail)"
         }
 
         if names.isEmpty { return "Done" }

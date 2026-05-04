@@ -67,14 +67,35 @@ actor PCloudAPIClient {
 
     func renameFile(path: String, toName newName: String) async throws {
         let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
-        let params = ["path": path, "topath": toPath]
-        let _: PCloudBasicResponse = try await request("renamefile", params: params)
+        try await renameFile(path: path, toPath: toPath)
     }
 
     func renameFolder(path: String, toName newName: String) async throws {
         let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
+        try await renameFolder(path: path, toPath: toPath)
+    }
+
+    /// pCloud's `renamefile` accepts an arbitrary destination path, so it
+    /// doubles as a server-side cross-folder move. The same is true of
+    /// `renamefolder` for directories.
+    func renameFile(path: String, toPath: String) async throws {
+        let params = ["path": path, "topath": toPath]
+        let _: PCloudBasicResponse = try await request("renamefile", params: params)
+    }
+
+    func renameFolder(path: String, toPath: String) async throws {
         let params = ["path": path, "topath": toPath]
         let _: PCloudBasicResponse = try await request("renamefolder", params: params)
+    }
+
+    func copyFile(path: String, toPath: String) async throws {
+        let params = ["path": path, "topath": toPath]
+        let _: PCloudBasicResponse = try await request("copyfile", params: params)
+    }
+
+    func copyFolder(path: String, toPath: String) async throws {
+        let params = ["path": path, "topath": toPath]
+        let _: PCloudBasicResponse = try await request("copyfolder", params: params)
     }
 
     // MARK: - File Operations

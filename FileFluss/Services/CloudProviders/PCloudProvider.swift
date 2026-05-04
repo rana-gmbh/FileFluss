@@ -103,6 +103,26 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        let metadata = try await client.stat(path: path)
+        if metadata.isDirectory {
+            try await client.renameFolder(path: path, toPath: newPath)
+        } else {
+            try await client.renameFile(path: path, toPath: newPath)
+        }
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        let metadata = try await client.stat(path: path)
+        if metadata.isDirectory {
+            try await client.copyFolder(path: path, toPath: newPath)
+        } else {
+            try await client.copyFile(path: path, toPath: newPath)
+        }
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.stat(path: path)

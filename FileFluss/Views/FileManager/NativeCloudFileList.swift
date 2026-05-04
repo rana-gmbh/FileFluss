@@ -66,6 +66,20 @@ struct NativeCloudFileList: NSViewRepresentable {
         sizeCol.sortDescriptorPrototype = NSSortDescriptor(key: "size", ascending: true)
         tableView.addTableColumn(sizeCol)
 
+        let kindCol = NSTableColumn(identifier: .cloudKindColumn)
+        kindCol.title = "Kind"
+        kindCol.width = 120
+        kindCol.minWidth = 80
+        kindCol.sortDescriptorPrototype = NSSortDescriptor(key: "kind", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
+        tableView.addTableColumn(kindCol)
+
+        coordinator.applyColumnVisibility(to: tableView)
+
+        let headerMenu = NSMenu()
+        headerMenu.delegate = coordinator
+        coordinator.headerMenu = headerMenu
+        tableView.headerView?.menu = headerMenu
+
         tableView.sizeLastColumnToFit()
 
         tableView.dataSource = coordinator
@@ -239,9 +253,49 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var canCreateFolder: Bool = true
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
+    weak var headerMenu: NSMenu?
+    nonisolated(unsafe) private var columnsObserver: NSObjectProtocol?
     let filePromiseDelegate = CloudFilePromiseDelegate()
 
     private var currentDragItems: [CloudFileItem] = []
+
+    override init() {
+        super.init()
+        columnsObserver = NotificationCenter.default.addObserver(
+            forName: .fileListColumnsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            // Only reapply when the cloud-panel prefs changed.
+            if let forCloud = note.object as? Bool, !forCloud { return }
+            MainActor.assumeIsolated {
+                guard let self, let tableView = self.tableView else { return }
+                self.applyColumnVisibility(to: tableView)
+            }
+        }
+    }
+
+    deinit {
+        if let columnsObserver {
+            NotificationCenter.default.removeObserver(columnsObserver)
+        }
+    }
+
+    func applyColumnVisibility(to tableView: NSTableView) {
+        let visible = FileListColumnPrefs.visibleColumns(forCloud: true)
+        for column in tableView.tableColumns {
+            switch column.identifier {
+            case .cloudDateColumn:
+                column.isHidden = !visible.contains(.dateModified)
+            case .cloudSizeColumn:
+                column.isHidden = !visible.contains(.size)
+            case .cloudKindColumn:
+                column.isHidden = !visible.contains(.kind)
+            default:
+                break
+            }
+        }
+    }
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -281,6 +335,13 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 alignment: .right,
                 font: .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             )
+        case .cloudKindColumn:
+            return makeTextCell(
+                text: item.kind,
+                identifier: .cloudKindColumn,
+                in: tableView,
+                color: .secondaryLabelColor
+            )
         default:
             return nil
         }
@@ -318,6 +379,10 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     // MARK: - Context Menu
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === headerMenu {
+            populateHeaderMenu(menu)
+            return
+        }
         menu.removeAllItems()
         guard let tableView else { return }
 
@@ -421,6 +486,26 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleRename(_ sender: NSMenuItem) {
         guard let item = sender.representedObject as? CloudFileItem else { return }
         onRename?(item)
+    }
+
+    // MARK: - Header menu (column visibility)
+
+    private func populateHeaderMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let visible = FileListColumnPrefs.visibleColumns(forCloud: true)
+        for column in FileListColumnPrefs.availableColumns(forCloud: true) {
+            let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = column.rawValue
+            item.state = visible.contains(column) ? .on : .off
+            menu.addItem(item)
+        }
+    }
+
+    @objc func toggleColumn(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let id = FileListColumnID(rawValue: raw) else { return }
+        FileListColumnPrefs.toggle(id, forCloud: true)
     }
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {
@@ -619,4 +704,5 @@ private extension NSUserInterfaceItemIdentifier {
     static let cloudNameColumn = NSUserInterfaceItemIdentifier("CloudNameColumn")
     static let cloudDateColumn = NSUserInterfaceItemIdentifier("CloudDateColumn")
     static let cloudSizeColumn = NSUserInterfaceItemIdentifier("CloudSizeColumn")
+    static let cloudKindColumn = NSUserInterfaceItemIdentifier("CloudKindColumn")
 }

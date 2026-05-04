@@ -424,6 +424,7 @@ struct CloudFileListView: View {
                     case "name": vm.sortOrder = .name
                     case "date": vm.sortOrder = .date
                     case "size": vm.sortOrder = .size
+                    case "kind": vm.sortOrder = .kind
                     default: break
                     }
                     vm.sortAscending = ascending

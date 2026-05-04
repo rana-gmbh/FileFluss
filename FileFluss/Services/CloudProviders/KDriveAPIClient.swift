@@ -232,6 +232,77 @@ actor KDriveAPIClient {
         pathToId[newPath] = fileId
     }
 
+    // MARK: - Server-side move / copy
+
+    /// Infomaniak's `move` endpoint relocates a file/folder to a new
+    /// directory. Pass `newName` to rename atomically; omit to keep the
+    /// existing name.
+    func moveFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/move/\(toDirectoryId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        if let newName {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(["name": newName])
+        }
+        let (data, response) = try await session.data(for: request)
+        let http = response as? HTTPURLResponse
+        guard let http, (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] POST move \(fileId) → dir \(toDirectoryId) → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
+            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+        }
+    }
+
+    /// Server-side copy via Infomaniak's `duplicate` endpoint.
+    func duplicateFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/duplicate/\(toDirectoryId)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        if let newName {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(["name": newName])
+        }
+        let (data, response) = try await session.data(for: request)
+        let http = response as? HTTPURLResponse
+        guard let http, (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] POST duplicate \(fileId) → dir \(toDirectoryId) → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
+            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+        }
+    }
+
+    func moveItem(path: String, toPath newPath: String) async throws {
+        let fileId = try await resolvePathToId(path)
+        let destParentPath = (newPath as NSString).deletingLastPathComponent
+        let destName = (newPath as NSString).lastPathComponent
+        let destParentId = try await resolvePathToId(destParentPath.isEmpty ? "/" : destParentPath)
+        let sourceName = (path as NSString).lastPathComponent
+        let renameDuringMove = sourceName == destName ? nil : destName
+
+        try await moveFile(fileId: fileId, toDirectoryId: destParentId, newName: renameDuringMove)
+
+        // Refresh cache: source path no longer valid, new path now points
+        // at the same file id.
+        pathToId.removeValue(forKey: path)
+        pathToId[newPath] = fileId
+    }
+
+    func copyItem(path: String, toPath newPath: String) async throws {
+        let fileId = try await resolvePathToId(path)
+        let destParentPath = (newPath as NSString).deletingLastPathComponent
+        let destName = (newPath as NSString).lastPathComponent
+        let destParentId = try await resolvePathToId(destParentPath.isEmpty ? "/" : destParentPath)
+        let sourceName = (path as NSString).lastPathComponent
+        let renameDuringCopy = sourceName == destName ? nil : destName
+
+        try await duplicateFile(fileId: fileId, toDirectoryId: destParentId, newName: renameDuringCopy)
+        // Don't cache newPath — the duplicate gets a new file id we don't
+        // know without listing the destination directory.
+    }
+
     func stat(fileId: Int) async throws -> KDriveFileMetadata {
         let response: KDriveResponse<KDriveFileMetadata> = try await request(
             .get,

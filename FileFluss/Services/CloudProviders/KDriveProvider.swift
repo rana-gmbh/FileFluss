@@ -137,6 +137,16 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         try await client.renameFile(path: path, to: newName)
     }
 
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.moveItem(path: path, toPath: newPath)
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.copyItem(path: path, toPath: newPath)
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let fileId = try await client.resolvePathToId(path)

@@ -209,9 +209,13 @@ actor WebDAVAPIClient {
         let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
+            let status = http?.statusCode ?? 0
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
-            webDAVLog.error("[WebDAV] Upload failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
-            throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
+            webDAVLog.error("[WebDAV] Upload failed: HTTP \(status): \(bodyStr.prefix(500))")
+            if let sizeError = CloudProviderError.sizeLimitError(forStatus: status, localFile: localURL) {
+                throw sizeError
+            }
+            throw Self.mapHTTPError(statusCode: status)
         }
     }
 
@@ -265,22 +269,28 @@ actor WebDAVAPIClient {
 
     func renameItem(at path: String, to newName: String) async throws {
         let parentPath = (path as NSString).deletingLastPathComponent
-        let destinationPath: String
-        if parentPath == "/" {
-            destinationPath = "/\(newName)"
-        } else {
-            destinationPath = "\(parentPath)/\(newName)"
-        }
+        let destinationPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
+        try await moveItem(at: path, toPath: destinationPath)
+    }
 
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        try await davMoveOrCopy(method: "MOVE", from: path, toPath: newPath)
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        try await davMoveOrCopy(method: "COPY", from: path, toPath: newPath)
+    }
+
+    private func davMoveOrCopy(method: String, from path: String, toPath newPath: String) async throws {
         let sourceDavPath = buildDAVPath(path)
-        let destDavPath = buildDAVPath(destinationPath)
+        let destDavPath = buildDAVPath(newPath)
 
         guard let url = URL(string: sourceDavPath) else {
             throw CloudProviderError.invalidResponse
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "MOVE"
+        request.httpMethod = method
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         request.setValue(destDavPath, forHTTPHeaderField: "Destination")
         request.setValue("F", forHTTPHeaderField: "Overwrite")
@@ -289,7 +299,7 @@ actor WebDAVAPIClient {
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) || http.statusCode == 201 else {
             let http = response as? HTTPURLResponse
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
-            webDAVLog.error("[WebDAV] MOVE \(path) → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
+            webDAVLog.error("[WebDAV] \(method) \(path) → \(newPath) → HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
     }

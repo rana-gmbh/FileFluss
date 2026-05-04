@@ -42,14 +42,14 @@ struct NativeFileList: NSViewRepresentable {
         tableView.headerView = NSTableHeaderView()
         tableView.gridStyleMask = []
 
-        // Name column
+        // Name column (always visible)
         let nameCol = NSTableColumn(identifier: .nameColumn)
         nameCol.title = "Name"
         nameCol.minWidth = 200
         nameCol.sortDescriptorPrototype = NSSortDescriptor(key: "name", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
         tableView.addTableColumn(nameCol)
 
-        // Date column
+        // Date Modified
         let dateCol = NSTableColumn(identifier: .dateColumn)
         dateCol.title = "Date Modified"
         dateCol.width = 160
@@ -57,13 +57,37 @@ struct NativeFileList: NSViewRepresentable {
         dateCol.sortDescriptorPrototype = NSSortDescriptor(key: "date", ascending: true)
         tableView.addTableColumn(dateCol)
 
-        // Size column
+        // Date Created
+        let dateCreatedCol = NSTableColumn(identifier: .dateCreatedColumn)
+        dateCreatedCol.title = "Date Created"
+        dateCreatedCol.width = 160
+        dateCreatedCol.minWidth = 100
+        dateCreatedCol.sortDescriptorPrototype = NSSortDescriptor(key: "dateCreated", ascending: true)
+        tableView.addTableColumn(dateCreatedCol)
+
+        // Size
         let sizeCol = NSTableColumn(identifier: .sizeColumn)
         sizeCol.title = "Size"
         sizeCol.width = 80
         sizeCol.minWidth = 60
         sizeCol.sortDescriptorPrototype = NSSortDescriptor(key: "size", ascending: true)
         tableView.addTableColumn(sizeCol)
+
+        // Kind
+        let kindCol = NSTableColumn(identifier: .kindColumn)
+        kindCol.title = "Kind"
+        kindCol.width = 120
+        kindCol.minWidth = 80
+        kindCol.sortDescriptorPrototype = NSSortDescriptor(key: "kind", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
+        tableView.addTableColumn(kindCol)
+
+        coordinator.applyColumnVisibility(to: tableView)
+
+        // Header context menu — right-click on a column header to toggle visibility
+        let headerMenu = NSMenu()
+        headerMenu.delegate = coordinator
+        coordinator.headerMenu = headerMenu
+        tableView.headerView?.menu = headerMenu
 
         // The Name column stretches to fill
         tableView.sizeLastColumnToFit()
@@ -245,9 +269,51 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onRename: ((FileItem) -> Void)?
     weak var tableView: FileTableView?
     var suppressSelectionUpdate = false
+    weak var headerMenu: NSMenu?
+    nonisolated(unsafe) private var columnsObserver: NSObjectProtocol?
 
     // Resolved items being dragged (set when drag starts)
     private var currentDragItems: [FileItem] = []
+
+    override init() {
+        super.init()
+        columnsObserver = NotificationCenter.default.addObserver(
+            forName: .fileListColumnsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            // Only reapply when the local-panel prefs changed.
+            if let forCloud = note.object as? Bool, forCloud { return }
+            MainActor.assumeIsolated {
+                guard let self, let tableView = self.tableView else { return }
+                self.applyColumnVisibility(to: tableView)
+            }
+        }
+    }
+
+    deinit {
+        if let columnsObserver {
+            NotificationCenter.default.removeObserver(columnsObserver)
+        }
+    }
+
+    func applyColumnVisibility(to tableView: NSTableView) {
+        let visible = FileListColumnPrefs.visibleColumns(forCloud: false)
+        for column in tableView.tableColumns {
+            switch column.identifier {
+            case .dateColumn:
+                column.isHidden = !visible.contains(.dateModified)
+            case .dateCreatedColumn:
+                column.isHidden = !visible.contains(.dateCreated)
+            case .sizeColumn:
+                column.isHidden = !visible.contains(.size)
+            case .kindColumn:
+                column.isHidden = !visible.contains(.kind)
+            default:
+                break
+            }
+        }
+    }
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -278,6 +344,13 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 in: tableView,
                 color: .secondaryLabelColor
             )
+        case .dateCreatedColumn:
+            return makeTextCell(
+                text: item.formattedCreationDate,
+                identifier: .dateCreatedColumn,
+                in: tableView,
+                color: .secondaryLabelColor
+            )
         case .sizeColumn:
             return makeTextCell(
                 text: item.formattedSize,
@@ -286,6 +359,13 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 color: .secondaryLabelColor,
                 alignment: .right,
                 font: .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            )
+        case .kindColumn:
+            return makeTextCell(
+                text: item.kind,
+                identifier: .kindColumn,
+                in: tableView,
+                color: .secondaryLabelColor
             )
         default:
             return nil
@@ -324,6 +404,10 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     // MARK: - Context Menu
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === headerMenu {
+            populateHeaderMenu(menu)
+            return
+        }
         menu.removeAllItems()
         guard let tableView else { return }
 
@@ -429,6 +513,26 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleRename(_ sender: NSMenuItem) {
         guard let item = sender.representedObject as? FileItem else { return }
         onRename?(item)
+    }
+
+    // MARK: - Header menu (column visibility)
+
+    private func populateHeaderMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let visible = FileListColumnPrefs.visibleColumns(forCloud: false)
+        for column in FileListColumnPrefs.availableColumns(forCloud: false) {
+            let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = column.rawValue
+            item.state = visible.contains(column) ? .on : .off
+            menu.addItem(item)
+        }
+    }
+
+    @objc func toggleColumn(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let id = FileListColumnID(rawValue: raw) else { return }
+        FileListColumnPrefs.toggle(id, forCloud: false)
     }
 
     // MARK: - Drag Source
@@ -631,5 +735,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 private extension NSUserInterfaceItemIdentifier {
     static let nameColumn = NSUserInterfaceItemIdentifier("NameColumn")
     static let dateColumn = NSUserInterfaceItemIdentifier("DateColumn")
+    static let dateCreatedColumn = NSUserInterfaceItemIdentifier("DateCreatedColumn")
     static let sizeColumn = NSUserInterfaceItemIdentifier("SizeColumn")
+    static let kindColumn = NSUserInterfaceItemIdentifier("KindColumn")
 }

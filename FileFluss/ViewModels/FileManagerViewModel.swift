@@ -42,12 +42,13 @@ final class FileManagerViewModel {
     let quickLookController = QuickLookController()
 
     enum SortOrder: String, CaseIterable {
-        case name, date, size, kind
+        case name, date, dateCreated, size, kind
 
         var label: String {
             switch self {
             case .name: return "Name"
             case .date: return "Date Modified"
+            case .dateCreated: return "Date Created"
             case .size: return "Size"
             case .kind: return "Kind"
             }
@@ -279,7 +280,10 @@ final class FileManagerViewModel {
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
                 switch choice {
-                case .skip: progress?.completedItems = index + 1; continue
+                case .skip:
+                    progress?.recordSkip(item.name)
+                    progress?.completedItems = index + 1
+                    continue
                 case .stop:
                     progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
                 case .keepBoth:
@@ -295,12 +299,10 @@ final class FileManagerViewModel {
                 progress?.totalBytes += item.size
                 try await FileSystemService.shared.moveItem(from: item.url, to: dest)
                 progress?.completedItems = index + 1
+                progress?.recordSuccess(item.name)
             } catch {
                 self.error = "Failed to move \(item.name): \(error.localizedDescription)"
-                progress?.errorMessage = error.localizedDescription
-                progress?.endTime = Date()
-                progress?.isComplete = true
-                return
+                progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }
         progress?.endTime = Date()
@@ -339,7 +341,10 @@ final class FileManagerViewModel {
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
                 switch choice {
-                case .skip: progress?.completedItems = index + 1; continue
+                case .skip:
+                    progress?.recordSkip(item.name)
+                    progress?.completedItems = index + 1
+                    continue
                 case .stop:
                     progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
                 case .keepBoth:
@@ -355,12 +360,10 @@ final class FileManagerViewModel {
                 progress?.totalBytes += item.size
                 try await FileSystemService.shared.copyItem(from: item.url, to: dest)
                 progress?.completedItems = index + 1
+                progress?.recordSuccess(item.name)
             } catch {
                 self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
-                progress?.errorMessage = error.localizedDescription
-                progress?.endTime = Date()
-                progress?.isComplete = true
-                return
+                progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }
         progress?.endTime = Date()
@@ -431,12 +434,12 @@ final class FileManagerViewModel {
                 result = a.name.localizedStandardCompare(b.name) == .orderedAscending
             case .date:
                 result = a.modificationDate < b.modificationDate
+            case .dateCreated:
+                result = a.creationDate < b.creationDate
             case .size:
                 result = a.size < b.size
             case .kind:
-                let aExt = a.url.pathExtension
-                let bExt = b.url.pathExtension
-                result = aExt.localizedStandardCompare(bExt) == .orderedAscending
+                result = a.kind.localizedStandardCompare(b.kind) == .orderedAscending
             }
             return sortAscending ? result : !result
         }

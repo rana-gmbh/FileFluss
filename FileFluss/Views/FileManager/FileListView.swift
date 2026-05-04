@@ -338,7 +338,9 @@ struct FileListView: View {
                         switch key {
                         case "name": fm.sortOrder = .name
                         case "date": fm.sortOrder = .date
+                        case "dateCreated": fm.sortOrder = .dateCreated
                         case "size": fm.sortOrder = .size
+                        case "kind": fm.sortOrder = .kind
                         default: break
                         }
                         fm.sortAscending = ascending

@@ -35,13 +35,14 @@ final class CloudFileManagerViewModel {
     private var quickLookTask: Task<Void, Never>?
 
     enum SortOrder: String, CaseIterable {
-        case name, date, size
+        case name, date, size, kind
 
         var label: String {
             switch self {
             case .name: return "Name"
             case .date: return "Date Modified"
             case .size: return "Size"
+            case .kind: return "Kind"
             }
         }
     }
@@ -384,7 +385,10 @@ final class CloudFileManagerViewModel {
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
                 switch choice {
-                case .skip: progress?.completedItems = index + 1; continue
+                case .skip:
+                    progress?.recordSkip(item.name)
+                    progress?.completedItems = index + 1
+                    continue
                 case .stop:
                     if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
                     return
@@ -406,11 +410,12 @@ final class CloudFileManagerViewModel {
                 }
                 try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
                 progress?.completedItems = index + 1
+                progress?.recordSuccess(item.name)
             } catch {
                 self.error = "Failed to download \(item.name): \(error.localizedDescription)"
-                progress?.errorMessage = error.localizedDescription
-                if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
-                return
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+                // Continue with remaining items so one failure doesn't
+                // abort the whole batch.
             }
         }
 
@@ -589,7 +594,9 @@ final class CloudFileManagerViewModel {
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
                 switch choice {
-                case .skip: continue
+                case .skip:
+                    progress?.recordSkip(name)
+                    continue
                 case .stop:
                     if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
                     await loadDirectory(); return
@@ -601,10 +608,10 @@ final class CloudFileManagerViewModel {
                     uploadURL = tempCopy
                 case .replace:
                     do { try await provider.deleteItem(at: existing.path) } catch {
+                        let msg = "Failed to overwrite: \(error.localizedDescription)"
                         self.error = "Failed to overwrite \(name): \(error.localizedDescription)"
-                        progress?.errorMessage = error.localizedDescription
-                        progress?.endTime = Date(); progress?.isComplete = true
-                        return
+                        progress?.recordFailure(name, error: msg)
+                        continue
                     }
                 }
             }
@@ -612,11 +619,13 @@ final class CloudFileManagerViewModel {
             do {
                 try await uploadRecursively(urls: [uploadURL], toRemotePath: remoteBase, provider: provider, progress: progress, uploadedCount: &uploadedCount)
                 if uploadURL != url { try? FileManager.default.removeItem(at: uploadURL) }
+                progress?.recordSuccess(name)
             } catch {
                 self.error = error.localizedDescription
-                progress?.errorMessage = error.localizedDescription
-                if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
-                return
+                progress?.recordFailure(name, error: error.localizedDescription)
+                // Continue with the remaining items so a single bad file
+                // (e.g. a >4 GiB upload that the provider rejects) doesn't
+                // cancel the rest of the batch.
             }
         }
 
@@ -657,13 +666,20 @@ final class CloudFileManagerViewModel {
             } else {
                 progress?.currentFileName = url.lastPathComponent
                 let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                let fileBytes = Int64(fileSize)
+
+                // Pre-flight: reject oversized files locally before sending
+                // any bytes. Saves the user from a multi-gigabyte upload that
+                // the server would refuse anyway.
+                try await CloudProviderError.enforceUploadSizeLimit(url, provider: provider)
+
                 print("[Upload] Uploading file: \(url.lastPathComponent) (\(fileSize) bytes) to \(itemRemotePath)")
                 let progressRef = progress
                 try await provider.uploadFile(from: url, to: itemRemotePath, onBytes: { bytes in
                     Task { @MainActor in progressRef?.addUploadBytes(bytes) }
                 })
                 print("[Upload] Success: \(url.lastPathComponent)")
-                progress?.totalBytes += Int64(fileSize)
+                progress?.totalBytes += fileBytes
                 uploadedCount += 1
                 progress?.totalFiles = uploadedCount
                 progress?.completedItems = uploadedCount
@@ -674,7 +690,9 @@ final class CloudFileManagerViewModel {
     // MARK: - Intra-cloud transfer (drag/drop onto subfolder of same account)
 
     /// Move or copy items from the current folder into another folder of the same cloud account.
-    /// Mirrors the cross-cloud pattern: pre-flight conflict check, download to temp, upload, optionally delete source.
+    /// Tries a server-side move/copy first (no bytes touch the user's machine);
+    /// falls back to download+upload+delete when the provider doesn't support
+    /// it. Pre-flight conflict resolution runs in both cases.
     func transferItemsToSubfolder(
         _ sourceItems: [CloudFileItem],
         targetPath: String,
@@ -690,10 +708,32 @@ final class CloudFileManagerViewModel {
         let targetSiblings = (try? await provider.listDirectory(at: targetPath)) ?? []
         let resolutions = await preFlightConflictCheck(sourceItems: sourceItems, against: targetSiblings)
         let itemsToTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
+        for (item, result) in resolutions where result == .skip {
+            progress?.recordSkip(item.name)
+        }
         guard !itemsToTransfer.isEmpty else {
             progress?.endTime = Date(); progress?.isComplete = true; return
         }
         let resolutionByName = Dictionary(resolutions.map { ($0.0.name, $0.1) }, uniquingKeysWith: { _, last in last })
+
+        // Fast path: ask the provider to do the move/copy server-side. This
+        // is what the user actually wants for an intra-cloud relocation —
+        // nothing leaves the cloud. If the provider returns .notImplemented
+        // we fall through to the legacy download+upload path below.
+        if await tryServerSideTransfer(
+            items: itemsToTransfer,
+            targetPath: targetPath,
+            targetSiblings: targetSiblings,
+            resolutionByName: resolutionByName,
+            deleteFromSource: deleteFromSource,
+            provider: provider,
+            progress: progress
+        ) {
+            await loadDirectory()
+            progress?.endTime = Date()
+            progress?.isComplete = true
+            return
+        }
 
         var expectedBytes: Int64 = 0
         for item in itemsToTransfer {
@@ -834,6 +874,75 @@ final class CloudFileManagerViewModel {
         }
     }
 
+    // MARK: - Server-side transfer (fast path for intra-account move/copy)
+
+    /// Try to perform the move/copy entirely on the cloud side. Returns
+    /// `true` if it succeeded for at least one item — in which case all
+    /// items were attempted and per-item results were recorded on
+    /// `progress`. Returns `false` if the provider doesn't support
+    /// server-side moves at all (`.notImplemented` on the very first item),
+    /// signalling the caller to fall back to download+upload.
+    private func tryServerSideTransfer(
+        items: [CloudFileItem],
+        targetPath: String,
+        targetSiblings: [CloudFileItem],
+        resolutionByName: [String: PreFlightResult],
+        deleteFromSource: Bool,
+        provider: any CloudProvider,
+        progress: TransferProgress?
+    ) async -> Bool {
+        // Probe the provider on the first item. If it throws .notImplemented
+        // we bail before doing anything visible. Any other error is reported
+        // per-item and we keep going (rest of the batch may still succeed).
+        progress?.expectedBytesSingle = 0
+        progress?.expectedBytesDownload = 0
+        progress?.expectedBytesUpload = 0
+        progress?.isCloudToCloud = false
+
+        var providerSupports = true
+        let existingNames = Set(targetSiblings.map(\.name))
+
+        for (index, item) in items.enumerated() {
+            if progress?.isCancelled == true || Task.isCancelled { return providerSupports }
+            progress?.currentFileName = item.name
+
+            // Determine the destination path. KeepBoth → unique name, Replace → delete first.
+            let resolution = resolutionByName[item.name] ?? .transfer
+            var destName = item.name
+            if resolution == .keepBoth {
+                destName = Self.uniqueCloudName(for: item.name, existing: existingNames)
+            } else if resolution == .replace,
+                      let existing = targetSiblings.first(where: { $0.name == item.name }) {
+                try? await provider.deleteItem(at: existing.path)
+            }
+            let destPath = targetPath == "/" ? "/\(destName)" : "\(targetPath)/\(destName)"
+
+            do {
+                if deleteFromSource {
+                    try await provider.moveItem(at: item.path, toPath: destPath)
+                } else {
+                    try await provider.copyItem(at: item.path, toPath: destPath)
+                }
+                progress?.recordSuccess(item.name)
+                progress?.completedItems = index + 1
+                progress?.totalBytes += item.size
+            } catch CloudProviderError.notImplemented {
+                if index == 0 {
+                    // Provider can't do server-side at all — let caller fall back.
+                    providerSupports = false
+                    return false
+                }
+                // Mid-batch .notImplemented shouldn't happen in practice, but
+                // record it as a failure for that item and keep going.
+                progress?.recordFailure(item.name, error: "Server-side move not supported for this item.")
+            } catch {
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+            }
+        }
+
+        return true
+    }
+
     // MARK: - Helpers
 
     static func uniqueCloudName(for name: String, existing: Set<String>) -> String {
@@ -901,6 +1010,8 @@ final class CloudFileManagerViewModel {
                 result = a.modificationDate < b.modificationDate
             case .size:
                 result = a.size < b.size
+            case .kind:
+                result = a.kind.localizedStandardCompare(b.kind) == .orderedAscending
             }
             return sortAscending ? result : !result
         }

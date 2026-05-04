@@ -87,6 +87,16 @@ final class DropboxProvider: CloudProvider, @unchecked Sendable {
         try await client.renameItem(at: path, to: newName)
     }
 
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.moveItem(at: path, toPath: newPath)
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.copyItem(at: path, toPath: newPath)
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.getFileMetadata(at: path)

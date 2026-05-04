@@ -558,16 +558,30 @@ actor DropboxAPIClient {
         let dbPath = dropboxPath(path)
         let parentPath = (dbPath as NSString).deletingLastPathComponent
         let newPath = parentPath.isEmpty ? "/\(newName)" : "\(parentPath)/\(newName)"
+        try await moveItem(at: path, toPath: newPath)
+    }
 
+    func moveItem(at path: String, toPath newPath: String) async throws {
         struct MoveArg: Encodable {
             let from_path: String
             let to_path: String
             let autorename: Bool
         }
-
         try await rpcRequestVoid(
             path: "/files/move_v2",
-            body: MoveArg(from_path: dbPath, to_path: newPath, autorename: false)
+            body: MoveArg(from_path: dropboxPath(path), to_path: dropboxPath(newPath), autorename: false)
+        )
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        struct CopyArg: Encodable {
+            let from_path: String
+            let to_path: String
+            let autorename: Bool
+        }
+        try await rpcRequestVoid(
+            path: "/files/copy_v2",
+            body: CopyArg(from_path: dropboxPath(path), to_path: dropboxPath(newPath), autorename: false)
         )
     }
 

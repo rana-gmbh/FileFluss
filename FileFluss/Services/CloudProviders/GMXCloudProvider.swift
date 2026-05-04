@@ -21,6 +21,13 @@ final class GMXCloudProvider: CloudProvider, @unchecked Sendable {
         get async { apiClient != nil }
     }
 
+    /// GMX MediaCenter rejects single-PUT uploads at the 4 GiB / 32-bit
+    /// Content-Length boundary with HTTP 422. Pre-flight files larger than
+    /// this so the upload doesn't get sent in the first place.
+    var maxUploadFileSize: Int64? {
+        get async { 4_000_000_000 }
+    }
+
     init(accountId: UUID = UUID()) {
         self.keychainKey = "gmxCloud.\(accountId.uuidString)"
         restoreCredentials()
@@ -91,6 +98,16 @@ final class GMXCloudProvider: CloudProvider, @unchecked Sendable {
     func renameItem(at path: String, to newName: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.renameItem(at: path, to: newName)
+    }
+
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.moveItem(at: path, toPath: newPath)
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.copyItem(at: path, toPath: newPath)
     }
 
     func getFileMetadata(at path: String) async throws -> CloudFileItem {

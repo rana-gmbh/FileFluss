@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 struct CloudFileItem: Identifiable, Hashable, Sendable {
     let id: String
@@ -35,6 +36,16 @@ struct CloudFileItem: Identifiable, Hashable, Sendable {
         return Self.dateFormatter.string(from: modificationDate)
     }
 
+    var kind: String {
+        if isDirectory { return "Folder" }
+        let ext = (name as NSString).pathExtension
+        if !ext.isEmpty, let utType = UTType(filenameExtension: ext),
+           let description = utType.localizedDescription {
+            return description
+        }
+        return ext.isEmpty ? "Document" : ext.uppercased()
+    }
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -49,6 +60,14 @@ protocol CloudProvider: Sendable {
     func authenticate() async throws
     func disconnect() async throws
     var isAuthenticated: Bool { get async }
+
+    /// Maximum per-file upload size accepted by this provider, in bytes.
+    /// Returning nil means "no documented limit" — uploads will still be
+    /// attempted, and the server may reject them after the bytes have been
+    /// transferred. Providers should override this when they have a known
+    /// hard cap so the upload path can reject oversized files locally
+    /// (pre-flight) instead of wasting bandwidth.
+    var maxUploadFileSize: Int64? { get async }
 
     func listDirectory(at path: String) async throws -> [CloudFileItem]
     func downloadFile(remotePath: String, to localURL: URL) async throws
@@ -65,6 +84,15 @@ protocol CloudProvider: Sendable {
     func deleteItem(at path: String) async throws
     func createDirectory(at path: String) async throws
     func renameItem(at path: String, to newName: String) async throws
+
+    /// Server-side move on the same account: relocate `path` to `newPath`
+    /// (full destination path, including the new filename). Default impl
+    /// throws `.notImplemented` so callers can fall back to download+upload.
+    func moveItem(at path: String, toPath newPath: String) async throws
+
+    /// Server-side copy on the same account. Same conventions as `moveItem`.
+    func copyItem(at path: String, toPath newPath: String) async throws
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem
     func folderSize(at path: String) async throws -> Int64
 
@@ -83,5 +111,17 @@ extension CloudProvider {
 
     func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         try await uploadFile(from: localURL, to: remotePath)
+    }
+
+    var maxUploadFileSize: Int64? {
+        get async { nil }
+    }
+
+    func moveItem(at path: String, toPath newPath: String) async throws {
+        throw CloudProviderError.notImplemented
+    }
+
+    func copyItem(at path: String, toPath newPath: String) async throws {
+        throw CloudProviderError.notImplemented
     }
 }

@@ -32,20 +32,28 @@ enum SyncExecutor {
 
         for op in plan.operations {
             if progress.isCancelled || Task.isCancelled { break }
-            progress.currentFileName = displayName(for: op)
+            let opName = displayName(for: op)
+            progress.currentFileName = opName
             do {
                 try await perform(op, source: source, destination: destination,
                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
                 progress.completedItems += 1
                 if case .add(_, let isDir, _) = op, !isDir {
-                    progress.transferredFileNames.append(displayName(for: op))
+                    progress.transferredFileNames.append(opName)
+                    progress.recordSuccess(opName)
                 } else if case .replace = op {
-                    progress.transferredFileNames.append(displayName(for: op))
+                    progress.transferredFileNames.append(opName)
+                    progress.recordSuccess(opName)
                 } else if case .addRenamed = op {
-                    progress.transferredFileNames.append(displayName(for: op))
+                    progress.transferredFileNames.append(opName)
+                    progress.recordSuccess(opName)
+                } else {
+                    // Folder creation / deletion — counts as success but
+                    // doesn't get listed under transferred file names.
+                    progress.recordSuccess(opName)
                 }
             } catch {
-                progress.errorMessage = (progress.errorMessage.map { $0 + "\n" } ?? "") + "\(displayName(for: op)): \(error.localizedDescription)"
+                progress.recordFailure(opName, error: error.localizedDescription)
             }
         }
 
@@ -154,6 +162,7 @@ enum SyncExecutor {
             let src = srcRoot.appendingPathComponent(sourceRelative)
             let destPath = cloudJoin(rootPath, destRelative)
             try await ensureCloudParentDirectory(for: destPath, on: provider)
+            try await CloudProviderError.enforceUploadSizeLimit(src, provider: provider)
             try await provider.uploadFile(from: src, to: destPath, onBytes: onUploadBytes)
 
         case let (.cloud(accountId, rootPath), .local(dstRoot)):
@@ -174,6 +183,7 @@ enum SyncExecutor {
             try await srcProvider.downloadFile(remotePath: cloudJoin(srcRoot, sourceRelative), to: tempURL, onBytes: onDownloadBytes)
             let dstPath = cloudJoin(dstRoot, destRelative)
             try await ensureCloudParentDirectory(for: dstPath, on: dstProvider)
+            try await CloudProviderError.enforceUploadSizeLimit(tempURL, provider: dstProvider)
             try await dstProvider.uploadFile(from: tempURL, to: dstPath, onBytes: onUploadBytes)
         }
     }

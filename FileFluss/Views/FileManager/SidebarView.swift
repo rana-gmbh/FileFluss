@@ -343,9 +343,15 @@ private struct CapsuleProgressBar: View {
     private var tintGradient: LinearGradient {
         let colors: [Color]
         if transfer.isComplete {
-            colors = transfer.errorMessage == nil
-                ? [Color.green.opacity(0.85), Color.green]
-                : [Color.red.opacity(0.85), Color.red]
+            if transfer.hasErrors {
+                // Partial success gets orange, full failure gets red so the
+                // user can tell at a glance whether anything got through.
+                colors = transfer.successCount > 0
+                    ? [Color.orange.opacity(0.85), Color.orange]
+                    : [Color.red.opacity(0.85), Color.red]
+            } else {
+                colors = [Color.green.opacity(0.85), Color.green]
+            }
         } else if transfer.isCloudToCloud {
             colors = transfer.currentPhase == .downloading
                 ? [Color.blue.opacity(0.85), Color.cyan]
@@ -399,14 +405,33 @@ private struct TransferDetailsView: View {
                 .font(.headline)
 
             if let errorMessage = transfer.errorMessage {
-                HStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                     Text(errorMessage)
                         .foregroundStyle(.red)
                         .font(.callout)
+                        .textSelection(.enabled)
                 }
                 .padding(.vertical, 2)
+            }
+
+            if transfer.failureCount > 0 || transfer.successCount > 0 {
+                HStack(spacing: 10) {
+                    if transfer.successCount > 0 {
+                        Label("\(transfer.successCount) succeeded", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    if transfer.failureCount > 0 {
+                        Label("\(transfer.failureCount) failed", systemImage: "xmark.octagon.fill")
+                            .foregroundStyle(.red)
+                    }
+                    if transfer.skippedCount > 0 {
+                        Label("\(transfer.skippedCount) skipped", systemImage: "minus.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption)
             }
 
             Divider()
@@ -445,6 +470,31 @@ private struct TransferDetailsView: View {
 
             Divider()
 
+            itemsList
+        }
+        .padding()
+        .frame(width: 340)
+    }
+
+    @ViewBuilder
+    private var itemsList: some View {
+        if !transfer.itemResults.isEmpty {
+            Text("Items (\(transfer.itemResults.count))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(transfer.itemResults) { result in
+                        TransferItemRow(result: result)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 220)
+        } else if !transfer.transferredFileNames.isEmpty {
+            // Fallback for transfers that didn't record per-item results
+            // (e.g. older code paths still in flight).
             Text("Items (\(transfer.transferredFileNames.count))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -461,7 +511,41 @@ private struct TransferDetailsView: View {
             }
             .frame(maxHeight: 150)
         }
-        .padding()
-        .frame(width: 280)
+    }
+}
+
+private struct TransferItemRow: View {
+    let result: TransferItemResult
+
+    private var icon: (name: String, color: Color) {
+        switch result.status {
+        case .succeeded: return ("checkmark.circle.fill", .green)
+        case .failed: return ("xmark.octagon.fill", .red)
+        case .skipped: return ("minus.circle.fill", .secondary)
+        case .cancelled: return ("slash.circle.fill", .secondary)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6) {
+                Image(systemName: icon.name)
+                    .foregroundStyle(icon.color)
+                    .font(.caption)
+                Text(result.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(result.name)
+            }
+            if let error = result.errorMessage {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .padding(.leading, 18)
+                    .textSelection(.enabled)
+            }
+        }
     }
 }

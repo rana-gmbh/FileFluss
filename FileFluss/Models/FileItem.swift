@@ -60,6 +60,20 @@ struct FileItem: Identifiable, Hashable, Sendable {
         Self.dateFormatter.string(from: modificationDate)
     }
 
+    var formattedCreationDate: String {
+        if creationDate == .distantPast { return "--" }
+        return Self.dateFormatter.string(from: creationDate)
+    }
+
+    var kind: String {
+        if isDirectory { return "Folder" }
+        if let contentType, let description = contentType.localizedDescription {
+            return description
+        }
+        let ext = url.pathExtension
+        return ext.isEmpty ? "Document" : ext.uppercased()
+    }
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
