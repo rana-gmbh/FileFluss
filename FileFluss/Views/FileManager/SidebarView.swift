@@ -131,14 +131,6 @@ struct SidebarView: View {
                         appState.syncManager.accounts.move(fromOffsets: indices, toOffset: destination)
                         appState.syncManager.saveAccounts()
                     }
-
-                    Button {
-                        appState.syncManager.isAddingAccount = true
-                    } label: {
-                        Label("Add Account...", systemImage: "plus.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 }
 
             if !appState.transfers(for: panelSide).isEmpty {
@@ -199,9 +191,6 @@ struct SidebarView: View {
             default:
                 break
             }
-        }
-        .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
-            AddCloudAccountView()
         }
         .alert("Rename Favorite", isPresented: Binding(
             get: { renamingFavorite != nil },

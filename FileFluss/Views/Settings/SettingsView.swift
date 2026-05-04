@@ -38,28 +38,45 @@ struct CloudSettingsView: View {
     var body: some View {
         Form {
             if appState.syncManager.accounts.isEmpty {
-                ContentUnavailableView(
-                    "No Cloud Accounts",
-                    systemImage: "cloud",
-                    description: Text("Add a cloud account from the sidebar.")
-                )
+                ContentUnavailableView {
+                    Label("No Cloud Accounts", systemImage: "cloud")
+                } description: {
+                    Text("Add a cloud account to get started.")
+                } actions: {
+                    Button("Add Account…") {
+                        appState.syncManager.isAddingAccount = true
+                    }
+                }
             } else {
-                ForEach(appState.syncManager.accounts) { account in
-                    HStack {
-                        CloudProviderIcon(providerType: account.providerType, size: 16)
-                        Text(account.displayName)
-                        Spacer()
-                        Circle()
-                            .fill(account.isConnected ? .green : .gray)
-                            .frame(width: 8, height: 8)
-                        Button("Remove", role: .destructive) {
-                            Task { await appState.syncManager.removeAccount(account) }
+                Section {
+                    ForEach(appState.syncManager.accounts) { account in
+                        HStack {
+                            CloudProviderIcon(providerType: account.providerType, size: 16)
+                            Text(account.displayName)
+                            Spacer()
+                            Circle()
+                                .fill(account.isConnected ? .green : .gray)
+                                .frame(width: 8, height: 8)
+                            Button("Remove", role: .destructive) {
+                                Task { await appState.syncManager.removeAccount(account) }
+                            }
                         }
+                    }
+                }
+
+                Section {
+                    Button {
+                        appState.syncManager.isAddingAccount = true
+                    } label: {
+                        Label("Add Account…", systemImage: "plus.circle")
                     }
                 }
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
+            AddCloudAccountView()
+        }
     }
 }
 
