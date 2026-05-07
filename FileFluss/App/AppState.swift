@@ -27,8 +27,14 @@ final class AppState {
     var rightFileManager: FileManagerViewModel
     var syncManager: SyncViewModel
     var searchVM = SearchViewModel()
-    var showSearchPopup = false
     var showSyncSheet = false
+
+    /// Bumped each time the user clicks Compare in the toolbar (or
+    /// Compare-again in the compare window). The compare window observes
+    /// this via `.task(id:)` and snapshots the current panels — so simply
+    /// browsing folders while the compare window is open does not re-run
+    /// the comparison.
+    var compareTrigger: UUID = UUID()
 
     var selectedLeftSidebarItem: SidebarItem? = .location(
         FileManager.default.homeDirectoryForCurrentUser

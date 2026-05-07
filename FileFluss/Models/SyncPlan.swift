@@ -36,6 +36,17 @@ struct SyncEntry: Hashable, Sendable {
     let isDirectory: Bool
     let size: Int64
     let modificationDate: Date
+    /// Creation date when the source exposes it (local FS does, most cloud
+    /// providers don't). Nil means "unknown — don't compare against this".
+    let creationDate: Date?
+
+    init(relativePath: String, isDirectory: Bool, size: Int64, modificationDate: Date, creationDate: Date? = nil) {
+        self.relativePath = relativePath
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modificationDate = modificationDate
+        self.creationDate = creationDate
+    }
 }
 
 /// A single operation the planner will perform to sync one side into the other.

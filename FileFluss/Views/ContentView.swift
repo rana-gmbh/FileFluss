@@ -25,10 +25,6 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: supportLog.isRecording)
-        .sheet(isPresented: Bindable(appState).showSearchPopup) {
-            SearchPopupView()
-                .environment(appState)
-        }
         .sheet(isPresented: Bindable(appState).showSyncSheet) {
             SyncPlannerView()
                 .environment(appState)

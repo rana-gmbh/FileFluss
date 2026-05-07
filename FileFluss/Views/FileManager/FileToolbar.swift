@@ -48,12 +48,12 @@ struct FileToolbar: CustomizableToolbarContent {
         .customizationBehavior(.disabled)
 
         ToolbarItem(id: "search", placement: .primaryAction) {
-            Button {
-                appState.showSearchPopup = true
-            } label: {
-                Label("Search", systemImage: "magnifyingglass")
-            }
-            .help("Search all sources (⌘F)")
+            OpenWindowToolbarButton(
+                windowId: "search",
+                label: "Search",
+                systemImage: "magnifyingglass",
+                help: "Search all sources (⌘F)"
+            )
             .keyboardShortcut("f", modifiers: .command)
         }
 
@@ -64,6 +64,10 @@ struct FileToolbar: CustomizableToolbarContent {
                 Label("Sync", systemImage: "arrow.triangle.2.circlepath")
             }
             .help("Sync left and right panels")
+        }
+
+        ToolbarItem(id: "compare", placement: .primaryAction) {
+            CompareToolbarButton()
         }
 
         ToolbarItem(id: "refresh", placement: .primaryAction) {
@@ -104,5 +108,43 @@ struct FileToolbar: CustomizableToolbarContent {
             }
             .help("Force all drag & drop operations to move (skips the Move/Copy prompt)")
         }
+    }
+}
+
+/// Wrapper that pulls `openWindow` out of the SwiftUI environment so we can
+/// invoke it from a toolbar button (CustomizableToolbarContent can't read
+/// `@Environment` directly).
+private struct OpenWindowToolbarButton: View {
+    @Environment(\.openWindow) private var openWindow
+    let windowId: String
+    let label: String
+    let systemImage: String
+    let help: String
+
+    var body: some View {
+        Button {
+            openWindow(id: windowId)
+        } label: {
+            Label(label, systemImage: systemImage)
+        }
+        .help(help)
+    }
+}
+
+/// Compare needs to bump `compareTrigger` so the compare window snapshots
+/// the *currently* selected folders, instead of re-running every time the
+/// user navigates a panel.
+private struct CompareToolbarButton: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button {
+            appState.compareTrigger = UUID()
+            openWindow(id: "compare")
+        } label: {
+            Label("Compare", systemImage: "arrow.left.arrow.right.square")
+        }
+        .help("Compare the two folders side by side")
     }
 }

@@ -41,7 +41,10 @@ actor SyncPlanner {
 
     private func enumerateLocal(root: URL) throws -> [SyncEntry] {
         let fm = Foundation.FileManager.default
-        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .totalFileSizeKey, .contentModificationDateKey]
+        let keys: [URLResourceKey] = [
+            .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
+            .contentModificationDateKey, .creationDateKey
+        ]
         guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else {
             throw SyncPlannerError.sourceNotEnumerable(root.path(percentEncoded: false))
         }
@@ -57,7 +60,14 @@ actor SyncPlanner {
             let isDir = values.isDirectory ?? false
             let size = Int64(values.totalFileSize ?? values.fileSize ?? 0)
             let mod = values.contentModificationDate ?? .distantPast
-            results.append(SyncEntry(relativePath: relative, isDirectory: isDir, size: isDir ? Int64(0) : size, modificationDate: mod))
+            let created = values.creationDate
+            results.append(SyncEntry(
+                relativePath: relative,
+                isDirectory: isDir,
+                size: isDir ? Int64(0) : size,
+                modificationDate: mod,
+                creationDate: created
+            ))
         }
         return results
     }

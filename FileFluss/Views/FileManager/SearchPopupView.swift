@@ -12,7 +12,7 @@ struct SearchPopupView: View {
             Divider()
             resultsList
         }
-        .frame(width: 700, height: 500)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: appState.searchVM.searchText) {
             triggerSearch()
         }
@@ -39,7 +39,21 @@ struct SearchPopupView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .help("Clear search")
             }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(.quaternary, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Close (Esc)")
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -94,6 +108,12 @@ struct SearchPopupView: View {
     }
 
     private var resultsList: some View {
+        // Force this region to claim all remaining vertical space so the
+        // header stays pinned to the top regardless of whether we're
+        // showing the empty-state view or a populated results list.
+        // Without this, the empty state would shrink-wrap and the parent
+        // VStack would vertically center, making the header appear to
+        // jump up the moment results arrive.
         Group {
             let vm = appState.searchVM
             if vm.searchText.isEmpty {
@@ -138,6 +158,7 @@ struct SearchPopupView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -196,7 +217,8 @@ struct SearchPopupView: View {
         }
 
         appState.activePanel = side
-        dismiss()
+        // Leave the search window open so the user can pick more results.
+        // Only the close button / Esc / red traffic light should dismiss.
     }
 
     private func triggerSearch() {
@@ -272,11 +294,21 @@ private struct SearchGroupHeader: View {
 private struct SearchResultRow: View {
     let item: SearchResultItem
 
+    private var iconImage: NSImage {
+        if item.isDirectory { return FileTypeIcon.folderIcon() }
+        if let colorful = FreeFileIcon.icon(forFilename: item.name) { return colorful }
+        switch item {
+        case .local(let f): return FileTypeIcon.icon(for: f.contentType)
+        case .cloud(let f, _, _): return FileTypeIcon.icon(forFilename: f.name)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: item.icon)
-                .font(.system(size: 16))
-                .foregroundStyle(item.isDirectory ? Color.accentColor : .secondary)
+            Image(nsImage: iconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 20, height: 20)
                 .frame(width: 24, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
