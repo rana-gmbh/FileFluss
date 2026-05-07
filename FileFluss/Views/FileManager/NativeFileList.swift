@@ -683,9 +683,10 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         cell.textField?.stringValue = item.name
         cell.textField?.textColor = .labelColor
 
-        let icon = NSImage(systemSymbolName: item.icon, accessibilityDescription: nil)
-        cell.imageView?.image = icon
-        cell.imageView?.contentTintColor = item.isDirectory ? .controlAccentColor : .secondaryLabelColor
+        cell.imageView?.image = item.isDirectory
+            ? FileTypeIcon.folderIcon()
+            : FileTypeIcon.icon(for: item.contentType)
+        cell.imageView?.contentTintColor = nil
 
         return cell
     }
