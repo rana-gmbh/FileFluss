@@ -168,27 +168,12 @@ struct CloudFileListView: View {
         }
         .confirmationDialog("Move or Copy?", isPresented: $showDropConfirmation, presenting: pendingUpload) { upload in
             Button("Copy Here") {
-                let urls = upload.urls
-                let targetPath = upload.targetFolder?.path
-                let transfer = TransferProgress(operation: "Copying", totalItems: urls.count)
-                appState.addTransfer(transfer, panel: panelSide)
                 pendingUpload = nil
-                vm.conflictDirection = incomingDirection
-                transfer.task = Task { await vm.uploadFiles(from: urls, toPath: targetPath, progress: transfer) }
+                runUploadDrop(upload, isMove: false)
             }
             Button("Move Here") {
-                let urls = upload.urls
-                let targetPath = upload.targetFolder?.path
-                let transfer = TransferProgress(operation: "Moving", totalItems: urls.count)
-                appState.addTransfer(transfer, panel: panelSide)
                 pendingUpload = nil
-                vm.conflictDirection = incomingDirection
-                transfer.task = Task {
-                    await vm.uploadFiles(from: urls, toPath: targetPath, progress: transfer)
-                    for url in urls { try? FileManager.default.removeItem(at: url) }
-                    let otherSide: PanelSide = panelSide == .left ? .right : .left
-                    await appState.fileManager(for: otherSide).refresh()
-                }
+                runUploadDrop(upload, isMove: true)
             }
             Button("Cancel", role: .cancel) { pendingUpload = nil }
         } message: { upload in
@@ -203,28 +188,12 @@ struct CloudFileListView: View {
         }
         .confirmationDialog("Move or Copy?", isPresented: $showCloudToCloudDropConfirmation, presenting: pendingCloudToCloudDrop) { drop in
             Button("Copy Here") {
-                let sourceItems = drop.sourceItems
-                let sourceAccountId = drop.sourceAccountId
-                let targetPath = drop.targetFolder?.path
                 pendingCloudToCloudDrop = nil
-                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
-                sourceVM.conflictDirection = incomingDirection
-                vm.conflictDirection = incomingDirection
-                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, targetSubfolderPath: targetPath, progress: transfer, deleteFromSource: false) }
+                runCloudToCloudDrop(drop, isMove: false)
             }
             Button("Move Here") {
-                let sourceItems = drop.sourceItems
-                let sourceAccountId = drop.sourceAccountId
-                let targetPath = drop.targetFolder?.path
                 pendingCloudToCloudDrop = nil
-                let sourceVM = appState.cloudFileManager(for: sourceAccountId)
-                sourceVM.conflictDirection = incomingDirection
-                vm.conflictDirection = incomingDirection
-                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task { await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, targetSubfolderPath: targetPath, progress: transfer, deleteFromSource: true) }
+                runCloudToCloudDrop(drop, isMove: true)
             }
             Button("Cancel", role: .cancel) { pendingCloudToCloudDrop = nil }
         } message: { drop in
@@ -238,26 +207,12 @@ struct CloudFileListView: View {
         }
         .confirmationDialog("Move or Copy?", isPresented: $showInternalCloudDropConfirmation, presenting: pendingInternalCloudDrop) { drop in
             Button("Copy Here") {
-                let items = drop.sourceItems
-                let target = drop.targetFolder
                 pendingInternalCloudDrop = nil
-                vm.conflictDirection = incomingDirection
-                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task {
-                    await vm.transferItemsToSubfolder(items, targetPath: target.path, deleteFromSource: false, progress: transfer)
-                }
+                runInternalCloudDrop(drop, isMove: false)
             }
             Button("Move Here") {
-                let items = drop.sourceItems
-                let target = drop.targetFolder
                 pendingInternalCloudDrop = nil
-                vm.conflictDirection = incomingDirection
-                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task {
-                    await vm.transferItemsToSubfolder(items, targetPath: target.path, deleteFromSource: true, progress: transfer)
-                }
+                runInternalCloudDrop(drop, isMove: true)
             }
             Button("Cancel", role: .cancel) { pendingInternalCloudDrop = nil }
         } message: { drop in
@@ -364,8 +319,7 @@ struct CloudFileListView: View {
         // (cloud drags don't put fileURLs on the pasteboard, but be safe).
         guard !urls.isEmpty else { return false }
         let folder = cloudFolder(forPath: target.path, name: target.name)
-        pendingUpload = PendingUpload(urls: urls, targetFolder: folder)
-        showDropConfirmation = true
+        presentOrRunUploadDrop(PendingUpload(urls: urls, targetFolder: folder))
         return true
     }
 
@@ -382,20 +336,91 @@ struct CloudFileListView: View {
             })
             if currentParents.contains(target.path) { return false }
             if appState.cloudDragSourceItems.contains(where: { $0.path == target.path }) { return false }
-            pendingInternalCloudDrop = PendingInternalCloudDrop(
+            presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
                 sourceItems: appState.cloudDragSourceItems,
                 targetFolder: folder
-            )
-            showInternalCloudDropConfirmation = true
+            ))
         } else {
-            pendingCloudToCloudDrop = PendingCloudToCloudDrop(
+            presentOrRunCloudToCloudDrop(PendingCloudToCloudDrop(
                 sourceItems: appState.cloudDragSourceItems,
                 sourceAccountId: sourceAccountId,
                 targetFolder: folder
-            )
-            showCloudToCloudDropConfirmation = true
+            ))
         }
         return true
+    }
+
+    // MARK: - DragDropMode dispatch
+
+    private func presentOrRunUploadDrop(_ upload: PendingUpload) {
+        switch appState.dragDropMode {
+        case .copy: runUploadDrop(upload, isMove: false)
+        case .move: runUploadDrop(upload, isMove: true)
+        case .ask:
+            pendingUpload = upload
+            showDropConfirmation = true
+        }
+    }
+
+    private func presentOrRunCloudToCloudDrop(_ drop: PendingCloudToCloudDrop) {
+        switch appState.dragDropMode {
+        case .copy: runCloudToCloudDrop(drop, isMove: false)
+        case .move: runCloudToCloudDrop(drop, isMove: true)
+        case .ask:
+            pendingCloudToCloudDrop = drop
+            showCloudToCloudDropConfirmation = true
+        }
+    }
+
+    private func presentOrRunInternalCloudDrop(_ drop: PendingInternalCloudDrop) {
+        switch appState.dragDropMode {
+        case .copy: runInternalCloudDrop(drop, isMove: false)
+        case .move: runInternalCloudDrop(drop, isMove: true)
+        case .ask:
+            pendingInternalCloudDrop = drop
+            showInternalCloudDropConfirmation = true
+        }
+    }
+
+    private func runUploadDrop(_ upload: PendingUpload, isMove: Bool) {
+        let urls = upload.urls
+        let targetPath = upload.targetFolder?.path
+        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: urls.count)
+        appState.addTransfer(transfer, panel: panelSide)
+        vm.conflictDirection = incomingDirection
+        transfer.task = Task {
+            await vm.uploadFiles(from: urls, toPath: targetPath, progress: transfer)
+            if isMove {
+                for url in urls { try? FileManager.default.removeItem(at: url) }
+                let otherSide: PanelSide = panelSide == .left ? .right : .left
+                await appState.fileManager(for: otherSide).refresh()
+            }
+        }
+    }
+
+    private func runCloudToCloudDrop(_ drop: PendingCloudToCloudDrop, isMove: Bool) {
+        let sourceItems = drop.sourceItems
+        let sourceAccountId = drop.sourceAccountId
+        let targetPath = drop.targetFolder?.path
+        let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+        sourceVM.conflictDirection = incomingDirection
+        vm.conflictDirection = incomingDirection
+        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            await Self.cloudToCloudTransfer(items: sourceItems, from: sourceVM, to: vm, targetSubfolderPath: targetPath, progress: transfer, deleteFromSource: isMove)
+        }
+    }
+
+    private func runInternalCloudDrop(_ drop: PendingInternalCloudDrop, isMove: Bool) {
+        let items = drop.sourceItems
+        let target = drop.targetFolder
+        vm.conflictDirection = incomingDirection
+        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: items.count)
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            await vm.transferItemsToSubfolder(items, targetPath: target.path, deleteFromSource: isMove, progress: transfer)
+        }
     }
 
     @ViewBuilder
@@ -415,8 +440,7 @@ struct CloudFileListView: View {
                     Task { await vm.openItem(item) }
                 },
                 onDrop: { urls, targetFolder in
-                    pendingUpload = PendingUpload(urls: urls, targetFolder: targetFolder)
-                    showDropConfirmation = true
+                    presentOrRunUploadDrop(PendingUpload(urls: urls, targetFolder: targetFolder))
                 },
                 onKeySpace: {
                     vm.toggleQuickLook()
@@ -514,20 +538,18 @@ struct CloudFileListView: View {
                     if !appState.cloudDragSourceItems.isEmpty,
                        let sourceAccountId = appState.cloudDragSourceAccountId,
                        sourceAccountId != accountId {
-                        pendingCloudToCloudDrop = PendingCloudToCloudDrop(
+                        presentOrRunCloudToCloudDrop(PendingCloudToCloudDrop(
                             sourceItems: appState.cloudDragSourceItems,
                             sourceAccountId: sourceAccountId,
                             targetFolder: targetFolder
-                        )
-                        showCloudToCloudDropConfirmation = true
+                        ))
                     }
                 },
                 onInternalCloudDrop: { items, target in
-                    pendingInternalCloudDrop = PendingInternalCloudDrop(
+                    presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
                         sourceItems: items,
                         targetFolder: target
-                    )
-                    showInternalCloudDropConfirmation = true
+                    ))
                 },
                 onCreateFolder: {
                     newFolderName = "New Folder"

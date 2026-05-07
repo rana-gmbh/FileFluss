@@ -84,5 +84,25 @@ struct FileToolbar: CustomizableToolbarContent {
                 Task { await appState.activeFileManager.refresh() }
             }
         }
+
+        ToolbarItem(id: "copyMode", placement: .primaryAction) {
+            Toggle(isOn: Binding(
+                get: { appState.dragDropMode == .copy },
+                set: { appState.dragDropMode = $0 ? .copy : .ask }
+            )) {
+                Label("Copy Mode", systemImage: "plus.square.on.square")
+            }
+            .help("Force all drag & drop operations to copy (skips the Move/Copy prompt)")
+        }
+
+        ToolbarItem(id: "moveMode", placement: .primaryAction) {
+            Toggle(isOn: Binding(
+                get: { appState.dragDropMode == .move },
+                set: { appState.dragDropMode = $0 ? .move : .ask }
+            )) {
+                Label("Move Mode", systemImage: "arrow.right.square")
+            }
+            .help("Force all drag & drop operations to move (skips the Move/Copy prompt)")
+        }
     }
 }

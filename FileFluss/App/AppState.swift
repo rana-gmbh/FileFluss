@@ -5,6 +5,14 @@ enum PanelSide: Hashable {
     case left, right
 }
 
+/// Forces drag & drop operations to a specific outcome, bypassing the
+/// "Move or Copy?" confirmation dialog. `.ask` keeps the default prompt.
+enum DragDropMode: String {
+    case ask
+    case copy
+    case move
+}
+
 extension Notification.Name {
     static let menuNewFolder = Notification.Name("menuNewFolder")
     static let menuRename = Notification.Name("menuRename")
@@ -30,6 +38,12 @@ final class AppState {
     )
 
     var activePanel: PanelSide = .left
+
+    /// When set to `.copy` or `.move`, drag & drop operations skip the
+    /// confirmation dialog and run that operation directly. Session-only;
+    /// resets to `.ask` on relaunch so the destructive Move Mode can't
+    /// silently persist across sessions.
+    var dragDropMode: DragDropMode = .ask
 
     var activeFileManager: FileManagerViewModel {
         activePanel == .left ? leftFileManager : rightFileManager

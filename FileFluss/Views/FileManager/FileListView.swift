@@ -51,28 +51,8 @@ struct FileListView: View {
             isPresented: $showDropConfirmation,
             presenting: fm.pendingDrop
         ) { drop in
-            Button("Copy Here") {
-                let items = drop.items
-                let dest = drop.destinationFolder
-                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                fm.conflictDirection = incomingDirection
-                transfer.task = Task {
-                    await fm.performCopy(items: items, to: dest, progress: transfer)
-                    await appState.refreshAllPanels()
-                }
-            }
-            Button("Move Here") {
-                let items = drop.items
-                let dest = drop.destinationFolder
-                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                fm.conflictDirection = incomingDirection
-                transfer.task = Task {
-                    await fm.performMove(items: items, to: dest, progress: transfer)
-                    await appState.refreshAllPanels()
-                }
-            }
+            Button("Copy Here") { runLocalDrop(drop, isMove: false) }
+            Button("Move Here") { runLocalDrop(drop, isMove: true) }
             Button("Cancel", role: .cancel) {
                 fm.pendingDrop = nil
             }
@@ -119,33 +99,12 @@ struct FileListView: View {
             presenting: pendingCloudDrop
         ) { drop in
             Button("Copy Here") {
-                let sourceItems = drop.sourceItems
-                let targetDir = drop.targetDirectory
-                let sourceAccountId = drop.sourceAccountId
                 pendingCloudDrop = nil
-                let transfer = TransferProgress(operation: "Copying", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task {
-                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
-                    cloudVM.conflictDirection = incomingDirection
-                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
-                    await fm.refresh()
-                }
+                runCloudToLocalDrop(drop, isMove: false)
             }
             Button("Move Here") {
-                let sourceItems = drop.sourceItems
-                let targetDir = drop.targetDirectory
-                let sourceAccountId = drop.sourceAccountId
                 pendingCloudDrop = nil
-                let transfer = TransferProgress(operation: "Moving", totalItems: sourceItems.count)
-                appState.addTransfer(transfer, panel: panelSide)
-                transfer.task = Task {
-                    let cloudVM = appState.cloudFileManager(for: sourceAccountId)
-                    cloudVM.conflictDirection = incomingDirection
-                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
-                    await cloudVM.deleteItems(sourceItems)
-                    await fm.refresh()
-                }
+                runCloudToLocalDrop(drop, isMove: true)
             }
             Button("Cancel", role: .cancel) {
                 pendingCloudDrop = nil
@@ -296,8 +255,8 @@ struct FileListView: View {
         }
         guard !allInSameDir else { return false }
 
-        fm.pendingDrop = FileManagerViewModel.PendingDrop(items: droppedItems, destinationFolder: target)
-        showDropConfirmation = true
+        let drop = FileManagerViewModel.PendingDrop(items: droppedItems, destinationFolder: target)
+        presentOrRunLocalDrop(drop)
         return true
     }
 
@@ -306,13 +265,74 @@ struct FileListView: View {
     private func handlePathDropCloudPromise(target: URL) -> Bool {
         guard !appState.cloudDragSourceItems.isEmpty,
               let sourceAccountId = appState.cloudDragSourceAccountId else { return false }
-        pendingCloudDrop = PendingCloudDrop(
+        let drop = PendingCloudDrop(
             sourceItems: appState.cloudDragSourceItems,
             sourceAccountId: sourceAccountId,
             targetDirectory: target
         )
-        showCloudDropConfirmation = true
+        presentOrRunCloudToLocalDrop(drop)
         return true
+    }
+
+    /// Decides whether to show the Move/Copy dialog or run the operation
+    /// directly based on `appState.dragDropMode`.
+    private func presentOrRunLocalDrop(_ drop: FileManagerViewModel.PendingDrop) {
+        fm.pendingDrop = drop
+        switch appState.dragDropMode {
+        case .copy:
+            runLocalDrop(drop, isMove: false)
+            fm.pendingDrop = nil
+        case .move:
+            runLocalDrop(drop, isMove: true)
+            fm.pendingDrop = nil
+        case .ask:
+            showDropConfirmation = true
+        }
+    }
+
+    private func presentOrRunCloudToLocalDrop(_ drop: PendingCloudDrop) {
+        switch appState.dragDropMode {
+        case .copy:
+            runCloudToLocalDrop(drop, isMove: false)
+        case .move:
+            runCloudToLocalDrop(drop, isMove: true)
+        case .ask:
+            pendingCloudDrop = drop
+            showCloudDropConfirmation = true
+        }
+    }
+
+    private func runLocalDrop(_ drop: FileManagerViewModel.PendingDrop, isMove: Bool) {
+        let items = drop.items
+        let dest = drop.destinationFolder
+        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: items.count)
+        appState.addTransfer(transfer, panel: panelSide)
+        fm.conflictDirection = incomingDirection
+        transfer.task = Task {
+            if isMove {
+                await fm.performMove(items: items, to: dest, progress: transfer)
+            } else {
+                await fm.performCopy(items: items, to: dest, progress: transfer)
+            }
+            await appState.refreshAllPanels()
+        }
+    }
+
+    private func runCloudToLocalDrop(_ drop: PendingCloudDrop, isMove: Bool) {
+        let sourceItems = drop.sourceItems
+        let targetDir = drop.targetDirectory
+        let sourceAccountId = drop.sourceAccountId
+        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+            cloudVM.conflictDirection = incomingDirection
+            await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
+            if isMove {
+                await cloudVM.deleteItems(sourceItems)
+            }
+            await fm.refresh()
+        }
     }
 
     private var fileArea: some View {
@@ -331,11 +351,11 @@ struct FileListView: View {
                         Task { await fm.openItem(item) }
                     },
                     onDrop: { droppedItems, targetURL in
-                        fm.pendingDrop = FileManagerViewModel.PendingDrop(
+                        let drop = FileManagerViewModel.PendingDrop(
                             items: droppedItems,
                             destinationFolder: targetURL
                         )
-                        showDropConfirmation = true
+                        presentOrRunLocalDrop(drop)
                     },
                     onKeySpace: {
                         fm.toggleQuickLook()
@@ -407,12 +427,12 @@ struct FileListView: View {
                     onReceivePromises: { targetDir in
                         if !appState.cloudDragSourceItems.isEmpty,
                            let sourceAccountId = appState.cloudDragSourceAccountId {
-                            pendingCloudDrop = PendingCloudDrop(
+                            let drop = PendingCloudDrop(
                                 sourceItems: appState.cloudDragSourceItems,
                                 sourceAccountId: sourceAccountId,
                                 targetDirectory: targetDir
                             )
-                            showCloudDropConfirmation = true
+                            presentOrRunCloudToLocalDrop(drop)
                         }
                         Task { await fm.refresh() }
                     },
