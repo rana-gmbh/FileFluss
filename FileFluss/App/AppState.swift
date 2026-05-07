@@ -524,6 +524,7 @@ final class TransferProgress: Identifiable {
         case "Moving": return "Moved"
         case "Downloading": return "Downloaded"
         case "Uploading": return "Uploaded"
+        case "Opening": return "Opened"
         default: return operation
         }
     }

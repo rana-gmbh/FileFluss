@@ -412,6 +412,29 @@ struct CloudFileListView: View {
         }
     }
 
+    /// Download a cloud file to a temp cache and hand it to the user's
+    /// default app via NSWorkspace. Cached copies (same size + mtime) are
+    /// reused so reopening a file is instant. A TransferProgress entry
+    /// shows feedback while the download runs.
+    private func openCloudFile(_ item: CloudFileItem) {
+        let transfer = TransferProgress(operation: "Opening", totalItems: 1)
+        transfer.transferredFileNames = [item.name]
+        transfer.totalFiles = 1
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            let url = await vm.downloadToTemp(item)
+            transfer.completedItems = 1
+            transfer.isComplete = true
+            transfer.endTime = Date()
+            if let url {
+                transfer.recordSuccess(item.name)
+                NSWorkspace.shared.open(url)
+            } else {
+                transfer.recordFailure(item.name, error: "Could not download file")
+            }
+        }
+    }
+
     private func runInternalCloudDrop(_ drop: PendingInternalCloudDrop, isMove: Bool) {
         let items = drop.sourceItems
         let target = drop.targetFolder
@@ -437,7 +460,11 @@ struct CloudFileListView: View {
                 selectedIDs: Bindable(vm).selectedItemIDs,
                 quickLookController: vm.quickLookController,
                 onDoubleClick: { item in
-                    Task { await vm.openItem(item) }
+                    if item.isDirectory {
+                        Task { await vm.openItem(item) }
+                    } else {
+                        openCloudFile(item)
+                    }
                 },
                 onDrop: { urls, targetFolder in
                     presentOrRunUploadDrop(PendingUpload(urls: urls, targetFolder: targetFolder))
