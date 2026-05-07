@@ -1,0 +1,7 @@
+{
+  "images" : [
+    { "idiom" : "mac", "scale" : "1x", "filename" : "mp3.png" },
+    { "idiom" : "mac", "scale" : "2x", "filename" : "mp3@2x.png" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

@@ -683,10 +683,36 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         cell.textField?.stringValue = item.name
         cell.textField?.textColor = .labelColor
 
-        cell.imageView?.image = item.isDirectory
+        let baseIcon: NSImage = item.isDirectory
             ? FileTypeIcon.folderIcon()
             : FileTypeIcon.icon(for: item.contentType)
         cell.imageView?.contentTintColor = nil
+
+        // Tag the imageView so an in-flight thumbnail request from a prior
+        // (now-reused) row doesn't paint the wrong image when it finishes.
+        let itemID = item.id
+        cell.imageView?.identifier = NSUserInterfaceItemIdentifier(itemID)
+
+        if !item.isDirectory, ThumbnailCache.shouldUseThumbnail(for: item.contentType) {
+            if let thumb = ThumbnailCache.shared.cached(for: item.url, mtime: item.modificationDate, size: item.size) {
+                cell.imageView?.image = thumb
+            } else {
+                cell.imageView?.image = baseIcon
+                let url = item.url
+                let mtime = item.modificationDate
+                let size = item.size
+                let imageView = cell.imageView
+                Task { @MainActor in
+                    let thumb = await ThumbnailCache.shared.thumbnail(for: url, mtime: mtime, size: size)
+                    guard let thumb,
+                          let imageView,
+                          imageView.identifier?.rawValue == itemID else { return }
+                    imageView.image = thumb
+                }
+            }
+        } else {
+            cell.imageView?.image = baseIcon
+        }
 
         return cell
     }

@@ -631,9 +631,12 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         cell.textField?.stringValue = item.name
         cell.textField?.textColor = .labelColor
 
-        cell.imageView?.image = item.isDirectory
-            ? FileTypeIcon.folderIcon()
-            : FileTypeIcon.icon(forFilename: item.name)
+        if item.isDirectory {
+            cell.imageView?.image = FileTypeIcon.folderIcon()
+        } else {
+            cell.imageView?.image = FreeFileIcon.icon(forFilename: item.name)
+                ?? FileTypeIcon.icon(forFilename: item.name)
+        }
         cell.imageView?.contentTintColor = nil
 
         return cell
