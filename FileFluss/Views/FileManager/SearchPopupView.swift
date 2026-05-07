@@ -207,7 +207,7 @@ struct SearchPopupView: View {
             if let account = appState.syncManager.accountFor(id: accountId) {
                 appState.setSidebarSelection(.cloudAccount(account), for: side)
             }
-            let cloudVM = appState.cloudFileManager(for: accountId)
+            let cloudVM = appState.cloudFileManager(for: accountId, side: side)
             Task {
                 await cloudVM.navigateTo(parentPath)
                 if !cloudItem.isDirectory {

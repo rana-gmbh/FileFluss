@@ -5,7 +5,7 @@ struct FileToolbar: CustomizableToolbarContent {
 
     private var activeCloudVM: CloudFileManagerViewModel? {
         guard let id = appState.cloudAccountId(for: appState.activePanel) else { return nil }
-        return appState.cloudFileManager(for: id)
+        return appState.cloudFileManager(for: id, side: appState.activePanel)
     }
 
     private var canGoBack: Bool {

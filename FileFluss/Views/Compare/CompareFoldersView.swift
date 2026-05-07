@@ -491,7 +491,7 @@ struct CompareFoldersView: View {
 
     private func currentEndpoint(for side: PanelSide) -> SyncEndpoint? {
         if let accountId = appState.cloudAccountId(for: side) {
-            let vm = appState.cloudFileManager(for: accountId)
+            let vm = appState.cloudFileManager(for: accountId, side: side)
             return .cloud(accountId: accountId, rootPath: vm.currentPath)
         }
         return .local(appState.fileManager(for: side).currentDirectory)

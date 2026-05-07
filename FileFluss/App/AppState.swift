@@ -76,7 +76,7 @@ final class AppState {
     var hasSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return !cloudFileManager(for: cloudId).selectedItems.isEmpty
+                return !cloudFileManager(for: cloudId, side: activePanel).selectedItems.isEmpty
             }
             return false
         }
@@ -86,7 +86,7 @@ final class AppState {
     var hasSingleSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return cloudFileManager(for: cloudId).selectedItems.count == 1
+                return cloudFileManager(for: cloudId, side: activePanel).selectedItems.count == 1
             }
             return false
         }
@@ -165,26 +165,38 @@ final class AppState {
         }
     }
 
-    // Cloud file managers (cached per account)
-    private var cloudFileManagers: [UUID: CloudFileManagerViewModel] = [:]
+    // Cloud file managers (cached per account and panel side, so the
+    // same cloud account on both panels keeps independent navigation
+    // state, just like local folders).
+    private struct CloudFMKey: Hashable {
+        let accountId: UUID
+        let side: PanelSide
+    }
+    private var cloudFileManagers: [CloudFMKey: CloudFileManagerViewModel] = [:]
 
-    func cloudFileManager(for accountId: UUID) -> CloudFileManagerViewModel {
-        if let existing = cloudFileManagers[accountId] {
+    func cloudFileManager(for accountId: UUID, side: PanelSide) -> CloudFileManagerViewModel {
+        let key = CloudFMKey(accountId: accountId, side: side)
+        if let existing = cloudFileManagers[key] {
             return existing
         }
         let providerType = syncManager.accountFor(id: accountId)?.providerType
         let vm = CloudFileManagerViewModel(accountId: accountId, providerType: providerType)
-        cloudFileManagers[accountId] = vm
+        cloudFileManagers[key] = vm
         return vm
     }
 
+    /// Removes both panel sides' VMs for an account (used when an account
+    /// is disconnected).
     func removeCloudFileManager(for accountId: UUID) {
-        cloudFileManagers.removeValue(forKey: accountId)
+        cloudFileManagers = cloudFileManagers.filter { $0.key.accountId != accountId }
     }
 
-    // Cloud drag source tracking (for cross-panel drag from cloud to local)
+    // Cloud drag source tracking (for cross-panel drag from cloud to local
+    // or between same-account panels). The side identifies which panel
+    // initiated the drag so the source VM can be looked up correctly.
     var cloudDragSourceItems: [CloudFileItem] = []
     var cloudDragSourceAccountId: UUID?
+    var cloudDragSourceSide: PanelSide?
 
     // Transfer progress per panel (shown in the sidebar of the destination panel)
     var leftTransfers: [TransferProgress] = []

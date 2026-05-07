@@ -46,7 +46,7 @@ struct SidebarView: View {
                 // here explicitly).
                 if case .cloudAccount(let account) = newValue, previous == newValue {
                     Task {
-                        let cloudFM = appState.cloudFileManager(for: account.id)
+                        let cloudFM = appState.cloudFileManager(for: account.id, side: panelSide)
                         await cloudFM.navigateTo("/")
                     }
                 }
@@ -180,12 +180,12 @@ struct SidebarView: View {
                 }
             case .cloudFolder(let accountId, let path):
                 Task {
-                    let cloudFM = appState.cloudFileManager(for: accountId)
+                    let cloudFM = appState.cloudFileManager(for: accountId, side: panelSide)
                     await cloudFM.navigateTo(path)
                 }
             case .cloudAccount(let account):
                 Task {
-                    let cloudFM = appState.cloudFileManager(for: account.id)
+                    let cloudFM = appState.cloudFileManager(for: account.id, side: panelSide)
                     await cloudFM.navigateTo("/")
                 }
             default:

@@ -214,7 +214,7 @@ struct SyncPlannerView: View {
 
     private func endpoint(for side: PanelSide) -> SyncEndpoint? {
         if let accountId = appState.cloudAccountId(for: side) {
-            let vm = appState.cloudFileManager(for: accountId)
+            let vm = appState.cloudFileManager(for: accountId, side: side)
             return .cloud(accountId: accountId, rootPath: vm.currentPath)
         }
         return .local(appState.fileManager(for: side).currentDirectory)
@@ -266,7 +266,7 @@ struct SyncPlannerView: View {
         transfer.task = Task {
             await SyncExecutor.execute(plan: plan, source: src, destination: dst, progress: transfer)
             if let destAccountId = appState.cloudAccountId(for: destSide) {
-                await appState.cloudFileManager(for: destAccountId).refresh()
+                await appState.cloudFileManager(for: destAccountId, side: destSide).refresh()
             } else {
                 await appState.fileManager(for: destSide).refresh()
             }

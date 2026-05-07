@@ -36,7 +36,7 @@ struct CloudFileListView: View {
     }
 
     private var vm: CloudFileManagerViewModel {
-        appState.cloudFileManager(for: accountId)
+        appState.cloudFileManager(for: accountId, side: panelSide)
     }
 
     private var incomingDirection: ConflictDirection {
@@ -75,7 +75,7 @@ struct CloudFileListView: View {
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
                 vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
                     otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
@@ -97,7 +97,7 @@ struct CloudFileListView: View {
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
                 vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                    let otherCloudVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
                     otherCloudVM.conflictDirection = outgoingDirection
                     let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                     appState.addTransfer(transfer, panel: otherSide)
@@ -402,7 +402,12 @@ struct CloudFileListView: View {
         let sourceItems = drop.sourceItems
         let sourceAccountId = drop.sourceAccountId
         let targetPath = drop.targetFolder?.path
-        let sourceVM = appState.cloudFileManager(for: sourceAccountId)
+        // Source side defaults to the *other* panel since cross-account
+        // drops are between panels; if a same-account drag was routed
+        // here it falls back to the recorded drag side.
+        let sourceSide = appState.cloudDragSourceSide
+            ?? (panelSide == .left ? .right : .left)
+        let sourceVM = appState.cloudFileManager(for: sourceAccountId, side: sourceSide)
         sourceVM.conflictDirection = incomingDirection
         vm.conflictDirection = incomingDirection
         let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
@@ -480,7 +485,7 @@ struct CloudFileListView: View {
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
                     vm.conflictDirection = outgoingDirection
                     if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
                         otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
@@ -501,7 +506,7 @@ struct CloudFileListView: View {
                     let otherSide: PanelSide = panelSide == .left ? .right : .left
                     vm.conflictDirection = outgoingDirection
                     if let otherCloudId = appState.cloudAccountId(for: otherSide) {
-                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId)
+                        let otherCloudVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
                         otherCloudVM.conflictDirection = outgoingDirection
                         let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
                         appState.addTransfer(transfer, panel: otherSide)
@@ -556,17 +561,42 @@ struct CloudFileListView: View {
                 onDragSessionStarted: { draggedItems in
                     appState.cloudDragSourceItems = draggedItems
                     appState.cloudDragSourceAccountId = accountId
+                    appState.cloudDragSourceSide = panelSide
                 },
                 onDragSessionEnded: {
                     appState.cloudDragSourceItems = []
                     appState.cloudDragSourceAccountId = nil
+                    appState.cloudDragSourceSide = nil
                 },
                 onReceiveCloudDrop: { targetFolder in
-                    if !appState.cloudDragSourceItems.isEmpty,
-                       let sourceAccountId = appState.cloudDragSourceAccountId,
-                       sourceAccountId != accountId {
+                    guard !appState.cloudDragSourceItems.isEmpty,
+                          let sourceAccountId = appState.cloudDragSourceAccountId else { return }
+                    let sourceItems = appState.cloudDragSourceItems
+
+                    if sourceAccountId == accountId {
+                        // Same cloud account, but the drag landed on a
+                        // *different* panel's table view (per-panel VMs).
+                        // Resolve the target folder (or fall back to this
+                        // panel's current directory) and route through the
+                        // in-cloud move/copy path so we don't re-upload.
+                        let resolvedTarget: CloudFileItem = targetFolder ?? {
+                            let path = vm.currentPath
+                            let name = path == "/" ? "/" : (path as NSString).lastPathComponent
+                            return cloudFolder(forPath: path, name: name)
+                        }()
+
+                        // No-op when the drop wouldn't move anything.
+                        let currentParents = Set(sourceItems.map { ($0.path as NSString).deletingLastPathComponent })
+                        if currentParents.contains(resolvedTarget.path) { return }
+                        if sourceItems.contains(where: { $0.path == resolvedTarget.path }) { return }
+
+                        presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
+                            sourceItems: sourceItems,
+                            targetFolder: resolvedTarget
+                        ))
+                    } else {
                         presentOrRunCloudToCloudDrop(PendingCloudToCloudDrop(
-                            sourceItems: appState.cloudDragSourceItems,
+                            sourceItems: sourceItems,
                             sourceAccountId: sourceAccountId,
                             targetFolder: targetFolder
                         ))

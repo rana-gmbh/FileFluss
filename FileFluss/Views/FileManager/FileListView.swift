@@ -160,7 +160,7 @@ struct FileListView: View {
             let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
             appState.addTransfer(transfer, panel: otherSide)
             if let cloudId = appState.cloudAccountId(for: otherSide) {
-                let cloudVM = appState.cloudFileManager(for: cloudId)
+                let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
                 cloudVM.conflictDirection = outgoingDirection
                 transfer.task = Task { await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer) }
             } else {
@@ -180,7 +180,7 @@ struct FileListView: View {
             let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
             appState.addTransfer(transfer, panel: otherSide)
             if let cloudId = appState.cloudAccountId(for: otherSide) {
-                let cloudVM = appState.cloudFileManager(for: cloudId)
+                let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
                 cloudVM.conflictDirection = outgoingDirection
                 transfer.task = Task {
                     await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
@@ -322,10 +322,14 @@ struct FileListView: View {
         let sourceItems = drop.sourceItems
         let targetDir = drop.targetDirectory
         let sourceAccountId = drop.sourceAccountId
+        // The cloud drag must originate from the *other* panel (we're a
+        // local panel). Fall back to the recorded drag side just in case.
+        let sourceSide = appState.cloudDragSourceSide
+            ?? (panelSide == .left ? .right : .left)
         let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
         appState.addTransfer(transfer, panel: panelSide)
         transfer.task = Task {
-            let cloudVM = appState.cloudFileManager(for: sourceAccountId)
+            let cloudVM = appState.cloudFileManager(for: sourceAccountId, side: sourceSide)
             cloudVM.conflictDirection = incomingDirection
             await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
             if isMove {
@@ -370,7 +374,7 @@ struct FileListView: View {
                         appState.addTransfer(transfer, panel: otherSide)
                         fm.conflictDirection = outgoingDirection
                         if let cloudId = appState.cloudAccountId(for: otherSide) {
-                            let cloudVM = appState.cloudFileManager(for: cloudId)
+                            let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
                             cloudVM.conflictDirection = outgoingDirection
                             transfer.task = Task {
                                 await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
@@ -389,7 +393,7 @@ struct FileListView: View {
                         appState.addTransfer(transfer, panel: otherSide)
                         fm.conflictDirection = outgoingDirection
                         if let cloudId = appState.cloudAccountId(for: otherSide) {
-                            let cloudVM = appState.cloudFileManager(for: cloudId)
+                            let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
                             cloudVM.conflictDirection = outgoingDirection
                             transfer.task = Task {
                                 await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
