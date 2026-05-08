@@ -15,8 +15,16 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     ]
 
     private var appearanceObservation: NSKeyValueObservation?
+    private let updateNotifier = UpdateNotifier()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Default automatic update checks to on the first time the app
+        // is launched. Users can toggle this with
+        // `defaults write com.rana-gmbh.FileFluss automaticUpdateChecksEnabled -bool false`.
+        UserDefaults.standard.register(defaults: [
+            "automaticUpdateChecksEnabled": true
+        ])
+
         applyAppIconForCurrentAppearance()
         // Swap the dock icon when the user (or system) toggles between
         // light and dark mode.
@@ -27,6 +35,9 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
                 self?.applyAppIconForCurrentAppearance()
             }
         }
+
+        let notifier = updateNotifier
+        Task { await notifier.start() }
     }
 
     private func applyAppIconForCurrentAppearance() {

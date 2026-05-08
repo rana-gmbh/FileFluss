@@ -1,45 +1,48 @@
-# FileFluss 1.0
+# FileFluss 1.0.1
 
-**FileFluss leaves beta.** This is the first full, non-prerelease version — a milestone focused on usability and a polished out-of-beta experience.
+A small follow-up to the 1.0 release that adds update awareness and a refreshed About panel.
 
-## What's new in 1.0
+## What's new
 
-### A new app icon
+### Update notifications
 
-A brand-new Light/Dark app icon designed by **[@JohnnyFireOne](https://github.com/JohnnyFireOne)** — thank you! The dock icon swaps live whenever macOS toggles between Light and Dark mode.
+FileFluss now checks for new versions on GitHub.
 
-### Compare Folders
+- A daily background check shows a one-time popup whenever a newer version is available, with *Later* and *Open Release Page* buttons. Subsequent days won't bother you again about the same version.
+- Manual check via **Apple menu → About FileFluss → Check for Updates** or **Help → Check for Updates…**.
+- The check uses the public GitHub Releases API — no telemetry, no account, no signup.
+- Defaults to on. Disable with `defaults write com.rana-gmbh.FileFluss automaticUpdateChecksEnabled -bool false`.
 
-A new toolbar action that opens a non-destructive side-by-side diff between the two panels.
+### Refreshed About panel
 
-- Status chips for **Different**, **Only on Left**, **Only on Right**, **Identical**, with counts.
-- **Collapsible folders** — a folder that exists only on one side, or contains many differing files, becomes one expandable row instead of a wall of children.
-- Optional **Compare Date** — flags files with matching size but diverging modification dates, shows both modify and create timestamps, and tags whichever side is newer.
-- Movable, resizable window; **Compare Again** button re-runs against the current folders without re-scanning while you browse.
+The standard About panel has been replaced with a custom window that shows:
 
-### Usability improvements
+- The new Light/Dark app icon
+- Version + a *Release Notes ↗* link to the matching tag on GitHub
+- Direct link to the GitHub repository
+- Credits for the app icon (@JohnnyFireOne) and the bundled file-type icons
+- The *Check for Updates* button described above
 
-- **Open files in the default app** — double-click any file in a local *or* cloud panel and it opens in Word, Preview, Photos, etc. Cloud files are cached on first open so reopening is instant.
-- **Copy Mode and Move Mode** — two toolbar toggles that force every drag & drop to that action and skip the *Move or Copy?* prompt. Mutually exclusive and reset on relaunch.
-- **Drop onto path-bar breadcrumbs** — files can be dropped on any ancestor folder right from the path bar, no need to navigate to it first.
-- **Independent panels for the same cloud account** — opening kDrive (or any cloud) on both panels now navigates each side independently, just like local folders. Dragging between them does an in-cloud move/copy without re-uploading.
-- **Movable Search and Compare windows** — both run as proper windows now, draggable so the panels behind them stay visible. Their size and position are remembered across launches.
-- **Search stays open after picking a result**, so you can act on multiple hits without reopening the window.
-- **Real Quick Look thumbnails** for local images and PDFs; **colourful generic icons** for cloud files based on the file extension.
-- **Built-in FileFluss Help** under the Help menu (⌘?), with documentation for every feature.
+This also fixes encoding glitches in the previous HTML-based About panel (`Â©`, `â€”`).
+
+### Help menu
+
+Two new entries under **Help**:
+
+- **Check for Updates…** — opens the About panel ready to check.
+- **GitHub Repository** — opens https://github.com/rana-gmbh/filefluss in your browser.
 
 ## Installation
 
 ### Homebrew
 
 ```bash
-brew tap rana-gmbh/filefluss
-brew install --cask filefluss
+brew upgrade --cask filefluss
 ```
 
 ### Manual
 
-Download `FileFluss-v1.0.dmg` below and drag FileFluss.app into your Applications folder.
+Download `FileFluss-v1.0.1.dmg` below and drag FileFluss.app into your Applications folder.
 
 ## Requirements
 

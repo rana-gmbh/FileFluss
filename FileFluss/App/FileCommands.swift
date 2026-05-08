@@ -64,29 +64,19 @@ struct FileCommands: Commands {
 
         CommandGroup(replacing: .appInfo) {
             Button("About FileFluss") {
-                NSApplication.shared.orderFrontStandardAboutPanel(options: [
-                    .credits: NSAttributedString(
-                        html: Data("""
-                        <div style="text-align: center; font-family: -apple-system; font-size: 11px;">
-                            <p>Conveniently handle files across cloud storage providers.</p>
-                            <p>Licensed under the \
-                        <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License v3.0</a>.<br>\
-                        Copyright © 2026 Rana GmbH.</p>
-                            <p>File-type icons from \
-                        <a href="https://github.com/redbooth/free-file-icons">free-file-icons</a><br>\
-                        © 2009 Teambox Technologies, S.L. — MIT License.</p>
-                            <p>If you want to support the FileFluss project<br>please consider \
-                        <a href="https://buymeacoffee.com/robertrudolph">Buying me a coffee</a>.</p>
-                        </div>
-                        """.utf8),
-                        documentAttributes: nil
-                    )!
-                ])
+                AboutWindowController.shared.show()
             }
         }
 
         CommandGroup(replacing: .help) {
             HelpMenuButton()
+            Divider()
+            Button("Check for Updates…") {
+                AboutWindowController.shared.show()
+            }
+            Button("GitHub Repository") {
+                NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)
+            }
         }
 
         CommandGroup(before: .help) {
