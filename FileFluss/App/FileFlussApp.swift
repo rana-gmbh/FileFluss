@@ -43,5 +43,11 @@ struct FileFlussApp: App {
         }
         .defaultSize(width: 640, height: 560)
         .windowResizability(.contentMinSize)
+
+        Window("FileFluss Help", id: "help") {
+            HelpView()
+        }
+        .defaultSize(width: 880, height: 600)
+        .windowResizability(.contentMinSize)
     }
 }

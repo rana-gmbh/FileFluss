@@ -85,6 +85,10 @@ struct FileCommands: Commands {
             }
         }
 
+        CommandGroup(replacing: .help) {
+            HelpMenuButton()
+        }
+
         CommandGroup(before: .help) {
             Button("Support the FileFluss Project") {
                 NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
@@ -103,5 +107,18 @@ struct FileCommands: Commands {
             }
             #endif
         }
+    }
+}
+
+/// The "FileFluss Help" entry under the Help menu. Opens our custom Help
+/// window via openWindow — needs an environment value, so it's wrapped in
+/// its own View instead of being inlined in the CommandGroup.
+private struct HelpMenuButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("FileFluss Help") {
+            openWindow(id: "help")
+        }
+        .keyboardShortcut("?", modifiers: .command)
     }
 }
