@@ -114,9 +114,10 @@ Search the active local folder and every connected cloud account at once.
 ### Homebrew (recommended)
 
 ```bash
-brew tap rana-gmbh/filefluss
-brew install --cask filefluss
+brew install --cask rana-gmbh/filefluss/filefluss
 ```
+
+This auto-taps `rana-gmbh/filefluss` and installs the cask in one step. To upgrade later: `brew upgrade --cask filefluss`.
 
 ### Manual
 
