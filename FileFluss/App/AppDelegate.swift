@@ -13,6 +13,26 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         "Compare Folders"
     ]
 
+    private var appearanceObservation: NSKeyValueObservation?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        applyAppIconForCurrentAppearance()
+        // Swap the dock icon when the user (or system) toggles between
+        // light and dark mode.
+        appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            self?.applyAppIconForCurrentAppearance()
+        }
+    }
+
+    private func applyAppIconForCurrentAppearance() {
+        let isDark = NSApp.effectiveAppearance
+            .bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark]) != nil
+        let resourceName = isDark ? "AppIcon-Dark" : "AppIcon-Light"
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "icns"),
+              let image = NSImage(contentsOf: url) else { return }
+        NSApp.applicationIconImage = image
+    }
+
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
         for window in NSApp.windows {
