@@ -4,6 +4,7 @@ import AppKit
 /// Compare Folders) are reachable from the Dock just like the main window.
 /// SwiftUI's `Window` scenes don't surface in the Dock menu by default, so
 /// we list each visible secondary window manually.
+@MainActor
 final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
 
     /// Titles we expose in the Dock menu. The strings must match the titles
@@ -20,7 +21,11 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         // Swap the dock icon when the user (or system) toggles between
         // light and dark mode.
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
-            self?.applyAppIconForCurrentAppearance()
+            // The KVO callback fires on the main thread, but its closure
+            // is nonisolated — bridge explicitly to satisfy Swift 6.
+            MainActor.assumeIsolated {
+                self?.applyAppIconForCurrentAppearance()
+            }
         }
     }
 
