@@ -1,5 +1,5 @@
 import AppKit
-import QuickLookThumbnailing
+@preconcurrency import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
 /// Caches Quick Look thumbnail previews for local files. Keyed by
@@ -18,7 +18,6 @@ final class ThumbnailCache {
 
     private var cache: [Key: NSImage] = [:]
     private var order: [Key] = []
-    private var inflight: [Key: Task<NSImage?, Never>] = [:]
     private let maxEntries = 512
 
     /// Returns true when a content thumbnail is worth generating instead
@@ -35,7 +34,6 @@ final class ThumbnailCache {
     func thumbnail(for url: URL, mtime: Date, size: Int64, pointSize: CGFloat = 18) async -> NSImage? {
         let key = Key(path: url.path, mtime: mtime.timeIntervalSinceReferenceDate, size: size)
         if let cached = cache[key] { return cached }
-        if let existing = inflight[key] { return await existing.value }
 
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let request = QLThumbnailGenerator.Request(
@@ -44,24 +42,17 @@ final class ThumbnailCache {
             scale: scale,
             representationTypes: .thumbnail
         )
-        let task = Task { () -> NSImage? in
-            do {
-                let rep = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
-                return rep.nsImage
-            } catch {
-                return nil
-            }
-        }
-        inflight[key] = task
-        let img = await task.value
-        inflight.removeValue(forKey: key)
-        if let img {
+        do {
+            let rep = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
+            let img = rep.nsImage
             cache[key] = img
             order.append(key)
             while order.count > maxEntries {
                 cache.removeValue(forKey: order.removeFirst())
             }
+            return img
+        } catch {
+            return nil
         }
-        return img
     }
 }
