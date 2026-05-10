@@ -4,6 +4,7 @@ struct FileListView: View {
     let panelSide: PanelSide
     @Environment(AppState.self) private var appState
     @AppStorage("showStatusBar") private var showStatusBar = true
+    @AppStorage("hideFileExtensions") private var hideFileExtensions = false
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var showConflict: Bool = false
@@ -349,6 +350,7 @@ struct FileListView: View {
                     items: fm.filteredItems,
                     currentDirectory: fm.currentDirectory,
                     panelSide: panelSide,
+                    hideFileExtensions: hideFileExtensions,
                     selectedIDs: Bindable(fm).selectedItemIDs,
                     quickLookController: fm.quickLookController,
                     onDoubleClick: { item in

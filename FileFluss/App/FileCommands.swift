@@ -3,6 +3,7 @@ import SwiftUI
 struct FileCommands: Commands {
     let appState: AppState
     @AppStorage("showStatusBar") private var showStatusBar = true
+    @AppStorage("hideFileExtensions") private var hideFileExtensions = false
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -53,6 +54,8 @@ struct FileCommands: Commands {
 
             Toggle("Show Status Bar", isOn: $showStatusBar)
                 .keyboardShortcut("/", modifiers: [.command, .shift])
+
+            Toggle("Hide File Extensions", isOn: $hideFileExtensions)
         }
 
         CommandMenu("Sync") {

@@ -8,6 +8,7 @@ import QuickLookUI
 struct NativeCloudFileList: NSViewRepresentable {
     let items: [CloudFileItem]
     let panelSide: PanelSide
+    var hideFileExtensions: Bool = false
     @Binding var selectedIDs: Set<String>
     var quickLookController: QuickLookController?
     var onDoubleClick: (CloudFileItem) -> Void
@@ -152,9 +153,12 @@ struct NativeCloudFileList: NSViewRepresentable {
             || coordinator.items.map(\.name) != items.map(\.name)
             || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
 
+        let extensionPrefChanged = coordinator.hideFileExtensions != hideFileExtensions
+        coordinator.hideFileExtensions = hideFileExtensions
+
         coordinator.items = items
 
-        if itemsChanged {
+        if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
         }
 
@@ -233,6 +237,15 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var items: [CloudFileItem] = []
     var selectedIDs: Binding<Set<String>>?
     var panelSide: PanelSide = .left
+    /// When true, file rows render their name without the extension.
+    /// Folders are always shown verbatim.
+    var hideFileExtensions: Bool = false
+
+    func displayedName(for item: CloudFileItem) -> String {
+        guard hideFileExtensions, !item.isDirectory else { return item.name }
+        let stripped = (item.name as NSString).deletingPathExtension
+        return stripped.isEmpty ? item.name : stripped
+    }
     var onDoubleClick: ((CloudFileItem) -> Void)?
     var onDrop: (([URL], CloudFileItem?) -> Void)?
     var onKeySpace: (() -> Void)?
@@ -628,7 +641,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             ])
         }
 
-        cell.textField?.stringValue = item.name
+        cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
 
         if item.isDirectory {

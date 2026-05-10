@@ -80,13 +80,25 @@ struct FileToolbar: CustomizableToolbarContent {
         }
 
         ToolbarItem(id: "hiddenFiles", placement: .primaryAction) {
-            Toggle(isOn: Bindable(appState.activeFileManager).showHiddenFiles) {
+            // Binds to whichever panel is active — cloud OR local. Toggling
+            // updates that panel's VM and triggers a refresh.
+            Toggle(isOn: Binding(
+                get: {
+                    if let cloud = activeCloudVM { return cloud.showHiddenFiles }
+                    return appState.activeFileManager.showHiddenFiles
+                },
+                set: { newValue in
+                    if let cloud = activeCloudVM {
+                        cloud.showHiddenFiles = newValue
+                    } else {
+                        appState.activeFileManager.showHiddenFiles = newValue
+                        Task { await appState.activeFileManager.refresh() }
+                    }
+                }
+            )) {
                 Label("Hidden Files", systemImage: "eye")
             }
             .help("Show hidden files")
-            .onChange(of: appState.activeFileManager.showHiddenFiles) { _, _ in
-                Task { await appState.activeFileManager.refresh() }
-            }
         }
 
         ToolbarItem(id: "copyMode", placement: .primaryAction) {

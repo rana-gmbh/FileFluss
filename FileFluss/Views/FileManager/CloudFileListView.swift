@@ -5,6 +5,7 @@ struct CloudFileListView: View {
     let accountId: UUID
     @Environment(AppState.self) private var appState
     @AppStorage("showStatusBar") private var showStatusBar = true
+    @AppStorage("hideFileExtensions") private var hideFileExtensions = false
     @State private var showDeleteConfirmation = false
     @State private var showConflict = false
     @State private var showDropConfirmation = false
@@ -462,6 +463,7 @@ struct CloudFileListView: View {
             NativeCloudFileList(
                 items: vm.filteredItems,
                 panelSide: panelSide,
+                hideFileExtensions: hideFileExtensions,
                 selectedIDs: Bindable(vm).selectedItemIDs,
                 quickLookController: vm.quickLookController,
                 onDoubleClick: { item in

@@ -139,7 +139,11 @@ actor SFTPAPIClient {
     // MARK: - File Operations
 
     func listFolder(path: String) async throws -> [CloudFileItem] {
-        let output = try await runBatch(commands: ["ls -la \(shellEscape(path))"])
+        // `-L` dereferences symlinks so a symlink-pointing-at-a-directory
+        // shows up as `d...` and double-click works. Dangling symlinks
+        // disappear, which on a real server is almost always what you
+        // want (they wouldn't be traversable anyway).
+        let output = try await runBatch(commands: ["ls -laL \(shellEscape(path))"])
         return parseListing(output: output, basePath: path)
     }
 
@@ -200,7 +204,7 @@ actor SFTPAPIClient {
     func getFileInfo(at path: String) async throws -> CloudFileItem {
         let parentPath = (path as NSString).deletingLastPathComponent
         let fileName = (path as NSString).lastPathComponent
-        let output = try await runBatch(commands: ["ls -la \(shellEscape(parentPath))"])
+        let output = try await runBatch(commands: ["ls -laL \(shellEscape(parentPath))"])
         let items = parseListing(output: output, basePath: parentPath)
         guard let item = items.first(where: { $0.name == fileName }) else {
             throw CloudProviderError.notFound(path)

@@ -9,6 +9,34 @@ struct S3Credentials: Codable, Sendable {
     let secretAccessKey: String
     let region: String
     let displayName: String
+    /// Optional custom endpoint base host for S3-compatible services like
+    /// Synology C2 Storage, Cloudflare R2, MinIO, Wasabi, etc. (e.g.
+    /// `eu-001.s3.synologyc2.net`). When nil the client uses AWS S3 defaults.
+    let endpointHost: String?
+
+    init(
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        displayName: String,
+        endpointHost: String? = nil
+    ) {
+        self.accessKeyId = accessKeyId
+        self.secretAccessKey = secretAccessKey
+        self.region = region
+        self.displayName = displayName
+        self.endpointHost = endpointHost
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accessKeyId = try c.decode(String.self, forKey: .accessKeyId)
+        secretAccessKey = try c.decode(String.self, forKey: .secretAccessKey)
+        region = try c.decode(String.self, forKey: .region)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        // Older v1.0.x AWS-only entries don't have this key — default to nil.
+        endpointHost = try c.decodeIfPresent(String.self, forKey: .endpointHost)
+    }
 }
 
 /// Internal error raised by the validator to signal "wrong region for
@@ -48,6 +76,25 @@ actor S3APIClient {
 
     private func regionFor(bucket: String) -> String {
         bucketRegions[bucket] ?? credentials.region
+    }
+
+    /// Top-level host (no bucket) used for `ListBuckets`. Custom-endpoint
+    /// services use the base host as-is; AWS uses `s3.<region>.amazonaws.com`.
+    private func topLevelHost(region: String) -> String {
+        if let custom = credentials.endpointHost, !custom.isEmpty {
+            return custom
+        }
+        return "s3.\(region).amazonaws.com"
+    }
+
+    /// Per-bucket host. Custom-endpoint services prepend the bucket name
+    /// to the base host (`<bucket>.<endpointHost>`); AWS uses
+    /// `<bucket>.s3.<region>.amazonaws.com`.
+    private func bucketHost(_ bucket: String, region: String) -> String {
+        if let custom = credentials.endpointHost, !custom.isEmpty {
+            return "\(bucket).\(custom)"
+        }
+        return "\(bucket).s3.\(region).amazonaws.com"
     }
 
     /// Runs `op`, retrying once if the server returned a 301 with the
@@ -107,7 +154,7 @@ actor S3APIClient {
     }
 
     func listBuckets() async throws -> [CloudFileItem] {
-        let host = "s3.\(credentials.region).amazonaws.com"
+        let host = topLevelHost(region: credentials.region)
         let url = URL(string: "https://\(host)/")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -148,7 +195,7 @@ actor S3APIClient {
         repeat {
             var components = URLComponents()
             components.scheme = "https"
-            components.host = "\(bucket).s3.\(region).amazonaws.com"
+            components.host = bucketHost(bucket, region: region)
             components.path = "/"
             var items: [URLQueryItem] = [
                 URLQueryItem(name: "list-type", value: "2"),
@@ -210,7 +257,7 @@ actor S3APIClient {
         let (bucket, key) = try splitPath(remotePath)
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
-            let host = "\(bucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(bucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(key))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -231,7 +278,7 @@ actor S3APIClient {
         let (bucket, key) = try splitPath(remotePath)
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
-            let host = "\(bucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(bucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(key))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -278,7 +325,7 @@ actor S3APIClient {
     private func deleteObject(bucket: String, key: String) async throws {
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
-            let host = "\(bucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(bucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(key))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -303,7 +350,7 @@ actor S3APIClient {
                 let region = regionFor(bucket: bucket)
                 var components = URLComponents()
                 components.scheme = "https"
-                components.host = "\(bucket).s3.\(region).amazonaws.com"
+                components.host = bucketHost(bucket, region: region)
                 components.path = "/"
                 var items: [URLQueryItem] = [
                     URLQueryItem(name: "list-type", value: "2"),
@@ -338,7 +385,7 @@ actor S3APIClient {
         let folderKey = key.hasSuffix("/") ? key : key + "/"
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
-            let host = "\(bucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(bucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(folderKey))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -380,7 +427,7 @@ actor S3APIClient {
         // AWS will reject with a clear "wrong region" message.
         try await withResolvedRegion(bucket: destBucket) {
             let region = regionFor(bucket: destBucket)
-            let host = "\(destBucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(destBucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(destKey))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -397,7 +444,7 @@ actor S3APIClient {
         let (bucket, key) = try splitPath(remotePath)
         return try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
-            let host = "\(bucket).s3.\(region).amazonaws.com"
+            let host = bucketHost(bucket, region: region)
             guard let url = URL(string: "https://\(host)/\(uriEncodeKey(key))") else {
                 throw CloudProviderError.invalidResponse
             }
@@ -444,7 +491,7 @@ actor S3APIClient {
                 let region = regionFor(bucket: bucket)
                 var components = URLComponents()
                 components.scheme = "https"
-                components.host = "\(bucket).s3.\(region).amazonaws.com"
+                components.host = bucketHost(bucket, region: region)
                 components.path = "/"
                 var items: [URLQueryItem] = [
                     URLQueryItem(name: "list-type", value: "2"),
@@ -478,7 +525,7 @@ actor S3APIClient {
             let region = regionFor(bucket: bucket)
             var components = URLComponents()
             components.scheme = "https"
-            components.host = "\(bucket).s3.\(region).amazonaws.com"
+            components.host = bucketHost(bucket, region: region)
             components.path = "/"
             components.queryItems = [
                 URLQueryItem(name: "list-type", value: "2"),

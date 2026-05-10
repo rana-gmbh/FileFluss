@@ -78,6 +78,8 @@ actor SyncEngine {
         case .wordpress: return WordPressProvider()
         case .gmxCloud: return GMXCloudProvider()
         case .s3: return S3Provider()
+        case .synologyDrive: return SynologyDriveProvider()
+        case .synologyC2: return SynologyC2Provider()
         }
     }
 }

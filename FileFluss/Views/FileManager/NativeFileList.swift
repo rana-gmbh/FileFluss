@@ -9,6 +9,7 @@ struct NativeFileList: NSViewRepresentable {
     let items: [FileItem]
     let currentDirectory: URL
     let panelSide: PanelSide
+    var hideFileExtensions: Bool = false
     @Binding var selectedIDs: Set<String>
     var quickLookController: QuickLookController?
     var onDoubleClick: (FileItem) -> Void
@@ -171,9 +172,12 @@ struct NativeFileList: NSViewRepresentable {
             || coordinator.items.map(\.name) != items.map(\.name)
             || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
 
+        let extensionPrefChanged = coordinator.hideFileExtensions != hideFileExtensions
+        coordinator.hideFileExtensions = hideFileExtensions
+
         coordinator.items = items
 
-        if itemsChanged {
+        if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
         }
 
@@ -254,6 +258,15 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var selectedIDs: Binding<Set<String>>?
     var currentDirectory: URL?
     var panelSide: PanelSide = .left
+    /// When true, file rows render their name without the extension.
+    /// Folders are always shown verbatim.
+    var hideFileExtensions: Bool = false
+
+    func displayedName(for item: FileItem) -> String {
+        guard hideFileExtensions, !item.isDirectory else { return item.name }
+        let stripped = (item.name as NSString).deletingPathExtension
+        return stripped.isEmpty ? item.name : stripped
+    }
     var onDoubleClick: ((FileItem) -> Void)?
     var onDrop: (([FileItem], URL) -> Void)?
     var onKeySpace: (() -> Void)?
@@ -680,7 +693,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             ])
         }
 
-        cell.textField?.stringValue = item.name
+        cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
 
         let baseIcon: NSImage = item.isDirectory

@@ -15,6 +15,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case wordpress
     case gmxCloud
     case s3
+    case synologyDrive
+    case synologyC2
 
     var id: String { rawValue }
 
@@ -34,6 +36,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .wordpress: return "WordPress"
         case .gmxCloud: return "GMX Cloud"
         case .s3: return "AWS S3"
+        case .synologyDrive: return "Synology Drive"
+        case .synologyC2: return "Synology C2 Storage"
         }
     }
 
@@ -53,6 +57,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .wordpress: return "w.square"
         case .gmxCloud: return "envelope.badge.shield.half.filled"
         case .s3: return "server.rack"
+        case .synologyDrive: return "externaldrive.fill"
+        case .synologyC2: return "externaldrive.badge.timemachine"
         }
     }
 
@@ -72,6 +78,8 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .wordpress: return "WordPressLogo"
         case .gmxCloud: return "GMXCloudLogo"
         case .s3: return "AmazonS3Logo"
+        case .synologyDrive: return "SynologyDriveLogo"
+        case .synologyC2: return "SynologyC2Logo"
         default: return nil
         }
     }

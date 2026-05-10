@@ -13,6 +13,11 @@ final class CloudFileManagerViewModel {
     var searchText: String = ""
     var sortOrder: SortOrder = .name
     var sortAscending: Bool = true
+    /// When false (default), dot-prefixed entries (`.gitignore`, `.ssh`,
+    /// SFTP server-side `lost+found`-style dotfiles) are hidden from the
+    /// listing. Mirrored to the local `FileManagerViewModel.showHiddenFiles`
+    /// flag by the toolbar toggle.
+    var showHiddenFiles: Bool = false
 
     let quickLookController = QuickLookController()
 
@@ -61,9 +66,13 @@ final class CloudFileManagerViewModel {
     }
 
     var filteredItems: [CloudFileItem] {
-        let filtered = searchText.isEmpty
-            ? items
-            : items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        var filtered = items
+        if !showHiddenFiles {
+            filtered = filtered.filter { !$0.name.hasPrefix(".") }
+        }
+        if !searchText.isEmpty {
+            filtered = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        }
         return sorted(filtered)
     }
 

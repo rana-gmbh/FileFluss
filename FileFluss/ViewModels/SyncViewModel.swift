@@ -302,6 +302,64 @@ final class SyncViewModel {
         }
     }
 
+    func addSynologyC2Account(accessKeyId: String, secretAccessKey: String, region: String) async {
+        let account = CloudAccount(providerType: .synologyC2)
+        let provider = SynologyC2Provider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                region: region
+            )
+            var connectedAccount = account
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = userName
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addSynologyDriveAccount(
+        serverURL: String,
+        username: String,
+        password: String,
+        otp: String?,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: .synologyDrive)
+        let provider = SynologyDriveProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            var connectedAccount = account
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addS3Account(accessKeyId: String, secretAccessKey: String, region: String) async {
         let account = CloudAccount(providerType: .s3)
         let provider = S3Provider(accountId: account.id)
@@ -471,6 +529,16 @@ final class SyncViewModel {
                 }
             case .s3:
                 let provider = S3Provider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .synologyDrive:
+                let provider = SynologyDriveProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .synologyC2:
+                let provider = SynologyC2Provider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

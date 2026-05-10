@@ -28,10 +28,17 @@ struct AddCloudAccountView: View {
     @State private var sftpKeyImporterPresented = false
     @State private var sftpKeyImportError: String?
 
+    @State private var synologyOTP = ""
+    @State private var synologyAllowSelfSigned = true
+
+    @State private var synologyC2AccessKeyId = ""
+    @State private var synologyC2SecretAccessKey = ""
+    @State private var synologyC2Region = "eu-001"
+
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -117,6 +124,10 @@ struct AddCloudAccountView: View {
                 wordPressFields
             case .s3:
                 s3Fields
+            case .synologyDrive:
+                synologyDriveFields
+            case .synologyC2:
+                synologyC2Fields
             default:
                 credentialFields
             }
@@ -149,6 +160,11 @@ struct AddCloudAccountView: View {
                     sftpPrivateKeyContents = ""
                     sftpPrivateKeyFilename = ""
                     sftpKeyImportError = nil
+                    synologyOTP = ""
+                    synologyAllowSelfSigned = true
+                    synologyC2AccessKeyId = ""
+                    synologyC2SecretAccessKey = ""
+                    synologyC2Region = "eu-001"
                 }
                 .disabled(isAuthenticating)
 
@@ -568,6 +584,74 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var synologyC2Fields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Synology C2 Object Storage is S3-compatible. Generate an access key in the C2 console (Storage Account → Access Keys), then enter it below along with the bucket's region.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("Access Key ID", text: $synologyC2AccessKeyId)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            SecureField("Secret Access Key", text: $synologyC2SecretAccessKey)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            HStack {
+                Text("Region")
+                    .frame(width: 80, alignment: .leading)
+                Picker("", selection: $synologyC2Region) {
+                    ForEach(SynologyC2RegionList.allRegions, id: \.code) { region in
+                        Text("\(region.displayName) (\(region.code))").tag(region.code)
+                    }
+                }
+                .labelsHidden()
+                .disabled(isAuthenticating)
+            }
+
+            TextField("Or type a custom region code (e.g. eu-001)", text: $synologyC2Region)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
+    private var synologyDriveFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Enter your NAS hostname (or QuickConnect URL) and DSM credentials. The default port is 5001 for HTTPS.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("Server URL (e.g. https://my-nas.local:5001)", text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            TextField("OTP Code (only if 2-factor auth is on)", text: $synologyOTP)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            Toggle("Allow self-signed certificate", isOn: $synologyAllowSelfSigned)
+                .help("Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).")
+                .disabled(isAuthenticating)
+        }
+    }
+
     private var s3Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Enter an AWS access key with S3 permissions and the region your buckets live in. You can create a key under IAM → Users → Security credentials → Access keys.")
@@ -651,6 +735,8 @@ struct AddCloudAccountView: View {
         case .mega: return email.isEmpty || password.isEmpty
         case .gmxCloud: return email.isEmpty || password.isEmpty
         case .s3: return s3AccessKeyId.isEmpty || s3SecretAccessKey.isEmpty || s3Region.isEmpty
+        case .synologyDrive: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -710,6 +796,22 @@ struct AddCloudAccountView: View {
                     accessKeyId: s3AccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
                     secretAccessKey: s3SecretAccessKey,
                     region: trimmedRegion.isEmpty ? "us-east-1" : trimmedRegion
+                )
+            case .synologyDrive:
+                let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addSynologyDriveAccount(
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
+                    otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .synologyC2:
+                let trimmedRegion = synologyC2Region.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addSynologyC2Account(
+                    accessKeyId: synologyC2AccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
+                    secretAccessKey: synologyC2SecretAccessKey,
+                    region: trimmedRegion.isEmpty ? "eu-001" : trimmedRegion
                 )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
