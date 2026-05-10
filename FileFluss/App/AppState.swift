@@ -121,48 +121,104 @@ final class AppState {
         await rightFileManager.refresh()
     }
 
-    // Custom favorites (shared across both panels)
-    var customFavorites: [FavoriteFolder] = []
+    // Per-panel favorites — fully customizable, persisted across launches.
+    // Each panel keeps its own ordered list, mixing local-folder and
+    // cloud-folder entries. System defaults (Home / Desktop / etc.) are
+    // seeded once on first run as ordinary entries, so the user can
+    // remove or rename them just like any custom favorite.
+    var leftFavorites: [SidebarFavorite] = []
+    var rightFavorites: [SidebarFavorite] = []
 
-    func addFavorite(url: URL) {
-        guard !customFavorites.contains(where: { $0.url == url }) else { return }
-        customFavorites.append(FavoriteFolder(url: url, displayName: url.lastPathComponent))
+    private static let leftFavoritesKey = "sidebarFavorites.left"
+    private static let rightFavoritesKey = "sidebarFavorites.right"
+    private static let favoritesInitializedKey = "sidebarFavorites.initialized"
+
+    func favorites(for side: PanelSide) -> [SidebarFavorite] {
+        side == .left ? leftFavorites : rightFavorites
     }
 
-    func removeFavorite(id: UUID) {
-        customFavorites.removeAll { $0.id == id }
+    func addLocalFavorite(url: URL, to side: PanelSide) {
+        var favs = favorites(for: side)
+        guard !favs.contains(where: { $0.kind == .localPath && $0.url == url }) else { return }
+        favs.append(.local(name: url.lastPathComponent, icon: "folder.fill", url: url))
+        write(favs, to: side)
     }
 
-    func renameFavorite(id: UUID, to newName: String) {
-        if let idx = customFavorites.firstIndex(where: { $0.id == id }) {
-            customFavorites[idx].displayName = newName
-        }
-    }
-
-    // Cloud favorites
-    var cloudFavorites: [CloudFavorite] = []
-
-    func addCloudFavorite(accountId: UUID, path: String, name: String) {
-        guard !cloudFavorites.contains(where: { $0.accountId == accountId && $0.path == path }) else { return }
+    func addCloudFavorite(accountId: UUID, path: String, name: String, to side: PanelSide) {
+        var favs = favorites(for: side)
+        guard !favs.contains(where: {
+            $0.kind == .cloudFolder && $0.accountId == accountId && $0.cloudPath == path
+        }) else { return }
         let account = syncManager.accountFor(id: accountId)
         let providerSuffix = account?.providerType.displayName ?? "Cloud"
         let displayName = "\(name) (\(providerSuffix))"
-        cloudFavorites.append(CloudFavorite(
+        favs.append(.cloud(
+            name: displayName,
             accountId: accountId,
             path: path,
-            displayName: displayName,
             providerType: account?.providerType ?? .pCloud
         ))
+        write(favs, to: side)
     }
 
-    func removeCloudFavorite(id: UUID) {
-        cloudFavorites.removeAll { $0.id == id }
+    func removeFavorite(id: UUID, from side: PanelSide) {
+        var favs = favorites(for: side)
+        favs.removeAll { $0.id == id }
+        write(favs, to: side)
     }
 
-    func renameCloudFavorite(id: UUID, to newName: String) {
-        if let idx = cloudFavorites.firstIndex(where: { $0.id == id }) {
-            cloudFavorites[idx].displayName = newName
+    func renameFavorite(id: UUID, to newName: String, in side: PanelSide) {
+        var favs = favorites(for: side)
+        guard let idx = favs.firstIndex(where: { $0.id == id }) else { return }
+        favs[idx].displayName = newName
+        write(favs, to: side)
+    }
+
+    func moveFavorites(in side: PanelSide, fromOffsets: IndexSet, toOffset: Int) {
+        var favs = favorites(for: side)
+        favs.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        write(favs, to: side)
+    }
+
+    private func write(_ favs: [SidebarFavorite], to side: PanelSide) {
+        if side == .left { leftFavorites = favs } else { rightFavorites = favs }
+        saveFavorites()
+    }
+
+    private func saveFavorites() {
+        let defaults = UserDefaults.standard
+        let encoder = JSONEncoder()
+        if let leftData = try? encoder.encode(leftFavorites) {
+            defaults.set(leftData, forKey: Self.leftFavoritesKey)
         }
+        if let rightData = try? encoder.encode(rightFavorites) {
+            defaults.set(rightData, forKey: Self.rightFavoritesKey)
+        }
+    }
+
+    private func loadFavorites() {
+        let defaults = UserDefaults.standard
+        let decoder = JSONDecoder()
+
+        if defaults.bool(forKey: Self.favoritesInitializedKey) {
+            if let data = defaults.data(forKey: Self.leftFavoritesKey),
+               let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
+                leftFavorites = decoded
+            }
+            if let data = defaults.data(forKey: Self.rightFavoritesKey),
+               let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
+                rightFavorites = decoded
+            }
+            return
+        }
+
+        // First run after this update — seed both panels with the system
+        // defaults but with independent UUIDs so reordering or removing
+        // on one side doesn't affect the other.
+        leftFavorites = SidebarFavorite.defaultLocalFavorites()
+        rightFavorites = SidebarFavorite.defaultLocalFavorites()
+        defaults.set(true, forKey: Self.favoritesInitializedKey)
+        saveFavorites()
     }
 
     // Cloud file managers (cached per account and panel side, so the
@@ -308,6 +364,7 @@ final class AppState {
         self.leftFileManager = FileManagerViewModel()
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
+        loadFavorites()
 
         Task {
             await syncManager.reconnectSavedAccounts()
@@ -316,6 +373,79 @@ final class AppState {
     }
 }
 
+/// A single sidebar favorite — either a local folder or a cloud folder.
+/// Both kinds live in the same per-panel array so the user can reorder
+/// them, rename them, or remove them uniformly.
+struct SidebarFavorite: Identifiable, Hashable, Codable {
+    enum Kind: String, Codable, Hashable {
+        case localPath
+        case cloudFolder
+    }
+
+    var id: UUID
+    var kind: Kind
+    var displayName: String
+    var icon: String
+
+    // Set when kind == .localPath
+    var url: URL?
+
+    // Set when kind == .cloudFolder
+    var accountId: UUID?
+    var cloudPath: String?
+    var providerType: CloudProviderType?
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        displayName: String,
+        icon: String,
+        url: URL? = nil,
+        accountId: UUID? = nil,
+        cloudPath: String? = nil,
+        providerType: CloudProviderType? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.displayName = displayName
+        self.icon = icon
+        self.url = url
+        self.accountId = accountId
+        self.cloudPath = cloudPath
+        self.providerType = providerType
+    }
+
+    static func local(name: String, icon: String, url: URL) -> SidebarFavorite {
+        SidebarFavorite(kind: .localPath, displayName: name, icon: icon, url: url)
+    }
+
+    static func cloud(name: String, accountId: UUID, path: String, providerType: CloudProviderType) -> SidebarFavorite {
+        SidebarFavorite(
+            kind: .cloudFolder,
+            displayName: name,
+            icon: "cloud.fill",
+            accountId: accountId,
+            cloudPath: path,
+            providerType: providerType
+        )
+    }
+
+    /// The system defaults seeded into both panels on first run. These
+    /// are ordinary entries — users can reorder, rename, or remove them.
+    static func defaultLocalFavorites() -> [SidebarFavorite] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return [
+            .local(name: "Home", icon: "house", url: home),
+            .local(name: "Desktop", icon: "menubar.dock.rectangle", url: home.appendingPathComponent("Desktop")),
+            .local(name: "Documents", icon: "doc", url: home.appendingPathComponent("Documents")),
+            .local(name: "Downloads", icon: "arrow.down.circle", url: home.appendingPathComponent("Downloads")),
+            .local(name: "Pictures", icon: "photo", url: home.appendingPathComponent("Pictures")),
+            .local(name: "Music", icon: "music.note", url: home.appendingPathComponent("Music")),
+        ]
+    }
+}
+
+@available(*, deprecated, message: "Replaced by SidebarFavorite. Kept temporarily for one transitional release.")
 struct FavoriteFolder: Identifiable {
     let id = UUID()
     let url: URL

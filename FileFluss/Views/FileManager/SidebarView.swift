@@ -21,19 +21,6 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
 
-    private let favorites: [(String, String, URL)] = {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        return [
-            ("Home", "house", home),
-            ("Desktop", "menubar.dock.rectangle", home.appendingPathComponent("Desktop")),
-            ("Documents", "doc", home.appendingPathComponent("Documents")),
-            ("Downloads", "arrow.down.circle", home.appendingPathComponent("Downloads")),
-            ("Pictures", "photo", home.appendingPathComponent("Pictures")),
-            ("Music", "music.note", home.appendingPathComponent("Music")),
-        ]
-    }()
-
     private var selection: Binding<SidebarItem?> {
         Binding(
             get: { appState.sidebarSelection(for: panelSide) },
@@ -55,24 +42,32 @@ struct SidebarView: View {
         )
     }
 
-    @State private var renamingFavorite: FavoriteFolder?
+    @State private var renamingFavorite: SidebarFavorite?
     @State private var renameText: String = ""
-    @State private var renamingCloudFavorite: CloudFavorite?
-    @State private var renameCloudText: String = ""
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
+
+    @ViewBuilder
+    private func favoriteRow(_ fav: SidebarFavorite) -> some View {
+        switch fav.kind {
+        case .localPath:
+            if let url = fav.url {
+                Label(fav.displayName, systemImage: fav.icon)
+                    .tag(SidebarItem.location(url))
+            }
+        case .cloudFolder:
+            if let accountId = fav.accountId, let path = fav.cloudPath {
+                Label(fav.displayName, systemImage: fav.icon)
+                    .tag(SidebarItem.cloudFolder(accountId: accountId, path: path))
+            }
+        }
+    }
 
     var body: some View {
         List(selection: selection) {
             Section("Favorites") {
-                ForEach(favorites, id: \.2) { name, icon, url in
-                    Label(name, systemImage: icon)
-                        .tag(SidebarItem.location(url))
-                }
-
-                ForEach(appState.customFavorites) { fav in
-                    Label(fav.displayName, systemImage: fav.icon)
-                        .tag(SidebarItem.location(fav.url))
+                ForEach(appState.favorites(for: panelSide)) { fav in
+                    favoriteRow(fav)
                         .contextMenu {
                             Button("Rename") {
                                 renameText = fav.displayName
@@ -80,30 +75,12 @@ struct SidebarView: View {
                             }
                             Divider()
                             Button("Remove from Favorites", role: .destructive) {
-                                appState.removeFavorite(id: fav.id)
+                                appState.removeFavorite(id: fav.id, from: panelSide)
                             }
                         }
                 }
                 .onMove { indices, destination in
-                    appState.customFavorites.move(fromOffsets: indices, toOffset: destination)
-                }
-
-                ForEach(appState.cloudFavorites) { fav in
-                    Label(fav.displayName, systemImage: fav.icon)
-                        .tag(SidebarItem.cloudFolder(accountId: fav.accountId, path: fav.path))
-                        .contextMenu {
-                            Button("Rename") {
-                                renameCloudText = fav.displayName
-                                renamingCloudFavorite = fav
-                            }
-                            Divider()
-                            Button("Remove from Favorites", role: .destructive) {
-                                appState.removeCloudFavorite(id: fav.id)
-                            }
-                        }
-                }
-                .onMove { indices, destination in
-                    appState.cloudFavorites.move(fromOffsets: indices, toOffset: destination)
+                    appState.moveFavorites(in: panelSide, fromOffsets: indices, toOffset: destination)
                 }
             }
 
@@ -210,7 +187,7 @@ struct SidebarView: View {
             TextField("Name", text: $renameText)
             Button("Rename") {
                 if let fav = renamingFavorite, !renameText.isEmpty {
-                    appState.renameFavorite(id: fav.id, to: renameText)
+                    appState.renameFavorite(id: fav.id, to: renameText, in: panelSide)
                 }
                 renamingFavorite = nil
             }
@@ -219,23 +196,6 @@ struct SidebarView: View {
             }
         } message: {
             Text("Enter a new name for this favorite.")
-        }
-        .alert("Rename Cloud Favorite", isPresented: Binding(
-            get: { renamingCloudFavorite != nil },
-            set: { if !$0 { renamingCloudFavorite = nil } }
-        )) {
-            TextField("Name", text: $renameCloudText)
-            Button("Rename") {
-                if let fav = renamingCloudFavorite, !renameCloudText.isEmpty {
-                    appState.renameCloudFavorite(id: fav.id, to: renameCloudText)
-                }
-                renamingCloudFavorite = nil
-            }
-            Button("Cancel", role: .cancel) {
-                renamingCloudFavorite = nil
-            }
-        } message: {
-            Text("Enter a new name for this cloud favorite.")
         }
         .alert("Rename Cloud Account", isPresented: Binding(
             get: { renamingAccountId != nil },

@@ -536,7 +536,8 @@ struct CloudFileListView: View {
                     appState.addCloudFavorite(
                         accountId: accountId,
                         path: folder.path,
-                        name: folder.name
+                        name: folder.name,
+                        to: panelSide
                     )
                 },
                 onSortChanged: { key, ascending in
