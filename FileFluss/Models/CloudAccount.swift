@@ -14,6 +14,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case sftp
     case wordpress
     case gmxCloud
+    case s3
 
     var id: String { rawValue }
 
@@ -32,6 +33,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .sftp: return "SFTP"
         case .wordpress: return "WordPress"
         case .gmxCloud: return "GMX Cloud"
+        case .s3: return "AWS S3"
         }
     }
 
@@ -50,6 +52,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .sftp: return "terminal"
         case .wordpress: return "w.square"
         case .gmxCloud: return "envelope.badge.shield.half.filled"
+        case .s3: return "server.rack"
         }
     }
 

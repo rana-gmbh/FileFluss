@@ -284,6 +284,33 @@ final class SyncViewModel {
         }
     }
 
+    func addS3Account(accessKeyId: String, secretAccessKey: String, region: String) async {
+        let account = CloudAccount(providerType: .s3)
+        let provider = S3Provider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                region: region
+            )
+            var connectedAccount = account
+
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = userName
+            }
+
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addWebDAVAccount(serverURL: String, username: String, password: String) async {
         let account = CloudAccount(providerType: .webDAV)
         let provider = WebDAVProvider(accountId: account.id)
@@ -421,6 +448,11 @@ final class SyncViewModel {
                 }
             case .gmxCloud:
                 let provider = GMXCloudProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .s3:
+                let provider = S3Provider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

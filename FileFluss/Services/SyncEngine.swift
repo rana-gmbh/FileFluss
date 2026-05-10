@@ -77,6 +77,7 @@ actor SyncEngine {
         case .sftp: return SFTPProvider()
         case .wordpress: return WordPressProvider()
         case .gmxCloud: return GMXCloudProvider()
+        case .s3: return S3Provider()
         }
     }
 }

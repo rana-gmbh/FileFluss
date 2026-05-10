@@ -11,10 +11,13 @@ struct AddCloudAccountView: View {
     @State private var serverURL = ""
     @State private var username = ""
     @State private var port = "22"
+    @State private var s3AccessKeyId = ""
+    @State private var s3SecretAccessKey = ""
+    @State private var s3Region = "us-east-1"
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -98,6 +101,8 @@ struct AddCloudAccountView: View {
                 sftpFields
             case .wordpress:
                 wordPressFields
+            case .s3:
+                s3Fields
             default:
                 credentialFields
             }
@@ -121,6 +126,9 @@ struct AddCloudAccountView: View {
                     serverURL = ""
                     username = ""
                     port = "22"
+                    s3AccessKeyId = ""
+                    s3SecretAccessKey = ""
+                    s3Region = "us-east-1"
                 }
                 .disabled(isAuthenticating)
 
@@ -440,6 +448,44 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var s3Fields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Enter an AWS access key with S3 permissions and the region your buckets live in. You can create a key under IAM → Users → Security credentials → Access keys.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("Access Key ID (e.g. AKIA…)", text: $s3AccessKeyId)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            SecureField("Secret Access Key", text: $s3SecretAccessKey)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            HStack {
+                Text("Region")
+                    .frame(width: 80, alignment: .leading)
+                Picker("", selection: $s3Region) {
+                    ForEach(S3RegionList.allRegions, id: \.code) { region in
+                        Text("\(region.displayName) (\(region.code))").tag(region.code)
+                    }
+                }
+                .labelsHidden()
+                .disabled(isAuthenticating)
+            }
+
+            Text("Tip: paste the exact region code (e.g. eu-central-1) from the AWS console URL if you don't see your region listed.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            TextField("Or type a custom region code", text: $s3Region)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+        }
+    }
+
     private var wordPressFields: some View {
         VStack(spacing: 12) {
             Text("Enter your WordPress site URL and an Application Password. Create one in WordPress under Users → Profile → Application Passwords.")
@@ -479,6 +525,7 @@ struct AddCloudAccountView: View {
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
         case .gmxCloud: return email.isEmpty || password.isEmpty
+        case .s3: return s3AccessKeyId.isEmpty || s3SecretAccessKey.isEmpty || s3Region.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -510,6 +557,13 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addSFTPAccount(host: serverURL, port: Int(port) ?? 22, username: username, password: password)
             case .wordpress:
                 await appState.syncManager.addWordPressAccount(siteURL: serverURL, username: username, appPassword: password)
+            case .s3:
+                let trimmedRegion = s3Region.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addS3Account(
+                    accessKeyId: s3AccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
+                    secretAccessKey: s3SecretAccessKey,
+                    region: trimmedRegion.isEmpty ? "us-east-1" : trimmedRegion
+                )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {
