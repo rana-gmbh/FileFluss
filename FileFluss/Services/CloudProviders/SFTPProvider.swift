@@ -20,16 +20,31 @@ final class SFTPProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
-    func authenticate(host: String, port: Int, username: String, password: String) async throws {
+    func authenticate(
+        host: String,
+        port: Int,
+        username: String,
+        password: String? = nil,
+        privateKey: String? = nil,
+        passphrase: String? = nil,
+        remotePath: String = "/"
+    ) async throws {
         let credentials = try await SFTPAPIClient.authenticate(
             host: host,
             port: port,
             username: username,
-            password: password
+            password: password,
+            privateKey: privateKey,
+            passphrase: passphrase,
+            remotePath: remotePath
         )
         self.apiClient = SFTPAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
-        sftpProviderLog.info("[SFTP] Authenticated as \(credentials.username)@\(credentials.host)")
+        sftpProviderLog.info("[SFTP] Authenticated as \(credentials.username)@\(credentials.host) via \(credentials.authMethod.rawValue)")
+    }
+
+    var remotePath: String {
+        get async { apiClient?.credentials.remotePath ?? "/" }
     }
 
     func authenticate() async throws {

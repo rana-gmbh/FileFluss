@@ -238,13 +238,31 @@ final class SyncViewModel {
         }
     }
 
-    func addSFTPAccount(host: String, port: Int, username: String, password: String) async {
-        let account = CloudAccount(providerType: .sftp)
+    func addSFTPAccount(
+        host: String,
+        port: Int,
+        username: String,
+        password: String? = nil,
+        privateKey: String? = nil,
+        passphrase: String? = nil,
+        remotePath: String = "/"
+    ) async {
+        let resolvedRemotePath = remotePath.isEmpty ? "/" : remotePath
+        var account = CloudAccount(providerType: .sftp)
+        account.rootPath = resolvedRemotePath
         let provider = SFTPProvider(accountId: account.id)
         authError = nil
 
         do {
-            try await provider.authenticate(host: host, port: port, username: username, password: password)
+            try await provider.authenticate(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                privateKey: privateKey,
+                passphrase: passphrase,
+                remotePath: resolvedRemotePath
+            )
             var connectedAccount = account
 
             let userName = try? await provider.userDisplayName()

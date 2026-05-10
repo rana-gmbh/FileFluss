@@ -14,6 +14,20 @@ struct AddCloudAccountView: View {
     @State private var s3AccessKeyId = ""
     @State private var s3SecretAccessKey = ""
     @State private var s3Region = "us-east-1"
+
+    enum SFTPAuthMethod: String, CaseIterable, Hashable, Identifiable {
+        case password = "Password"
+        case privateKey = "SSH Key"
+        var id: String { rawValue }
+    }
+    @State private var sftpAuthMethod: SFTPAuthMethod = .password
+    @State private var sftpRemotePath = "/"
+    @State private var sftpPassphrase = ""
+    @State private var sftpPrivateKeyContents: String = ""
+    @State private var sftpPrivateKeyFilename: String = ""
+    @State private var sftpKeyImporterPresented = false
+    @State private var sftpKeyImportError: String?
+
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
@@ -129,6 +143,12 @@ struct AddCloudAccountView: View {
                     s3AccessKeyId = ""
                     s3SecretAccessKey = ""
                     s3Region = "us-east-1"
+                    sftpAuthMethod = .password
+                    sftpRemotePath = "/"
+                    sftpPassphrase = ""
+                    sftpPrivateKeyContents = ""
+                    sftpPrivateKeyFilename = ""
+                    sftpKeyImportError = nil
                 }
                 .disabled(isAuthenticating)
 
@@ -375,11 +395,11 @@ struct AddCloudAccountView: View {
     }
 
     private var sftpFields: some View {
-        VStack(spacing: 12) {
-            Text("Enter your SFTP server hostname, port, username, and password.")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Enter your SFTP server details. You can authenticate with either a password or a private SSH key, and pin the panel to a specific remote folder on first open.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 TextField("Hostname (e.g. server.example.com)", text: $serverURL)
@@ -397,10 +417,110 @@ struct AddCloudAccountView: View {
                 .textContentType(.username)
                 .disabled(isAuthenticating)
 
-            SecureField("Password", text: $password)
+            TextField("Remote Path (e.g. /home/me or leave as /)", text: $sftpRemotePath)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            Picker("Authentication", selection: $sftpAuthMethod) {
+                ForEach(SFTPAuthMethod.allCases) { method in
+                    Text(method.rawValue).tag(method)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(isAuthenticating)
+
+            if sftpAuthMethod == .privateKey {
+                sftpKeyFields
+            } else {
+                sftpPasswordField
+            }
+        }
+    }
+
+    private var sftpPasswordField: some View {
+        SecureField("Password", text: $password)
+            .textFieldStyle(.roundedBorder)
+            .textContentType(.password)
+            .disabled(isAuthenticating)
+            .onSubmit { login() }
+    }
+
+    private var sftpKeyFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    sftpKeyImportError = nil
+                    sftpKeyImporterPresented = true
+                } label: {
+                    Label(sftpPrivateKeyFilename.isEmpty ? "Choose Private Key…" : "Replace Private Key…",
+                          systemImage: "key.horizontal")
+                }
+                .disabled(isAuthenticating)
+
+                if !sftpPrivateKeyFilename.isEmpty {
+                    Text(sftpPrivateKeyFilename)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button {
+                        sftpPrivateKeyContents = ""
+                        sftpPrivateKeyFilename = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isAuthenticating)
+                }
+            }
+
+            if let err = sftpKeyImportError {
+                Text(err)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            SecureField("Passphrase (leave empty if key has none)", text: $sftpPassphrase)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            Text("FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .fileImporter(
+            isPresented: $sftpKeyImporterPresented,
+            allowedContentTypes: [.data, .text, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let didStart = url.startAccessingSecurityScopedResource()
+                defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard let text = String(data: data, encoding: .utf8) else {
+                        sftpKeyImportError = "Key file is not a UTF-8 text PEM."
+                        return
+                    }
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard trimmed.hasPrefix("-----BEGIN") else {
+                        sftpKeyImportError = "That doesn't look like a PEM private key. Expected file to start with -----BEGIN."
+                        return
+                    }
+                    sftpPrivateKeyContents = text
+                    sftpPrivateKeyFilename = url.lastPathComponent
+                    sftpKeyImportError = nil
+                } catch {
+                    sftpKeyImportError = "Could not read key file: \(error.localizedDescription)"
+                }
+            case .failure(let error):
+                sftpKeyImportError = error.localizedDescription
+            }
         }
     }
 
@@ -520,7 +640,12 @@ struct AddCloudAccountView: View {
         case .dropbox: return false
         case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
-        case .sftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .sftp:
+            if serverURL.isEmpty || username.isEmpty { return true }
+            switch sftpAuthMethod {
+            case .password: return password.isEmpty
+            case .privateKey: return sftpPrivateKeyContents.isEmpty
+            }
         case .wordpress: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
         case .mega: return email.isEmpty || password.isEmpty
@@ -554,7 +679,29 @@ struct AddCloudAccountView: View {
             case .webDAV:
                 await appState.syncManager.addWebDAVAccount(serverURL: serverURL, username: username, password: password)
             case .sftp:
-                await appState.syncManager.addSFTPAccount(host: serverURL, port: Int(port) ?? 22, username: username, password: password)
+                let trimmedRemote = sftpRemotePath.trimmingCharacters(in: .whitespacesAndNewlines)
+                let resolvedRemote = trimmedRemote.isEmpty ? "/" : trimmedRemote
+                let parsedPort = Int(port) ?? 22
+                switch sftpAuthMethod {
+                case .password:
+                    await appState.syncManager.addSFTPAccount(
+                        host: serverURL,
+                        port: parsedPort,
+                        username: username,
+                        password: password,
+                        remotePath: resolvedRemote
+                    )
+                case .privateKey:
+                    let pass = sftpPassphrase.isEmpty ? nil : sftpPassphrase
+                    await appState.syncManager.addSFTPAccount(
+                        host: serverURL,
+                        port: parsedPort,
+                        username: username,
+                        privateKey: sftpPrivateKeyContents,
+                        passphrase: pass,
+                        remotePath: resolvedRemote
+                    )
+                }
             case .wordpress:
                 await appState.syncManager.addWordPressAccount(siteURL: serverURL, username: username, appPassword: password)
             case .s3:

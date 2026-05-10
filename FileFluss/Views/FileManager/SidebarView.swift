@@ -35,7 +35,8 @@ struct SidebarView: View {
                 if case .cloudAccount(let account) = newValue, previous == newValue {
                     Task {
                         let cloudFM = appState.cloudFileManager(for: account.id, side: panelSide)
-                        await cloudFM.navigateTo("/")
+                        let target = account.rootPath.isEmpty ? "/" : account.rootPath
+                        await cloudFM.navigateTo(target)
                     }
                 }
             }
@@ -174,7 +175,8 @@ struct SidebarView: View {
             case .cloudAccount(let account):
                 Task {
                     let cloudFM = appState.cloudFileManager(for: account.id, side: panelSide)
-                    await cloudFM.navigateTo("/")
+                    let target = account.rootPath.isEmpty ? "/" : account.rootPath
+                    await cloudFM.navigateTo(target)
                 }
             default:
                 break

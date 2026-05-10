@@ -4,39 +4,131 @@ import os
 private let sftpLog = Logger(subsystem: "com.rana.FileFluss", category: "sftp")
 
 struct SFTPCredentials: Codable, Sendable {
+    enum AuthMethod: String, Codable, Sendable {
+        case password
+        case privateKey
+    }
+
     let host: String
     let port: Int
     let username: String
-    let password: String
+    let authMethod: AuthMethod
+    /// Set when authMethod == .password.
+    let password: String?
+    /// Raw PEM contents of the private key — set when authMethod == .privateKey.
+    let privateKey: String?
+    /// Optional passphrase for the private key. nil when the key is unencrypted.
+    let passphrase: String?
+    /// Initial directory the panel lands in. "/" by default.
+    let remotePath: String
+
+    init(
+        host: String,
+        port: Int,
+        username: String,
+        authMethod: AuthMethod = .password,
+        password: String? = nil,
+        privateKey: String? = nil,
+        passphrase: String? = nil,
+        remotePath: String = "/"
+    ) {
+        self.host = host
+        self.port = port
+        self.username = username
+        self.authMethod = authMethod
+        self.password = password
+        self.privateKey = privateKey
+        self.passphrase = passphrase
+        self.remotePath = remotePath
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        host = try c.decode(String.self, forKey: .host)
+        port = try c.decode(Int.self, forKey: .port)
+        username = try c.decode(String.self, forKey: .username)
+        // Legacy keychain entries store only host/port/username/password.
+        // Default the new fields so they decode cleanly.
+        authMethod = try c.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .password
+        password = try c.decodeIfPresent(String.self, forKey: .password)
+        privateKey = try c.decodeIfPresent(String.self, forKey: .privateKey)
+        passphrase = try c.decodeIfPresent(String.self, forKey: .passphrase)
+        remotePath = try c.decodeIfPresent(String.self, forKey: .remotePath) ?? "/"
+    }
 }
 
 actor SFTPAPIClient {
     let credentials: SFTPCredentials
     private let controlPath: String
-    private let passwordScriptPath: String
+    /// SSH_ASKPASS script — echoes the password or the key passphrase.
+    /// nil when auth is .privateKey with no passphrase.
+    private let askPassScriptPath: String?
+    /// Path to the private-key file written for `-i`. nil for password auth.
+    private let privateKeyPath: String?
 
     init(credentials: SFTPCredentials) {
         self.credentials = credentials
         let id = UUID().uuidString.prefix(8)
         self.controlPath = NSTemporaryDirectory() + "filefluss-sftp-\(id)"
-        self.passwordScriptPath = NSTemporaryDirectory() + "filefluss-sftp-askpass-\(id)"
 
-        // Create SSH_ASKPASS script that echoes the password
-        let escaped = credentials.password.replacingOccurrences(of: "'", with: "'\\''")
-        let script = "#!/bin/sh\necho '\(escaped)'\n"
-        FileManager.default.createFile(atPath: passwordScriptPath, contents: Data(script.utf8), attributes: [.posixPermissions: 0o700])
+        // Pick the secret SSH_ASKPASS should echo (password OR key passphrase).
+        let secret: String?
+        switch credentials.authMethod {
+        case .password:
+            secret = credentials.password
+        case .privateKey:
+            // Empty passphrase => key is unencrypted, no askpass needed.
+            secret = (credentials.passphrase?.isEmpty ?? true) ? nil : credentials.passphrase
+        }
+
+        if let secret {
+            let path = NSTemporaryDirectory() + "filefluss-sftp-askpass-\(id)"
+            let escaped = secret.replacingOccurrences(of: "'", with: "'\\''")
+            let script = "#!/bin/sh\necho '\(escaped)'\n"
+            FileManager.default.createFile(atPath: path, contents: Data(script.utf8), attributes: [.posixPermissions: 0o700])
+            self.askPassScriptPath = path
+        } else {
+            self.askPassScriptPath = nil
+        }
+
+        if credentials.authMethod == .privateKey, let key = credentials.privateKey, !key.isEmpty {
+            let path = NSTemporaryDirectory() + "filefluss-sftp-key-\(id)"
+            // Make sure the key ends in a newline; some SSH builds reject otherwise.
+            let body = key.hasSuffix("\n") ? key : (key + "\n")
+            FileManager.default.createFile(atPath: path, contents: Data(body.utf8), attributes: [.posixPermissions: 0o600])
+            self.privateKeyPath = path
+        } else {
+            self.privateKeyPath = nil
+        }
     }
 
     // MARK: - Authentication
 
-    static func authenticate(host: String, port: Int, username: String, password: String) async throws -> SFTPCredentials {
-        let creds = SFTPCredentials(host: host, port: port, username: username, password: password)
+    static func authenticate(
+        host: String,
+        port: Int,
+        username: String,
+        password: String? = nil,
+        privateKey: String? = nil,
+        passphrase: String? = nil,
+        remotePath: String = "/"
+    ) async throws -> SFTPCredentials {
+        let authMethod: SFTPCredentials.AuthMethod = (privateKey?.isEmpty == false) ? .privateKey : .password
+        let creds = SFTPCredentials(
+            host: host,
+            port: port,
+            username: username,
+            authMethod: authMethod,
+            password: password,
+            privateKey: privateKey,
+            passphrase: passphrase,
+            remotePath: remotePath
+        )
         let client = SFTPAPIClient(credentials: creds)
-
-        // Verify connection by listing root
-        let output = try await client.runBatch(commands: ["ls /"])
-        sftpLog.info("[SFTP] Authenticated as \(username)@\(host):\(port)")
-        _ = output  // Just verify it didn't throw
+        // Verify by listing the chosen remote path (or "/" if it's empty).
+        let probePath = remotePath.isEmpty ? "/" : remotePath
+        _ = try await client.runBatch(commands: ["ls \(client.shellEscape(probePath))"])
+        sftpLog.info("[SFTP] Authenticated as \(username)@\(host):\(port) via \(authMethod.rawValue)")
         return creds
     }
 
@@ -160,24 +252,50 @@ actor SFTPAPIClient {
         return try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
-            process.arguments = [
+
+            var args: [String] = [
                 "-oBatchMode=no",
                 "-oStrictHostKeyChecking=accept-new",
                 "-oControlMaster=auto",
                 "-oControlPath=\(controlPath)",
                 "-oControlPersist=600",
                 "-oConnectTimeout=10",
-                "-P", "\(credentials.port)",
-                "-b", batchPath,
-                "\(credentials.username)@\(credentials.host)"
+                "-P", "\(credentials.port)"
             ]
-            process.environment = [
-                "SSH_ASKPASS": passwordScriptPath,
-                "SSH_ASKPASS_REQUIRE": "force",
+
+            // Auth-method-specific flags: tell sftp exactly which method
+            // to use so it doesn't fall back and prompt the user
+            // interactively when the chosen method fails.
+            switch credentials.authMethod {
+            case .password:
+                args.append(contentsOf: [
+                    "-oPubkeyAuthentication=no",
+                    "-oPreferredAuthentications=password,keyboard-interactive"
+                ])
+            case .privateKey:
+                if let keyPath = privateKeyPath {
+                    args.append(contentsOf: ["-i", keyPath])
+                }
+                args.append(contentsOf: [
+                    "-oPasswordAuthentication=no",
+                    "-oPreferredAuthentications=publickey",
+                    "-oIdentitiesOnly=yes"
+                ])
+            }
+
+            args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
+            process.arguments = args
+
+            var env: [String: String] = [
                 "DISPLAY": ":0",
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
                 "HOME": NSHomeDirectory()
             ]
+            if let askPass = askPassScriptPath {
+                env["SSH_ASKPASS"] = askPass
+                env["SSH_ASKPASS_REQUIRE"] = "force"
+            }
+            process.environment = env
 
             let stdoutPipe = Pipe()
             let stderrPipe = Pipe()
