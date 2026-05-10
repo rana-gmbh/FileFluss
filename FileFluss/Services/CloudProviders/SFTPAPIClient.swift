@@ -321,22 +321,12 @@ actor SFTPAPIClient {
                 }
 
                 if proc.terminationStatus != 0 {
-                    let errMsg = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Also check stdout for error messages (sftp reports some errors there)
-                    let combinedMsg = (errMsg + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    if combinedMsg.contains("Permission denied") || combinedMsg.contains("Authentication failed") {
-                        continuation.resume(throwing: CloudProviderError.invalidCredentials)
-                    } else if combinedMsg.contains("Connection refused") || combinedMsg.contains("No route to host") || combinedMsg.contains("Connection timed out") {
-                        continuation.resume(throwing: CloudProviderError.serverError(-1))
-                    } else if combinedMsg.contains("No such file") || combinedMsg.contains("not found") {
-                        continuation.resume(throwing: CloudProviderError.notFound(errMsg))
-                    } else if combinedMsg.contains("Couldn't") || combinedMsg.contains("failure") {
-                        // sftp batch errors like "Couldn't create directory"
-                        continuation.resume(throwing: CloudProviderError.notFound(combinedMsg))
-                    } else {
-                        continuation.resume(throwing: CloudProviderError.serverError(Int(proc.terminationStatus)))
-                    }
+                    let exit = Int(proc.terminationStatus)
+                    let stderrTrim = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let combined = (stderrTrim + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let authMethod = self.credentials.authMethod
+                    let error = Self.mapSFTPFailure(exit: exit, stderr: stderrTrim, combined: combined, authMethod: authMethod)
+                    continuation.resume(throwing: error)
                     return
                 }
                 continuation.resume(returning: stdout)
@@ -348,6 +338,76 @@ actor SFTPAPIClient {
                 continuation.resume(throwing: CloudProviderError.networkError(error))
             }
         }
+    }
+
+    /// Translate an `sftp`/`ssh` failure into a useful CloudProviderError.
+    /// We pattern-match the stderr lines openssh actually emits — the exit
+    /// code on its own (255 for almost everything ssh-related) is too
+    /// coarse to be useful, so the messages drive the dispatch.
+    private static func mapSFTPFailure(exit: Int, stderr: String, combined: String, authMethod: SFTPCredentials.AuthMethod) -> CloudProviderError {
+        let lower = combined.lowercased()
+
+        // Auth failures — distinguish password vs key vs passphrase so
+        // the user knows which thing to fix.
+        if lower.contains("permission denied (publickey)") {
+            return .commandFailed("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).")
+        }
+        if lower.contains("permission denied") || lower.contains("authentication failed") {
+            switch authMethod {
+            case .password:
+                return .commandFailed("SSH authentication failed. Check the username and password.")
+            case .privateKey:
+                return .commandFailed("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.")
+            }
+        }
+
+        // Key-loading problems on the client side.
+        if lower.contains("invalid format") || lower.contains("error in libcrypto") {
+            return .commandFailed("Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).")
+        }
+        if lower.contains("are too open") || lower.contains("bad permissions") {
+            return .commandFailed("Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again.")
+        }
+        if lower.contains("incorrect passphrase") || lower.contains("bad passphrase") || lower.contains("could not decrypt") {
+            return .commandFailed("Wrong passphrase for the private key.")
+        }
+
+        // Host-key problems.
+        if lower.contains("host key verification failed") {
+            return .commandFailed("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry.")
+        }
+
+        // Connection-level issues.
+        if lower.contains("connection refused") {
+            return .commandFailed("Connection refused — is the SSH daemon running on this host and port?")
+        }
+        if lower.contains("connection timed out") || lower.contains("operation timed out") {
+            return .commandFailed("Connection timed out. Check the hostname, port, and your network.")
+        }
+        if lower.contains("no route to host") || lower.contains("network is unreachable") {
+            return .commandFailed("Network is unreachable from this Mac.")
+        }
+        if lower.contains("could not resolve hostname") || lower.contains("name or service not known") {
+            return .commandFailed("Could not resolve hostname. Check spelling or DNS.")
+        }
+
+        // SFTP-level errors during a command (mkdir/put/get) — surface the
+        // first useful line so the user sees what actually failed.
+        if lower.contains("no such file") || lower.contains("not found") {
+            return .notFound(stderr.isEmpty ? combined : stderr)
+        }
+        if lower.contains("couldn't") || lower.contains("failure") {
+            // e.g. "Couldn't create directory: Permission denied"
+            return .commandFailed(combined.isEmpty ? "SFTP command failed (exit \(exit))." : combined)
+        }
+
+        // Fall-through: surface the raw stderr if we have it, otherwise
+        // the exit code. Truncate aggressively — SFTP can spew banners.
+        if !stderr.isEmpty {
+            let snippet = stderr.split(separator: "\n").prefix(3).joined(separator: " — ")
+            return .commandFailed("SFTP failed (exit \(exit)): \(snippet)")
+        }
+        return .commandFailed("SFTP failed with exit code \(exit). Check the server is reachable and the credentials are correct.")
     }
 
     // MARK: - Parsing

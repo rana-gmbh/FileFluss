@@ -9,6 +9,9 @@ enum CloudProviderError: LocalizedError {
     case quotaExceeded
     case rateLimited
     case serverError(Int)
+    /// Used by non-HTTP transports (SFTP, etc.) to surface a useful
+    /// human-readable message instead of a status-code label.
+    case commandFailed(String)
     case invalidResponse
     case invalidCredentials
     /// The cloud rejected the upload because the file is too large. `fileBytes`
@@ -26,6 +29,7 @@ enum CloudProviderError: LocalizedError {
         case .quotaExceeded: return "Storage quota exceeded."
         case .rateLimited: return "Rate limited. Please try again later."
         case .serverError(let code): return "Server error (HTTP \(code))."
+        case .commandFailed(let message): return message
         case .invalidResponse: return "Invalid response from server."
         case .invalidCredentials: return "Invalid email or password."
         case .fileTooLarge(let fileBytes, let limit):
