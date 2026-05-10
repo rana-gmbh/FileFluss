@@ -71,6 +71,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .sftp: return "SFTPLogo"
         case .wordpress: return "WordPressLogo"
         case .gmxCloud: return "GMXCloudLogo"
+        case .s3: return "AmazonS3Logo"
         default: return nil
         }
     }

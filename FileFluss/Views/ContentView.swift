@@ -29,6 +29,10 @@ struct ContentView: View {
             SyncPlannerView()
                 .environment(appState)
         }
+        .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
+            AddCloudAccountView()
+                .environment(appState)
+        }
     }
 
     private var supportLogBanner: some View {

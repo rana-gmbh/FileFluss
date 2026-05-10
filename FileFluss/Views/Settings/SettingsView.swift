@@ -22,11 +22,13 @@ struct SettingsView: View {
 struct GeneralSettingsView: View {
     @AppStorage("showHiddenFiles") private var showHiddenFiles = false
     @AppStorage("confirmDelete") private var confirmDelete = true
+    @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
 
     var body: some View {
         Form {
             Toggle("Show hidden files by default", isOn: $showHiddenFiles)
             Toggle("Confirm before deleting", isOn: $confirmDelete)
+            Toggle("Show \"Add Cloud Account\" in sidebars", isOn: $showSidebarAddAccount)
         }
         .formStyle(.grouped)
     }

@@ -19,6 +19,7 @@ private struct CalculatingLabel: View {
 struct SidebarView: View {
     let panelSide: PanelSide
     @Environment(AppState.self) private var appState
+    @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
 
     private let favorites: [(String, String, URL)] = {
         let fm = FileManager.default
@@ -130,6 +131,16 @@ struct SidebarView: View {
                     .onMove { indices, destination in
                         appState.syncManager.accounts.move(fromOffsets: indices, toOffset: destination)
                         appState.syncManager.saveAccounts()
+                    }
+
+                    if showSidebarAddAccount {
+                        Button {
+                            appState.syncManager.isAddingAccount = true
+                        } label: {
+                            Label("Add Cloud Account…", systemImage: "plus.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
