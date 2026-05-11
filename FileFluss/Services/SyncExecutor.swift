@@ -116,6 +116,8 @@ enum SyncExecutor {
                 throw SyncPlannerError.providerUnavailable
             }
             try await provider.createDirectory(at: cloudJoin(rootPath, rel))
+        case .offlineIndexed:
+            throw SyncPlannerError.offlineEndpointNotWritable
         }
     }
 
@@ -131,6 +133,8 @@ enum SyncExecutor {
                 throw SyncPlannerError.providerUnavailable
             }
             try await provider.deleteItem(at: cloudJoin(rootPath, rel))
+        case .offlineIndexed:
+            throw SyncPlannerError.offlineEndpointNotWritable
         }
     }
 
@@ -185,6 +189,9 @@ enum SyncExecutor {
             try await ensureCloudParentDirectory(for: dstPath, on: dstProvider)
             try await CloudProviderError.enforceUploadSizeLimit(tempURL, provider: dstProvider)
             try await dstProvider.uploadFile(from: tempURL, to: dstPath, onBytes: onUploadBytes)
+
+        case (.offlineIndexed, _), (_, .offlineIndexed):
+            throw SyncPlannerError.offlineEndpointNotWritable
         }
     }
 

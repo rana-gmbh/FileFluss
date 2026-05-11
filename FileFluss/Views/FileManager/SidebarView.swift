@@ -21,6 +21,28 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
 
+    // Section expansion is tracked per panel side so users can have different
+    // sections collapsed on left vs right. The chooser between the two
+    // `@AppStorage` properties below switches at view-creation time based
+    // on `panelSide`, and the bindings forwarded to `Section(isExpanded:)`
+    // resolve to the correct underlying key.
+    @AppStorage("sidebar.left.section.favorites.expanded") private var favoritesExpandedLeft = true
+    @AppStorage("sidebar.left.section.drives.expanded") private var drivesExpandedLeft = true
+    @AppStorage("sidebar.left.section.cloud.expanded") private var cloudExpandedLeft = true
+    @AppStorage("sidebar.right.section.favorites.expanded") private var favoritesExpandedRight = true
+    @AppStorage("sidebar.right.section.drives.expanded") private var drivesExpandedRight = true
+    @AppStorage("sidebar.right.section.cloud.expanded") private var cloudExpandedRight = true
+
+    private var favoritesExpanded: Binding<Bool> {
+        panelSide == .left ? $favoritesExpandedLeft : $favoritesExpandedRight
+    }
+    private var drivesExpanded: Binding<Bool> {
+        panelSide == .left ? $drivesExpandedLeft : $drivesExpandedRight
+    }
+    private var cloudExpanded: Binding<Bool> {
+        panelSide == .left ? $cloudExpandedLeft : $cloudExpandedRight
+    }
+
     private var selection: Binding<SidebarItem?> {
         Binding(
             get: { appState.sidebarSelection(for: panelSide) },
@@ -121,7 +143,7 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: selection) {
-            Section("Favorites") {
+            Section(isExpanded: favoritesExpanded) {
                 ForEach(appState.favorites(for: panelSide)) { fav in
                     favoriteRow(fav)
                         .contextMenu {
@@ -139,10 +161,12 @@ struct SidebarView: View {
                 .onMove { indices, destination in
                     appState.moveFavorites(in: panelSide, fromOffsets: indices, toOffset: destination)
                 }
+            } header: {
+                Text("Favorites")
             }
 
             if !appState.driveMonitor.drives.isEmpty {
-                Section("Drives") {
+                Section(isExpanded: drivesExpanded) {
                     ForEach(appState.driveMonitor.drives) { drive in
                         DriveRow(drive: drive, panelSide: panelSide)
                             .tag(SidebarItem.drive(driveId: drive.id))
@@ -150,10 +174,12 @@ struct SidebarView: View {
                                 driveContextMenu(for: drive)
                             }
                     }
+                } header: {
+                    Text("Drives")
                 }
             }
 
-            Section("Cloud Accounts") {
+            Section(isExpanded: cloudExpanded) {
                     ForEach(appState.syncManager.accounts) { account in
                         Label {
                             HStack {
@@ -195,6 +221,8 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                } header: {
+                    Text("Cloud Accounts")
                 }
 
             if !appState.transfers(for: panelSide).isEmpty {

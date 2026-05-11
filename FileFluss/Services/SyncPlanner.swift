@@ -4,9 +4,27 @@ import Foundation
 enum SyncEndpoint: Sendable {
     case local(URL)
     case cloud(accountId: UUID, rootPath: String)
+    /// Read-only snapshot from the offline search index. Used by Compare
+    /// when one side is a drive or cloud account that's currently
+    /// disconnected — we enumerate from the persisted index rather than
+    /// hitting the unreachable source. Sync execution against this kind
+    /// is not supported (no live destination to write to).
+    case offlineIndexed(sourceId: String, kind: OfflineKind, rootPath: String, displayName: String)
+
+    enum OfflineKind: Sendable {
+        /// Entries live in `indexed_files` (drive snapshot).
+        case drive
+        /// Entries live in `cloud_files` (cloud-account snapshot).
+        case cloud(accountId: UUID)
+    }
 
     var isCloud: Bool {
         if case .cloud = self { return true }
+        return false
+    }
+
+    var isOffline: Bool {
+        if case .offlineIndexed = self { return true }
         return false
     }
 
@@ -14,6 +32,9 @@ enum SyncEndpoint: Sendable {
         switch self {
         case .local(let url): return url.path(percentEncoded: false)
         case .cloud(_, let root): return root.isEmpty ? "/" : root
+        case .offlineIndexed(_, _, let root, let name):
+            let path = root.isEmpty || root == "/" ? "" : root
+            return "\(name) (offline)\(path)"
         }
     }
 }
@@ -21,6 +42,9 @@ enum SyncEndpoint: Sendable {
 enum SyncPlannerError: Error {
     case providerUnavailable
     case sourceNotEnumerable(String)
+    /// Compare can read from an offline indexed snapshot, but execution
+    /// against one would have no live destination to write to.
+    case offlineEndpointNotWritable
 }
 
 /// Builds sync plans by enumerating both endpoints and diffing them according to the chosen mode.
@@ -36,6 +60,61 @@ actor SyncPlanner {
                 throw SyncPlannerError.providerUnavailable
             }
             return try await enumerateCloud(provider: provider, root: rootPath)
+        case .offlineIndexed(let sourceId, let kind, let rootPath, _):
+            return await enumerateOffline(sourceId: sourceId, kind: kind, rootPath: rootPath)
+        }
+    }
+
+    /// Enumerates a sub-tree from the offline search index. Builds the same
+    /// `SyncEntry` rows the live enumerators would produce, but reads from
+    /// SQLite — so Compare works even when the drive/account is gone.
+    private func enumerateOffline(sourceId: String, kind: SyncEndpoint.OfflineKind, rootPath: String) async -> [SyncEntry] {
+        switch kind {
+        case .drive:
+            // Normalise root so "" / "/" both behave as the source root.
+            let normRoot = rootPath.isEmpty ? "/" : rootPath
+            let rows = await SearchIndex.shared.indexedFilesUnder(sourceId: sourceId, rootPath: normRoot)
+            let rootPrefix = normRoot == "/" ? "/" : (normRoot.hasSuffix("/") ? normRoot : normRoot + "/")
+            var entries: [SyncEntry] = []
+            for row in rows {
+                let abs = row.path
+                guard abs.hasPrefix(rootPrefix) || (normRoot == "/" && abs.hasPrefix("/")) else { continue }
+                var relative = String(abs.dropFirst(rootPrefix.count))
+                if normRoot == "/" && relative.isEmpty {
+                    relative = String(abs.drop(while: { $0 == "/" }))
+                }
+                while relative.hasPrefix("/") { relative.removeFirst() }
+                if relative.isEmpty { continue }
+                entries.append(SyncEntry(
+                    relativePath: relative,
+                    isDirectory: row.isDirectory,
+                    size: row.isDirectory ? 0 : row.size,
+                    modificationDate: row.modificationDate
+                ))
+            }
+            return entries
+        case .cloud(let accountId):
+            let normRoot = rootPath.isEmpty ? "/" : rootPath
+            let rows = await SearchIndex.shared.cloudFilesUnder(accountId: accountId, rootPath: normRoot)
+            let rootPrefix = normRoot == "/" ? "/" : (normRoot.hasSuffix("/") ? normRoot : normRoot + "/")
+            var entries: [SyncEntry] = []
+            for row in rows {
+                let abs = row.path
+                guard abs.hasPrefix(rootPrefix) || (normRoot == "/" && abs.hasPrefix("/")) else { continue }
+                var relative = String(abs.dropFirst(rootPrefix.count))
+                if normRoot == "/" && relative.isEmpty {
+                    relative = String(abs.drop(while: { $0 == "/" }))
+                }
+                while relative.hasPrefix("/") { relative.removeFirst() }
+                if relative.isEmpty { continue }
+                entries.append(SyncEntry(
+                    relativePath: relative,
+                    isDirectory: row.isDirectory,
+                    size: row.isDirectory ? 0 : row.size,
+                    modificationDate: row.modificationDate
+                ))
+            }
+            return entries
         }
     }
 

@@ -58,12 +58,7 @@ struct FileToolbar: CustomizableToolbarContent {
         }
 
         ToolbarItem(id: "sync", placement: .primaryAction) {
-            Button {
-                appState.showSyncSheet = true
-            } label: {
-                Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-            }
-            .help("Sync left and right panels")
+            SyncToolbarButton()
         }
 
         ToolbarItem(id: "compare", placement: .primaryAction) {
@@ -120,6 +115,27 @@ struct FileToolbar: CustomizableToolbarContent {
             }
             .help("Force all drag & drop operations to move (skips the Move/Copy prompt)")
         }
+    }
+}
+
+/// Sync toolbar button. Disabled when either panel sits on an offline
+/// source — there's no live destination to write to — and shows a tooltip
+/// explaining why. Clicking the disabled button does nothing; macOS
+/// surfaces the `.help` text on hover, including for disabled controls.
+private struct SyncToolbarButton: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        let blocked = appState.hasOfflineSelection
+        Button {
+            if !blocked { appState.showSyncSheet = true }
+        } label: {
+            Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+        }
+        .disabled(blocked)
+        .help(blocked
+              ? "It's not possible to sync with an offline folder."
+              : "Sync left and right panels")
     }
 }
 

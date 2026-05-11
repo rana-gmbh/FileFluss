@@ -613,6 +613,116 @@ actor SearchIndex {
         )
     }
 
+    /// Bulk read for Compare: every indexed_files row whose absolute path
+    /// is at or beneath `rootPath`. Caller computes relative paths.
+    func indexedFilesUnder(sourceId: String, rootPath: String) -> [IndexedFile] {
+        guard let db else { return [] }
+        let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+        let sql: String
+        if rootPath == "/" {
+            sql = """
+                SELECT path, parent_path, name, is_directory, size, modification_date
+                FROM indexed_files
+                WHERE source_id = ?
+                ORDER BY path
+            """
+        } else {
+            sql = """
+                SELECT path, parent_path, name, is_directory, size, modification_date
+                FROM indexed_files
+                WHERE source_id = ? AND (path = ? OR path LIKE ? ESCAPE '\\')
+                ORDER BY path
+            """
+        }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
+        if rootPath != "/" {
+            let escaped = Self.escapeLike(prefix)
+            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, nil)
+        }
+        var rows: [IndexedFile] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            rows.append(IndexedFile(
+                sourceId: sourceId,
+                path: String(cString: sqlite3_column_text(stmt, 0)),
+                parentPath: String(cString: sqlite3_column_text(stmt, 1)),
+                name: String(cString: sqlite3_column_text(stmt, 2)),
+                isDirectory: sqlite3_column_int(stmt, 3) == 1,
+                size: sqlite3_column_int64(stmt, 4),
+                modificationDate: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
+            ))
+        }
+        return rows
+    }
+
+    struct CloudIndexedFile: Sendable, Hashable {
+        let accountId: UUID
+        let path: String
+        let name: String
+        let isDirectory: Bool
+        let size: Int64
+        let modificationDate: Date
+    }
+
+    /// Bulk read for Compare from `cloud_files` (the cloud index cache).
+    func cloudFilesUnder(accountId: UUID, rootPath: String) -> [CloudIndexedFile] {
+        guard let db else { return [] }
+        let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
+        let sql: String
+        if rootPath == "/" {
+            sql = """
+                SELECT path, name, is_directory, size, modification_date
+                FROM cloud_files
+                WHERE account_id = ?
+                ORDER BY path
+            """
+        } else {
+            sql = """
+                SELECT path, name, is_directory, size, modification_date
+                FROM cloud_files
+                WHERE account_id = ? AND (path = ? OR path LIKE ? ESCAPE '\\')
+                ORDER BY path
+            """
+        }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        if rootPath != "/" {
+            let escaped = Self.escapeLike(prefix)
+            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, nil)
+        }
+        var rows: [CloudIndexedFile] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            rows.append(CloudIndexedFile(
+                accountId: accountId,
+                path: String(cString: sqlite3_column_text(stmt, 0)),
+                name: String(cString: sqlite3_column_text(stmt, 1)),
+                isDirectory: sqlite3_column_int(stmt, 2) == 1,
+                size: sqlite3_column_int64(stmt, 3),
+                modificationDate: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
+            ))
+        }
+        return rows
+    }
+
+    /// Escapes `%`, `_`, and `\` for use in a SQL `LIKE ... ESCAPE '\\'`
+    /// clause, so path segments containing those characters don't act as
+    /// wildcards or break the escape.
+    private static func escapeLike(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for ch in s {
+            if ch == "\\" || ch == "%" || ch == "_" { out.append("\\") }
+            out.append(ch)
+        }
+        return out
+    }
+
     /// Records a cloud account's indexing in `indexed_sources` so the
     /// Settings → Index Status tab and the right-click context menu can
     /// treat cloud and drive sources uniformly. Called after a successful

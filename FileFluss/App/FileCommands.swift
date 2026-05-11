@@ -63,6 +63,7 @@ struct FileCommands: Commands {
                 appState.showSyncSheet = true
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(appState.hasOfflineSelection)
         }
 
         CommandGroup(replacing: .appInfo) {

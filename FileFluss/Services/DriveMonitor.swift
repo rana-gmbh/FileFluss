@@ -42,19 +42,57 @@ final class DriveMonitor {
             forName: NSWorkspace.didMountNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
+            // Extract the URL synchronously on the notification thread —
+            // Notification isn't Sendable, but `URL` is, so we marshal the
+            // value across before hopping to the actor.
+            let mountedURL = note.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL
             MainActor.assumeIsolated {
-                self?.refreshMountedVolumes()
+                self?.handleMount(url: mountedURL)
             }
         }
         nc.addObserver(
             forName: NSWorkspace.didUnmountNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] note in
+            let unmountedURL = note.userInfo?[NSWorkspace.volumeURLUserInfoKey] as? URL
             MainActor.assumeIsolated {
-                self?.refreshMountedVolumes()
+                self?.handleUnmount(url: unmountedURL)
             }
+        }
+    }
+
+    private func handleMount(url: URL?) {
+        // A fresh enumeration is enough — the new volume will be picked
+        // up by classify().
+        refreshMountedVolumes()
+    }
+
+    /// Optimistic unmount handling: directly drop the entry pointing at the
+    /// disappearing URL so the UI flips to offline immediately, then run a
+    /// full refresh shortly after. Without the direct removal we relied on
+    /// `mountedVolumeURLs()` already excluding the just-unmounted drive,
+    /// which isn't always true — the system can return the stale URL for
+    /// a moment after the notification fires, so the next `liveMountURLs =
+    /// nextLive` assignment re-adds it and the row keeps showing online.
+    private func handleUnmount(url: URL?) {
+        if let url {
+            suppressedURLPaths.insert(url.path)
+            if let staleId = liveMountURLs.first(where: { $0.value.path == url.path })?.key {
+                liveMountURLs.removeValue(forKey: staleId)
+            }
+        }
+        refreshMountedVolumes()
+        // Belt-and-suspenders: schedule another refresh + clear the
+        // suppression after the kernel catches up. Cheap, and guarantees
+        // we end in a consistent state even if the first refresh saw
+        // stale data.
+        let suppressed = url?.path
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            if let suppressed { self.suppressedURLPaths.remove(suppressed) }
+            self.refreshMountedVolumes()
         }
     }
 
@@ -89,6 +127,14 @@ final class DriveMonitor {
 
     // MARK: - Mount handling
 
+    /// Volume URLs we've optimistically removed from `liveMountURLs` after
+    /// an unmount notification. The next `refreshMountedVolumes()` call
+    /// must NOT re-add these even if `mountedVolumeURLs()` is still
+    /// returning them — that's the kernel-lag race the bug exposes.
+    /// Entries clear themselves after a short delay, so a genuinely
+    /// re-mounted drive can come back online.
+    private var suppressedURLPaths: Set<String> = []
+
     private func refreshMountedVolumes() {
         let keys: [URLResourceKey] = [
             .volumeIsRemovableKey,
@@ -107,6 +153,11 @@ final class DriveMonitor {
 
         var nextLive: [String: URL] = [:]
         for url in mounted {
+            if suppressedURLPaths.contains(url.path) {
+                // The kernel still reports this URL even though we just
+                // saw the unmount notification. Don't treat it as online.
+                continue
+            }
             guard let drive = classify(url, keys: keys) else { continue }
             nextLive[drive.id] = url
 

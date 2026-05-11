@@ -146,6 +146,30 @@ final class AppState {
         else { selectedRightSidebarItem = item }
     }
 
+    /// True when either panel is sitting on an offline source — an
+    /// unmounted indexed drive, a disconnected cloud account, or an
+    /// offline-folder selection opened from a search result. Used by the
+    /// toolbar to disable Sync, since the offline snapshot has no live
+    /// destination to write to.
+    var hasOfflineSelection: Bool {
+        isPanelOffline(.left) || isPanelOffline(.right)
+    }
+
+    func isPanelOffline(_ side: PanelSide) -> Bool {
+        switch sidebarSelection(for: side) {
+        case .cloudAccount(let account):
+            return !account.isConnected
+        case .cloudFolder(let accountId, _):
+            return !(syncManager.accountFor(id: accountId)?.isConnected ?? false)
+        case .drive(let driveId):
+            return driveMonitor.mountURL(for: driveId) == nil
+        case .offlineFolder:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Refresh both panels (used after cross-panel move)
     func refreshAllPanels() async {
         await leftFileManager.refresh()

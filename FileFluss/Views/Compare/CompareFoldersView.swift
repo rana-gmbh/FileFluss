@@ -490,11 +490,65 @@ struct CompareFoldersView: View {
     // MARK: - Endpoints / calculation
 
     private func currentEndpoint(for side: PanelSide) -> SyncEndpoint? {
-        if let accountId = appState.cloudAccountId(for: side) {
-            let vm = appState.cloudFileManager(for: accountId, side: side)
-            return .cloud(accountId: accountId, rootPath: vm.currentPath)
+        let item = appState.sidebarSelection(for: side)
+        switch item {
+        case .cloudAccount(let account):
+            if account.isConnected {
+                let vm = appState.cloudFileManager(for: account.id, side: side)
+                return .cloud(accountId: account.id, rootPath: vm.currentPath)
+            }
+            return .offlineIndexed(
+                sourceId: account.id.uuidString,
+                kind: .cloud(accountId: account.id),
+                rootPath: account.rootPath.isEmpty ? "/" : account.rootPath,
+                displayName: account.displayName
+            )
+        case .cloudFolder(let accountId, let path):
+            if let account = appState.syncManager.accountFor(id: accountId), account.isConnected {
+                let vm = appState.cloudFileManager(for: accountId, side: side)
+                return .cloud(accountId: accountId, rootPath: vm.currentPath)
+            }
+            let name = appState.syncManager.accountFor(id: accountId)?.displayName ?? "Cloud Account"
+            return .offlineIndexed(
+                sourceId: accountId.uuidString,
+                kind: .cloud(accountId: accountId),
+                rootPath: path.isEmpty ? "/" : path,
+                displayName: name
+            )
+        case .drive(let driveId):
+            if let mount = appState.driveMonitor.mountURL(for: driveId) {
+                return .local(mount)
+            }
+            let name = appState.driveMonitor.drives.first(where: { $0.id == driveId })?.displayName ?? "Drive"
+            return .offlineIndexed(
+                sourceId: driveId,
+                kind: .drive,
+                rootPath: "/",
+                displayName: name
+            )
+        case .offlineFolder(let sourceId, let path):
+            // Could be a drive id ("vol:…", "net:…") or a cloud account
+            // UUID string. Tell them apart by trying to parse a UUID.
+            if let uuid = UUID(uuidString: sourceId) {
+                let name = appState.syncManager.accountFor(id: uuid)?.displayName ?? "Cloud Account"
+                return .offlineIndexed(
+                    sourceId: sourceId,
+                    kind: .cloud(accountId: uuid),
+                    rootPath: path,
+                    displayName: name
+                )
+            } else {
+                let name = appState.driveMonitor.drives.first(where: { $0.id == sourceId })?.displayName ?? "Drive"
+                return .offlineIndexed(
+                    sourceId: sourceId,
+                    kind: .drive,
+                    rootPath: path,
+                    displayName: name
+                )
+            }
+        default:
+            return .local(appState.fileManager(for: side).currentDirectory)
         }
-        return .local(appState.fileManager(for: side).currentDirectory)
     }
 
     private func calculate() async {
