@@ -48,18 +48,73 @@ struct SidebarView: View {
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
 
+    /// "Change Icon" submenu shown in the favorite's context menu. Lists
+    /// the matching cloud provider's logo (when this is a cloud favorite)
+    /// and a curated set of SF Symbols.
+    @ViewBuilder
+    private func changeIconMenu(for fav: SidebarFavorite) -> some View {
+        Menu {
+            if fav.kind == .cloudFolder,
+               let providerType = fav.providerType,
+               let asset = providerType.logoAssetName,
+               let menuImage = Self.menuSizedImage(named: asset) {
+                Button {
+                    appState.setFavoriteIcon(id: fav.id, to: .favoriteAssetIcon(asset), in: panelSide)
+                } label: {
+                    Label {
+                        Text("\(providerType.displayName) Logo")
+                    } icon: {
+                        // AppKit menus ignore SwiftUI .frame() on Image,
+                        // so we hand them an NSImage whose intrinsic size
+                        // is already 16×16.
+                        Image(nsImage: menuImage)
+                    }
+                }
+                Divider()
+            }
+            ForEach(FavoriteIconLibrary.allSymbols, id: \.self) { item in
+                Button {
+                    appState.setFavoriteIcon(id: fav.id, to: item.symbol, in: panelSide)
+                } label: {
+                    Label(item.name, systemImage: item.symbol)
+                }
+            }
+        } label: {
+            Text("Change Icon")
+        }
+    }
+
+    /// Loads an asset-catalog image and returns a 16×16 NSImage copy.
+    /// The original image data is preserved; only the layout size hint
+    /// changes, which is what NSMenuItem honours.
+    private static func menuSizedImage(named asset: String) -> NSImage? {
+        guard let original = NSImage(named: asset) else { return nil }
+        // Copy so we don't mutate the cached app-wide instance.
+        let copy = original.copy() as? NSImage ?? original
+        copy.size = NSSize(width: 16, height: 16)
+        return copy
+    }
+
     @ViewBuilder
     private func favoriteRow(_ fav: SidebarFavorite) -> some View {
         switch fav.kind {
         case .localPath:
             if let url = fav.url {
-                Label(fav.displayName, systemImage: fav.icon)
-                    .tag(SidebarItem.location(url))
+                Label {
+                    Text(fav.displayName)
+                } icon: {
+                    FavoriteIconView(icon: fav.icon)
+                }
+                .tag(SidebarItem.location(url))
             }
         case .cloudFolder:
             if let accountId = fav.accountId, let path = fav.cloudPath {
-                Label(fav.displayName, systemImage: fav.icon)
-                    .tag(SidebarItem.cloudFolder(accountId: accountId, path: path))
+                Label {
+                    Text(fav.displayName)
+                } icon: {
+                    FavoriteIconView(icon: fav.icon)
+                }
+                .tag(SidebarItem.cloudFolder(accountId: accountId, path: path))
             }
         }
     }
@@ -74,6 +129,7 @@ struct SidebarView: View {
                                 renameText = fav.displayName
                                 renamingFavorite = fav
                             }
+                            changeIconMenu(for: fav)
                             Divider()
                             Button("Remove from Favorites", role: .destructive) {
                                 appState.removeFavorite(id: fav.id, from: panelSide)
@@ -85,15 +141,32 @@ struct SidebarView: View {
                 }
             }
 
+            if !appState.driveMonitor.drives.isEmpty {
+                Section("Drives") {
+                    ForEach(appState.driveMonitor.drives) { drive in
+                        DriveRow(drive: drive, panelSide: panelSide)
+                            .tag(SidebarItem.drive(driveId: drive.id))
+                            .contextMenu {
+                                driveContextMenu(for: drive)
+                            }
+                    }
+                }
+            }
+
             Section("Cloud Accounts") {
                     ForEach(appState.syncManager.accounts) { account in
                         Label {
                             HStack {
                                 Text(account.displayName)
+                                    .foregroundStyle(account.isConnected ? .primary : .secondary)
                                 Spacer()
-                                Circle()
-                                    .fill(account.isConnected ? .green : .gray)
-                                    .frame(width: 8, height: 8)
+                                if let job = appState.indexingService.activeJob(sourceId: account.id.uuidString) {
+                                    indexingProgress(processed: job.filesProcessed)
+                                } else {
+                                    Circle()
+                                        .fill(account.isConnected ? .green : .gray)
+                                        .frame(width: 8, height: 8)
+                                }
                             }
                         } icon: {
                             CloudProviderIcon(providerType: account.providerType, size: 16)
@@ -104,6 +177,8 @@ struct SidebarView: View {
                                 renamingAccountId = account.id
                                 renameAccountText = account.displayName
                             }
+                            Divider()
+                            cloudIndexMenu(for: account)
                         }
                     }
                     .onMove { indices, destination in
@@ -178,6 +253,15 @@ struct SidebarView: View {
                     let target = account.rootPath.isEmpty ? "/" : account.rootPath
                     await cloudFM.navigateTo(target)
                 }
+            case .drive(let driveId):
+                // Online drives navigate the local file manager to the
+                // mount path; offline drives are handled by the panel
+                // content via OfflineSourceView.
+                if let mount = appState.driveMonitor.mountURL(for: driveId) {
+                    Task {
+                        await appState.fileManager(for: panelSide).navigateTo(mount)
+                    }
+                }
             default:
                 break
             }
@@ -215,6 +299,155 @@ struct SidebarView: View {
             }
         } message: {
             Text("Enter a new name for this cloud account.")
+        }
+    }
+
+    // MARK: - Drive / indexing helpers
+
+    /// Spinner + count shown next to a drive or cloud account while a
+    /// background indexing job is running.
+    @ViewBuilder
+    private func indexingProgress(processed: Int) -> some View {
+        HStack(spacing: 4) {
+            ProgressView().controlSize(.mini)
+            Text("\(processed)")
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func driveContextMenu(for drive: Drive) -> some View {
+        let isOnline = appState.driveMonitor.isOnline(drive)
+        let activeJob = appState.indexingService.activeJob(sourceId: drive.id)
+        // Show the indexed-at info as a disabled label so users can decide
+        // whether a re-index is needed before triggering one.
+        if let last = drive.lastIndexed {
+            Text("Indexed \(Self.shortIndexedSummary(date: last, files: drive.totalFiles))")
+            Divider()
+        } else {
+            Text("Not indexed yet")
+            Divider()
+        }
+        if isOnline, let mount = appState.driveMonitor.mountURL(for: drive.id) {
+            if activeJob == nil {
+                Button(drive.lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                    appState.indexingService.indexDrive(drive, mountURL: mount)
+                }
+            } else {
+                Button("Cancel Indexing") {
+                    appState.indexingService.cancel(sourceId: drive.id)
+                }
+            }
+            Divider()
+        }
+        if drive.lastIndexed != nil {
+            Button("Remove Offline Index", role: .destructive) {
+                Task {
+                    await SearchIndex.shared.dropSource(sourceId: drive.id)
+                    var d = drive
+                    d.lastIndexed = nil
+                    d.totalFiles = 0
+                    d.totalBytes = 0
+                    if isOnline {
+                        appState.driveMonitor.upsert(d)
+                    } else {
+                        appState.driveMonitor.forget(driveId: drive.id)
+                    }
+                }
+            }
+        } else if !isOnline {
+            Button("Forget Drive", role: .destructive) {
+                appState.driveMonitor.forget(driveId: drive.id)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cloudIndexMenu(for account: CloudAccount) -> some View {
+        let activeJob = appState.indexingService.activeJob(sourceId: account.id.uuidString)
+        let lastIndexed = appState.cloudIndexInfo[account.id]
+        if let info = lastIndexed {
+            Text("Indexed \(Self.shortIndexedSummary(date: info.lastIndexed, files: info.totalFiles))")
+            Divider()
+        } else {
+            Text("Not indexed yet")
+            Divider()
+        }
+        if account.isConnected {
+            if activeJob == nil {
+                Button(lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                    appState.indexingService.indexCloudAccount(account)
+                }
+            } else {
+                Button("Cancel Indexing") {
+                    appState.indexingService.cancel(sourceId: account.id.uuidString)
+                }
+            }
+            if lastIndexed != nil {
+                Divider()
+                Button("Remove Offline Index", role: .destructive) {
+                    let accountId = account.id
+                    Task {
+                        await SearchIndex.shared.dropCloudAccount(accountId: accountId)
+                        await SearchIndex.shared.dropSource(sourceId: accountId.uuidString)
+                        await appState.refreshIndexInfo()
+                    }
+                }
+            }
+        }
+    }
+
+    /// e.g. "today · 12,304 files" or "3 days ago · 12,304 files"
+    private static func shortIndexedSummary(date: Date, files: Int) -> String {
+        let secs = Date().timeIntervalSince(date)
+        let when: String
+        if secs < 60 { when = "just now" }
+        else if secs < 86_400 { when = "today" }
+        else if secs < 86_400 * 2 { when = "yesterday" }
+        else { when = "\(Int(secs / 86_400)) days ago" }
+        let countStr = NumberFormatter.localizedString(from: NSNumber(value: files), number: .decimal)
+        return "\(when) · \(countStr) files"
+    }
+}
+
+// MARK: - Drive sidebar row
+
+private struct DriveRow: View {
+    let drive: Drive
+    let panelSide: PanelSide
+    @Environment(AppState.self) private var appState
+
+    private var isOnline: Bool { appState.driveMonitor.isOnline(drive) }
+
+    var body: some View {
+        Label {
+            HStack(spacing: 6) {
+                Text(drive.displayName)
+                    .italic(!isOnline)
+                    .foregroundStyle(isOnline ? .primary : .secondary)
+                Spacer()
+                if let job = appState.indexingService.activeJob(sourceId: drive.id) {
+                    HStack(spacing: 4) {
+                        ProgressView().controlSize(.mini)
+                        Text("\(job.filesProcessed)")
+                            .font(.caption2)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                } else if !isOnline {
+                    Text("Offline")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.18), in: Capsule())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Image(systemName: drive.kind.sfSymbol)
+                .foregroundStyle(isOnline ? Color.accentColor : Color.secondary)
         }
     }
 }

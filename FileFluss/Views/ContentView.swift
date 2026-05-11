@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// Root wrapper that owns the first-launch welcome sheet. The sheet lives
+/// here rather than on `ContentView` because that view already presents two
+/// other sheets (sync planner, add account) and stacking three `.sheet`
+/// modifiers on the same view doesn't reliably surface the late-set one.
+struct RootView: View {
+    @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
+    @State private var showWelcome = false
+
+    var body: some View {
+        ContentView()
+            .sheet(isPresented: $showWelcome) {
+                WelcomeView()
+            }
+            .onChange(of: hasCompletedWelcome, initial: true) { _, completed in
+                showWelcome = !completed
+            }
+    }
+}
+
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @State private var supportLog = SupportLogService.shared
@@ -83,9 +102,26 @@ struct ContentView: View {
         VStack(spacing: 0) {
             switch sidebarItem {
             case .cloudAccount(let account):
-                CloudFileListView(panelSide: side, accountId: account.id)
-            case .cloudFolder(let accountId, _):
-                CloudFileListView(panelSide: side, accountId: accountId)
+                if account.isConnected {
+                    CloudFileListView(panelSide: side, accountId: account.id)
+                } else {
+                    OfflineSourceView(sourceId: account.id.uuidString, panelSide: side)
+                }
+            case .cloudFolder(let accountId, let path):
+                if let account = appState.syncManager.accountFor(id: accountId), account.isConnected {
+                    CloudFileListView(panelSide: side, accountId: accountId)
+                } else {
+                    OfflineSourceView(sourceId: accountId.uuidString, panelSide: side, initialPath: path)
+                }
+            case .drive(let driveId):
+                if appState.driveMonitor.mountURL(for: driveId) != nil {
+                    // Online — sidebar onChange already navigated the local FM.
+                    FileListView(panelSide: side)
+                } else {
+                    OfflineSourceView(sourceId: driveId, panelSide: side)
+                }
+            case .offlineFolder(let sourceId, let path):
+                OfflineSourceView(sourceId: sourceId, panelSide: side, initialPath: path)
             default:
                 FileListView(panelSide: side)
             }

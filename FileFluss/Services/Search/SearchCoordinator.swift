@@ -13,6 +13,23 @@ actor SearchCoordinator {
         let cloudAccountId: UUID?
         let cloudPath: String?
         let allAccounts: [(id: UUID, name: String)]
+        /// Extra local roots to scan in parallel with `localDirectory` when
+        /// scope is `.allSources` — typically mounted external/network
+        /// drives so they're included in a "search everywhere" query
+        /// without requiring the user to navigate to them first. Each
+        /// entry pairs the root URL with a display name used to group its
+        /// results in the UI.
+        let extraLocalRoots: [(url: URL, name: String)]
+        /// When true, also surface matches from the offline index for
+        /// disconnected cloud accounts and unmounted indexed drives.
+        let includeOffline: Bool
+        /// Currently online sources keyed by id — used to determine which
+        /// indexed sources are *offline* and therefore eligible to appear in
+        /// offline results. `offlineCloudAccounts` holds disconnected ones
+        /// from `allAccounts`. `offlineDrives` carries (id, name) for any
+        /// drive that has an index but isn't currently mounted.
+        let offlineCloudAccounts: [(id: UUID, name: String)]
+        let offlineDrives: [(id: String, name: String)]
     }
 
     func search(request: SearchRequest) -> AsyncStream<SearchResultBatch> {
@@ -46,6 +63,41 @@ actor SearchCoordinator {
                                 items: [],
                                 isComplete: true
                             ))
+                        }
+                    }
+
+                    // Extra local roots (mounted external/network drives) — only
+                    // applies to "all sources" scope, so we don't fan out when
+                    // the user explicitly scoped to the active panel.
+                    if request.scope == .allSources {
+                        for entry in request.extraLocalRoots {
+                            sourcesTotal += 1
+                            let rootURL = entry.url
+                            let sourceName = entry.name
+                            group.addTask { [localSearcher] in
+                                // Use direct recursive enumeration rather
+                                // than Spotlight: many external drives have
+                                // indexing disabled, and the underlying
+                                // NSMetadataQuery is single-instance so
+                                // running multiple in parallel doesn't work.
+                                let stream = await localSearcher.recursiveEnumerate(
+                                    query: request.query,
+                                    rootURL: rootURL
+                                )
+                                for await batch in stream {
+                                    guard !Task.isCancelled else { return }
+                                    continuation.yield(SearchResultBatch(
+                                        source: sourceName,
+                                        items: batch,
+                                        isComplete: false
+                                    ))
+                                }
+                                continuation.yield(SearchResultBatch(
+                                    source: sourceName,
+                                    items: [],
+                                    isComplete: true
+                                ))
+                            }
                         }
                     }
 
@@ -91,6 +143,71 @@ actor SearchCoordinator {
                                 items: [],
                                 isComplete: true
                             ))
+                        }
+                    }
+
+                    // Offline indexed results (drives + disconnected accounts)
+                    if request.includeOffline {
+                        let query = request.query
+                        let offlineCloud = request.offlineCloudAccounts
+                        let offlineDrives = request.offlineDrives
+                        if !offlineCloud.isEmpty || !offlineDrives.isEmpty {
+                            group.addTask {
+                                let driveIds = offlineDrives.map(\.id)
+                                let driveResults = await SearchIndex.shared.searchIndexed(
+                                    query: query, sourceIds: driveIds, limit: 300
+                                )
+                                let driveNames = Dictionary(uniqueKeysWithValues: offlineDrives.map { ($0.id, $0.name) })
+                                let driveBatch: [SearchResultItem] = driveResults.map { f in
+                                    .offline(
+                                        name: f.name,
+                                        path: f.path,
+                                        isDirectory: f.isDirectory,
+                                        size: f.size,
+                                        modificationDate: f.modificationDate,
+                                        sourceId: f.sourceId,
+                                        sourceName: driveNames[f.sourceId] ?? "Offline Drive",
+                                        sourceKind: "drive"
+                                    )
+                                }
+                                if !driveBatch.isEmpty {
+                                    continuation.yield(SearchResultBatch(
+                                        source: "Offline Drives",
+                                        items: driveBatch,
+                                        isComplete: false
+                                    ))
+                                }
+
+                                let cloudIds = offlineCloud.map(\.id)
+                                let cloudResults = await SearchIndex.shared.searchCloudCached(
+                                    query: query, accountIds: cloudIds, limit: 300
+                                )
+                                let cloudNames = Dictionary(uniqueKeysWithValues: offlineCloud.map { ($0.id, $0.name) })
+                                let cloudBatch: [SearchResultItem] = cloudResults.map { r in
+                                    .offline(
+                                        name: r.item.name,
+                                        path: r.item.path,
+                                        isDirectory: r.item.isDirectory,
+                                        size: r.item.size,
+                                        modificationDate: r.item.modificationDate,
+                                        sourceId: r.accountId.uuidString,
+                                        sourceName: cloudNames[r.accountId] ?? "Offline Account",
+                                        sourceKind: "cloud"
+                                    )
+                                }
+                                if !cloudBatch.isEmpty {
+                                    continuation.yield(SearchResultBatch(
+                                        source: "Offline Cloud Accounts",
+                                        items: cloudBatch,
+                                        isComplete: false
+                                    ))
+                                }
+                                continuation.yield(SearchResultBatch(
+                                    source: "Offline",
+                                    items: [],
+                                    isComplete: true
+                                ))
+                            }
                         }
                     }
 

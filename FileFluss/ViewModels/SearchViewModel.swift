@@ -6,6 +6,11 @@ final class SearchViewModel {
     var results: [SearchResultItem] = []
     var status: SearchStatus = .idle
     var sourceFilter: SourceFilter = .all
+    /// When on, search also queries the offline index for unmounted drives
+    /// and disconnected cloud accounts. Persisted across launches.
+    var includeOffline: Bool = UserDefaults.standard.object(forKey: "search.includeOffline") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(includeOffline, forKey: "search.includeOffline") }
+    }
 
     private var searchTask: Task<Void, Never>?
 
@@ -30,6 +35,7 @@ final class SearchViewModel {
     var groupedResults: [(source: String, icon: String?, providerType: CloudProviderType?, items: [SearchResultItem])] {
         var localItems: [SearchResultItem] = []
         var cloudGroups: [UUID: (name: String, providerType: CloudProviderType?, items: [SearchResultItem])] = [:]
+        var offlineGroups: [String: (name: String, items: [SearchResultItem])] = [:]
 
         for item in filteredResults {
             switch item {
@@ -39,6 +45,10 @@ final class SearchViewModel {
                 var group = cloudGroups[accountId] ?? (name: accountName, providerType: nil, items: [])
                 group.items.append(item)
                 cloudGroups[accountId] = group
+            case .offline(_, _, _, _, _, let sourceId, let sourceName, _):
+                var group = offlineGroups[sourceId] ?? (name: "\(sourceName) (offline)", items: [])
+                group.items.append(item)
+                offlineGroups[sourceId] = group
             }
         }
 
@@ -48,6 +58,9 @@ final class SearchViewModel {
         }
         for (_, group) in cloudGroups.sorted(by: { $0.value.name < $1.value.name }) {
             groups.append((source: group.name, icon: nil, providerType: group.providerType, items: group.items))
+        }
+        for (_, group) in offlineGroups.sorted(by: { $0.value.name < $1.value.name }) {
+            groups.append((source: group.name, icon: "wifi.slash", providerType: nil, items: group.items))
         }
         return groups
     }
@@ -74,7 +87,10 @@ final class SearchViewModel {
 
     func performSearch(
         localDirectory: URL?,
-        allAccounts: [(id: UUID, name: String)]
+        allAccounts: [(id: UUID, name: String)],
+        extraLocalRoots: [(url: URL, name: String)] = [],
+        offlineCloudAccounts: [(id: UUID, name: String)] = [],
+        offlineDrives: [(id: String, name: String)] = []
     ) {
         searchTask?.cancel()
 
@@ -98,7 +114,11 @@ final class SearchViewModel {
                 localDirectory: localDirectory,
                 cloudAccountId: nil,
                 cloudPath: nil,
-                allAccounts: allAccounts
+                allAccounts: allAccounts,
+                extraLocalRoots: extraLocalRoots,
+                includeOffline: includeOffline,
+                offlineCloudAccounts: offlineCloudAccounts,
+                offlineDrives: offlineDrives
             )
 
             let stream = await SearchCoordinator.shared.search(request: request)

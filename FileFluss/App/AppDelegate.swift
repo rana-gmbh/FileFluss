@@ -71,4 +71,18 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
+
+    /// Forcibly accept termination requests. SwiftUI `.sheet` modals attach
+    /// as `NSWindow.attachedSheet` and can stall the system's "Quit & Reopen"
+    /// flow after granting Full Disk Access — end them explicitly so the
+    /// app always quits cleanly. Auxiliary windows (Settings, Search,
+    /// Compare) also get closed defensively.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        for window in NSApp.windows {
+            if let sheet = window.attachedSheet {
+                window.endSheet(sheet, returnCode: .cancel)
+            }
+        }
+        return .terminateNow
+    }
 }

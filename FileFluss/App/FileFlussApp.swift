@@ -8,7 +8,7 @@ struct FileFlussApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environment(appState)
         }
         .windowStyle(.titleBar)

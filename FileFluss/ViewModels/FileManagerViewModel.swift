@@ -166,20 +166,33 @@ final class FileManagerViewModel {
         isCalculatingSelectionSize = true
         selectionSize = fileSize // show file size immediately
 
+        let folderURLs = folders.map(\.url)
         selectionSizeTask = Task {
-            var total = fileSize
-            let fm = Foundation.FileManager.default
-            for folder in folders {
-                guard !Task.isCancelled else { return }
-                let enumerator = fm.enumerator(at: folder.url, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey], options: [.skipsHiddenFiles])
-                while let fileURL = enumerator?.nextObject() as? URL {
-                    guard !Task.isCancelled else { return }
-                    if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
-                       values.isRegularFile == true {
-                        total += Int64(values.fileSize ?? 0)
+            // The folder walk must NOT run on the MainActor: `Task { … }`
+            // inside a `@MainActor` class inherits the actor, so without
+            // `Task.detached` the enumerator blocks the UI thread — visible
+            // as a beachball on every selection change when the folder lives
+            // on a slow external/network volume.
+            let total = await Task.detached(priority: .utility) { () -> Int64 in
+                var running = fileSize
+                let fm = Foundation.FileManager.default
+                for folderURL in folderURLs {
+                    if Task.isCancelled { return running }
+                    let enumerator = fm.enumerator(
+                        at: folderURL,
+                        includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                    while let fileURL = enumerator?.nextObject() as? URL {
+                        if Task.isCancelled { return running }
+                        if let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+                           values.isRegularFile == true {
+                            running += Int64(values.fileSize ?? 0)
+                        }
                     }
                 }
-            }
+                return running
+            }.value
             guard !Task.isCancelled else { return }
             self.selectionSize = total
             self.isCalculatingSelectionSize = false

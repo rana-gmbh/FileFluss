@@ -8,6 +8,8 @@ struct SearchPopupView: View {
         VStack(spacing: 0) {
             searchHeader
             Divider()
+            offlineToggleBar
+            Divider()
             filterBar
             Divider()
             resultsList
@@ -80,6 +82,26 @@ struct SearchPopupView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var offlineToggleBar: some View {
+        HStack(spacing: 8) {
+            Toggle(isOn: Bindable(appState.searchVM).includeOffline) {
+                Label("Show offline results", systemImage: "wifi.slash")
+                    .font(.system(size: 11))
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .onChange(of: appState.searchVM.includeOffline) {
+                triggerSearch()
+            }
+            Spacer()
+            Text("Includes indexed drives & disconnected accounts")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
     }
 
     private var filterBar: some View {
@@ -178,6 +200,15 @@ struct SearchPopupView: View {
 
     private func openInPanel(_ item: SearchResultItem, side: PanelSide) {
         switch item {
+        case .offline:
+            if let nav = item.offlineNavigation {
+                appState.setSidebarSelection(
+                    .offlineFolder(sourceId: nav.sourceId, path: nav.parentPath),
+                    for: side
+                )
+                appState.activePanel = side
+            }
+            return
         case .local(let fileItem):
             let parentURL: URL
             if fileItem.isDirectory {
@@ -223,10 +254,32 @@ struct SearchPopupView: View {
 
     private func triggerSearch() {
         let localDir = appState.activeFileManager.currentDirectory
-        let accounts = appState.syncManager.accounts.map { (id: $0.id, name: $0.providerType.displayName) }
+        let connectedAccounts = appState.syncManager.accounts
+            .filter { $0.isConnected }
+            .map { (id: $0.id, name: $0.providerType.displayName) }
+        let offlineAccounts = appState.syncManager.accounts
+            .filter { !$0.isConnected }
+            .map { (id: $0.id, name: $0.displayName) }
+        let offlineDrives = appState.driveMonitor.drives
+            .filter { !appState.driveMonitor.isOnline($0) && $0.lastIndexed != nil }
+            .map { (id: $0.id, name: $0.displayName) }
+        // Fan out the search to every currently-mounted external/network
+        // drive so users find files on them even when neither panel is
+        // sitting on the drive. Skip any drive whose mount path is already
+        // a prefix of the active local directory to avoid duplicate hits.
+        let activePath = localDir.path
+        var extraRoots: [(url: URL, name: String)] = []
+        for drive in appState.driveMonitor.drives {
+            guard let url = appState.driveMonitor.mountURL(for: drive.id) else { continue }
+            if activePath.hasPrefix(url.path) { continue }
+            extraRoots.append((url: url, name: drive.displayName))
+        }
         appState.searchVM.performSearch(
             localDirectory: localDir,
-            allAccounts: accounts
+            allAccounts: connectedAccounts,
+            extraLocalRoots: extraRoots,
+            offlineCloudAccounts: offlineAccounts,
+            offlineDrives: offlineDrives
         )
     }
 }
@@ -300,6 +353,7 @@ private struct SearchResultRow: View {
         switch item {
         case .local(let f): return FileTypeIcon.icon(for: f.contentType)
         case .cloud(let f, _, _): return FileTypeIcon.icon(forFilename: f.name)
+        case .offline(let n, _, _, _, _, _, _, _): return FileTypeIcon.icon(forFilename: n)
         }
     }
 
@@ -310,11 +364,24 @@ private struct SearchResultRow: View {
                 .interpolation(.high)
                 .frame(width: 20, height: 20)
                 .frame(width: 24, alignment: .center)
+                .opacity(item.isOffline ? 0.55 : 1.0)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(item.name)
+                        .font(.system(size: 13))
+                        .italic(item.isOffline)
+                        .foregroundStyle(item.isOffline ? .secondary : .primary)
+                        .lineLimit(1)
+                    if item.isOffline {
+                        Text("Offline")
+                            .font(.system(size: 9, weight: .medium))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.18), in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 Text(item.locationDescription)
                     .font(.system(size: 10))

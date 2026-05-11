@@ -29,6 +29,37 @@ final class AppState {
     var searchVM = SearchViewModel()
     var showSyncSheet = false
 
+    // Drive detection + background indexing. Both are singletons but exposed
+    // here so SwiftUI views can observe them via the AppState environment.
+    let driveMonitor = DriveMonitor.shared
+    let indexingService = IndexingService.shared
+
+    /// Per-cloud-account index summary, refreshed after every indexing run
+    /// and when the Settings → Index Status panel appears. Keyed by account
+    /// UUID. The summary type only carries the fields the UI needs.
+    struct CloudIndexInfo: Hashable {
+        let lastIndexed: Date
+        let totalFiles: Int
+        let totalFolders: Int
+        let totalBytes: Int64
+    }
+    var cloudIndexInfo: [UUID: CloudIndexInfo] = [:]
+
+    func refreshIndexInfo() async {
+        var next: [UUID: CloudIndexInfo] = [:]
+        for account in syncManager.accounts {
+            if let s = await SearchIndex.shared.cloudAccountSummary(accountId: account.id) {
+                next[account.id] = CloudIndexInfo(
+                    lastIndexed: s.lastIndexed,
+                    totalFiles: s.totalFiles,
+                    totalFolders: s.totalFolders,
+                    totalBytes: s.totalBytes
+                )
+            }
+        }
+        cloudIndexInfo = next
+    }
+
     /// Bumped each time the user clicks Compare in the toolbar (or
     /// Compare-again in the compare window). The compare window observes
     /// this via `.task(id:)` and snapshots the current panels — so simply
@@ -171,6 +202,16 @@ final class AppState {
         var favs = favorites(for: side)
         guard let idx = favs.firstIndex(where: { $0.id == id }) else { return }
         favs[idx].displayName = newName
+        write(favs, to: side)
+    }
+
+    /// Replaces a favorite's icon. Accepts either an SF Symbol name or an
+    /// `@asset:<asset-catalog-name>` reference (use `String.favoriteAssetIcon`
+    /// to build one).
+    func setFavoriteIcon(id: UUID, to icon: String, in side: PanelSide) {
+        var favs = favorites(for: side)
+        guard let idx = favs.firstIndex(where: { $0.id == id }) else { return }
+        favs[idx].icon = icon
         write(favs, to: side)
     }
 
@@ -360,15 +401,41 @@ final class AppState {
         }
     }
 
+    private static func runCacheMaintenanceIfEnabled() async {
+        let defaults = UserDefaults.standard
+        // Default ON if the key has never been written.
+        let enabled = defaults.object(forKey: "cacheAutoManage") as? Bool ?? true
+        guard enabled else {
+            await CacheManager.shared.refreshSize()
+            return
+        }
+        let days = (defaults.object(forKey: "cacheAutoDeleteDays") as? Int) ?? CacheManager.defaultAutoDeleteDays
+        let sizeMB = (defaults.object(forKey: "cacheMaxSizeMB") as? Int) ?? CacheManager.defaultMaxSizeMB
+        await CacheManager.shared.runAutoMaintenance(maxAgeDays: days, maxSizeMB: sizeMB)
+    }
+
     init() {
         self.leftFileManager = FileManagerViewModel()
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
         loadFavorites()
 
+        NotificationCenter.default.addObserver(
+            forName: .indexingDidFinish, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Task { @MainActor in
+                    await self.refreshIndexInfo()
+                }
+            }
+        }
+
         Task {
             await syncManager.reconnectSavedAccounts()
             try? await SearchIndex.shared.open()
+            await refreshIndexInfo()
+            await Self.runCacheMaintenanceIfEnabled()
         }
     }
 }
@@ -777,6 +844,12 @@ enum SidebarItem: Hashable, Identifiable {
     case cloudAccount(CloudAccount)
     case cloudFolder(accountId: UUID, path: String)
     case syncRules
+    /// An external or network drive. When online, panel navigates to its
+    /// mount path via `.location`. When offline, panel shows OfflineSourceView.
+    case drive(driveId: String)
+    /// An offline-source folder view, opened from a search result.
+    /// Used for both indexed drives and disconnected cloud accounts.
+    case offlineFolder(sourceId: String, path: String)
 
     var id: String {
         switch self {
@@ -786,6 +859,8 @@ enum SidebarItem: Hashable, Identifiable {
         case .cloudAccount(let account): return account.id.uuidString
         case .cloudFolder(let accountId, let path): return "cloud:\(accountId.uuidString):\(path)"
         case .syncRules: return "syncRules"
+        case .drive(let id): return "drive:\(id)"
+        case .offlineFolder(let sourceId, let path): return "offline:\(sourceId):\(path)"
         }
     }
 }
