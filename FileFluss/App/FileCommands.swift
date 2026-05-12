@@ -1,4 +1,18 @@
+import AppKit
 import SwiftUI
+
+/// Forwards an Edit-menu action to the first responder in the key
+/// window. Returns `true` if AppKit found a responder that handled it
+/// (typically a text field or text view), `false` otherwise. We use
+/// this in the Cut/Copy/Paste menu items so a focused text field gets
+/// the standard text-editing behaviour while the file manager view
+/// gets the file-clipboard behaviour. Without this, the file-clipboard
+/// menu items swallow ⌘C/⌘X/⌘V everywhere, including inside sheets
+/// like Add Cloud Account.
+@MainActor
+private func forwardToFirstResponder(_ selector: Selector) -> Bool {
+    return NSApp.sendAction(selector, to: nil, from: nil)
+}
 
 struct FileCommands: Commands {
     let appState: AppState
@@ -80,15 +94,24 @@ struct FileCommands: Commands {
         // fires but the observer doesn't always see the post), so the menu
         // path uses a guaranteed direct invocation.
         CommandGroup(replacing: .pasteboard) {
+            // Each handler forwards to the key-window's first responder
+            // first; only if no text field/view consumes the keystroke
+            // do we fall through to the file-clipboard handler. This
+            // restores standard ⌘C/⌘X/⌘V inside sheets, popovers, and
+            // any other text input without giving up file-clipboard
+            // ownership when the file manager itself is focused.
             applyShortcut(.cutFiles, to: Button("Cut") {
+                if forwardToFirstResponder(#selector(NSText.cut(_:))) { return }
                 NSLog("[FileFluss] menu: Cut clicked")
                 appState.captureFileClipboard(operation: .cut)
             })
             applyShortcut(.copyFiles, to: Button("Copy") {
+                if forwardToFirstResponder(#selector(NSText.copy(_:))) { return }
                 NSLog("[FileFluss] menu: Copy clicked")
                 appState.captureFileClipboard(operation: .copy)
             })
             applyShortcut(.pasteFiles, to: Button("Paste") {
+                if forwardToFirstResponder(#selector(NSText.paste(_:))) { return }
                 NSLog("[FileFluss] menu: Paste clicked")
                 Task { await appState.pasteFileClipboard() }
             })
