@@ -199,15 +199,21 @@ enum VersionTestRunner {
             )
         }
 
-        let testFolderPath = "/" + testFolderName
+        // S3-style providers expose the root as a list of buckets, not
+        // ordinary folders — `createDirectory(at: "/Foo")` would attempt
+        // to create a bucket called "Foo", which fails for many reasons
+        // (illegal characters, region/quota restrictions). Pick an
+        // existing bucket and run the test inside it instead.
+        let testRoot = await resolveTestRoot(provider: provider, account: account)
+        let testFolderPath = testRoot == "/" ? "/" + testFolderName : testRoot + "/" + testFolderName
 
         // Phase 1 — create folder
         let createStep = await measure(
             name: "create \(testFolderName)",
-            diagnostics: { await listingDiagnostic(provider: provider, parent: "/", expectedName: testFolderName) }
+            diagnostics: { await listingDiagnostic(provider: provider, parent: testRoot, expectedName: testFolderName) }
         ) {
             try await provider.createDirectory(at: testFolderPath)
-            let rootContents = try await provider.listDirectory(at: "/")
+            let rootContents = try await provider.listDirectory(at: testRoot)
             guard rootContents.contains(where: { $0.name == testFolderName && $0.isDirectory }) else {
                 throw VersionTestError.verificationFailed("folder not present after create")
             }
@@ -341,6 +347,27 @@ enum VersionTestRunner {
     }
 
     // MARK: - Helpers
+
+    /// Returns the path under which the version test should run for the
+    /// given account. For most providers this is `"/"` (the account
+    /// root). S3-flavoured providers expose the root as a list of
+    /// buckets — we can't create a folder there directly, so we list the
+    /// root once and nest the test inside the first existing bucket.
+    /// If listing fails or there are no buckets, fall through to `"/"`
+    /// and let the create step surface the underlying error.
+    private static func resolveTestRoot(provider: any CloudProvider, account: CloudAccount) async -> String {
+        let bucketRooted: Set<CloudProviderType> = [.s3, .s3Compatible, .synologyC2]
+        guard bucketRooted.contains(account.providerType) else { return "/" }
+        do {
+            let buckets = try await provider.listDirectory(at: "/")
+                .filter { $0.isDirectory }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            guard let first = buckets.first else { return "/" }
+            return "/\(first.name)"
+        } catch {
+            return "/"
+        }
+    }
 
     private static func measure(
         name: String,
