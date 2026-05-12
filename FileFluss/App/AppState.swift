@@ -517,6 +517,7 @@ final class AppState {
         }
 
         // --- Selection
+        on(.selectAll) { [weak self] in self?.activeSelectAll() }
         on(.deselectAll) { [weak self] in self?.activeClearSelection() }
         on(.invertSelection) { [weak self] in self?.activeInvertSelection() }
 
@@ -620,6 +621,16 @@ final class AppState {
         } else {
             guard let item = activeFileManager.selectedItems.first, item.isDirectory else { return }
             setSidebarSelection(.location(item.url), for: otherSide)
+        }
+    }
+
+    private func activeSelectAll() {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            vm.selectedItemIDs = Set(vm.filteredItems.map(\.id))
+        } else {
+            let fm = activeFileManager
+            fm.selectedItemIDs = Set(fm.filteredItems.map(\.id))
         }
     }
 

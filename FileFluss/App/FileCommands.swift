@@ -117,6 +117,7 @@ struct FileCommands: Commands {
             })
             Divider()
             applyShortcut(.selectAll, to: Button("Select All") {
+                if forwardToFirstResponder(#selector(NSResponder.selectAll(_:))) { return }
                 NotificationCenter.default.post(name: KeyboardCommand.selectAll.notification, object: nil)
             })
             applyShortcut(.deselectAll, to: Button("Deselect All") {
