@@ -248,6 +248,48 @@ class FileTableView: NSTableView {
             panel.delegate = nil
         }
     }
+
+    // MARK: - Responder-chain Cut / Copy / Paste
+    //
+    // SwiftUI's menu-level `.keyboardShortcut` for ⌘C/⌘X/⌘V never wins
+    // against the responder chain: macOS routes those keys via the
+    // `copy:` / `cut:` / `paste:` selectors to the first responder before
+    // checking menu key equivalents. By implementing those actions here
+    // and posting our keyboard-command notifications, the same handlers
+    // that drive the menu items run when the table is focused. Standard
+    // text fields keep their own behaviour because they implement these
+    // selectors themselves.
+
+    @objc func copy(_ sender: Any?) {
+        NSLog("[FileFluss] FileTableView.copy(_:) invoked")
+        NotificationCenter.default.post(name: KeyboardCommand.copyFiles.notification, object: nil)
+    }
+
+    @objc func cut(_ sender: Any?) {
+        NSLog("[FileFluss] FileTableView.cut(_:) invoked")
+        NotificationCenter.default.post(name: KeyboardCommand.cutFiles.notification, object: nil)
+    }
+
+    @objc func paste(_ sender: Any?) {
+        NSLog("[FileFluss] FileTableView.paste(_:) invoked")
+        NotificationCenter.default.post(name: KeyboardCommand.pasteFiles.notification, object: nil)
+    }
+
+    /// Gate the Edit-menu items (and ⌘C/⌘X/⌘V) on whether anything is
+    /// selected / clipboard has contents. Without this AppKit greys out
+    /// items it doesn't know how to validate.
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(copy(_:)), #selector(cut(_:)):
+            return numberOfSelectedRows > 0
+        case #selector(paste(_:)):
+            // Allow paste when our in-app clipboard has anything, or when
+            // the system pasteboard has file URLs from another app.
+            return true
+        default:
+            return super.validateUserInterfaceItem(item)
+        }
+    }
 }
 
 // MARK: - Coordinator (DataSource + Delegate)
@@ -426,8 +468,13 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         let clickedRow = tableView.clickedRow
 
-        // Right-click on empty area — show "New Folder" only
+        // Right-click on empty area — Paste (if clipboard has items) + New Folder.
         if clickedRow < 0 || clickedRow >= items.count {
+            let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+            pasteItem.keyEquivalentModifierMask = [.command]
+            pasteItem.target = self
+            menu.addItem(pasteItem)
+            menu.addItem(.separator())
             let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
             newFolderItem.target = self
             menu.addItem(newFolderItem)
@@ -447,6 +494,25 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         guard !contextItems.isEmpty else { return }
 
         let otherPanelName = panelSide == .left ? "Right" : "Left"
+
+        // Standard clipboard ops first so they line up with where users
+        // expect them in Finder's context menu.
+        let cutItem = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
+        cutItem.keyEquivalentModifierMask = [.command]
+        cutItem.target = self
+        menu.addItem(cutItem)
+
+        let copyContextItem = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
+        copyContextItem.keyEquivalentModifierMask = [.command]
+        copyContextItem.target = self
+        menu.addItem(copyContextItem)
+
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+        pasteItem.keyEquivalentModifierMask = [.command]
+        pasteItem.target = self
+        menu.addItem(pasteItem)
+
+        menu.addItem(.separator())
 
         let copyItem = NSMenuItem(title: "Copy to \(otherPanelName) Panel", action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
         copyItem.target = self
@@ -517,6 +583,18 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {
         onDelete?()
+    }
+
+    @objc func handleCut(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.cutFiles.notification, object: nil)
+    }
+
+    @objc func handleCopy(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.copyFiles.notification, object: nil)
+    }
+
+    @objc func handlePaste(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.pasteFiles.notification, object: nil)
     }
 
     @objc func handleCreateFolder(_ sender: NSMenuItem) {

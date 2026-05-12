@@ -21,6 +21,7 @@ struct RootView: View {
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @State private var supportLog = SupportLogService.shared
 
     var body: some View {
@@ -51,6 +52,16 @@ struct ContentView: View {
         .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
             AddCloudAccountView()
                 .environment(appState)
+        }
+        .sheet(isPresented: Bindable(appState).showGoToFolder) {
+            GoToFolderSheet()
+                .environment(appState)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestShowCompareWindow)) { _ in
+            openWindow(id: "compare")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.openSearch.notification)) { _ in
+            openWindow(id: "search")
         }
     }
 
@@ -138,5 +149,39 @@ struct ContentView: View {
         .onTapGesture {
             appState.activePanel = side
         }
+    }
+}
+
+/// Small modal prompt for "Go to Folder…" — the user types a path,
+/// presses Return, the active panel navigates there. Supports `~` and
+/// paths relative to the active panel's current directory.
+private struct GoToFolderSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    @State private var path: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Go to Folder")
+                .font(.headline)
+            TextField("/path/to/folder", text: $path)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 360)
+                .onSubmit { go() }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Go") { go() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(path.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+    }
+
+    private func go() {
+        appState.goToFolder(path)
+        dismiss()
     }
 }

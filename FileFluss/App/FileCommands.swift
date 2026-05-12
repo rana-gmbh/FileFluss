@@ -5,65 +5,198 @@ struct FileCommands: Commands {
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
 
+    // Read manager via the singleton so SwiftUI observes its state and the
+    // Commands rebuild when bindings change.
+    private var shortcuts: KeyboardShortcutManager { .shared }
+
+    /// Adds the appropriate `.keyboardShortcut(...)` modifier to a menu
+    /// button when the user (or preset) has a binding for `command`. If
+    /// the binding is empty or unsupported by SwiftUI, the menu item
+    /// still works — it just has no key combo.
+    @ViewBuilder
+    private func applyShortcut<V: View>(_ command: KeyboardCommand, to view: V) -> some View {
+        if let binding = shortcuts.binding(for: command),
+           let sk = binding.swiftUIShortcut {
+            view.keyboardShortcut(sk)
+        } else {
+            view
+        }
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Folder") {
-                NotificationCenter.default.post(name: .menuNewFolder, object: nil)
-            }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            applyShortcut(.newFolder, to: Button("New Folder") {
+                NotificationCenter.default.post(name: KeyboardCommand.newFolder.notification, object: nil)
+            })
             .disabled(!appState.canCreateFolderInActivePanel)
 
             Divider()
 
-            Button("Rename") {
-                NotificationCenter.default.post(name: .menuRename, object: nil)
-            }
-            .keyboardShortcut(.return, modifiers: [])
+            applyShortcut(.rename, to: Button("Rename") {
+                NotificationCenter.default.post(name: KeyboardCommand.rename.notification, object: nil)
+            })
             .disabled(!appState.hasSingleSelection)
 
-            Divider()
-
-            Button("Copy to Other Panel") {
-                NotificationCenter.default.post(name: .menuCopyToOtherPanel, object: nil)
-            }
-            .keyboardShortcut("c", modifiers: [.command, .shift])
+            applyShortcut(.duplicate, to: Button("Duplicate") {
+                NotificationCenter.default.post(name: KeyboardCommand.duplicate.notification, object: nil)
+            })
             .disabled(!appState.hasSelection)
 
-            Button("Move to Other Panel") {
-                NotificationCenter.default.post(name: .menuMoveToOtherPanel, object: nil)
-            }
-            .keyboardShortcut("m", modifiers: [.command, .shift])
+            applyShortcut(.getInfo, to: Button("Get Info") {
+                NotificationCenter.default.post(name: KeyboardCommand.getInfo.notification, object: nil)
+            })
             .disabled(!appState.hasSelection)
 
             Divider()
 
-            Button("Delete") {
-                NotificationCenter.default.post(name: .menuDelete, object: nil)
-            }
-            .keyboardShortcut(.delete, modifiers: [.command])
+            applyShortcut(.copyToOtherPanel, to: Button("Copy to Other Panel") {
+                NotificationCenter.default.post(name: KeyboardCommand.copyToOtherPanel.notification, object: nil)
+            })
+            .disabled(!appState.hasSelection)
+
+            applyShortcut(.moveToOtherPanel, to: Button("Move to Other Panel") {
+                NotificationCenter.default.post(name: KeyboardCommand.moveToOtherPanel.notification, object: nil)
+            })
+            .disabled(!appState.hasSelection)
+
+            applyShortcut(.copyPath, to: Button("Copy Path") {
+                NotificationCenter.default.post(name: KeyboardCommand.copyPath.notification, object: nil)
+            })
+            .disabled(!appState.hasSelection)
+
+            Divider()
+
+            applyShortcut(.deleteToTrash, to: Button("Move to Trash") {
+                NotificationCenter.default.post(name: KeyboardCommand.deleteToTrash.notification, object: nil)
+            })
             .disabled(!appState.hasSelection)
         }
 
+        // Replace the system Edit menu's Cut/Copy/Paste so our file-aware
+        // versions own ⌘C/⌘X/⌘V and the responder chain doesn't steal them.
+        // These call AppState directly rather than round-tripping through
+        // NotificationCenter — Notification delivery from inside a SwiftUI
+        // CommandGroup is unreliable in some configurations (the closure
+        // fires but the observer doesn't always see the post), so the menu
+        // path uses a guaranteed direct invocation.
+        CommandGroup(replacing: .pasteboard) {
+            applyShortcut(.cutFiles, to: Button("Cut") {
+                NSLog("[FileFluss] menu: Cut clicked")
+                appState.captureFileClipboard(operation: .cut)
+            })
+            applyShortcut(.copyFiles, to: Button("Copy") {
+                NSLog("[FileFluss] menu: Copy clicked")
+                appState.captureFileClipboard(operation: .copy)
+            })
+            applyShortcut(.pasteFiles, to: Button("Paste") {
+                NSLog("[FileFluss] menu: Paste clicked")
+                Task { await appState.pasteFileClipboard() }
+            })
+            Divider()
+            applyShortcut(.selectAll, to: Button("Select All") {
+                NotificationCenter.default.post(name: KeyboardCommand.selectAll.notification, object: nil)
+            })
+            applyShortcut(.deselectAll, to: Button("Deselect All") {
+                NotificationCenter.default.post(name: KeyboardCommand.deselectAll.notification, object: nil)
+            })
+            applyShortcut(.invertSelection, to: Button("Invert Selection") {
+                NotificationCenter.default.post(name: KeyboardCommand.invertSelection.notification, object: nil)
+            })
+        }
+
+        // Add Search / Quick Filter into the existing Edit menu after the
+        // pasteboard group so they appear in the same menu.
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            applyShortcut(.openSearch, to: Button("Search…") {
+                NotificationCenter.default.post(name: KeyboardCommand.openSearch.notification, object: nil)
+            })
+            applyShortcut(.quickFilter, to: Button("Quick Filter…") {
+                NotificationCenter.default.post(name: KeyboardCommand.quickFilter.notification, object: nil)
+            })
+        }
+
+        CommandMenu("Go") {
+            applyShortcut(.parentDirectory, to: Button("Parent Directory") {
+                NotificationCenter.default.post(name: KeyboardCommand.parentDirectory.notification, object: nil)
+            })
+            applyShortcut(.historyBack, to: Button("Back") {
+                NotificationCenter.default.post(name: KeyboardCommand.historyBack.notification, object: nil)
+            })
+            applyShortcut(.historyForward, to: Button("Forward") {
+                NotificationCenter.default.post(name: KeyboardCommand.historyForward.notification, object: nil)
+            })
+            applyShortcut(.openInOtherPanel, to: Button("Open in Other Panel") {
+                NotificationCenter.default.post(name: KeyboardCommand.openInOtherPanel.notification, object: nil)
+            })
+            applyShortcut(.focusPathBar, to: Button("Go to Folder…") {
+                NotificationCenter.default.post(name: KeyboardCommand.focusPathBar.notification, object: nil)
+            })
+            applyShortcut(.jumpToRoot, to: Button("Jump to Root") {
+                NotificationCenter.default.post(name: KeyboardCommand.jumpToRoot.notification, object: nil)
+            })
+            Divider()
+            applyShortcut(.toggleActivePanel, to: Button("Toggle Active Panel") {
+                NotificationCenter.default.post(name: KeyboardCommand.toggleActivePanel.notification, object: nil)
+            })
+        }
+
         CommandGroup(after: .toolbar) {
-            Button("Refresh") {
+            applyShortcut(.refreshAll, to: Button("Refresh Both Panels") {
                 Task { await appState.refreshAllPanels() }
-            }
-            .keyboardShortcut("r", modifiers: .command)
+            })
+            applyShortcut(.refreshActive, to: Button("Refresh Active Panel") {
+                NotificationCenter.default.post(name: KeyboardCommand.refreshActive.notification, object: nil)
+            })
 
             Divider()
 
+            applyShortcut(.sortByName, to: Button("Sort by Name") {
+                NotificationCenter.default.post(name: KeyboardCommand.sortByName.notification, object: nil)
+            })
+            applyShortcut(.sortByDate, to: Button("Sort by Date") {
+                NotificationCenter.default.post(name: KeyboardCommand.sortByDate.notification, object: nil)
+            })
+            applyShortcut(.sortBySize, to: Button("Sort by Size") {
+                NotificationCenter.default.post(name: KeyboardCommand.sortBySize.notification, object: nil)
+            })
+            applyShortcut(.sortByKind, to: Button("Sort by Kind") {
+                NotificationCenter.default.post(name: KeyboardCommand.sortByKind.notification, object: nil)
+            })
+
+            Divider()
+
+            applyShortcut(.toggleHiddenFiles, to: Button("Toggle Hidden Files") {
+                NotificationCenter.default.post(name: KeyboardCommand.toggleHiddenFiles.notification, object: nil)
+            })
             Toggle("Show Status Bar", isOn: $showStatusBar)
                 .keyboardShortcut("/", modifiers: [.command, .shift])
-
             Toggle("Hide File Extensions", isOn: $hideFileExtensions)
         }
 
         CommandMenu("Sync") {
-            Button("Sync Left and Right Panels…") {
+            applyShortcut(.syncPanels, to: Button("Sync Left and Right Panels…") {
                 appState.showSyncSheet = true
-            }
-            .keyboardShortcut("s", modifiers: [.command, .shift])
+            })
             .disabled(appState.hasOfflineSelection)
+
+            applyShortcut(.compareFolders, to: Button("Compare Folders") {
+                NotificationCenter.default.post(name: KeyboardCommand.compareFolders.notification, object: nil)
+            })
+
+            applyShortcut(.swapPanels, to: Button("Swap Panels") {
+                NotificationCenter.default.post(name: KeyboardCommand.swapPanels.notification, object: nil)
+            })
+
+            applyShortcut(.targetToSource, to: Button("Target → Source") {
+                NotificationCenter.default.post(name: KeyboardCommand.targetToSource.notification, object: nil)
+            })
+
+            Divider()
+
+            applyShortcut(.indexCurrentSource, to: Button("Index Current Source") {
+                NotificationCenter.default.post(name: KeyboardCommand.indexCurrentSource.notification, object: nil)
+            })
         }
 
         CommandGroup(replacing: .appInfo) {

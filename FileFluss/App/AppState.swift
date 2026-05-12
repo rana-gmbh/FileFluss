@@ -14,11 +14,21 @@ enum DragDropMode: String {
 }
 
 extension Notification.Name {
-    static let menuNewFolder = Notification.Name("menuNewFolder")
-    static let menuRename = Notification.Name("menuRename")
-    static let menuDelete = Notification.Name("menuDelete")
-    static let menuCopyToOtherPanel = Notification.Name("menuCopyToOtherPanel")
-    static let menuMoveToOtherPanel = Notification.Name("menuMoveToOtherPanel")
+    // Aliased to the unified `KeyboardCommand.notification` names so a
+    // single post from `FileCommands` reaches both the legacy
+    // FileListView/CloudFileListView listeners and any new listener that
+    // observes the command directly.
+    static let menuNewFolder = KeyboardCommand.newFolder.notification
+    static let menuRename = KeyboardCommand.rename.notification
+    static let menuDelete = KeyboardCommand.deleteToTrash.notification
+    static let menuCopyToOtherPanel = KeyboardCommand.copyToOtherPanel.notification
+    static let menuMoveToOtherPanel = KeyboardCommand.moveToOtherPanel.notification
+
+    /// Sent by AppState when the user triggers Compare via menu/shortcut.
+    /// ContentView listens for it and calls `openWindow(id: "compare")`
+    /// — `openWindow` is a SwiftUI environment value not reachable from
+    /// AppState.
+    static let requestShowCompareWindow = Notification.Name("FileFluss.requestShowCompareWindow")
 }
 
 @Observable @MainActor
@@ -33,6 +43,36 @@ final class AppState {
     // here so SwiftUI views can observe them via the AppState environment.
     let driveMonitor = DriveMonitor.shared
     let indexingService = IndexingService.shared
+
+    /// In-app file clipboard for Cmd+C / Cmd+X / Cmd+V. Tracks both the
+    /// item URLs and whether it was a copy or cut so paste can move
+    /// rather than copy when requested. Files captured by a cut are only
+    /// deleted on a successful paste — if the user does Cmd+X but never
+    /// pastes, the originals stay untouched.
+    enum ClipboardOperation: String, Hashable {
+        case copy
+        case cut
+    }
+
+    struct FileClipboardSnapshot: Hashable {
+        let urls: [URL]
+        let operation: ClipboardOperation
+    }
+
+    /// Current clipboard contents from this app. Non-nil only when the
+    /// user pressed Cmd+C or Cmd+X within FileFluss. The system pasteboard
+    /// may also carry file URLs from other apps (e.g. Finder) — `pasteFiles`
+    /// falls back to it when this is nil.
+    var fileClipboard: FileClipboardSnapshot?
+
+    /// Set while a paste is in flight so a second Cmd+V doesn't queue the
+    /// same files a second time before the first completes. For copy
+    /// operations the user can still re-paste once the current one
+    /// finishes (Finder-style "duplicate at dest").
+    private(set) var isPasteInProgress: Bool = false
+
+    /// "Go to Folder…" dialog visibility, bound by ContentView.
+    var showGoToFolder = false
 
     /// Per-cloud-account index summary, refreshed after every indexing run
     /// and when the Settings → Index Status panel appears. Keyed by account
@@ -425,6 +465,696 @@ final class AppState {
         }
     }
 
+    // MARK: - Keyboard command routing
+
+    /// Subscribes to every `KeyboardCommand.notification` we handle at the
+    /// AppState level — anything that mutates panel state or routes a
+    /// generic "act on the active panel" action. Commands that need
+    /// view-local state (Quick Look, in-table rename, etc.) keep their
+    /// existing per-view listeners.
+    private func setupCommandHandlers() {
+        let nc = NotificationCenter.default
+        func on(_ cmd: KeyboardCommand, _ handler: @escaping @MainActor () -> Void) {
+            nc.addObserver(forName: cmd.notification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { handler() }
+            }
+        }
+
+        // --- Panel navigation
+        on(.parentDirectory) { [weak self] in
+            guard let self else { return }
+            Task { await self.navigateActiveParent() }
+        }
+        on(.historyBack) { [weak self] in
+            guard let self else { return }
+            Task { await self.navigateActiveBack() }
+        }
+        on(.historyForward) { [weak self] in
+            guard let self else { return }
+            Task { await self.navigateActiveForward() }
+        }
+        on(.jumpToRoot) { [weak self] in
+            guard let self else { return }
+            Task { await self.navigateActiveToRoot() }
+        }
+        on(.openInOtherPanel) { [weak self] in
+            self?.openSelectionInOtherPanel()
+        }
+        on(.toggleActivePanel) { [weak self] in
+            guard let self else { return }
+            activePanel = (activePanel == .left) ? .right : .left
+        }
+
+        // --- Selection
+        on(.deselectAll) { [weak self] in self?.activeClearSelection() }
+        on(.invertSelection) { [weak self] in self?.activeInvertSelection() }
+
+        // --- View / sort
+        on(.sortByName) { [weak self] in self?.setActiveSortOrder(.name) }
+        on(.sortByDate) { [weak self] in self?.setActiveSortOrder(.date) }
+        on(.sortBySize) { [weak self] in self?.setActiveSortOrder(.size) }
+        on(.sortByKind) { [weak self] in self?.setActiveSortOrder(.kind) }
+        on(.toggleHiddenFiles) { [weak self] in self?.toggleActiveHiddenFiles() }
+
+        // --- Cross-panel
+        on(.swapPanels) { [weak self] in self?.swapPanelSelections() }
+        on(.targetToSource) { [weak self] in self?.copyActivePathToOtherPanel() }
+        on(.refreshActive) { [weak self] in
+            guard let self else { return }
+            Task { await self.refreshActivePanel() }
+        }
+        // Compare needs to open the dedicated Window scene, which only the
+        // SwiftUI environment can do (openWindow). AppState bumps the
+        // trigger so any already-open Compare window re-snapshots, AND
+        // posts a separate "show compare window" request that ContentView
+        // listens for to call openWindow.
+        on(.compareFolders) { [weak self] in
+            guard let self else { return }
+            self.compareTrigger = UUID()
+            NotificationCenter.default.post(name: .requestShowCompareWindow, object: nil)
+        }
+
+        // --- File operations / clipboard
+        on(.copyPath) { [weak self] in self?.copyActiveSelectionPath() }
+        on(.duplicate) { [weak self] in
+            guard let self else { return }
+            Task { await self.duplicateActiveSelection() }
+        }
+        on(.getInfo) { [weak self] in self?.revealActiveSelectionInFinder() }
+        on(.copyFiles) { [weak self] in
+            NSLog("[FileFluss] observer fired: copyFiles")
+            self?.captureFileClipboard(operation: .copy)
+        }
+        on(.cutFiles) { [weak self] in
+            NSLog("[FileFluss] observer fired: cutFiles")
+            self?.captureFileClipboard(operation: .cut)
+        }
+        on(.pasteFiles) { [weak self] in
+            NSLog("[FileFluss] observer fired: pasteFiles")
+            guard let self else { return }
+            Task { await self.pasteFileClipboard() }
+        }
+
+        // --- Navigation: Go to Folder dialog
+        on(.focusPathBar) { [weak self] in self?.showGoToFolder = true }
+
+        // --- Indexing
+        on(.indexCurrentSource) { [weak self] in self?.indexActiveSource() }
+    }
+
+    // MARK: - Command implementations
+
+    private func navigateActiveParent() async {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            let parent = (vm.currentPath as NSString).deletingLastPathComponent
+            await vm.navigateTo(parent.isEmpty ? "/" : parent)
+        } else {
+            await activeFileManager.navigateUp()
+        }
+    }
+
+    private func navigateActiveBack() async {
+        if let id = cloudAccountId(for: activePanel) {
+            await cloudFileManager(for: id, side: activePanel).navigateBack()
+        } else {
+            await activeFileManager.navigateBack()
+        }
+    }
+
+    private func navigateActiveForward() async {
+        if let id = cloudAccountId(for: activePanel) {
+            await cloudFileManager(for: id, side: activePanel).navigateForward()
+        } else {
+            await activeFileManager.navigateForward()
+        }
+    }
+
+    private func navigateActiveToRoot() async {
+        if let id = cloudAccountId(for: activePanel) {
+            let account = syncManager.accountFor(id: id)
+            let root = account?.rootPath.isEmpty == false ? account!.rootPath : "/"
+            await cloudFileManager(for: id, side: activePanel).navigateTo(root)
+        } else {
+            await activeFileManager.navigateTo(URL(fileURLWithPath: "/"))
+        }
+    }
+
+    private func openSelectionInOtherPanel() {
+        let otherSide: PanelSide = activePanel == .left ? .right : .left
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            guard let item = vm.selectedItems.first, item.isDirectory else { return }
+            setSidebarSelection(.cloudFolder(accountId: id, path: item.path), for: otherSide)
+        } else {
+            guard let item = activeFileManager.selectedItems.first, item.isDirectory else { return }
+            setSidebarSelection(.location(item.url), for: otherSide)
+        }
+    }
+
+    private func activeClearSelection() {
+        if let id = cloudAccountId(for: activePanel) {
+            cloudFileManager(for: id, side: activePanel).selectedItemIDs = []
+        } else {
+            activeFileManager.selectedItemIDs = []
+        }
+    }
+
+    private func activeInvertSelection() {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            let allIDs = Set(vm.filteredItems.map(\.id))
+            vm.selectedItemIDs = allIDs.symmetricDifference(vm.selectedItemIDs)
+        } else {
+            let fm = activeFileManager
+            let allIDs = Set(fm.filteredItems.map(\.id))
+            fm.selectedItemIDs = allIDs.symmetricDifference(fm.selectedItemIDs)
+        }
+    }
+
+    private func setActiveSortOrder(_ order: FileManagerViewModel.SortOrder) {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            // Map between the two enums by raw value — both use the same
+            // four cases ("name", "date", "size", "kind").
+            if let mapped = CloudFileManagerViewModel.SortOrder(rawValue: order.rawValue) {
+                vm.sortOrder = mapped
+            }
+        } else {
+            activeFileManager.sortOrder = order
+        }
+    }
+
+    private func toggleActiveHiddenFiles() {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            vm.showHiddenFiles.toggle()
+        } else {
+            activeFileManager.showHiddenFiles.toggle()
+            Task { await activeFileManager.refresh() }
+        }
+    }
+
+    /// Captured state of one panel — local URL or (cloud account, path).
+    /// Used by `swapPanelSelections` so the swap preserves the actual
+    /// current folder rather than falling back to the sidebar root.
+    private enum PanelSnapshot {
+        case local(URL)
+        case cloud(accountId: UUID, path: String)
+    }
+
+    private func snapshot(for side: PanelSide) -> PanelSnapshot {
+        if let id = cloudAccountId(for: side) {
+            let vm = cloudFileManager(for: id, side: side)
+            return .cloud(accountId: id, path: vm.currentPath)
+        }
+        return .local(fileManager(for: side).currentDirectory)
+    }
+
+    private func apply(_ snapshot: PanelSnapshot, to side: PanelSide) {
+        switch snapshot {
+        case .local(let url):
+            setSidebarSelection(.location(url), for: side)
+            Task { await fileManager(for: side).navigateTo(url) }
+        case .cloud(let id, let path):
+            if let account = syncManager.accountFor(id: id) {
+                let root = account.rootPath.isEmpty ? "/" : account.rootPath
+                if path == root {
+                    setSidebarSelection(.cloudAccount(account), for: side)
+                } else {
+                    setSidebarSelection(.cloudFolder(accountId: id, path: path), for: side)
+                }
+            } else {
+                setSidebarSelection(.cloudFolder(accountId: id, path: path), for: side)
+            }
+            Task { await cloudFileManager(for: id, side: side).navigateTo(path) }
+        }
+    }
+
+    private func swapPanelSelections() {
+        let leftSnapshot = snapshot(for: .left)
+        let rightSnapshot = snapshot(for: .right)
+        apply(rightSnapshot, to: .left)
+        apply(leftSnapshot, to: .right)
+    }
+
+    private func copyActivePathToOtherPanel() {
+        let otherSide: PanelSide = activePanel == .left ? .right : .left
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            setSidebarSelection(.cloudFolder(accountId: id, path: vm.currentPath), for: otherSide)
+        } else {
+            setSidebarSelection(.location(activeFileManager.currentDirectory), for: otherSide)
+        }
+    }
+
+    private func refreshActivePanel() async {
+        if let id = cloudAccountId(for: activePanel) {
+            await cloudFileManager(for: id, side: activePanel).refresh()
+        } else {
+            await activeFileManager.refresh()
+        }
+    }
+
+    private func copyActiveSelectionPath() {
+        let pb = NSPasteboard.general
+        var paths: [String] = []
+        if let id = cloudAccountId(for: activePanel) {
+            paths = cloudFileManager(for: id, side: activePanel).selectedItems.map(\.path)
+        } else {
+            paths = activeFileManager.selectedItems.map { $0.url.path(percentEncoded: false) }
+        }
+        guard !paths.isEmpty else { return }
+        pb.clearContents()
+        pb.setString(paths.joined(separator: "\n"), forType: .string)
+    }
+
+    private func duplicateActiveSelection() async {
+        // Only meaningful for the local panel — cloud providers don't have
+        // a generic in-place copy primitive yet.
+        guard cloudAccountId(for: activePanel) == nil else { return }
+        let fm = activeFileManager
+        for item in fm.selectedItems {
+            let dir = item.url.deletingLastPathComponent()
+            let nameNS = item.name as NSString
+            let ext = nameNS.pathExtension
+            let base = nameNS.deletingPathExtension
+            var target = dir.appendingPathComponent(ext.isEmpty ? "\(base) copy" : "\(base) copy.\(ext)")
+            var i = 2
+            while FileManager.default.fileExists(atPath: target.path) {
+                let suffix = ext.isEmpty ? "\(base) copy \(i)" : "\(base) copy \(i).\(ext)"
+                target = dir.appendingPathComponent(suffix)
+                i += 1
+            }
+            try? await FileSystemService.shared.copyItem(from: item.url, to: target)
+        }
+        await fm.refresh()
+    }
+
+    private func revealActiveSelectionInFinder() {
+        // For local files only; cloud items don't have a Finder path.
+        guard cloudAccountId(for: activePanel) == nil else { return }
+        let urls = activeFileManager.selectedItems.map(\.url)
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    // MARK: - File clipboard
+
+    /// Snapshots the active panel's selected local files into the in-app
+    /// clipboard and also writes them to NSPasteboard so the user can paste
+    /// into Finder or other apps. Cloud selections aren't placed on the
+    /// system pasteboard (no local URL); they're stashed in-app and the
+    /// paste operation uploads/downloads as needed. Cut operations leave
+    /// originals in place — they're removed only after a successful paste.
+    func captureFileClipboard(operation: ClipboardOperation) {
+        NSLog("[FileFluss] captureFileClipboard op=\(operation.rawValue) activePanel=\(activePanel) isCloud=\(isActivePanelCloud)")
+        // Local panel — selection has real file URLs.
+        if cloudAccountId(for: activePanel) == nil {
+            let urls = activeFileManager.selectedItems.map(\.url)
+            guard !urls.isEmpty else { return }
+            fileClipboard = FileClipboardSnapshot(urls: urls, operation: operation)
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.writeObjects(urls as [NSURL])
+            return
+        }
+        // Cloud panel — only support cut/copy within FileFluss for now;
+        // pasteboard would have no useful URL representation.
+        guard let accountId = cloudAccountId(for: activePanel) else { return }
+        let vm = cloudFileManager(for: accountId, side: activePanel)
+        guard !vm.selectedItems.isEmpty else { return }
+        // Wrap paths in URLs with a custom scheme so paste can decode them.
+        let urls: [URL] = vm.selectedItems.compactMap { item in
+            var components = URLComponents()
+            components.scheme = "filefluss-cloud"
+            components.host = accountId.uuidString
+            components.path = item.path.hasPrefix("/") ? item.path : "/" + item.path
+            return components.url
+        }
+        guard !urls.isEmpty else { return }
+        fileClipboard = FileClipboardSnapshot(urls: urls, operation: operation)
+    }
+
+    func pasteFileClipboard() async {
+        NSLog("[FileFluss] pasteFileClipboard activePanel=\(activePanel) hasClipboard=\(fileClipboard != nil)")
+        // Re-entrancy guard — a second Cmd+V while the first paste is still
+        // running would otherwise re-process the same clipboard contents.
+        guard !isPasteInProgress else {
+            NSLog("[FileFluss] pasteFileClipboard ignored: paste already in flight")
+            return
+        }
+        isPasteInProgress = true
+        defer { isPasteInProgress = false }
+        // Prefer the in-app clipboard (preserves cut state). If empty, fall
+        // back to the system pasteboard so files copied from Finder paste in.
+        let snapshot: FileClipboardSnapshot
+        if let local = fileClipboard {
+            snapshot = local
+        } else if let pbUrls = NSPasteboard.general.readObjects(forClasses: [NSURL.self]) as? [URL],
+                  !pbUrls.isEmpty {
+            snapshot = FileClipboardSnapshot(urls: pbUrls, operation: .copy)
+        } else {
+            return
+        }
+
+        let isCut = snapshot.operation == .cut
+        let localURLs = snapshot.urls.filter { $0.isFileURL }
+        let cloudURLs = snapshot.urls.filter { $0.scheme == "filefluss-cloud" }
+
+        // Clear the cut clipboard NOW (before the async work) so a second
+        // Cmd+V on the way doesn't accidentally cut the same files again
+        // after the first paste finishes deleting the originals.
+        if isCut { fileClipboard = nil }
+
+        // Destination — active panel.
+        if let destAccountId = cloudAccountId(for: activePanel) {
+            // Pasting into cloud panel.
+            let destVM = cloudFileManager(for: destAccountId, side: activePanel)
+            let leftFM = leftFileManager
+            let rightFM = rightFileManager
+            if !localURLs.isEmpty {
+                let transfer = TransferProgress(operation: isCut ? "Moving" : "Uploading", totalItems: localURLs.count)
+                addTransfer(transfer, panel: activePanel)
+                transfer.task = Task { [destVM] in
+                    await destVM.uploadFiles(from: localURLs, progress: transfer)
+                    if isCut && !transfer.hasErrors {
+                        // Only remove originals after a clean upload, so
+                        // a partial failure never silently destroys data.
+                        for url in localURLs {
+                            try? await FileSystemService.shared.deleteItem(at: url)
+                        }
+                        // Refresh whichever local panel(s) held the source.
+                        await leftFM.refresh()
+                        await rightFM.refresh()
+                    }
+                    await destVM.refresh()
+                }
+            }
+            // Cloud-to-cloud paste — uses raw provider methods so the
+            // single TransferProgress is the only place item counts /
+            // bytes are recorded. Going through the VM `downloadItems` +
+            // `uploadFiles` would double-write item results (the screen
+            // bug where the same filename appeared twice and progress
+            // showed 50% after completion).
+            if !cloudURLs.isEmpty {
+                var byAccount: [UUID: [(remotePath: String, name: String)]] = [:]
+                for url in cloudURLs {
+                    guard let host = url.host,
+                          let sourceAccountId = UUID(uuidString: host) else { continue }
+                    let remotePath = url.path
+                    let name = (remotePath as NSString).lastPathComponent
+                    byAccount[sourceAccountId, default: []].append((remotePath, name))
+                }
+                for (sourceAccountId, sourceItems) in byAccount {
+                    let destAccount = destAccountId
+                    let panelForRefresh = activePanel
+                    let isCutCopy = isCut
+                    Task { @MainActor in
+                        await self.runCloudToCloudPaste(
+                            sourceAccountId: sourceAccountId,
+                            destAccountId: destAccount,
+                            destPath: destVM.currentPath,
+                            sourceItems: sourceItems,
+                            isCut: isCutCopy,
+                            destPanel: panelForRefresh
+                        )
+                    }
+                }
+            }
+        } else {
+            // Pasting into local panel.
+            let destFM = activeFileManager
+            if !localURLs.isEmpty {
+                let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying", totalItems: localURLs.count)
+                addTransfer(transfer, panel: activePanel)
+                let destDir = destFM.currentDirectory
+                transfer.task = Task { [destFM] in
+                    if isCut {
+                        await destFM.performMove(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
+                    } else {
+                        await destFM.performCopy(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
+                    }
+                    await destFM.refresh()
+                }
+            }
+            // Cloud-to-local paste: group by account so each account uses
+            // its own VM, and use the VM's batch downloadItems.
+            if !cloudURLs.isEmpty {
+                var byAccount: [UUID: [CloudFileItem]] = [:]
+                for url in cloudURLs {
+                    guard let host = url.host, let accountId = UUID(uuidString: host) else { continue }
+                    let remotePath = url.path
+                    let item = CloudFileItem(
+                        id: remotePath,
+                        name: (remotePath as NSString).lastPathComponent,
+                        path: remotePath,
+                        isDirectory: false,
+                        size: 0,
+                        modificationDate: Date(),
+                        checksum: nil
+                    )
+                    byAccount[accountId, default: []].append(item)
+                }
+                for (accountId, items) in byAccount {
+                    let sourceVM = cloudFileManager(for: accountId, side: activePanel)
+                    let transfer = TransferProgress(operation: isCut ? "Moving" : "Downloading", totalItems: items.count)
+                    addTransfer(transfer, panel: activePanel)
+                    let destDir = destFM.currentDirectory
+                    transfer.task = Task { [sourceVM, destFM] in
+                        await sourceVM.downloadItems(items, to: destDir, progress: transfer)
+                        if isCut, !transfer.hasErrors {
+                            // Only remove originals once the download
+                            // landed cleanly — otherwise we'd lose data.
+                            await sourceVM.deleteItems(items)
+                            await sourceVM.refresh()
+                        }
+                        await destFM.refresh()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Performs a robust cloud→cloud transfer for one source account.
+    /// Uses raw provider download/upload so the single TransferProgress is
+    /// the only place item-level success/failure and byte counters are
+    /// recorded — going through the VM batch methods double-bookkeeps and
+    /// produces the duplicate-row / wrong-percentage artifact the user
+    /// reported. On cut, source items are removed only after their upload
+    /// landed cleanly, so a partial failure never silently deletes data.
+    @MainActor
+    private func runCloudToCloudPaste(
+        sourceAccountId: UUID,
+        destAccountId: UUID,
+        destPath: String,
+        sourceItems: [(remotePath: String, name: String)],
+        isCut: Bool,
+        destPanel: PanelSide
+    ) async {
+        guard let sourceProvider = await SyncEngine.shared.provider(for: sourceAccountId),
+              let destProvider = await SyncEngine.shared.provider(for: destAccountId) else {
+            return
+        }
+        let sourceVM = cloudFileManager(for: sourceAccountId, side: destPanel)
+        let destVM = cloudFileManager(for: destAccountId, side: destPanel)
+
+        let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying",
+                                        totalItems: sourceItems.count)
+        transfer.isCloudToCloud = true
+        transfer.totalFiles = sourceItems.count
+        addTransfer(transfer, panel: destPanel)
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("filefluss-paste-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        let task = Task.detached(priority: .userInitiated) {
+            // Best-effort pre-size lookup so the progress bar can show a
+            // meaningful percentage. We pre-fetch metadata for each file
+            // (often a cheap operation) and total it up.
+            var expectedTotal: Int64 = 0
+            var sized: [(path: String, name: String, size: Int64)] = []
+            for item in sourceItems {
+                if Task.isCancelled { break }
+                if let meta = try? await sourceProvider.getFileMetadata(at: item.remotePath) {
+                    expectedTotal += meta.size
+                    sized.append((item.remotePath, item.name, meta.size))
+                } else {
+                    sized.append((item.remotePath, item.name, 0))
+                }
+            }
+            await MainActor.run {
+                transfer.expectedBytesDownload = expectedTotal
+                transfer.expectedBytesUpload = expectedTotal
+                transfer.currentPhase = .downloading
+                transfer.downloadStartTime = Date()
+            }
+
+            // For each item: download → upload → (cut) delete source.
+            // Doing them serially keeps the transfer ordering predictable
+            // and avoids hammering both providers in parallel; for typical
+            // file counts this is the simpler, more reliable choice.
+            var successfulSources: [(path: String, name: String)] = []
+            for item in sized {
+                if Task.isCancelled { break }
+                await MainActor.run { transfer.currentFileName = item.name }
+
+                let tempURL = tempDir.appendingPathComponent(item.name)
+                try? FileManager.default.removeItem(at: tempURL)
+
+                // --- Download phase
+                do {
+                    try await sourceProvider.downloadFile(
+                        remotePath: item.path,
+                        to: tempURL,
+                        onBytes: { bytes in
+                            Task { @MainActor in transfer.addDownloadBytes(bytes) }
+                        }
+                    )
+                } catch {
+                    await MainActor.run {
+                        transfer.recordFailure(item.name, error: "Download failed: \(error.localizedDescription)")
+                        transfer.completedItems += 1
+                    }
+                    continue
+                }
+                await MainActor.run { transfer.totalBytes += item.size }
+
+                // --- Upload phase
+                await MainActor.run {
+                    transfer.currentPhase = .uploading
+                    if transfer.uploadStartTime == nil { transfer.uploadStartTime = Date() }
+                }
+                let dstPath: String = {
+                    let root = destPath.hasSuffix("/") ? String(destPath.dropLast()) : destPath
+                    if root.isEmpty { return "/" + item.name }
+                    return root + "/" + item.name
+                }()
+                do {
+                    try await destProvider.uploadFile(
+                        from: tempURL,
+                        to: dstPath,
+                        onBytes: { bytes in
+                            Task { @MainActor in transfer.addUploadBytes(bytes) }
+                        }
+                    )
+                    await MainActor.run {
+                        transfer.recordSuccess(item.name)
+                        transfer.transferredFileNames.append(item.name)
+                        transfer.completedItems += 1
+                    }
+                    successfulSources.append((item.path, item.name))
+                } catch {
+                    await MainActor.run {
+                        transfer.recordFailure(item.name, error: "Upload failed: \(error.localizedDescription)")
+                        transfer.completedItems += 1
+                    }
+                }
+                try? FileManager.default.removeItem(at: tempURL)
+
+                // Flip back to downloading for the next item, so the
+                // dual-phase progress visualisation stays in sync.
+                await MainActor.run { transfer.currentPhase = .downloading }
+            }
+
+            try? FileManager.default.removeItem(at: tempDir)
+
+            // --- Delete originals (cut only, only the ones that uploaded)
+            if isCut && !successfulSources.isEmpty {
+                let items = successfulSources.map { src in
+                    CloudFileItem(
+                        id: src.path,
+                        name: src.name,
+                        path: src.path,
+                        isDirectory: false,
+                        size: 0,
+                        modificationDate: Date(),
+                        checksum: nil
+                    )
+                }
+                await sourceVM.deleteItems(items)
+            }
+
+            await MainActor.run {
+                transfer.downloadEndTime = transfer.downloadEndTime ?? Date()
+                transfer.uploadEndTime = Date()
+                transfer.isComplete = true
+                transfer.endTime = Date()
+            }
+
+            // Refresh both source and destination panels so the user sees
+            // the moved/copied files immediately.
+            await sourceVM.refresh()
+            await destVM.refresh()
+        }
+        transfer.task = task
+    }
+
+    // MARK: - Go to Folder
+
+    /// Resolves a user-typed path and navigates the active panel there.
+    /// Cloud panels stay in the cloud (path is interpreted as a remote path
+    /// rooted at "/"). Local panels — including external drives, which are
+    /// just local mount points — expand `~` and resolve relative paths
+    /// against the panel's current directory.
+    func goToFolder(_ rawPath: String) {
+        let trimmed = rawPath.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        // Cloud panel: navigate the cloud VM along the (remote) path.
+        if let accountId = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: accountId, side: activePanel)
+            let target: String
+            if trimmed.hasPrefix("/") {
+                target = trimmed
+            } else {
+                // Treat as relative to the cloud VM's current path.
+                let base = vm.currentPath.hasSuffix("/") ? vm.currentPath : vm.currentPath + "/"
+                target = base + trimmed
+            }
+            if case .cloudAccount(let account) = sidebarSelection(for: activePanel),
+               target == (account.rootPath.isEmpty ? "/" : account.rootPath) {
+                // Already at root — leave sidebar selection as-is.
+            } else {
+                setSidebarSelection(.cloudFolder(accountId: accountId, path: target), for: activePanel)
+            }
+            Task { await vm.navigateTo(target) }
+            return
+        }
+
+        // Local panel (or external drive mount).
+        let expanded = (trimmed as NSString).expandingTildeInPath
+        var resolved = expanded
+        if !resolved.hasPrefix("/") {
+            let base = activeFileManager.currentDirectory.path
+            resolved = (base as NSString).appendingPathComponent(resolved)
+        }
+        let url = URL(fileURLWithPath: resolved)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+            return
+        }
+        setSidebarSelection(.location(url), for: activePanel)
+        Task { await fileManager(for: activePanel).navigateTo(url) }
+    }
+
+    private func indexActiveSource() {
+        // Drive case: active panel is on .drive() and mounted.
+        if case .drive(let driveId) = sidebarSelection(for: activePanel),
+           let drive = driveMonitor.drives.first(where: { $0.id == driveId }),
+           let mount = driveMonitor.mountURL(for: driveId) {
+            indexingService.indexDrive(drive, mountURL: mount)
+            return
+        }
+        // Cloud case: active panel is on a connected cloud account.
+        if let id = cloudAccountId(for: activePanel),
+           let account = syncManager.accountFor(id: id),
+           account.isConnected {
+            indexingService.indexCloudAccount(account)
+        }
+    }
+
     private static func runCacheMaintenanceIfEnabled() async {
         let defaults = UserDefaults.standard
         // Default ON if the key has never been written.
@@ -454,6 +1184,8 @@ final class AppState {
                 }
             }
         }
+
+        setupCommandHandlers()
 
         Task {
             await syncManager.reconnectSavedAccounts()

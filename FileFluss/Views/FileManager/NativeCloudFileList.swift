@@ -228,6 +228,32 @@ class CloudTableView: NSTableView {
         onBecameFirstResponder?()
         super.mouseDown(with: event)
     }
+
+    // Responder-chain Cut/Copy/Paste — see the long-form comment on
+    // FileTableView for why this is the only reliable way to bind
+    // ⌘C/⌘X/⌘V on macOS.
+    @objc func copy(_ sender: Any?) {
+        NotificationCenter.default.post(name: KeyboardCommand.copyFiles.notification, object: nil)
+    }
+
+    @objc func cut(_ sender: Any?) {
+        NotificationCenter.default.post(name: KeyboardCommand.cutFiles.notification, object: nil)
+    }
+
+    @objc func paste(_ sender: Any?) {
+        NotificationCenter.default.post(name: KeyboardCommand.pasteFiles.notification, object: nil)
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(copy(_:)), #selector(cut(_:)):
+            return numberOfSelectedRows > 0
+        case #selector(paste(_:)):
+            return true
+        default:
+            return super.validateUserInterfaceItem(item)
+        }
+    }
 }
 
 // MARK: - Coordinator
@@ -401,9 +427,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let clickedRow = tableView.clickedRow
 
-        // Right-click on empty area — show "New Folder" only (if supported)
+        // Right-click on empty area — offer Paste + New Folder.
         if clickedRow < 0 || clickedRow >= items.count {
+            let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+            pasteItem.keyEquivalentModifierMask = [.command]
+            pasteItem.target = self
+            menu.addItem(pasteItem)
             if canCreateFolder {
+                menu.addItem(.separator())
                 let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
                 newFolderItem.target = self
                 menu.addItem(newFolderItem)
@@ -423,6 +454,23 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         guard !contextItems.isEmpty else { return }
 
         let otherPanelName = panelSide == .left ? "Right" : "Left"
+
+        let cutCtx = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
+        cutCtx.keyEquivalentModifierMask = [.command]
+        cutCtx.target = self
+        menu.addItem(cutCtx)
+
+        let copyCtx = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
+        copyCtx.keyEquivalentModifierMask = [.command]
+        copyCtx.target = self
+        menu.addItem(copyCtx)
+
+        let pasteCtx = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+        pasteCtx.keyEquivalentModifierMask = [.command]
+        pasteCtx.target = self
+        menu.addItem(pasteCtx)
+
+        menu.addItem(.separator())
 
         let copyItem = NSMenuItem(title: "Copy to \(otherPanelName) Panel", action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
         copyItem.target = self
@@ -523,6 +571,18 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {
         onDelete?()
+    }
+
+    @objc func handleCut(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.cutFiles.notification, object: nil)
+    }
+
+    @objc func handleCopy(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.copyFiles.notification, object: nil)
+    }
+
+    @objc func handlePaste(_ sender: NSMenuItem) {
+        NotificationCenter.default.post(name: KeyboardCommand.pasteFiles.notification, object: nil)
     }
 
     // MARK: - Drag Source

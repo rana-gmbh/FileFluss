@@ -24,8 +24,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Index Status", systemImage: "magnifyingglass.circle")
                 }
+
+            KeyboardMapSettingsView()
+                .tabItem {
+                    Label("Keyboard Map", systemImage: "keyboard")
+                }
         }
-        .frame(width: 560, height: 420)
+        .frame(width: 620, height: 520)
     }
 }
 
