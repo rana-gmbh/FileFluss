@@ -60,6 +60,13 @@ struct GeneralSettingsView: View {
 struct CloudSettingsView: View {
     @Environment(AppState.self) private var appState
 
+    /// Settings owns its own add-account sheet rather than sharing the
+    /// global `appState.syncManager.isAddingAccount` flag. The same flag
+    /// is bound to a sheet on `ContentView`, so flipping it from here
+    /// would present two sheets at once — one anchored to the Settings
+    /// window, one to the main window.
+    @State private var showAddAccount = false
+
     var body: some View {
         Form {
             if appState.syncManager.accounts.isEmpty {
@@ -69,7 +76,7 @@ struct CloudSettingsView: View {
                     Text("Add a cloud account to get started.")
                 } actions: {
                     Button("Add Account…") {
-                        appState.syncManager.isAddingAccount = true
+                        showAddAccount = true
                     }
                 }
             } else {
@@ -91,7 +98,7 @@ struct CloudSettingsView: View {
 
                 Section {
                     Button {
-                        appState.syncManager.isAddingAccount = true
+                        showAddAccount = true
                     } label: {
                         Label("Add Account…", systemImage: "plus.circle")
                     }
@@ -99,7 +106,7 @@ struct CloudSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: Bindable(appState.syncManager).isAddingAccount) {
+        .sheet(isPresented: $showAddAccount) {
             AddCloudAccountView()
         }
     }
