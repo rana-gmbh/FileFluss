@@ -44,7 +44,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.iCloud, .pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
+    private let availableProviders: [CloudProviderType] = [.iCloud, .pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .box, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -138,6 +138,8 @@ struct AddCloudAccountView: View {
                 s3CompatibleFields
             case .iCloud:
                 iCloudFields
+            case .box:
+                boxFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -188,7 +190,7 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
+                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -373,6 +375,25 @@ struct AddCloudAccountView: View {
                 }
             } else {
                 Text("Click Connect to sign in with your Dropbox account. Your browser will open for authentication.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var boxFields: some View {
+        VStack(spacing: 12) {
+            if appState.syncManager.isAuthenticatingBox {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Waiting for sign-in in browser…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -791,6 +812,7 @@ struct AddCloudAccountView: View {
         case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
         case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
         case .iCloud: return false
+        case .box: return false
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -878,6 +900,8 @@ struct AddCloudAccountView: View {
                 )
             case .iCloud:
                 await appState.syncManager.addICloudAccount()
+            case .box:
+                await appState.syncManager.addBoxAccount()
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

@@ -19,6 +19,9 @@ final class SyncViewModel {
     // Dropbox OAuth state
     var isAuthenticatingDropbox: Bool = false
 
+    // Box OAuth state
+    var isAuthenticatingBox: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -298,6 +301,30 @@ final class SyncViewModel {
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
         } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addBoxAccount() async {
+        let account = CloudAccount(providerType: .box)
+        let provider = BoxProvider(accountId: account.id)
+        authError = nil
+        isAuthenticatingBox = true
+
+        do {
+            let credentials = try await provider.startOAuthFlow()
+            isAuthenticatingBox = false
+
+            var connectedAccount = account
+            if !credentials.displayName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.displayName))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isAuthenticatingBox = false
             authError = error.localizedDescription
         }
     }
@@ -604,6 +631,11 @@ final class SyncViewModel {
                 }
             case .iCloud:
                 let provider = ICloudProvider()
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .box:
+                let provider = BoxProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

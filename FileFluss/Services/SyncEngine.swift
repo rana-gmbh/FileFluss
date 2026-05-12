@@ -81,6 +81,7 @@ actor SyncEngine {
         case .synologyDrive: return SynologyDriveProvider()
         case .synologyC2: return SynologyC2Provider()
         case .s3Compatible: return S3CompatibleProvider()
+        case .box: return BoxProvider()
         }
     }
 }
