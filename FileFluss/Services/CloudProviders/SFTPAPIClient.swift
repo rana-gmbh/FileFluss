@@ -66,6 +66,15 @@ actor SFTPAPIClient {
     /// Path to the private-key file written for `-i`. nil for password auth.
     private let privateKeyPath: String?
 
+    /// Tri-state cache for whether `ls -L` is accepted by the server.
+    /// nil = haven't probed yet, true = supported (preferred — dereferences
+    /// symlinks so a symlink-to-directory shows as `d`), false = the server
+    /// rejected `-L` with "Invalid flag" and we should always send plain
+    /// `ls -la`. Some lightweight or restricted SFTP servers (rsync.net,
+    /// certain firmware embedded ones, mft proxies) ship a stripped-down
+    /// `ls` command that doesn't recognise `-L`.
+    private var lsSupportsDereference: Bool? = nil
+
     init(credentials: SFTPCredentials) {
         self.credentials = credentials
         let id = UUID().uuidString.prefix(8)
@@ -139,12 +148,55 @@ actor SFTPAPIClient {
     // MARK: - File Operations
 
     func listFolder(path: String) async throws -> [CloudFileItem] {
-        // `-L` dereferences symlinks so a symlink-pointing-at-a-directory
-        // shows up as `d...` and double-click works. Dangling symlinks
-        // disappear, which on a real server is almost always what you
-        // want (they wouldn't be traversable anyway).
-        let output = try await runBatch(commands: ["ls -laL \(shellEscape(path))"])
+        let output = try await runListing(path: path)
         return parseListing(output: output, basePath: path)
+    }
+
+    /// Runs `ls -laL <path>` (preferred — dereferences symlinks so a
+    /// symlink-to-directory shows up as `d` and double-click works) and
+    /// transparently falls back to `ls -la <path>` when the server's
+    /// `ls` doesn't accept `-L`. The fallback decision is cached on the
+    /// actor so the second listing on the same connection skips the
+    /// failed attempt entirely.
+    private func runListing(path: String) async throws -> String {
+        let escaped = shellEscape(path)
+        if lsSupportsDereference == false {
+            return try await runBatch(commands: ["ls -la \(escaped)"])
+        }
+        do {
+            let output = try await runBatch(commands: ["ls -laL \(escaped)"])
+            if lsSupportsDereference == nil { lsSupportsDereference = true }
+            return output
+        } catch let error as CloudProviderError {
+            if Self.isInvalidLFlagError(error) {
+                sftpLog.info("[SFTP] Server rejects `ls -L`; switching to `ls -la` for this connection.")
+                lsSupportsDereference = false
+                return try await runBatch(commands: ["ls -la \(escaped)"])
+            }
+            throw error
+        }
+    }
+
+    /// Detects the various ways an SFTP server can reject the `-L` flag.
+    /// Each implementation phrases its complaint slightly differently —
+    /// match all the common ones case-insensitively.
+    private static func isInvalidLFlagError(_ error: CloudProviderError) -> Bool {
+        let message: String
+        switch error {
+        case .commandFailed(let m): message = m
+        case .serverError, .notFound, .networkError, .invalidResponse,
+             .invalidCredentials, .notAuthenticated, .unauthorized,
+             .quotaExceeded, .rateLimited, .notImplemented, .fileTooLarge:
+            return false
+        }
+        let lower = message.lowercased()
+        return lower.contains("invalid flag -l")
+            || lower.contains("invalid flag --l")
+            || lower.contains("invalid option -- l")
+            || lower.contains("unknown option -l")
+            || lower.contains("illegal option -- l")
+            || lower.contains("unrecognized option -l")
+            || lower.contains("unrecognized option `-l")
     }
 
     func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -204,7 +256,7 @@ actor SFTPAPIClient {
     func getFileInfo(at path: String) async throws -> CloudFileItem {
         let parentPath = (path as NSString).deletingLastPathComponent
         let fileName = (path as NSString).lastPathComponent
-        let output = try await runBatch(commands: ["ls -laL \(shellEscape(parentPath))"])
+        let output = try await runListing(path: parentPath)
         let items = parseListing(output: output, basePath: parentPath)
         guard let item = items.first(where: { $0.name == fileName }) else {
             throw CloudProviderError.notFound(path)
