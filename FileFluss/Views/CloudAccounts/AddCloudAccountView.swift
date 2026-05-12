@@ -31,6 +31,13 @@ struct AddCloudAccountView: View {
     @State private var synologyOTP = ""
     @State private var synologyAllowSelfSigned = true
 
+    enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
+        case browser = "Browser Login"
+        case appPassword = "App Password"
+        var id: String { rawValue }
+    }
+    @State private var nextCloudMode: NextCloudAuthMode = .browser
+
     @State private var synologyC2AccessKeyId = ""
     @State private var synologyC2SecretAccessKey = ""
     @State private var synologyC2Region = ""
@@ -43,8 +50,19 @@ struct AddCloudAccountView: View {
 
     @State private var isAuthenticating = false
 
-    // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.iCloud, .pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .box, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
+    /// Providers that show up under "Cloud Storage Providers". These are
+    /// branded consumer/business cloud services. Sorted alphabetically
+    /// by display name at render time.
+    private let cloudStorageProviders: [CloudProviderType] = [
+        .box, .dropbox, .gmxCloud, .googleDrive, .iCloud, .kDrive,
+        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .synologyC2,
+    ]
+
+    /// Providers that show up under "Other Protocols" — generic transport
+    /// or open-standard endpoints rather than a specific branded service.
+    private let otherProtocolProviders: [CloudProviderType] = [
+        .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
+    ]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -66,8 +84,30 @@ struct AddCloudAccountView: View {
             Text("Select a cloud provider to connect:")
                 .foregroundStyle(.secondary)
 
+            providerSection(
+                title: "Cloud Storage Providers",
+                providers: cloudStorageProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: "Other Protocols",
+                providers: otherProtocolProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            Button("Cancel") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+    }
+
+    private func providerSection(title: String, providers: [CloudProviderType]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
-                ForEach(availableProviders) { provider in
+                ForEach(providers) { provider in
                     Button {
                         selectedProvider = provider
                     } label: {
@@ -88,9 +128,6 @@ struct AddCloudAccountView: View {
                     .buttonStyle(.plain)
                 }
             }
-
-            Button("Cancel") { dismiss() }
-                .keyboardShortcut(.cancelAction)
         }
     }
 
@@ -190,7 +227,7 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
+                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && !appState.syncManager.isAuthenticatingNextCloud && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -403,25 +440,53 @@ struct AddCloudAccountView: View {
 
     private var nextCloudFields: some View {
         VStack(spacing: 12) {
-            Text("Enter your Nextcloud server URL and an app password. Create one at Settings → Security → Devices & sessions.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Picker("Sign-in method", selection: $nextCloudMode) {
+                ForEach(NextCloudAuthMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(isAuthenticating || appState.syncManager.isAuthenticatingNextCloud)
+            .labelsHidden()
 
             TextField("Server URL (e.g. https://cloud.example.com)", text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
-                .disabled(isAuthenticating)
+                .disabled(isAuthenticating || appState.syncManager.isAuthenticatingNextCloud)
 
-            TextField("Username", text: $username)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.username)
-                .disabled(isAuthenticating)
+            switch nextCloudMode {
+            case .browser:
+                if appState.syncManager.isAuthenticatingNextCloud {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7)
+                        Text("Waiting for sign-in in browser…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Click Connect to open your Nextcloud server's login page in the browser. Sign in there with your normal username and password (2FA supported); FileFluss receives an app-specific password back automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .appPassword:
+                Text("Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            SecureField("App Password", text: $password)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isAuthenticating)
-                .onSubmit { login() }
+                TextField("Username", text: $username)
+                    .textFieldStyle(.roundedBorder)
+                    .textContentType(.username)
+                    .disabled(isAuthenticating)
+
+                SecureField("App Password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { login() }
+            }
         }
     }
 
@@ -795,7 +860,11 @@ struct AddCloudAccountView: View {
         case .oneDrive: return false
         case .googleDrive: return false
         case .dropbox: return false
-        case .nextCloud: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .nextCloud:
+            switch nextCloudMode {
+            case .browser: return serverURL.isEmpty
+            case .appPassword: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+            }
         case .webDAV: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .sftp:
             if serverURL.isEmpty || username.isEmpty { return true }
@@ -833,7 +902,12 @@ struct AddCloudAccountView: View {
             case .gmxCloud:
                 await appState.syncManager.addGMXCloudAccount(email: email, password: password)
             case .nextCloud:
-                await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
+                switch nextCloudMode {
+                case .browser:
+                    await appState.syncManager.addNextCloudAccountViaBrowser(serverURL: serverURL)
+                case .appPassword:
+                    await appState.syncManager.addNextCloudAccount(serverURL: serverURL, username: username, appPassword: password)
+                }
             case .koofr:
                 await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
             case .mega:

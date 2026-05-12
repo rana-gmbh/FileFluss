@@ -22,6 +22,9 @@ final class SyncViewModel {
     // Box OAuth state
     var isAuthenticatingBox: Bool = false
 
+    // NextCloud Login Flow v2 state (browser-based sign-in)
+    var isAuthenticatingNextCloud: Bool = false
+
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
@@ -191,6 +194,30 @@ final class SyncViewModel {
         } catch {
             isPollingForOneDrive = false
             oneDriveDeviceCode = nil
+            authError = error.localizedDescription
+        }
+    }
+
+    func addNextCloudAccountViaBrowser(serverURL: String) async {
+        let account = CloudAccount(providerType: .nextCloud)
+        let provider = NextCloudProvider(accountId: account.id)
+        authError = nil
+        isAuthenticatingNextCloud = true
+
+        do {
+            let credentials = try await provider.startLoginFlowV2(serverURL: serverURL)
+            isAuthenticatingNextCloud = false
+
+            var connectedAccount = account
+            if !credentials.displayName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.displayName))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            isAuthenticatingNextCloud = false
             authError = error.localizedDescription
         }
     }

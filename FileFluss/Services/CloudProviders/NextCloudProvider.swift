@@ -36,6 +36,17 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         nextCloudProviderLog.info("[NextCloud] Authenticated as \(credentials.displayName)")
     }
 
+    /// Browser-based sign-in using Nextcloud's Login Flow v2. Returns the
+    /// credentials so the caller can display the user's real name on the
+    /// account row.
+    func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+        let credentials = try await NextCloudAPIClient.startLoginFlowV2(serverURL: serverURL)
+        self.apiClient = NextCloudAPIClient(credentials: credentials)
+        try KeychainService.save(key: keychainKey, value: credentials)
+        nextCloudProviderLog.info("[NextCloud] Login Flow v2 succeeded for \(credentials.displayName)")
+        return credentials
+    }
+
     func authenticate() async throws {
         throw CloudProviderError.notAuthenticated
     }

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -35,6 +36,131 @@ actor NextCloudAPIClient {
     }
 
     // MARK: - Authentication & User Info
+
+    // MARK: - Login Flow v2 (Browser-based)
+
+    /// Kicks off NextCloud's "Login Flow v2" — the server-side standard
+    /// for getting an app-password without making the user manually
+    /// create one in the web UI. We POST to `/index.php/login/v2`, open
+    /// the returned `login` URL in the user's browser, and poll the
+    /// `poll.endpoint` until the user finishes signing in. The server
+    /// hands back a freshly-minted app-password; we never see the user's
+    /// real password, and 2FA is handled entirely by the browser.
+    /// See https://docs.nextcloud.com/server/latest/developer_manual/client_apis/LoginFlow/index.html
+    static func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+        let normalized = normalizeServerURL(serverURL)
+        guard let initURL = URL(string: "\(normalized)/index.php/login/v2") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var initRequest = URLRequest(url: initURL)
+        initRequest.httpMethod = "POST"
+        initRequest.setValue("FileFluss (macOS)", forHTTPHeaderField: "User-Agent")
+        initRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (initData, initResponse) = try await URLSession.shared.data(for: initRequest)
+        guard let initHTTP = initResponse as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        guard (200...299).contains(initHTTP.statusCode) else {
+            let body = String(data: initData, encoding: .utf8) ?? ""
+            nextCloudLog.error("[NextCloud] Login flow init failed: HTTP \(initHTTP.statusCode) body=\(body.prefix(300))")
+            // 404 = server doesn't have the endpoint (Nextcloud < 16 or
+            // a third-party fork that disabled it). Surface a clear hint
+            // so the user knows the legacy app-password path is what
+            // they need instead.
+            if initHTTP.statusCode == 404 {
+                throw CloudProviderError.commandFailed("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.")
+            }
+            throw Self.mapHTTPError(statusCode: initHTTP.statusCode)
+        }
+
+        let flow = try JSONDecoder().decode(NextCloudLoginFlowInit.self, from: initData)
+        guard let loginURL = URL(string: flow.login),
+              let pollURL = URL(string: flow.poll.endpoint) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // Open the browser. Has to hop to the main actor since
+        // NSWorkspace requires it.
+        await MainActor.run {
+            NSWorkspace.shared.open(loginURL)
+        }
+
+        // Poll every 3 seconds. NextCloud's docs recommend ≥ 5 s but in
+        // practice 3 s gives the snappiest UX without hammering the
+        // server. Cap at 5 minutes — beyond that the user has clearly
+        // wandered off and we should free the polling task.
+        let pollInterval: UInt64 = 3 * 1_000_000_000
+        let deadline = Date().addingTimeInterval(5 * 60)
+
+        while Date() < deadline {
+            if Task.isCancelled { throw CancellationError() }
+            try await Task.sleep(nanoseconds: pollInterval)
+
+            var pollRequest = URLRequest(url: pollURL)
+            pollRequest.httpMethod = "POST"
+            pollRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            pollRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+            pollRequest.setValue("FileFluss (macOS)", forHTTPHeaderField: "User-Agent")
+            let bodyStr = "token=\(flow.poll.token)"
+            pollRequest.httpBody = bodyStr.data(using: .utf8)
+
+            let (pollData, pollResponse) = try await URLSession.shared.data(for: pollRequest)
+            guard let pollHTTP = pollResponse as? HTTPURLResponse else { continue }
+
+            if pollHTTP.statusCode == 200 {
+                let result = try JSONDecoder().decode(NextCloudLoginFlowResult.self, from: pollData)
+                let displayName = (try? await fetchDisplayName(
+                    serverURL: result.server,
+                    username: result.loginName,
+                    appPassword: result.appPassword
+                )) ?? result.loginName
+                nextCloudLog.info("[NextCloud] Login Flow v2 succeeded for \(displayName)")
+                return NextCloudCredentials(
+                    serverURL: normalizeServerURL(result.server),
+                    username: result.loginName,
+                    appPassword: result.appPassword,
+                    displayName: displayName
+                )
+            }
+            if pollHTTP.statusCode == 404 {
+                // Still pending — user hasn't finished the browser flow.
+                continue
+            }
+            // Anything else is unexpected — fail fast.
+            nextCloudLog.error("[NextCloud] Login Flow v2 poll failed: HTTP \(pollHTTP.statusCode)")
+            throw Self.mapHTTPError(statusCode: pollHTTP.statusCode)
+        }
+
+        throw CloudProviderError.commandFailed("Timed out waiting for browser sign-in.")
+    }
+
+    /// One-shot user-info fetch used by Login Flow v2 to pull a real
+    /// display name. Mirrors the legacy `authenticate` path but takes
+    /// already-known credentials and just reads the OCS user endpoint.
+    private static func fetchDisplayName(serverURL: String, username: String, appPassword: String) async throws -> String {
+        let base = normalizeServerURL(serverURL)
+        guard let url = URL(string: "\(base)/ocs/v1.php/cloud/user") else { return username }
+        var request = URLRequest(url: url)
+        let cred = "\(username):\(appPassword)"
+        let encoded = Data(cred.utf8).base64EncodedString()
+        request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return username
+        }
+        return parseDisplayName(from: data) ?? username
+    }
+
+    private static func normalizeServerURL(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasSuffix("/") { s.removeLast() }
+        if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") {
+            s = "https://\(s)"
+        }
+        return s
+    }
 
     static func authenticate(serverURL: String, username: String, appPassword: String) async throws -> NextCloudCredentials {
         let base = serverURL.hasSuffix("/") ? String(serverURL.dropLast()) : serverURL
@@ -642,4 +768,21 @@ private final class WebDAVXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
     private static func parseHTTPDate(_ string: String) -> Date? {
         httpDateFormatter.date(from: string)
     }
+}
+
+// MARK: - Login Flow v2 response types
+
+private struct NextCloudLoginFlowInit: Decodable {
+    struct Poll: Decodable {
+        let token: String
+        let endpoint: String
+    }
+    let poll: Poll
+    let login: String
+}
+
+private struct NextCloudLoginFlowResult: Decodable {
+    let server: String
+    let loginName: String
+    let appPassword: String
 }
