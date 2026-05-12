@@ -153,6 +153,9 @@ struct FileCommands: Commands {
             applyShortcut(.openInOtherPanel, to: Button("Open in Other Panel") {
                 NotificationCenter.default.post(name: KeyboardCommand.openInOtherPanel.notification, object: nil)
             })
+            applyShortcut(.targetToSource, to: Button("Target → Source") {
+                NotificationCenter.default.post(name: KeyboardCommand.targetToSource.notification, object: nil)
+            })
             applyShortcut(.focusPathBar, to: Button("Go to Folder…") {
                 NotificationCenter.default.post(name: KeyboardCommand.focusPathBar.notification, object: nil)
             })
@@ -198,7 +201,7 @@ struct FileCommands: Commands {
             Toggle("Hide File Extensions", isOn: $hideFileExtensions)
         }
 
-        CommandMenu("Sync") {
+        CommandMenu("Tools") {
             applyShortcut(.syncPanels, to: Button("Sync Left and Right Panels…") {
                 appState.showSyncSheet = true
             })
@@ -210,10 +213,6 @@ struct FileCommands: Commands {
 
             applyShortcut(.swapPanels, to: Button("Swap Panels") {
                 NotificationCenter.default.post(name: KeyboardCommand.swapPanels.notification, object: nil)
-            })
-
-            applyShortcut(.targetToSource, to: Button("Target → Source") {
-                NotificationCenter.default.post(name: KeyboardCommand.targetToSource.notification, object: nil)
             })
 
             Divider()

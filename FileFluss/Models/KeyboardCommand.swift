@@ -116,7 +116,7 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
         case clipboard = "Clipboard"
         case selection = "Selection"
         case viewSort = "View & Sort"
-        case crossPanelSync = "Cross-panel & Sync"
+        case crossPanelTools = "Cross-panel & Tools"
         case search = "Search"
         case misc = "Misc"
     }
@@ -124,7 +124,7 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
     var section: Section {
         switch self {
         case .toggleActivePanel, .parentDirectory, .historyBack, .historyForward,
-             .openInOtherPanel, .focusPathBar, .jumpToRoot:
+             .openInOtherPanel, .targetToSource, .focusPathBar, .jumpToRoot:
             return .panelNavigation
         case .quickLook, .copyToOtherPanel, .moveToOtherPanel, .rename, .newFolder,
              .deleteToTrash, .duplicate:
@@ -135,8 +135,8 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
             return .selection
         case .sortByName, .sortByDate, .sortBySize, .sortByKind, .toggleHiddenFiles:
             return .viewSort
-        case .swapPanels, .syncPanels, .compareFolders, .targetToSource, .refreshActive, .refreshAll:
-            return .crossPanelSync
+        case .swapPanels, .syncPanels, .compareFolders, .refreshActive, .refreshAll:
+            return .crossPanelTools
         case .openSearch, .quickFilter:
             return .search
         case .openSettings, .indexCurrentSource:
