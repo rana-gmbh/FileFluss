@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 enum PanelSide: Hashable {
     case left, right

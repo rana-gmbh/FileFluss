@@ -4,6 +4,7 @@ struct CloudFileListView: View {
     let panelSide: PanelSide
     let accountId: UUID
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
     @State private var showDeleteConfirmation = false
@@ -50,6 +51,10 @@ struct CloudFileListView: View {
 
     var body: some View {
         bodyWithDialogs
+            .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.quickFilter.notification)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                vm.isFilterBarVisible = true
+            }
             .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
                 guard appState.canCreateFolderInActivePanel else { return }
@@ -228,6 +233,10 @@ struct CloudFileListView: View {
         VStack(spacing: 0) {
             cloudPathBar
             Divider()
+            if vm.isFilterBarVisible {
+                PanelFilterBar(text: Bindable(vm).searchText, isVisible: Bindable(vm).isFilterBarVisible)
+                Divider()
+            }
             cloudFileArea
             if showStatusBar {
                 Divider()
@@ -458,7 +467,7 @@ struct CloudFileListView: View {
             ProgressView("Loading...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = vm.error {
-            ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error))
+            cloudErrorBanner(message: error)
         } else {
             NativeCloudFileList(
                 items: vm.filteredItems,
@@ -791,6 +800,49 @@ struct CloudFileListView: View {
             progress.endTime = Date()
             progress.isComplete = true
         }
+    }
+
+    /// Top-aligned error banner shown in place of the file list when a
+    /// cloud listing fails. When the failure is an auth problem and the
+    /// provider supports inline OAuth re-auth, surfaces a "Sign In Again"
+    /// button; otherwise routes to Settings → Cloud Accounts.
+    @ViewBuilder
+    private func cloudErrorBanner(message: String) -> some View {
+        let providerType = appState.syncManager.accountFor(id: accountId)?.providerType
+        let canReauthInline = providerType.map { appState.syncManager.providerSupportsInlineReauth($0) } ?? false
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text(vm.needsReAuth ? "Sign-In Required" : "Error")
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if vm.needsReAuth {
+                HStack(spacing: 8) {
+                    if canReauthInline {
+                        Button("Sign In Again") {
+                            Task {
+                                await appState.syncManager.reauthenticate(accountId: accountId)
+                                await vm.loadDirectory()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
+                    }
+                    Button(canReauthInline ? "Open Settings…" : "Open Settings to Re-Connect…") {
+                        try? openSettings()
+                    }
+                    .controlSize(.regular)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 40)
+        .padding(.horizontal, 24)
     }
 
     private var pathComponents: [(name: String, path: String)] {

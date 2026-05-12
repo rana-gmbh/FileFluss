@@ -24,7 +24,7 @@ Tests use Swift Testing framework (`@Suite`, `@Test` macros), not XCTest.
 
 ## Architecture
 
-**MVVM + Observable** — SwiftUI app targeting macOS 14.0, Swift 6.0.
+**MVVM + Observable** — SwiftUI app targeting macOS 14.0, Swift 6.3.
 
 ### State flow
 
@@ -34,7 +34,7 @@ Tests use Swift Testing framework (`@Suite`, `@Test` macros), not XCTest.
 
 - **App/** — Entry point (`FileFlussApp`) and `AppState`
 - **Models/** — `FileItem`, `CloudAccount`, `SyncRule` (plain data types)
-- **Services/** — Actor-based: `FileSystemService` (local FS ops), `SyncEngine` (cloud sync orchestration), `CloudProvider` protocol + 5 stub providers
+- **Services/** — Actor-based: `FileSystemService` (local FS ops), `SyncEngine` (cloud sync orchestration), `CloudProvider` protocol + 18 concrete providers: Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Mega, S3, S3-compatible, NextCloud, WebDAV, SFTP, Synology C2, Synology Drive, iCloud, GMX, WordPress
 - **ViewModels/** — `@Observable @MainActor` view models coordinating between views and services
 - **Views/** — SwiftUI views; `NativeFileList` bridges to AppKit `NSTableView` via `NSViewRepresentable`
 
@@ -42,7 +42,7 @@ Tests use Swift Testing framework (`@Suite`, `@Test` macros), not XCTest.
 
 - **Concurrency**: Actors for services, `@MainActor` for view models/views, `async/await` throughout
 - **Dual-panel UI**: Left and right file manager panels tracked by `AppState.activePanel`
-- **Cloud providers**: Protocol-based (`CloudProvider`), implementations are stubs with TODOs
+- **Cloud providers**: Protocol-based (`CloudProvider`), with full implementations for each supported service (see Services/CloudProviders/)
 - **App Sandbox disabled** — app uses direct file system access with security-scoped bookmarks
 
 ### No external dependencies

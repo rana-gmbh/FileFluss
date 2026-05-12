@@ -167,10 +167,17 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onRename = onRename
         coordinator.selectedIDs = _selectedIDs
 
-        // Update data
-        let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
-            || coordinator.items.map(\.name) != items.map(\.name)
-            || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
+        // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
+        // three times allocates six arrays per refresh on large directories.
+        let itemsChanged: Bool = {
+            if coordinator.items.count != items.count { return true }
+            for (a, b) in zip(coordinator.items, items) {
+                if a.id != b.id || a.name != b.name || a.modificationDate != b.modificationDate {
+                    return true
+                }
+            }
+            return false
+        }()
 
         let extensionPrefChanged = coordinator.hideFileExtensions != hideFileExtensions
         coordinator.hideFileExtensions = hideFileExtensions
@@ -329,6 +336,9 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     // Resolved items being dragged (set when drag starts)
     private var currentDragItems: [FileItem] = []
+    // Parallel set of IDs for the active drag. Cheaper than a linear search
+    // through `currentDragItems` on every cursor move during validateDrop.
+    private var currentDragItemIDs: Set<String> = []
 
     override init() {
         super.init()
@@ -639,10 +649,12 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             guard index < items.count else { return nil }
             return items[index]
         }
+        currentDragItemIDs = Set(currentDragItems.map(\.id))
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         currentDragItems = []
+        currentDragItemIDs = []
     }
 
     // MARK: - Drop Destination
@@ -665,7 +677,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             let target = items[row]
             guard target.isDirectory else { return [] }
             // Don't drop onto a dragged item itself
-            if currentDragItems.contains(where: { $0.id == target.id }) {
+            if currentDragItemIDs.contains(target.id) {
                 return []
             }
             return .generic
@@ -721,12 +733,16 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             }
         }
 
+        // Standardize the target URL once — recomputing it for every dropped
+        // item (and inside `allInSameDir`) is wasteful on large drops.
+        let standardizedTarget = targetURL.standardizedFileURL
+
         // Don't drop a folder into itself
-        guard !droppedItems.contains(where: { $0.url.standardizedFileURL == targetURL.standardizedFileURL }) else { return false }
+        guard !droppedItems.contains(where: { $0.url.standardizedFileURL == standardizedTarget }) else { return false }
 
         // Don't drop into the same directory the items are already in
         let allInSameDir = droppedItems.allSatisfy {
-            $0.url.deletingLastPathComponent().standardizedFileURL == targetURL.standardizedFileURL
+            $0.url.deletingLastPathComponent().standardizedFileURL == standardizedTarget
         }
         guard !allInSameDir else { return false }
 

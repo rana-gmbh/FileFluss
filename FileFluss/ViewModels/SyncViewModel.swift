@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 @Observable @MainActor
 final class SyncViewModel {
@@ -570,6 +569,51 @@ final class SyncViewModel {
         if let idx = accounts.firstIndex(where: { $0.id == id }) {
             accounts[idx].displayName = newName
             saveAccounts()
+        }
+    }
+
+    /// Returns true when the provider's auth flow can be re-run from inside
+    /// the panel — currently the loopback-OAuth providers (Google, Dropbox,
+    /// Box). Anything else needs the Settings → Cloud Accounts sheet because
+    /// it relies on credentials the user must type in.
+    func providerSupportsInlineReauth(_ type: CloudProviderType) -> Bool {
+        switch type {
+        case .googleDrive, .dropbox, .box: return true
+        default: return false
+        }
+    }
+
+    /// Re-runs the OAuth flow for an existing account, reusing the same
+    /// `accountId` so the stored credentials slot is overwritten in the
+    /// keychain. Only handles providers reported by
+    /// `providerSupportsInlineReauth(_:)`; for the rest the caller should
+    /// open Settings → Cloud Accounts instead.
+    func reauthenticate(accountId: UUID) async {
+        guard let account = accounts.first(where: { $0.id == accountId }) else { return }
+        authError = nil
+        do {
+            switch account.providerType {
+            case .googleDrive:
+                let provider = GoogleDriveProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
+            case .dropbox:
+                let provider = DropboxProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
+            case .box:
+                let provider = BoxProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
+            default:
+                return
+            }
+            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                accounts[idx].isConnected = true
+                saveAccounts()
+            }
+        } catch {
+            authError = error.localizedDescription
         }
     }
 

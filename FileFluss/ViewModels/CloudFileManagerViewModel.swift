@@ -1,5 +1,8 @@
 import SwiftUI
 import QuickLookUI
+import os
+
+private let cloudFileVMLog = Logger(subsystem: "com.rana.FileFluss", category: "cloudFileVM")
 
 @Observable @MainActor
 final class CloudFileManagerViewModel {
@@ -10,7 +13,14 @@ final class CloudFileManagerViewModel {
     var selectedItemIDs: Set<String> = []
     var isLoading = false
     var error: String?
+    /// True when the latest load failed because the stored credentials are no
+    /// longer valid (`CloudProviderError.notAuthenticated`/`.unauthorized`).
+    /// The panel's error view uses this to surface a "Sign In Again" button.
+    var needsReAuth: Bool = false
     var searchText: String = ""
+    /// Toggled by the Edit → Quick Filter… command; when true, the panel
+    /// shows an inline filter bar bound to `searchText`.
+    var isFilterBarVisible: Bool = false
     var sortOrder: SortOrder = .name
     var sortAscending: Bool = true
     /// When false (default), dot-prefixed entries (`.gitignore`, `.ssh`,
@@ -136,6 +146,7 @@ final class CloudFileManagerViewModel {
         let targetPath = path ?? currentPath
         isLoading = true
         error = nil
+        needsReAuth = false
 
         do {
             let provider = await SyncEngine.shared.provider(for: accountId)
@@ -162,6 +173,14 @@ final class CloudFileManagerViewModel {
             self.isLoading = false
         } catch {
             self.error = error.localizedDescription
+            if let cpe = error as? CloudProviderError {
+                switch cpe {
+                case .notAuthenticated, .unauthorized, .invalidCredentials:
+                    self.needsReAuth = true
+                default:
+                    break
+                }
+            }
             self.isLoading = false
         }
     }
@@ -482,7 +501,7 @@ final class CloudFileManagerViewModel {
 
     func downloadToTemp(_ item: CloudFileItem) async -> URL? {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
-            print("[QuickLook] No provider for account \(accountId)")
+            cloudFileVMLog.debug("QuickLook: no provider for account \(self.accountId, privacy: .public)")
             return nil
         }
 
@@ -536,7 +555,7 @@ final class CloudFileManagerViewModel {
             )
             return localURL
         } catch {
-            print("[QuickLook] Download failed for \(item.path): \(error)")
+            cloudFileVMLog.error("QuickLook download failed for \(item.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -660,14 +679,14 @@ final class CloudFileManagerViewModel {
         for url in urls {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else {
-                print("[Upload] File not found, skipping: \(url.path)")
+                cloudFileVMLog.debug("Upload: file not found, skipping \(url.path, privacy: .public)")
                 continue
             }
 
             let itemRemotePath = remotePath == "/" ? "/\(url.lastPathComponent)" : "\(remotePath)/\(url.lastPathComponent)"
 
             if isDir.boolValue {
-                print("[Upload] Creating directory: \(itemRemotePath)")
+                cloudFileVMLog.debug("Upload: creating directory \(itemRemotePath, privacy: .public)")
                 do {
                     try await provider.createDirectory(at: itemRemotePath)
                 } catch let error as CloudProviderError {
@@ -676,11 +695,11 @@ final class CloudFileManagerViewModel {
                         throw error // Auth errors must propagate
                     default:
                         // Folder may already exist — continue uploading contents
-                        print("[Upload] Create directory failed (may already exist): \(itemRemotePath) — \(error.localizedDescription)")
+                        cloudFileVMLog.debug("Upload: create directory failed (may already exist) \(itemRemotePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
                 let contents = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey])
-                print("[Upload] Directory \(url.lastPathComponent) has \(contents.count) items")
+                cloudFileVMLog.debug("Upload: directory \(url.lastPathComponent, privacy: .public) has \(contents.count) items")
                 try await uploadRecursively(urls: contents, toRemotePath: itemRemotePath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
             } else {
                 progress?.currentFileName = url.lastPathComponent
@@ -692,12 +711,12 @@ final class CloudFileManagerViewModel {
                 // the server would refuse anyway.
                 try await CloudProviderError.enforceUploadSizeLimit(url, provider: provider)
 
-                print("[Upload] Uploading file: \(url.lastPathComponent) (\(fileSize) bytes) to \(itemRemotePath)")
+                cloudFileVMLog.debug("Upload: \(url.lastPathComponent, privacy: .public) (\(fileSize) bytes) → \(itemRemotePath, privacy: .public)")
                 let progressRef = progress
                 try await provider.uploadFile(from: url, to: itemRemotePath, onBytes: { bytes in
                     Task { @MainActor in progressRef?.addUploadBytes(bytes) }
                 })
-                print("[Upload] Success: \(url.lastPathComponent)")
+                cloudFileVMLog.debug("Upload: success \(url.lastPathComponent, privacy: .public)")
                 // Preserve the source file's modification date on the
                 // newly-uploaded remote so cross-source transfers behave
                 // like Finder — only content changes update "Date Modified".

@@ -149,9 +149,17 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.canCreateFolder = canCreateFolder
         coordinator.selectedIDs = _selectedIDs
 
-        let itemsChanged = coordinator.items.map(\.id) != items.map(\.id)
-            || coordinator.items.map(\.name) != items.map(\.name)
-            || coordinator.items.map(\.modificationDate) != items.map(\.modificationDate)
+        // Diff in a single pass — comparing via `.map(\.id) != …` three times
+        // allocates six arrays per refresh on large directories.
+        let itemsChanged: Bool = {
+            if coordinator.items.count != items.count { return true }
+            for (a, b) in zip(coordinator.items, items) {
+                if a.id != b.id || a.name != b.name || a.modificationDate != b.modificationDate {
+                    return true
+                }
+            }
+            return false
+        }()
 
         let extensionPrefChanged = coordinator.hideFileExtensions != hideFileExtensions
         coordinator.hideFileExtensions = hideFileExtensions

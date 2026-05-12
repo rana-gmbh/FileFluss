@@ -41,6 +41,10 @@ struct FileListView: View {
         VStack(spacing: 0) {
             pathBar
             Divider()
+            if fm.isFilterBarVisible {
+                PanelFilterBar(text: Bindable(fm).searchText, isVisible: Bindable(fm).isFilterBarVisible)
+                Divider()
+            }
             fileArea
             if showStatusBar {
                 Divider()
@@ -134,6 +138,10 @@ struct FileListView: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.quickFilter.notification)) { _ in
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            fm.isFilterBarVisible = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }

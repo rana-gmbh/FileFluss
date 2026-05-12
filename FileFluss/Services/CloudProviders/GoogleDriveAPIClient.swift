@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Network
 import os
+import Security
 
 private let googleLog = Logger(subsystem: "com.rana.FileFluss", category: "googleDrive")
 
@@ -72,15 +73,16 @@ actor GoogleDriveAPIClient {
     static func startOAuthFlow() async throws -> GoogleDriveCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
+        let expectedState = generateState()
 
-        let (port, authCode) = try await listenForAuthCode(codeVerifier: codeVerifier, codeChallenge: codeChallenge)
+        let (port, authCode) = try await listenForAuthCode(codeVerifier: codeVerifier, codeChallenge: codeChallenge, expectedState: expectedState)
 
         // Exchange auth code for tokens
         let credentials = try await exchangeCodeForTokens(code: authCode, codeVerifier: codeVerifier, redirectPort: port)
         return credentials
     }
 
-    private static func listenForAuthCode(codeVerifier: String, codeChallenge: String) async throws -> (UInt16, String) {
+    private static func listenForAuthCode(codeVerifier: String, codeChallenge: String, expectedState: String) async throws -> (UInt16, String) {
         let listener = try NWListener(using: .tcp, on: .any)
         let guard_ = ContinuationGuard<(UInt16, String)>()
 
@@ -102,6 +104,7 @@ actor GoogleDriveAPIClient {
                         URLQueryItem(name: "code_challenge_method", value: "S256"),
                         URLQueryItem(name: "access_type", value: "offline"),
                         URLQueryItem(name: "prompt", value: "consent"),
+                        URLQueryItem(name: "state", value: expectedState),
                     ]
 
                     if let url = components.url {
@@ -158,6 +161,23 @@ actor GoogleDriveAPIClient {
                         connection.send(content: emptyResponse.data(using: .utf8), completion: .contentProcessed { _ in
                             connection.cancel()
                         })
+                        return
+                    }
+
+                    // CSRF defence: reject any callback whose `state` doesn't
+                    // match the value we sent in the authorize URL. A missing
+                    // or mismatched state means this code didn't originate
+                    // from our authorize request and must not be exchanged.
+                    let returnedState = components?.queryItems?.first(where: { $0.name == "state" })?.value
+                    if returnedState != expectedState {
+                        googleLog.error("[Google] OAuth state mismatch — rejecting callback")
+                        let errorHTML = "<!DOCTYPE html><html><body><h2>Authentication failed</h2><p>Invalid state parameter. You can close this window.</p></body></html>"
+                        let response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\nContent-Length: \(errorHTML.utf8.count)\r\nConnection: close\r\n\r\n\(errorHTML)"
+                        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
+                            connection.cancel()
+                        })
+                        listener.cancel()
+                        guard_.resume(throwing: CloudProviderError.unauthorized)
                         return
                     }
 
@@ -915,6 +935,18 @@ actor GoogleDriveAPIClient {
         }
         return Data(hash)
             .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Cryptographically random opaque value for the OAuth `state`
+    /// parameter — used to bind the authorize request to its callback and
+    /// reject auth codes the user didn't initiate.
+    private static func generateState() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")

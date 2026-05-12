@@ -176,3 +176,52 @@ private struct CompareToolbarButton: View {
         .help("Compare the two folders side by side")
     }
 }
+
+// MARK: - Quick Filter bar
+
+/// Inline filter bar shown above a panel's file list when the user invokes
+/// Edit → Quick Filter… (default ⌘S / ⌥⌘F). Mutates the panel's `searchText`
+/// directly — the existing `filteredItems` pipeline picks the result up
+/// without further plumbing. Escape clears + hides the bar.
+struct PanelFilterBar: View {
+    @Binding var text: String
+    @Binding var isVisible: Bool
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .foregroundStyle(.secondary)
+            TextField("Filter visible items…", text: $text)
+                .textFieldStyle(.plain)
+                .focused($focused)
+                .onExitCommand {
+                    text = ""
+                    isVisible = false
+                }
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear filter")
+            }
+            Button {
+                text = ""
+                isVisible = false
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Close filter (Esc)")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onAppear { focused = true }
+    }
+}

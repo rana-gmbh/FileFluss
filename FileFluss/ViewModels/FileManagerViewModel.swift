@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import QuickLookUI
 
 @Observable @MainActor
@@ -15,6 +14,9 @@ final class FileManagerViewModel {
     var pathHistory: [URL] = []
     var pathHistoryIndex: Int = -1
     var searchText: String = ""
+    /// Toggled by the Edit → Quick Filter… command; when true, the panel
+    /// shows an inline filter bar bound to `searchText`.
+    var isFilterBarVisible: Bool = false
 
     // Drag & Drop
     var draggedItems: [FileItem] = []

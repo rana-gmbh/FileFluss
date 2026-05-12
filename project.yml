@@ -3,13 +3,13 @@ options:
   bundleIdPrefix: com.rana-gmbh
   deploymentTarget:
     macOS: "14.0"
-  xcodeVersion: "16.0"
+  xcodeVersion: "26.0"
   generateEmptyDirectories: true
   groupSortPosition: top
 
 settings:
   base:
-    SWIFT_VERSION: "6.0"
+    SWIFT_VERSION: "6.3"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: true
 

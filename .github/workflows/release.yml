@@ -10,12 +10,12 @@ permissions:
 
 jobs:
   build-notarize-release:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -171,7 +171,7 @@ jobs:
           xcrun stapler staple "$DMG_PATH"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.DMG_PATH }}
           body_path: RELEASE_NOTES.md
