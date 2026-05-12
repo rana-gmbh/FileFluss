@@ -219,6 +219,43 @@ actor WebDAVAPIClient {
         }
     }
 
+    /// Sets the modification date via WebDAV PROPPATCH. Falls back silently
+    /// if the server rejects the request — many WebDAV implementations
+    /// don't permit setting `getlastmodified` (it's read-only in RFC 4918),
+    /// but Nextcloud/ownCloud and a few others honor it as an extension.
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        let davPath = buildDAVPath(remotePath)
+        guard let url = URL(string: davPath) else {
+            throw CloudProviderError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PROPPATCH"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("application/xml", forHTTPHeaderField: "Content-Type")
+        let httpDate = Self.rfc1123Formatter.string(from: date)
+        let body = """
+        <?xml version="1.0" encoding="utf-8" ?>
+        <d:propertyupdate xmlns:d="DAV:">
+          <d:set>
+            <d:prop>
+              <d:getlastmodified>\(httpDate)</d:getlastmodified>
+            </d:prop>
+          </d:set>
+        </d:propertyupdate>
+        """
+        request.httpBody = body.data(using: .utf8)
+        let (_, _) = try await session.data(for: request)
+        // Best-effort: don't surface HTTP errors. Callers use `try?`.
+    }
+
+    private static let rfc1123Formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "GMT")
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        return f
+    }()
+
     func deleteItem(at path: String) async throws {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {

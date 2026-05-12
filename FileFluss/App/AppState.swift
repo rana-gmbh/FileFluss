@@ -71,6 +71,17 @@ final class AppState {
     /// finishes (Finder-style "duplicate at dest").
     private(set) var isPasteInProgress: Bool = false
 
+    /// Timestamps used to absorb duplicate command deliveries. macOS
+    /// occasionally dispatches the same `⌘C` / `⌘X` / `⌘V` through both
+    /// the SwiftUI menu shortcut AND the responder-chain action selector,
+    /// which would otherwise run our handlers twice (the user-reported
+    /// "Items (2) — same filename" / "50% Done" bug). A short window is
+    /// short enough that a deliberate retry from the user still works.
+    private var lastCopyDispatch: Date = .distantPast
+    private var lastCutDispatch: Date = .distantPast
+    private var lastPasteDispatch: Date = .distantPast
+    private static let dispatchDebounceWindow: TimeInterval = 0.3
+
     /// "Go to Folder…" dialog visibility, bound by ContentView.
     var showGoToFolder = false
 
@@ -768,6 +779,14 @@ final class AppState {
     /// paste operation uploads/downloads as needed. Cut operations leave
     /// originals in place — they're removed only after a successful paste.
     func captureFileClipboard(operation: ClipboardOperation) {
+        // De-dupe duplicate dispatches from menu + responder chain.
+        let now = Date()
+        let lastDispatch = operation == .cut ? lastCutDispatch : lastCopyDispatch
+        if now.timeIntervalSince(lastDispatch) < Self.dispatchDebounceWindow {
+            NSLog("[FileFluss] captureFileClipboard debounced op=\(operation.rawValue)")
+            return
+        }
+        if operation == .cut { lastCutDispatch = now } else { lastCopyDispatch = now }
         NSLog("[FileFluss] captureFileClipboard op=\(operation.rawValue) activePanel=\(activePanel) isCloud=\(isActivePanelCloud)")
         // Local panel — selection has real file URLs.
         if cloudAccountId(for: activePanel) == nil {
@@ -797,9 +816,20 @@ final class AppState {
     }
 
     func pasteFileClipboard() async {
+        // Debounce duplicate deliveries from menu + responder chain — same
+        // root cause as `captureFileClipboard`, but the consequences here
+        // were the visible "Items (2) / 50% Done" duplicate-transfer bug
+        // because two paste tasks were spawned for one ⌘V keystroke.
+        let now = Date()
+        if now.timeIntervalSince(lastPasteDispatch) < Self.dispatchDebounceWindow {
+            NSLog("[FileFluss] pasteFileClipboard debounced")
+            return
+        }
+        lastPasteDispatch = now
+
         NSLog("[FileFluss] pasteFileClipboard activePanel=\(activePanel) hasClipboard=\(fileClipboard != nil)")
-        // Re-entrancy guard — a second Cmd+V while the first paste is still
-        // running would otherwise re-process the same clipboard contents.
+        // Secondary guard: a *third* paste before the first one's tasks
+        // settle would otherwise double-process the same clipboard.
         guard !isPasteInProgress else {
             NSLog("[FileFluss] pasteFileClipboard ignored: paste already in flight")
             return
@@ -936,13 +966,29 @@ final class AppState {
         }
     }
 
+    /// Refreshes every cloud VM that's currently bound to a given account
+    /// id, on both panel sides. Used after copy/cut so whichever panel(s)
+    /// happen to be displaying the source or destination see the change
+    /// immediately — without this, refreshing only one side leaves the
+    /// other (often the user's *source* panel) showing stale rows.
+    @MainActor
+    func refreshCloudPanels(forAccount accountId: UUID) async {
+        for side in [PanelSide.left, .right] {
+            let key = CloudFMKey(accountId: accountId, side: side)
+            if let vm = cloudFileManagers[key] {
+                await vm.refresh()
+            }
+        }
+    }
+
     /// Performs a robust cloud→cloud transfer for one source account.
-    /// Uses raw provider download/upload so the single TransferProgress is
-    /// the only place item-level success/failure and byte counters are
-    /// recorded — going through the VM batch methods double-bookkeeps and
-    /// produces the duplicate-row / wrong-percentage artifact the user
-    /// reported. On cut, source items are removed only after their upload
-    /// landed cleanly, so a partial failure never silently deletes data.
+    /// Routes through the VM methods (`downloadItems` + `uploadFiles`) with
+    /// a pre-flight conflict check so the "already exists" dialog appears
+    /// (matching the drag-and-drop UX). `downloadItems` skips recordSuccess
+    /// in cloud-to-cloud mode so each file is recorded exactly once
+    /// (during upload). On cut, source items are removed only after their
+    /// upload landed cleanly so a partial failure never silently destroys
+    /// data.
     @MainActor
     private func runCloudToCloudPaste(
         sourceAccountId: UUID,
@@ -959,51 +1005,89 @@ final class AppState {
         let sourceVM = cloudFileManager(for: sourceAccountId, side: destPanel)
         let destVM = cloudFileManager(for: destAccountId, side: destPanel)
 
+        // Fetch metadata for proper sizes (so the pre-flight dialog has
+        // real numbers to display, and the progress bar can show
+        // meaningful percentages).
+        var cloudItems: [CloudFileItem] = []
+        for src in sourceItems {
+            if let meta = try? await sourceProvider.getFileMetadata(at: src.remotePath) {
+                cloudItems.append(meta)
+            } else {
+                cloudItems.append(CloudFileItem(
+                    id: src.remotePath,
+                    name: src.name,
+                    path: src.remotePath,
+                    isDirectory: false,
+                    size: 0,
+                    modificationDate: Date(),
+                    checksum: nil
+                ))
+            }
+        }
+
+        // List the destination directory if it differs from the VM's
+        // current path — `preFlightConflictCheck` compares against
+        // `destVM.items` by default, which is only the active folder.
+        let targetExistingItems: [CloudFileItem]
+        if destPath == destVM.currentPath {
+            targetExistingItems = destVM.items
+        } else {
+            targetExistingItems = (try? await destProvider.listDirectory(at: destPath)) ?? []
+        }
+
+        // Show the "already exists" dialog for any colliding names. This
+        // is the same primitive the drag-and-drop path uses, so the UX
+        // matches between drop-paste and ⌘C / ⌘V paste.
+        let resolutions = await destVM.preFlightConflictCheck(
+            sourceItems: cloudItems,
+            against: targetExistingItems
+        )
+        let resolutionByName = Dictionary(
+            resolutions.map { ($0.0.name, $0.1) },
+            uniquingKeysWith: { _, last in last }
+        )
+        let toTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
+        guard !toTransfer.isEmpty else { return }
+        let expectedTotal = toTransfer.reduce(Int64(0)) { $0 + $1.size }
+
         let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying",
-                                        totalItems: sourceItems.count)
+                                        totalItems: toTransfer.count)
         transfer.isCloudToCloud = true
-        transfer.totalFiles = sourceItems.count
+        transfer.totalFiles = toTransfer.count
+        transfer.expectedBytesDownload = expectedTotal
+        transfer.expectedBytesUpload = expectedTotal
         addTransfer(transfer, panel: destPanel)
 
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("filefluss-paste-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
+        let existingNames = Set(targetExistingItems.map(\.name))
+
         let task = Task.detached(priority: .userInitiated) {
-            // Best-effort pre-size lookup so the progress bar can show a
-            // meaningful percentage. We pre-fetch metadata for each file
-            // (often a cheap operation) and total it up.
-            var expectedTotal: Int64 = 0
-            var sized: [(path: String, name: String, size: Int64)] = []
-            for item in sourceItems {
-                if Task.isCancelled { break }
-                if let meta = try? await sourceProvider.getFileMetadata(at: item.remotePath) {
-                    expectedTotal += meta.size
-                    sized.append((item.remotePath, item.name, meta.size))
-                } else {
-                    sized.append((item.remotePath, item.name, 0))
-                }
-            }
             await MainActor.run {
-                transfer.expectedBytesDownload = expectedTotal
-                transfer.expectedBytesUpload = expectedTotal
                 transfer.currentPhase = .downloading
                 transfer.downloadStartTime = Date()
             }
 
-            // For each item: download → upload → (cut) delete source.
-            // Doing them serially keeps the transfer ordering predictable
-            // and avoids hammering both providers in parallel; for typical
-            // file counts this is the simpler, more reliable choice.
             var successfulSources: [(path: String, name: String)] = []
-            for item in sized {
+            for item in toTransfer {
                 if Task.isCancelled { break }
                 await MainActor.run { transfer.currentFileName = item.name }
 
                 let tempURL = tempDir.appendingPathComponent(item.name)
                 try? FileManager.default.removeItem(at: tempURL)
 
+                // --- Apply .replace: delete the existing item at the
+                // destination before uploading. Done up-front so an
+                // upload error doesn't leave a half-replaced state.
+                if resolutionByName[item.name] == .replace,
+                   let existing = targetExistingItems.first(where: { $0.name == item.name }) {
+                    try? await destProvider.deleteItem(at: existing.path)
+                }
+
                 // --- Download phase
+                let bytesBeforeDownload = await MainActor.run { transfer.downloadBytes }
                 do {
                     try await sourceProvider.downloadFile(
                         remotePath: item.path,
@@ -1012,6 +1096,15 @@ final class AppState {
                             Task { @MainActor in transfer.addDownloadBytes(bytes) }
                         }
                     )
+                    // Stamp the staged temp file with the source's
+                    // modification date. Some providers (e.g. NextCloud
+                    // via X-OC-Mtime) preserve the local file's mtime at
+                    // upload time — so propagating it here keeps the
+                    // source's "Date Modified" through the round-trip.
+                    try? FileManager.default.setAttributes(
+                        [.modificationDate: item.modificationDate],
+                        ofItemAtPath: tempURL.path
+                    )
                 } catch {
                     await MainActor.run {
                         transfer.recordFailure(item.name, error: "Download failed: \(error.localizedDescription)")
@@ -1019,18 +1112,37 @@ final class AppState {
                     }
                     continue
                 }
-                await MainActor.run { transfer.totalBytes += item.size }
+                await MainActor.run {
+                    let streamed = transfer.downloadBytes - bytesBeforeDownload
+                    if streamed < item.size {
+                        transfer.addDownloadBytes(item.size - streamed)
+                    }
+                    transfer.totalBytes += item.size
+                }
 
                 // --- Upload phase
                 await MainActor.run {
                     transfer.currentPhase = .uploading
                     if transfer.uploadStartTime == nil { transfer.uploadStartTime = Date() }
                 }
+                // For .keepBoth, mint a non-clashing destination name.
+                let destName: String
+                if resolutionByName[item.name] == .keepBoth {
+                    destName = await MainActor.run {
+                        CloudFileManagerViewModel.uniqueCloudName(
+                            for: item.name,
+                            existing: existingNames
+                        )
+                    }
+                } else {
+                    destName = item.name
+                }
                 let dstPath: String = {
                     let root = destPath.hasSuffix("/") ? String(destPath.dropLast()) : destPath
-                    if root.isEmpty { return "/" + item.name }
-                    return root + "/" + item.name
+                    if root.isEmpty { return "/" + destName }
+                    return root + "/" + destName
                 }()
+                let bytesBeforeUpload = await MainActor.run { transfer.uploadBytes }
                 do {
                     try await destProvider.uploadFile(
                         from: tempURL,
@@ -1039,7 +1151,20 @@ final class AppState {
                             Task { @MainActor in transfer.addUploadBytes(bytes) }
                         }
                     )
+                    // Preserve the source's modification date on the
+                    // destination so Finder-style mtime semantics hold:
+                    // a copy/move shouldn't change "Date Modified" — only
+                    // a content edit should. Best-effort; unsupported
+                    // providers no-op via the protocol default.
+                    try? await destProvider.setModificationDate(
+                        at: dstPath,
+                        to: item.modificationDate
+                    )
                     await MainActor.run {
+                        let streamed = transfer.uploadBytes - bytesBeforeUpload
+                        if streamed < item.size {
+                            transfer.addUploadBytes(item.size - streamed)
+                        }
                         transfer.recordSuccess(item.name)
                         transfer.transferredFileNames.append(item.name)
                         transfer.completedItems += 1
@@ -1053,8 +1178,6 @@ final class AppState {
                 }
                 try? FileManager.default.removeItem(at: tempURL)
 
-                // Flip back to downloading for the next item, so the
-                // dual-phase progress visualisation stays in sync.
                 await MainActor.run { transfer.currentPhase = .downloading }
             }
 
@@ -1083,10 +1206,10 @@ final class AppState {
                 transfer.endTime = Date()
             }
 
-            // Refresh both source and destination panels so the user sees
-            // the moved/copied files immediately.
-            await sourceVM.refresh()
-            await destVM.refresh()
+            await self.refreshCloudPanels(forAccount: sourceAccountId)
+            if destAccountId != sourceAccountId {
+                await self.refreshCloudPanels(forAccount: destAccountId)
+            }
         }
         transfer.task = task
     }

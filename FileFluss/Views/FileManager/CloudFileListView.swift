@@ -709,6 +709,13 @@ struct CloudFileListView: View {
 
         if let progress {
             progress.downloadEndTime = Date()
+            // Many providers fall back to the non-streaming default of
+            // `downloadFile`, which never calls `onBytes`. Without this
+            // top-up `downloadBytes` stays at 0 and the dual-phase
+            // fraction pegs at 50% after upload — visible as "Done at 50%".
+            if progress.downloadBytes < expectedBytes {
+                progress.addDownloadBytes(expectedBytes - progress.downloadBytes)
+            }
         }
 
         // Phase 2: Delete items that need replacing, then upload
@@ -767,6 +774,11 @@ struct CloudFileListView: View {
 
         if let progress {
             progress.uploadEndTime = Date()
+            // Mirror the download top-up: providers without streaming
+            // uploads would leave uploadBytes at 0.
+            if progress.uploadBytes < expectedBytes {
+                progress.addUploadBytes(expectedBytes - progress.uploadBytes)
+            }
             progress.totalBytes = progress.downloadBytes + progress.uploadBytes
         }
 

@@ -427,6 +427,14 @@ actor GoogleDriveAPIClient {
         }
     }
 
+    /// Public path-keyed wrapper around `patchFileTimestamps` so callers
+    /// outside the upload path (clipboard paste, drag-drop) can preserve
+    /// the source's mtime on a cross-source copy.
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        let cached = try await resolvePathToCachedFile(remotePath)
+        try await patchFileTimestamps(fileId: cached.id, modDate: date, createdDate: nil)
+    }
+
     private func patchFileTimestamps(fileId: String, modDate: Date?, createdDate: Date?) async throws {
         let creds = try await refreshTokenIfNeeded()
         guard let url = URL(string: "\(apiURL)/files/\(fileId)") else { return }

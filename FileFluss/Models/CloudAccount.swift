@@ -17,6 +17,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case s3
     case synologyDrive
     case synologyC2
+    case s3Compatible
 
     var id: String { rawValue }
 
@@ -38,6 +39,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .s3: return "AWS S3"
         case .synologyDrive: return "Synology Drive"
         case .synologyC2: return "Synology C2 Storage"
+        case .s3Compatible: return "S3-Compatible Storage"
         }
     }
 
@@ -59,6 +61,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .s3: return "server.rack"
         case .synologyDrive: return "externaldrive.fill"
         case .synologyC2: return "externaldrive.badge.timemachine"
+        case .s3Compatible: return "externaldrive.connected.to.line.below.fill"
         }
     }
 
@@ -80,6 +83,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .s3: return "AmazonS3Logo"
         case .synologyDrive: return "SynologyDriveLogo"
         case .synologyC2: return "SynologyC2Logo"
+        case .s3Compatible: return "S3CompatibleLogo"
         default: return nil
         }
     }

@@ -419,9 +419,19 @@ final class CloudFileManagerViewModel {
                 }
                 try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
                 progress?.completedItems = index + 1
-                progress?.recordSuccess(item.name)
+                // In a cloud-to-cloud transfer the upload phase is the
+                // canonical place to record per-item success — recording
+                // here too would double-write to `itemResults` (the
+                // "Items (2)" duplicate-row artefact users saw on
+                // drag-and-drop between two cloud accounts).
+                if progress?.isCloudToCloud != true {
+                    progress?.recordSuccess(item.name)
+                }
             } catch {
                 self.error = "Failed to download \(item.name): \(error.localizedDescription)"
+                // Failures must always be recorded so cloud-to-cloud
+                // download errors aren't silently dropped — the upload
+                // phase won't see those items.
                 progress?.recordFailure(item.name, error: error.localizedDescription)
                 // Continue with remaining items so one failure doesn't
                 // abort the whole batch.
@@ -688,6 +698,15 @@ final class CloudFileManagerViewModel {
                     Task { @MainActor in progressRef?.addUploadBytes(bytes) }
                 })
                 print("[Upload] Success: \(url.lastPathComponent)")
+                // Preserve the source file's modification date on the
+                // newly-uploaded remote so cross-source transfers behave
+                // like Finder — only content changes update "Date Modified".
+                // For cloud→local→cloud transfers the local mtime was set
+                // to the original source mtime during download (see
+                // downloadRecursively), so this carries it through.
+                if let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                    try? await provider.setModificationDate(at: itemRemotePath, to: mtime)
+                }
                 progress?.totalBytes += fileBytes
                 uploadedCount += 1
                 progress?.totalFiles = uploadedCount

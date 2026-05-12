@@ -33,12 +33,18 @@ struct AddCloudAccountView: View {
 
     @State private var synologyC2AccessKeyId = ""
     @State private var synologyC2SecretAccessKey = ""
-    @State private var synologyC2Region = "eu-001"
+    @State private var synologyC2Region = ""
+
+    @State private var s3CompatibleAccessKeyId = ""
+    @State private var s3CompatibleSecretAccessKey = ""
+    @State private var s3CompatibleEndpoint = ""
+    @State private var s3CompatibleRegion = ""
+    @State private var s3CompatibleDisplayName = ""
 
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2]
+    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -128,6 +134,8 @@ struct AddCloudAccountView: View {
                 synologyDriveFields
             case .synologyC2:
                 synologyC2Fields
+            case .s3Compatible:
+                s3CompatibleFields
             default:
                 credentialFields
             }
@@ -164,7 +172,12 @@ struct AddCloudAccountView: View {
                     synologyAllowSelfSigned = true
                     synologyC2AccessKeyId = ""
                     synologyC2SecretAccessKey = ""
-                    synologyC2Region = "eu-001"
+                    synologyC2Region = ""
+                    s3CompatibleAccessKeyId = ""
+                    s3CompatibleSecretAccessKey = ""
+                    s3CompatibleEndpoint = ""
+                    s3CompatibleRegion = ""
+                    s3CompatibleDisplayName = ""
                 }
                 .disabled(isAuthenticating)
 
@@ -584,9 +597,43 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var s3CompatibleFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Generic S3-compatible storage — Hetzner Object Storage, MinIO, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces, Linode, and the like. Paste the endpoint URL from your provider's console along with the access key it issued.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("Access Key ID", text: $s3CompatibleAccessKeyId)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            SecureField("Secret Access Key", text: $s3CompatibleSecretAccessKey)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            TextField("Endpoint URL (e.g. https://fsn1.your-objectstorage.com)", text: $s3CompatibleEndpoint)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            TextField("Region (leave empty to auto-detect, e.g. fsn1, us-east-1, auto)", text: $s3CompatibleRegion)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+
+            TextField("Display name (optional, e.g. \"Hetzner FSN1\")", text: $s3CompatibleDisplayName)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            Text("Region tips: Hetzner uses the location code (fsn1, nbg1, hel1). Cloudflare R2 expects \"auto\". MinIO and most Backblaze B2 setups want \"us-east-1\".")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
     private var synologyC2Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Synology C2 Object Storage is S3-compatible. Generate an access key in the C2 console (Storage Account → Access Keys), then enter it below along with the bucket's region.")
+            Text("Synology C2 Object Storage is S3-compatible. Generate an access key in the C2 console (Storage Account → Access Keys), then paste it below along with the endpoint URL the console shows for your storage.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -599,22 +646,14 @@ struct AddCloudAccountView: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
 
-            HStack {
-                Text("Region")
-                    .frame(width: 80, alignment: .leading)
-                Picker("", selection: $synologyC2Region) {
-                    ForEach(SynologyC2RegionList.allRegions, id: \.code) { region in
-                        Text("\(region.displayName) (\(region.code))").tag(region.code)
-                    }
-                }
-                .labelsHidden()
-                .disabled(isAuthenticating)
-            }
-
-            TextField("Or type a custom region code (e.g. eu-001)", text: $synologyC2Region)
+            TextField("Endpoint URL (e.g. https://eu-005.s3.synologyc2.net)", text: $synologyC2Region)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            Text("Find the exact endpoint in your C2 console on the bucket detail page. Pasting the full URL is fine; FileFluss extracts the hostname and region automatically.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -737,6 +776,7 @@ struct AddCloudAccountView: View {
         case .s3: return s3AccessKeyId.isEmpty || s3SecretAccessKey.isEmpty || s3Region.isEmpty
         case .synologyDrive: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
+        case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -807,11 +847,20 @@ struct AddCloudAccountView: View {
                     allowSelfSignedCertificate: synologyAllowSelfSigned
                 )
             case .synologyC2:
-                let trimmedRegion = synologyC2Region.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedEndpoint = synologyC2Region.trimmingCharacters(in: .whitespacesAndNewlines)
                 await appState.syncManager.addSynologyC2Account(
                     accessKeyId: synologyC2AccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
                     secretAccessKey: synologyC2SecretAccessKey,
-                    region: trimmedRegion.isEmpty ? "eu-001" : trimmedRegion
+                    region: trimmedEndpoint
+                )
+            case .s3Compatible:
+                let displayName = s3CompatibleDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addS3CompatibleAccount(
+                    accessKeyId: s3CompatibleAccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
+                    secretAccessKey: s3CompatibleSecretAccessKey,
+                    endpoint: s3CompatibleEndpoint.trimmingCharacters(in: .whitespacesAndNewlines),
+                    region: s3CompatibleRegion.trimmingCharacters(in: .whitespacesAndNewlines),
+                    displayName: displayName.isEmpty ? nil : displayName
                 )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)

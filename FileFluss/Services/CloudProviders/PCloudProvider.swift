@@ -113,6 +113,11 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.setModificationDate(at: remotePath, to: date)
+    }
+
     func copyItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let metadata = try await client.stat(path: path)

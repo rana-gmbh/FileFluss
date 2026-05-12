@@ -155,7 +155,9 @@ actor S3APIClient {
 
     func listBuckets() async throws -> [CloudFileItem] {
         let host = topLevelHost(region: credentials.region)
-        let url = URL(string: "https://\(host)/")!
+        guard !host.isEmpty, let url = URL(string: "https://\(host)/") else {
+            throw CloudProviderError.commandFailed("S3 endpoint URL is invalid (host: \"\(host)\"). Double-check the Endpoint URL field.")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         try sign(&request, host: host, payloadHash: emptyPayloadHash, service: "s3")
@@ -576,10 +578,21 @@ actor S3APIClient {
         let message = body.flatMap { S3ErrorParser.parse(data: $0) }
         s3Log.error("[S3] HTTP \(http.statusCode): \(message ?? "<no body>")")
         switch http.statusCode {
-        case 401, 403: throw CloudProviderError.unauthorized
+        case 401, 403:
+            // S3-compatible services return a structured <Error> body for
+            // most 401/403 — surfacing it makes "Server error (HTTP 403)"
+            // turn into something like "AccessDenied: Signature mismatch."
+            if let message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw CloudProviderError.unauthorized
         case 404: throw CloudProviderError.notFound(message ?? "Not Found")
         case 429, 503: throw CloudProviderError.rateLimited
-        default: throw CloudProviderError.serverError(http.statusCode)
+        default:
+            if let message {
+                throw CloudProviderError.commandFailed("S3 error (HTTP \(http.statusCode)): \(message)")
+            }
+            throw CloudProviderError.serverError(http.statusCode)
         }
     }
 

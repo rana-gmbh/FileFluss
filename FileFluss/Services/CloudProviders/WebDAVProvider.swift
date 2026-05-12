@@ -103,6 +103,11 @@ final class WebDAVProvider: CloudProvider, @unchecked Sendable {
         try await client.copyItem(at: path, toPath: newPath)
     }
 
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.setModificationDate(at: remotePath, to: date)
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.getFileInfo(at: path)

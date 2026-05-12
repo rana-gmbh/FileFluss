@@ -421,6 +421,24 @@ actor OneDriveAPIClient {
         let _: GraphDriveItem = try await graphRequest(.patch, path: endpoint, body: RenameBody(name: newName))
     }
 
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        // Microsoft Graph stores the client-visible mtime in
+        // `fileSystemInfo.lastModifiedDateTime`. PATCHing the drive item
+        // updates it without re-uploading content.
+        let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
+        let endpoint = "/me/drive/root:\(encodedPath):"
+
+        struct FsInfo: Encodable { let lastModifiedDateTime: String }
+        struct Body: Encodable { let fileSystemInfo: FsInfo }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let body = Body(fileSystemInfo: FsInfo(lastModifiedDateTime: formatter.string(from: date)))
+
+        let _: GraphDriveItem = try await graphRequest(.patch, path: endpoint, body: body)
+    }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         let endpoint = "/me/drive/root:\(encodedPath):"

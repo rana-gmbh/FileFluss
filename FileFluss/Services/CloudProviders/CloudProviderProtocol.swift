@@ -98,6 +98,13 @@ protocol CloudProvider: Sendable {
 
     /// Search for files matching the query. Returns nil if the provider does not support search.
     func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]?
+
+    /// Sets the modification date on a remote file. Default implementation
+    /// is a no-op so providers that don't expose this API still compile.
+    /// Used by the transfer paths so a copy/move preserves the source file's
+    /// mtime instead of stamping it with the upload time — matching Finder's
+    /// behaviour across drives, local folders, and cloud accounts.
+    func setModificationDate(at remotePath: String, to date: Date) async throws
 }
 
 extension CloudProvider {
@@ -122,6 +129,14 @@ extension CloudProvider {
     }
 
     func copyItem(at path: String, toPath newPath: String) async throws {
+        throw CloudProviderError.notImplemented
+    }
+
+    /// Default no-op — providers without an API to set mtime simply skip
+    /// the call. Each transfer path uses `try?` so an unsupported provider
+    /// never blocks the operation; the file will land with the server's
+    /// upload time, which is the existing pre-fix behaviour.
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
         throw CloudProviderError.notImplemented
     }
 }

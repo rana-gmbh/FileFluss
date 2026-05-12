@@ -80,6 +80,7 @@ actor SyncEngine {
         case .s3: return S3Provider()
         case .synologyDrive: return SynologyDriveProvider()
         case .synologyC2: return SynologyC2Provider()
+        case .s3Compatible: return S3CompatibleProvider()
         }
     }
 }

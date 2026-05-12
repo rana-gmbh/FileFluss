@@ -302,6 +302,39 @@ final class SyncViewModel {
         }
     }
 
+    func addS3CompatibleAccount(
+        accessKeyId: String,
+        secretAccessKey: String,
+        endpoint: String,
+        region: String,
+        displayName: String?
+    ) async {
+        let account = CloudAccount(providerType: .s3Compatible)
+        let provider = S3CompatibleProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                endpoint: endpoint,
+                region: region,
+                displayName: displayName
+            )
+            var connectedAccount = account
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = userName
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addSynologyC2Account(accessKeyId: String, secretAccessKey: String, region: String) async {
         let account = CloudAccount(providerType: .synologyC2)
         let provider = SynologyC2Provider(accountId: account.id)
@@ -539,6 +572,11 @@ final class SyncViewModel {
                 }
             case .synologyC2:
                 let provider = SynologyC2Provider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .s3Compatible:
+                let provider = S3CompatibleProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

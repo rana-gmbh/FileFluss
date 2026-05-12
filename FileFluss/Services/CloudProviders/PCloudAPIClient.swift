@@ -217,6 +217,17 @@ actor PCloudAPIClient {
         }
     }
 
+    /// Updates a file's mtime via pCloud's `setfilemtime` endpoint so
+    /// cross-source copies preserve the original "Date Modified".
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        let encoded = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
+        let params: [String: String] = [
+            "path": encoded,
+            "newtime": "\(Int64(date.timeIntervalSince1970))"
+        ]
+        let _: PCloudBasicResponse = try await request("setfilemtime", params: params)
+    }
+
     // MARK: - User Info
 
     func userInfo() async throws -> PCloudUserInfo {
