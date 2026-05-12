@@ -25,17 +25,23 @@ targets:
         PRODUCT_NAME: FileFluss
         INFOPLIST_FILE: FileFluss/Resources/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: FileFluss/Resources/FileFluss.entitlements
         COMBINE_HIDPI_IMAGES: true
         SWIFT_EMIT_LOC_STRINGS: true
         ENABLE_PREVIEWS: true
-    entitlements:
-      path: FileFluss/Resources/FileFluss.entitlements
-      properties:
-        com.apple.security.app-sandbox: false
-        com.apple.security.files.user-selected.read-write: true
-        com.apple.security.files.bookmarks.app-scope: true
-        com.apple.security.network.client: true
+      configs:
+        # Debug builds use ad-hoc signing where $(AppIdentifierPrefix)
+        # can't resolve, so the slim variant omits keychain-access-groups.
+        # Release builds sign with Developer ID + a team prefix and pick
+        # up the full entitlements (including the keychain access group
+        # required for the modern data-protection keychain).
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: FileFluss/Resources/FileFluss.Debug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: FileFluss/Resources/FileFluss.entitlements
+    # Entitlements live as hand-maintained plists on disk (Debug + Release
+    # variants under FileFluss/Resources/). Don't add an `entitlements:`
+    # block here — XcodeGen would overwrite the on-disk files at every
+    # `xcodegen generate`.
 
   FileFlussTests:
     type: bundle.unit-test

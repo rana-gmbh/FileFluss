@@ -1,5 +1,8 @@
 import Foundation
 import Security
+import os
+
+private let keychainLog = Logger(subsystem: "com.rana.FileFluss", category: "keychain")
 
 #if DEBUG
 /// Dev-only credential store: a 0600-permissions JSON-per-key folder
@@ -137,9 +140,21 @@ enum KeychainService {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(legacy as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            if status != errSecItemNotFound {
+                keychainLog.info("[keychain] migrate key=\(key) legacy-read failed status=\(status)")
+            }
+            return nil
+        }
 
-        try? save(key: key, data: data)
+        do {
+            try save(key: key, data: data)
+            keychainLog.info("[keychain] migrate key=\(key) legacy → modern OK")
+        } catch {
+            // Modern-store write failed — keep returning the legacy
+            // data so callers continue working; next launch will retry.
+            keychainLog.info("[keychain] migrate key=\(key) legacy hit, modern write failed (\(error.localizedDescription))")
+        }
         return data
     }
 
