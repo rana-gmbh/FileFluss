@@ -15,7 +15,16 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     ]
 
     private var appearanceObservation: NSKeyValueObservation?
+    private var themeChangeObserver: NSObjectProtocol?
     private let updateNotifier = UpdateNotifier()
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Earliest possible chance to stamp the right icon — runs before
+        // the first SwiftUI scene materialises. Belt-and-suspenders for
+        // issue #11 where the dark icon stayed stuck on light for some
+        // users (suspected launch-time race on effectiveAppearance).
+        applyAppIconForCurrentAppearance()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Default automatic update checks to on the first time the app
@@ -26,11 +35,29 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         ])
 
         applyAppIconForCurrentAppearance()
-        // Swap the dock icon when the user (or system) toggles between
-        // light and dark mode.
+        // One more pass once SwiftUI has had a run-loop tick to propagate
+        // the resolved system appearance to NSApp — addresses the launch
+        // race where `effectiveAppearance` still reports `.aqua` here.
+        DispatchQueue.main.async { [weak self] in
+            self?.applyAppIconForCurrentAppearance()
+        }
+
+        // KVO on effectiveAppearance is documented as supported but is
+        // unreliable in practice; we keep it as one of several redundant
+        // triggers.
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
-            // The KVO callback fires on the main thread, but its closure
-            // is nonisolated — bridge explicitly to satisfy Swift 6.
+            MainActor.assumeIsolated {
+                self?.applyAppIconForCurrentAppearance()
+            }
+        }
+
+        // System-wide Appearance toggle in System Settings. Fires reliably
+        // when KVO above misses the change.
+        themeChangeObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.applyAppIconForCurrentAppearance()
             }
@@ -40,13 +67,32 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         Task { await notifier.start() }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // On some macOS builds the resolved appearance is only available
+        // after the app has actually become active. Idempotent re-apply.
+        applyAppIconForCurrentAppearance()
+    }
+
     private func applyAppIconForCurrentAppearance() {
-        let isDark = NSApp.effectiveAppearance
-            .bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark]) != nil
+        let appearance = NSApp.effectiveAppearance
+        let name = appearance.name
+        let isDark = name == .darkAqua
+            || name == .vibrantDark
+            || name == .accessibilityHighContrastDarkAqua
+            || name == .accessibilityHighContrastVibrantDark
+            || appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let resourceName = isDark ? "AppIcon-Dark" : "AppIcon-Light"
+        NSLog("[FileFluss] applyAppIcon appearance=\(name.rawValue) isDark=\(isDark) file=\(resourceName)")
         guard let url = Bundle.main.url(forResource: resourceName, withExtension: "icns"),
-              let image = NSImage(contentsOf: url) else { return }
+              let image = NSImage(contentsOf: url) else {
+            NSLog("[FileFluss] applyAppIcon missing icns for \(resourceName)")
+            return
+        }
         NSApp.applicationIconImage = image
+        // Force the Dock to redraw — without this, a cached pre-launch
+        // icon (from CFBundleIconFile / asset catalog) sometimes persists
+        // even after applicationIconImage is reassigned.
+        NSApp.dockTile.display()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
