@@ -666,6 +666,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     // MARK: - Cell Factories
 
+    private static let cloudBadgeTag = 9911
+
     private func makeNameCell(for item: CloudFileItem, in tableView: NSTableView) -> NSTableCellView {
         let id = NSUserInterfaceItemIdentifier("CloudNameCell")
         let cell: NSTableCellView
@@ -685,8 +687,18 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             textField.lineBreakMode = .byTruncatingMiddle
             textField.cell?.truncatesLastVisibleLine = true
 
+            // Small overlay badge for iCloud evicted / downloading items.
+            // Pinned to the bottom-right of the file icon so it overlaps
+            // the corner without obscuring file-type recognition.
+            let badge = NSImageView()
+            badge.tag = Self.cloudBadgeTag
+            badge.translatesAutoresizingMaskIntoConstraints = false
+            badge.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+            badge.isHidden = true
+
             cell.addSubview(imageView)
             cell.addSubview(textField)
+            cell.addSubview(badge)
             cell.imageView = imageView
             cell.textField = textField
 
@@ -698,6 +710,10 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
                 textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
                 textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                badge.trailingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 2),
+                badge.bottomAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 2),
+                badge.widthAnchor.constraint(equalToConstant: 11),
+                badge.heightAnchor.constraint(equalToConstant: 11),
             ])
         }
 
@@ -711,6 +727,22 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 ?? FileTypeIcon.icon(forFilename: item.name)
         }
         cell.imageView?.contentTintColor = nil
+
+        if let badge = cell.viewWithTag(Self.cloudBadgeTag) as? NSImageView {
+            switch item.downloadStatus {
+            case .local:
+                badge.isHidden = true
+                badge.image = nil
+            case .evicted:
+                badge.isHidden = false
+                badge.image = NSImage(systemSymbolName: "icloud.and.arrow.down", accessibilityDescription: "Not downloaded")
+                badge.contentTintColor = .secondaryLabelColor
+            case .downloading:
+                badge.isHidden = false
+                badge.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: "Downloading")
+                badge.contentTintColor = .controlAccentColor
+            }
+        }
 
         return cell
     }

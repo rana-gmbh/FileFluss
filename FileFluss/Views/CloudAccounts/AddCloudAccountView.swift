@@ -44,7 +44,7 @@ struct AddCloudAccountView: View {
     @State private var isAuthenticating = false
 
     // Only show providers that are implemented
-    private let availableProviders: [CloudProviderType] = [.pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
+    private let availableProviders: [CloudProviderType] = [.iCloud, .pCloud, .kDrive, .oneDrive, .googleDrive, .nextCloud, .koofr, .dropbox, .gmxCloud, .mega, .webDAV, .sftp, .wordpress, .s3, .synologyDrive, .synologyC2, .s3Compatible]
 
     var body: some View {
         VStack(spacing: 20) {
@@ -136,8 +136,8 @@ struct AddCloudAccountView: View {
                 synologyC2Fields
             case .s3Compatible:
                 s3CompatibleFields
-            default:
-                credentialFields
+            case .iCloud:
+                iCloudFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -597,6 +597,19 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var iCloudFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Files that aren't currently downloaded show a small iCloud badge in the file list. Copying or syncing them triggers a transparent download first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var s3CompatibleFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Generic S3-compatible storage — Hetzner Object Storage, MinIO, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces, Linode, and the like. Paste the endpoint URL from your provider's console along with the access key it issued.")
@@ -777,6 +790,7 @@ struct AddCloudAccountView: View {
         case .synologyDrive: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
         case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
+        case .iCloud: return false
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -862,6 +876,8 @@ struct AddCloudAccountView: View {
                     region: s3CompatibleRegion.trimmingCharacters(in: .whitespacesAndNewlines),
                     displayName: displayName.isEmpty ? nil : displayName
                 )
+            case .iCloud:
+                await appState.syncManager.addICloudAccount()
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

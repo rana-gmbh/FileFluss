@@ -73,6 +73,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .oneDrive: return "OneDriveLogo"
         case .googleDrive: return "GoogleDriveLogo"
         case .koofr: return "KoofrLogo"
+        case .iCloud: return "iCloudLogo"
         case .nextCloud: return "NextCloudLogo"
         case .dropbox: return "DropboxLogo"
         case .mega: return "MegaLogo"
@@ -84,7 +85,6 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .synologyDrive: return "SynologyDriveLogo"
         case .synologyC2: return "SynologyC2Logo"
         case .s3Compatible: return "S3CompatibleLogo"
-        default: return nil
         }
     }
 }

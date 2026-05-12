@@ -1,6 +1,15 @@
 import Foundation
 import UniformTypeIdentifiers
 
+/// Whether the file is fully present locally or held remotely (only
+/// meaningful for providers that have a partial-local concept — today
+/// that's iCloud Drive's evicted files).
+enum CloudDownloadStatus: Hashable, Sendable {
+    case local
+    case evicted
+    case downloading
+}
+
 struct CloudFileItem: Identifiable, Hashable, Sendable {
     let id: String
     let name: String
@@ -9,6 +18,27 @@ struct CloudFileItem: Identifiable, Hashable, Sendable {
     let size: Int64
     let modificationDate: Date
     let checksum: String?
+    let downloadStatus: CloudDownloadStatus
+
+    init(
+        id: String,
+        name: String,
+        path: String,
+        isDirectory: Bool,
+        size: Int64,
+        modificationDate: Date,
+        checksum: String?,
+        downloadStatus: CloudDownloadStatus = .local
+    ) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modificationDate = modificationDate
+        self.checksum = checksum
+        self.downloadStatus = downloadStatus
+    }
 
     var icon: String {
         if isDirectory { return "folder.fill" }

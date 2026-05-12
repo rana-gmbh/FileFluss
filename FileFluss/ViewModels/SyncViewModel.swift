@@ -302,6 +302,28 @@ final class SyncViewModel {
         }
     }
 
+    func addICloudAccount() async {
+        authError = nil
+        // Disallow more than one iCloud account — they all back the same
+        // CloudDocs folder, so duplicates would only confuse the sidebar.
+        if accounts.contains(where: { $0.providerType == .iCloud }) {
+            authError = "iCloud Drive is already added."
+            return
+        }
+        let provider = ICloudProvider()
+        do {
+            try await provider.authenticate()
+            var account = CloudAccount(providerType: .iCloud)
+            account.displayName = "iCloud Drive"
+            account.isConnected = true
+            accounts.append(account)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addS3CompatibleAccount(
         accessKeyId: String,
         secretAccessKey: String,
@@ -580,8 +602,11 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
-            default:
-                break
+            case .iCloud:
+                let provider = ICloudProvider()
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             }
         }
     }
