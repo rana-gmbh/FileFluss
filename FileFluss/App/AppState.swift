@@ -217,9 +217,10 @@ final class AppState {
     func isPanelOffline(_ side: PanelSide) -> Bool {
         switch sidebarSelection(for: side) {
         case .cloudAccount(let account):
-            return !account.isConnected
+            return account.isOfflineMode || !account.isConnected
         case .cloudFolder(let accountId, _):
-            return !(syncManager.accountFor(id: accountId)?.isConnected ?? false)
+            guard let account = syncManager.accountFor(id: accountId) else { return true }
+            return account.isOfflineMode || !account.isConnected
         case .drive(let driveId):
             return driveMonitor.mountURL(for: driveId) == nil
         case .offlineFolder:

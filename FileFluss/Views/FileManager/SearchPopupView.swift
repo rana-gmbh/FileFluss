@@ -254,11 +254,14 @@ struct SearchPopupView: View {
 
     private func triggerSearch() {
         let localDir = appState.activeFileManager.currentDirectory
+        // Online-only accounts feed the live search; anything the user has
+        // forced into offline mode (or that's simply disconnected) goes
+        // through the offline-search path against `cloud_files`.
         let connectedAccounts = appState.syncManager.accounts
-            .filter { $0.isConnected }
+            .filter { $0.isConnected && !$0.isOfflineMode }
             .map { (id: $0.id, name: $0.providerType.displayName) }
         let offlineAccounts = appState.syncManager.accounts
-            .filter { !$0.isConnected }
+            .filter { !$0.isConnected || $0.isOfflineMode }
             .map { (id: $0.id, name: $0.displayName) }
         let offlineDrives = appState.driveMonitor.drives
             .filter { !appState.driveMonitor.isOnline($0) && $0.lastIndexed != nil }

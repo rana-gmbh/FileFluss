@@ -587,6 +587,18 @@ final class SyncViewModel {
         saveAccounts()
     }
 
+    /// Flip the user-controlled offline-mode flag. When on, the sidebar
+    /// row routes its panel to `OfflineSourceView` and the search popup
+    /// treats this account as offline — even if the live provider would
+    /// otherwise be reachable. Persists immediately so the choice
+    /// survives a relaunch.
+    func setOfflineMode(_ enabled: Bool, accountId: UUID) {
+        guard let idx = accounts.firstIndex(where: { $0.id == accountId }) else { return }
+        guard accounts[idx].isOfflineMode != enabled else { return }
+        accounts[idx].isOfflineMode = enabled
+        saveAccounts()
+    }
+
     func renameAccount(id: UUID, to newName: String) {
         if let idx = accounts.firstIndex(where: { $0.id == id }) {
             accounts[idx].displayName = newName

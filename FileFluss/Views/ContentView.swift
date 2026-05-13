@@ -113,13 +113,15 @@ struct ContentView: View {
         VStack(spacing: 0) {
             switch sidebarItem {
             case .cloudAccount(let account):
-                if account.isConnected {
+                if account.isConnected && !account.isOfflineMode {
                     CloudFileListView(panelSide: side, accountId: account.id)
                 } else {
                     OfflineSourceView(sourceId: account.id.uuidString, panelSide: side)
                 }
             case .cloudFolder(let accountId, let path):
-                if let account = appState.syncManager.accountFor(id: accountId), account.isConnected {
+                if let account = appState.syncManager.accountFor(id: accountId),
+                   account.isConnected,
+                   !account.isOfflineMode {
                     CloudFileListView(panelSide: side, accountId: accountId)
                 } else {
                     OfflineSourceView(sourceId: accountId.uuidString, panelSide: side, initialPath: path)

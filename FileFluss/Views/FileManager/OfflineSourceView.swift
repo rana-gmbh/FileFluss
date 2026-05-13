@@ -190,7 +190,16 @@ struct OfflineSourceView: View {
         defer { isLoading = false }
         let target = path
         let id = sourceId
-        let loaded = await SearchIndex.shared.listChildren(sourceId: id, parentPath: target)
+        // Cloud accounts cache their entries in `cloud_files` keyed by
+        // `account_id`, drives use `indexed_files` keyed by `source_id`.
+        // The convention is that drive sourceIds carry a `vol:` prefix;
+        // anything else with a valid UUID is a cloud account.
+        let loaded: [SearchIndex.IndexedFile]
+        if let accountUUID = UUID(uuidString: id) {
+            loaded = await SearchIndex.shared.listCloudChildren(accountId: accountUUID, parentPath: target)
+        } else {
+            loaded = await SearchIndex.shared.listChildren(sourceId: id, parentPath: target)
+        }
         let meta = await SearchIndex.shared.source(id)
         if path == target && sourceId == id {
             rows = loaded

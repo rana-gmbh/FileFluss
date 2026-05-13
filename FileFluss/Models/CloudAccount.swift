@@ -104,6 +104,19 @@ struct CloudAccount: Identifiable, Hashable, Codable {
     var isConnected: Bool
     var rootPath: String
     var lastSyncDate: Date?
+    /// User-forced offline mode. When true, the panel reads from the local
+    /// offline index (`cloud_files`) instead of talking to the provider —
+    /// the user has explicitly said "treat this account as offline" even if
+    /// the connection / credentials would otherwise work. Distinct from
+    /// `isConnected`, which reflects whether the provider is currently
+    /// registered in `SyncEngine`. An account in offline mode is treated
+    /// the same as a disconnected one by the UI (offline source view,
+    /// included in offline search, etc.).
+    var isOfflineMode: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id, providerType, displayName, isConnected, rootPath, lastSyncDate, isOfflineMode
+    }
 
     init(
         id: UUID = UUID(),
@@ -111,7 +124,8 @@ struct CloudAccount: Identifiable, Hashable, Codable {
         displayName: String? = nil,
         isConnected: Bool = false,
         rootPath: String = "/",
-        lastSyncDate: Date? = nil
+        lastSyncDate: Date? = nil,
+        isOfflineMode: Bool = false
     ) {
         self.id = id
         self.providerType = providerType
@@ -119,5 +133,19 @@ struct CloudAccount: Identifiable, Hashable, Codable {
         self.isConnected = isConnected
         self.rootPath = rootPath
         self.lastSyncDate = lastSyncDate
+        self.isOfflineMode = isOfflineMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        providerType = try c.decode(CloudProviderType.self, forKey: .providerType)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        isConnected = try c.decode(Bool.self, forKey: .isConnected)
+        rootPath = try c.decode(String.self, forKey: .rootPath)
+        lastSyncDate = try c.decodeIfPresent(Date.self, forKey: .lastSyncDate)
+        // Default `false` when the key is missing — accounts persisted by
+        // builds prior to this feature still decode cleanly.
+        isOfflineMode = (try? c.decode(Bool.self, forKey: .isOfflineMode)) ?? false
     }
 }

@@ -184,10 +184,25 @@ struct SidebarView: View {
                         Label {
                             HStack {
                                 Text(account.displayName)
-                                    .foregroundStyle(account.isConnected ? .primary : .secondary)
+                                    // Italic + secondary when the user has
+                                    // forced offline mode, matching how
+                                    // unmounted drives render. Disconnected
+                                    // accounts also dim (no italic) to
+                                    // distinguish "we lost the connection"
+                                    // from "the user chose to go offline".
+                                    .italic(account.isOfflineMode)
+                                    .foregroundStyle(
+                                        account.isOfflineMode || !account.isConnected
+                                            ? .secondary
+                                            : .primary
+                                    )
                                 Spacer()
                                 if let job = appState.indexingService.activeJob(sourceId: account.id.uuidString) {
                                     indexingProgress(processed: job.filesProcessed)
+                                } else if account.isOfflineMode {
+                                    Image(systemName: "wifi.slash")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                 } else {
                                     Circle()
                                         .fill(account.isConnected ? .green : .gray)
@@ -203,6 +218,8 @@ struct SidebarView: View {
                                 renamingAccountId = account.id
                                 renameAccountText = account.displayName
                             }
+                            Divider()
+                            offlineModeMenu(for: account)
                             Divider()
                             cloudIndexMenu(for: account)
                         }
@@ -389,6 +406,31 @@ struct SidebarView: View {
             Button("Forget Drive", role: .destructive) {
                 appState.driveMonitor.forget(driveId: drive.id)
             }
+        }
+    }
+
+    /// Right-click → Go Offline / Go Online toggle. Going offline routes
+    /// the panel to `OfflineSourceView`, which reads the cached file/folder
+    /// listing from `cloud_files`. The option is only meaningful when the
+    /// account has actually been indexed end-to-end (presence in
+    /// `cloudIndexInfo`); offering it on a never-indexed account would land
+    /// the user on an empty offline view with no obvious fix.
+    @ViewBuilder
+    private func offlineModeMenu(for account: CloudAccount) -> some View {
+        let hasFullIndex = appState.cloudIndexInfo[account.id] != nil
+        if account.isOfflineMode {
+            Button("Go Online") {
+                appState.syncManager.setOfflineMode(false, accountId: account.id)
+            }
+        } else if hasFullIndex {
+            Button("Go Offline") {
+                appState.syncManager.setOfflineMode(true, accountId: account.id)
+            }
+            .help("Browse and search this account's last-indexed contents without contacting the server.")
+        } else {
+            Button("Go Offline") {}
+                .disabled(true)
+                .help("Index this account for offline use first.")
         }
     }
 

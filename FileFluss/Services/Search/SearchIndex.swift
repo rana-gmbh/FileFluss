@@ -398,6 +398,51 @@ actor SearchIndex {
         )
     }
 
+    /// Cloud equivalent of `listChildren`. Cloud accounts store their
+    /// entries in `cloud_files`, where `parent_path` isn't an indexed
+    /// column (the drive table has it explicitly). Derive it from `path`
+    /// in SQL so the offline cloud browser can drill folder by folder
+    /// without changing the schema.
+    func listCloudChildren(accountId: UUID, parentPath: String) -> [IndexedFile] {
+        guard let db else { return [] }
+        // `path` is always "/foo/bar"; the parent path is everything up
+        // to (but not including) the last "/". Special-case root because
+        // rfind('/') in a top-level path like "/file.txt" returns position 1,
+        // whose substr(... , 1, 0) is empty — but the intended parent is "/".
+        let sql = """
+            SELECT path, name, is_directory, size, modification_date
+            FROM cloud_files
+            WHERE account_id = ?
+              AND (
+                CASE WHEN instr(substr(path, 2), '/') = 0 THEN '/'
+                     ELSE substr(path, 1, length(path) - length(name) - 1)
+                END
+              ) = ?
+            ORDER BY is_directory DESC, name COLLATE NOCASE ASC
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, nil)
+
+        var rows: [IndexedFile] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let path = String(cString: sqlite3_column_text(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            rows.append(IndexedFile(
+                sourceId: accountId.uuidString,
+                path: path,
+                parentPath: parentPath,
+                name: name,
+                isDirectory: sqlite3_column_int(stmt, 2) == 1,
+                size: sqlite3_column_int64(stmt, 3),
+                modificationDate: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
+            ))
+        }
+        return rows
+    }
+
     /// List entries whose parent path equals `parentPath`. Used by the
     /// offline browser to walk an indexed source folder-by-folder.
     func listChildren(sourceId: String, parentPath: String) -> [IndexedFile] {
