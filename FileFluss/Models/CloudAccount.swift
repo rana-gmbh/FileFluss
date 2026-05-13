@@ -19,6 +19,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case synologyC2
     case s3Compatible
     case box
+    case seafile
 
     var id: String { rawValue }
 
@@ -42,6 +43,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .synologyC2: return "Synology C2 Storage"
         case .s3Compatible: return "S3-Compatible Storage"
         case .box: return "Box"
+        case .seafile: return "Seafile"
         }
     }
 
@@ -65,6 +67,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .synologyC2: return "externaldrive.badge.timemachine"
         case .s3Compatible: return "externaldrive.connected.to.line.below.fill"
         case .box: return "shippingbox.fill"
+        case .seafile: return "leaf.fill"
         }
     }
 
@@ -89,6 +92,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         case .synologyC2: return "SynologyC2Logo"
         case .s3Compatible: return "S3CompatibleLogo"
         case .box: return "BoxLogo"
+        case .seafile: return "SeafileLogo"
         }
     }
 }

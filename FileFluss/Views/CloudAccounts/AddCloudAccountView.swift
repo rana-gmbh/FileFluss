@@ -31,6 +31,9 @@ struct AddCloudAccountView: View {
     @State private var synologyOTP = ""
     @State private var synologyAllowSelfSigned = true
 
+    @State private var seafileOTP = ""
+    @State private var seafileAllowSelfSigned = false
+
     enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
         case browser = "Browser Login"
         case appPassword = "App Password"
@@ -55,7 +58,7 @@ struct AddCloudAccountView: View {
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
         .box, .dropbox, .gmxCloud, .googleDrive, .iCloud, .kDrive,
-        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .synologyC2,
+        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2,
     ]
 
     /// Providers that show up under "Other Protocols" — generic transport
@@ -177,6 +180,8 @@ struct AddCloudAccountView: View {
                 iCloudFields
             case .box:
                 boxFields
+            case .seafile:
+                seafileFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -207,6 +212,8 @@ struct AddCloudAccountView: View {
                     sftpKeyImportError = nil
                     synologyOTP = ""
                     synologyAllowSelfSigned = true
+                    seafileOTP = ""
+                    seafileAllowSelfSigned = false
                     synologyC2AccessKeyId = ""
                     synologyC2SecretAccessKey = ""
                     synologyC2Region = ""
@@ -409,6 +416,34 @@ struct AddCloudAccountView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    private var seafileFields: some View {
+        VStack(spacing: 12) {
+            TextField("Server URL (e.g. https://seafile.example.com)", text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+            TextField("Two-factor code (only if enabled)", text: $seafileOTP)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            Toggle("Allow self-signed certificate", isOn: $seafileAllowSelfSigned)
+                .disabled(isAuthenticating)
+                .help("Enable when the server presents a self-signed or LAN-only TLS certificate. Trust is scoped to the host you entered.")
+            Text("Seafile doesn't support browser OAuth — the password is exchanged once for a long-lived API token, then discarded. Self-hosted servers work too.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
     }
 
@@ -856,6 +891,7 @@ struct AddCloudAccountView: View {
         case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
         case .iCloud: return false
         case .box: return false
+        case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -950,6 +986,15 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addICloudAccount()
             case .box:
                 await appState.syncManager.addBoxAccount()
+            case .seafile:
+                let otp = seafileOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addSeafileAccount(
+                    serverURL: serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: seafileAllowSelfSigned
+                )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

@@ -5,6 +5,10 @@ enum CloudProviderError: LocalizedError {
     case notImplemented
     case networkError(Error)
     case unauthorized
+    /// Server requires a one-time password / TOTP in addition to the
+    /// account credentials. Add-account flows catch this to re-prompt the
+    /// user without making them retype the password.
+    case twoFactorRequired
     case notFound(String)
     case quotaExceeded
     case rateLimited
@@ -25,6 +29,7 @@ enum CloudProviderError: LocalizedError {
         case .notImplemented: return "This feature is not yet implemented."
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .unauthorized: return "Authorization expired. Please sign in again."
+        case .twoFactorRequired: return "Two-factor authentication required. Enter your 6-digit code and try again."
         case .notFound(let path): return "Item not found: \(path)"
         case .quotaExceeded: return "Storage quota exceeded."
         case .rateLimited: return "Rate limited. Please try again later."

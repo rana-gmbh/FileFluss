@@ -186,7 +186,8 @@ actor SFTPAPIClient {
         case .commandFailed(let m): message = m
         case .serverError, .notFound, .networkError, .invalidResponse,
              .invalidCredentials, .notAuthenticated, .unauthorized,
-             .quotaExceeded, .rateLimited, .notImplemented, .fileTooLarge:
+             .quotaExceeded, .rateLimited, .notImplemented, .fileTooLarge,
+             .twoFactorRequired:
             return false
         }
         let lower = message.lowercased()

@@ -1015,6 +1015,18 @@ final class AppState {
         let sourceVM = cloudFileManager(for: sourceAccountId, side: destPanel)
         let destVM = cloudFileManager(for: destAccountId, side: destPanel)
 
+        // Add the transfer entry up-front so the panel shows immediate
+        // feedback. The preflight calls below (per-item metadata fetch,
+        // destination listing, conflict dialog) can take several seconds
+        // against high-latency clouds — the drag-and-drop path adds its
+        // progress entry before doing the same work, so do the same here
+        // for ⌘C / ⌘V to match. Item count and expected bytes get refined
+        // once we know which items are actually being transferred.
+        let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying",
+                                        totalItems: sourceItems.count)
+        transfer.isCloudToCloud = true
+        addTransfer(transfer, panel: destPanel)
+
         // Fetch metadata for proper sizes (so the pre-flight dialog has
         // real numbers to display, and the progress bar can show
         // meaningful percentages).
@@ -1057,16 +1069,21 @@ final class AppState {
             uniquingKeysWith: { _, last in last }
         )
         let toTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
-        guard !toTransfer.isEmpty else { return }
+        guard !toTransfer.isEmpty else {
+            // All items were skipped — mark the transfer complete so the
+            // entry doesn't sit at 0% forever.
+            for (item, _) in resolutions {
+                transfer.recordSkip(item.name)
+            }
+            transfer.isComplete = true
+            transfer.endTime = Date()
+            return
+        }
         let expectedTotal = toTransfer.reduce(Int64(0)) { $0 + $1.size }
 
-        let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying",
-                                        totalItems: toTransfer.count)
-        transfer.isCloudToCloud = true
         transfer.totalFiles = toTransfer.count
         transfer.expectedBytesDownload = expectedTotal
         transfer.expectedBytesUpload = expectedTotal
-        addTransfer(transfer, panel: destPanel)
 
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("filefluss-paste-\(UUID().uuidString)", isDirectory: true)

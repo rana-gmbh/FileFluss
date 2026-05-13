@@ -346,6 +346,37 @@ final class SyncViewModel {
         }
     }
 
+    func addSeafileAccount(
+        serverURL: String,
+        username: String,
+        password: String,
+        otp: String?,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: .seafile)
+        let provider = SeafileProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            let credentials = try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+
+            var connectedAccount = account
+            connectedAccount.displayName = "Seafile (\(credentials.username))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addICloudAccount() async {
         authError = nil
         // Disallow more than one iCloud account — they all back the same
@@ -702,6 +733,11 @@ final class SyncViewModel {
                 }
             case .box:
                 let provider = BoxProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .seafile:
+                let provider = SeafileProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

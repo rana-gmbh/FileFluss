@@ -24,5 +24,19 @@
 	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Rana GmbH. Licensed under GPL-3.0.</string>
+	<!--
+	  FileFluss talks to self-hosted servers the user enters at runtime
+	  (Seafile, NextCloud, WebDAV, SFTP, S3-compatible, Synology Drive…),
+	  many of which run on local IPs or LAN domains without TLS. App
+	  Transport Security blocks plain http:// connections by default;
+	  enable arbitrary loads so the URLSession-based providers can reach
+	  those servers. The user already chose to type an http URL, so this
+	  is a user-controlled trust boundary rather than a silent downgrade.
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
