@@ -190,8 +190,6 @@ struct AddCloudAccountView: View {
                 Button("Back") {
                     selectedProvider = nil
                     appState.syncManager.authError = nil
-                    appState.syncManager.oneDriveDeviceCode = nil
-                    appState.syncManager.isPollingForOneDrive = false
                     email = ""
                     password = ""
                     apiToken = ""
@@ -227,7 +225,7 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && !appState.syncManager.isAuthenticatingNextCloud && (provider != .oneDrive || appState.syncManager.oneDriveDeviceCode == nil) {
+                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && !appState.syncManager.isAuthenticatingNextCloud && !appState.syncManager.isAuthenticatingOneDrive {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -320,40 +318,16 @@ struct AddCloudAccountView: View {
 
     private var oneDriveFields: some View {
         VStack(spacing: 12) {
-            if let deviceCode = appState.syncManager.oneDriveDeviceCode {
-                // Show the device code for the user to enter at Microsoft's page
-                Text("Enter the code below at Microsoft's sign-in page:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Text(deviceCode.userCode)
-                    .font(.system(.title, design: .monospaced).bold())
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-                    .background(.quaternary)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .textSelection(.enabled)
-
-                Link(destination: URL(string: deviceCode.verificationUri)!) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.right.square")
-                        Text("Open Microsoft Login")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-
-                if appState.syncManager.isPollingForOneDrive {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("Waiting for sign-in…")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            if appState.syncManager.isAuthenticatingOneDrive {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Waiting for sign-in in browser…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else {
-                Text("Click Connect to sign in with your Microsoft account. A code will appear for you to enter at Microsoft's login page.")
+                Text("Click Connect to sign in with your Microsoft account. Your browser will open for authentication.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -986,7 +960,7 @@ struct AddCloudAccountView: View {
             default:
                 break
             }
-            if appState.syncManager.authError == nil && !appState.syncManager.isPollingForOneDrive {
+            if appState.syncManager.authError == nil {
                 dismiss()
             }
             isAuthenticating = false

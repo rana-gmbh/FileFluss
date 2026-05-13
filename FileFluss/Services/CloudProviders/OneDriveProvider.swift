@@ -23,19 +23,18 @@ final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         self.apiClient = OneDriveAPIClient(credentials: credentials)
     }
 
-    // MARK: - Authentication (Device Code Flow)
+    // MARK: - Authentication (Loopback OAuth + PKCE)
 
-    /// Step 1: Request a device code for the user to enter at the Microsoft login page.
-    func startDeviceCodeFlow() async throws -> OneDriveDeviceCode {
-        return try await OneDriveAPIClient.requestDeviceCode()
-    }
-
-    /// Step 2: Poll Microsoft until the user completes sign-in. Saves credentials on success.
-    func completeDeviceCodeFlow(deviceCode: String) async throws {
-        let credentials = try await OneDriveAPIClient.pollForToken(deviceCode: deviceCode)
+    /// Runs Microsoft's loopback OAuth flow and persists the resulting
+    /// credentials under this account's keychain slot. Matches the pattern
+    /// used by Google Drive, Dropbox, and Box so `SyncViewModel.reauthenticate`
+    /// can drive all four through a single switch.
+    func startOAuthFlow() async throws -> OneDriveCredentials {
+        let credentials = try await OneDriveAPIClient.startOAuthFlow()
         self.apiClient = OneDriveAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
-        oneDriveProviderLog.info("[OneDrive] Authenticated as \(credentials.userEmail)")
+        oneDriveProviderLog.info("[OneDrive] Authenticated as \(credentials.userEmail, privacy: .public)")
+        return credentials
     }
 
     func authenticate() async throws {

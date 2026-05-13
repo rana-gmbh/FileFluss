@@ -8,9 +8,8 @@ final class SyncViewModel {
     var isAddingRule: Bool = false
     var authError: String?
 
-    // OneDrive device code flow state
-    var oneDriveDeviceCode: OneDriveDeviceCode?
-    var isPollingForOneDrive: Bool = false
+    // OneDrive OAuth state
+    var isAuthenticatingOneDrive: Bool = false
 
     // Google Drive OAuth state
     var isAuthenticatingGoogleDrive: Bool = false
@@ -168,22 +167,15 @@ final class SyncViewModel {
         let account = CloudAccount(providerType: .oneDrive)
         let provider = OneDriveProvider(accountId: account.id)
         authError = nil
-        oneDriveDeviceCode = nil
-        isPollingForOneDrive = false
+        isAuthenticatingOneDrive = true
 
         do {
-            let deviceCode = try await provider.startDeviceCodeFlow()
-            oneDriveDeviceCode = deviceCode
-            isPollingForOneDrive = true
-
-            try await provider.completeDeviceCodeFlow(deviceCode: deviceCode.deviceCode)
-            isPollingForOneDrive = false
-            oneDriveDeviceCode = nil
+            let credentials = try await provider.startOAuthFlow()
+            isAuthenticatingOneDrive = false
 
             var connectedAccount = account
-            let userName = try? await provider.userDisplayName()
-            if let userName, !userName.isEmpty {
-                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            if !credentials.userEmail.isEmpty, credentials.userEmail != "Unknown" {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(credentials.userEmail))"
             }
 
             connectedAccount.isConnected = true
@@ -191,8 +183,7 @@ final class SyncViewModel {
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
         } catch {
-            isPollingForOneDrive = false
-            oneDriveDeviceCode = nil
+            isAuthenticatingOneDrive = false
             authError = error.localizedDescription
         }
     }
@@ -578,7 +569,7 @@ final class SyncViewModel {
     /// it relies on credentials the user must type in.
     func providerSupportsInlineReauth(_ type: CloudProviderType) -> Bool {
         switch type {
-        case .googleDrive, .dropbox, .box: return true
+        case .googleDrive, .dropbox, .box, .oneDrive: return true
         default: return false
         }
     }
@@ -603,6 +594,10 @@ final class SyncViewModel {
                 await syncEngine.registerProvider(for: accountId, provider: provider)
             case .box:
                 let provider = BoxProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
+            case .oneDrive:
+                let provider = OneDriveProvider(accountId: accountId)
                 _ = try await provider.startOAuthFlow()
                 await syncEngine.registerProvider(for: accountId, provider: provider)
             default:
