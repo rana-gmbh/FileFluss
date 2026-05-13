@@ -400,7 +400,11 @@ struct SidebarView: View {
             Text("Indexed \(Self.shortIndexedSummary(date: info.lastIndexed, files: info.totalFiles))")
             Divider()
         } else {
-            Text("Not indexed yet")
+            // Distinct from "Never indexed" — covers both the
+            // truly-untouched case and the "you've browsed a few folders
+            // but never ran a full crawl" case, since the per-folder
+            // upserts shouldn't be advertised as a complete index.
+            Text("Not fully indexed yet")
             Divider()
         }
         if account.isConnected {

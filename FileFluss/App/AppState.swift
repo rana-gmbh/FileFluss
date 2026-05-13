@@ -98,14 +98,23 @@ final class AppState {
     func refreshIndexInfo() async {
         var next: [UUID: CloudIndexInfo] = [:]
         for account in syncManager.accounts {
-            if let s = await SearchIndex.shared.cloudAccountSummary(accountId: account.id) {
-                next[account.id] = CloudIndexInfo(
-                    lastIndexed: s.lastIndexed,
-                    totalFiles: s.totalFiles,
-                    totalFolders: s.totalFolders,
-                    totalBytes: s.totalBytes
-                )
-            }
+            // Only treat an account as indexed if a full crawl has been
+            // recorded in `indexed_sources`. Browsing a folder upserts
+            // those entries into `cloud_files` for incremental search,
+            // but the resulting (low) file count would otherwise leak
+            // into the sidebar as "Indexed N files, today" — making the
+            // user think the account had been fully indexed when only a
+            // handful of items were touched.
+            guard let source = await SearchIndex.shared.source(account.id.uuidString),
+                  let lastFullIndex = source.lastIndexed,
+                  let s = await SearchIndex.shared.cloudAccountSummary(accountId: account.id)
+            else { continue }
+            next[account.id] = CloudIndexInfo(
+                lastIndexed: lastFullIndex,
+                totalFiles: s.totalFiles,
+                totalFolders: s.totalFolders,
+                totalBytes: s.totalBytes
+            )
         }
         cloudIndexInfo = next
     }

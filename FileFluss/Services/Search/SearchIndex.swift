@@ -102,6 +102,20 @@ actor SearchIndex {
                 tokenize='unicode61'
             )
         """)
+
+        // One-shot migration: earlier builds wrote garbage (5 zero bytes
+        // from a dangling pointer — see the comment in `recordCloudSource`)
+        // into `indexed_sources.kind` for every cloud account. The exact
+        // stored value isn't empty, NULL, or matchable as ASCII text, so
+        // detect those rows by exclusion: any source that isn't a drive
+        // (drives use the `vol:` prefix on `source_id`) and isn't already
+        // tagged as `cloud` must be a cloud account that needs the fix.
+        try? execute("""
+            UPDATE indexed_sources
+            SET kind = 'cloud'
+            WHERE source_id NOT LIKE 'vol:%'
+              AND kind != 'cloud'
+        """)
     }
 
     func close() {
@@ -729,10 +743,15 @@ actor SearchIndex {
     /// walkCloud completes.
     func recordCloudSource(accountId: UUID, displayName: String, summary: IndexedAccountSummary) {
         guard let db else { return }
+        // Update `kind` on conflict too — older builds had a bind bug that
+        // wrote an empty string for `kind`, so re-indexing must be able to
+        // self-heal the row (otherwise the cloud account stays mis-classified
+        // as a drive in Settings → Index Status forever).
         let sql = """
             INSERT INTO indexed_sources (source_id, kind, display_name, last_indexed, total_files, total_bytes)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(source_id) DO UPDATE SET
+                kind = excluded.kind,
                 display_name = excluded.display_name,
                 last_indexed = excluded.last_indexed,
                 total_files = excluded.total_files,
@@ -741,8 +760,16 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
+        // Bind every text via NSString.utf8String — passing a Swift String
+        // literal directly to sqlite3_bind_text with a nil destructor
+        // (SQLITE_STATIC) lands a dangling pointer here: Swift's auto-bridge
+        // to `const char *` only keeps the C buffer alive for the duration
+        // of the bind call, but SQLite reads the bytes lazily during step().
+        // The result is an empty string in the `kind` column for every
+        // cloud account ever indexed. Routing through NSString keeps the
+        // backing buffer alive for the scope of the local, which is enough.
         sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, "cloud", -1, nil)
+        sqlite3_bind_text(stmt, 2, ("cloud" as NSString).utf8String, -1, nil)
         sqlite3_bind_text(stmt, 3, (displayName as NSString).utf8String, -1, nil)
         sqlite3_bind_double(stmt, 4, summary.lastIndexed.timeIntervalSince1970)
         sqlite3_bind_int(stmt, 5, Int32(summary.totalFiles))

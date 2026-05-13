@@ -418,53 +418,61 @@ struct IndexStatusSettingsView: View {
         var built: [IndexStatusRow] = []
 
         for src in sources {
-            let counts = await SearchIndex.shared.sourceCounts(src.sourceId) ?? (0, 0)
             let isCloud = src.kind == "cloud"
             let icon: String
             let kindLabel: String
             let origin: IndexStatusRow.Origin
 
+            // Drive rows count from `indexed_files`; cloud accounts have
+            // their entries in `cloud_files`, so `sourceCounts` returns
+            // nil → 0/0 for them. Pull from `cloudAccountSummary` instead
+            // when the source is a cloud account.
+            let files: Int
+            let folders: Int
+            let bytes: Int64
+
             if isCloud, let uuid = UUID(uuidString: src.sourceId) {
                 icon = "cloud.fill"
                 kindLabel = "Cloud Account"
                 origin = .cloud(accountId: uuid)
+                if let summary = await SearchIndex.shared.cloudAccountSummary(accountId: uuid) {
+                    files = summary.totalFiles
+                    folders = summary.totalFolders
+                    bytes = summary.totalBytes
+                } else {
+                    files = src.totalFiles
+                    folders = 0
+                    bytes = src.totalBytes
+                }
             } else {
                 let drive = appState.driveMonitor.drives.first(where: { $0.id == src.sourceId })
                 icon = drive?.kind.sfSymbol ?? "externaldrive.fill"
                 kindLabel = drive?.kind.displayName ?? "Drive"
                 origin = .drive(id: src.sourceId)
+                let counts = await SearchIndex.shared.sourceCounts(src.sourceId) ?? (0, 0)
+                files = counts.files
+                folders = counts.folders
+                bytes = src.totalBytes
             }
+
             built.append(IndexStatusRow(
                 id: src.sourceId,
                 displayName: src.displayName,
                 kindLabel: kindLabel,
                 icon: icon,
                 lastIndexed: src.lastIndexed,
-                totalFiles: counts.files,
-                totalFolders: counts.folders,
-                totalBytes: src.totalBytes,
+                totalFiles: files,
+                totalFolders: folders,
+                totalBytes: bytes,
                 origin: origin
             ))
         }
-        // Also surface cloud accounts that were indexed before we started
-        // tracking them in indexed_sources — we read directly from
-        // cloud_files. Skip ones already in `built`.
-        let existing = Set(built.map(\.id))
-        for account in appState.syncManager.accounts where !existing.contains(account.id.uuidString) {
-            if let summary = await SearchIndex.shared.cloudAccountSummary(accountId: account.id) {
-                built.append(IndexStatusRow(
-                    id: account.id.uuidString,
-                    displayName: account.displayName,
-                    kindLabel: "Cloud Account",
-                    icon: "cloud.fill",
-                    lastIndexed: summary.lastIndexed,
-                    totalFiles: summary.totalFiles,
-                    totalFolders: summary.totalFolders,
-                    totalBytes: summary.totalBytes,
-                    origin: .cloud(accountId: account.id)
-                ))
-            }
-        }
+        // Note: cloud accounts that have only been *browsed* (and so have
+        // rows in `cloud_files` but no `indexed_sources` entry) are
+        // deliberately not surfaced here. Showing them as indexed would
+        // mislead the user with the (small) browsed file count; they
+        // need to trigger a full crawl from the sidebar context menu to
+        // appear in this list.
         rows = built.sorted { $0.displayName.lowercased() < $1.displayName.lowercased() }
     }
 }
