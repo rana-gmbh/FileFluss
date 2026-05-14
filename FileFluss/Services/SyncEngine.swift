@@ -82,6 +82,7 @@ actor SyncEngine {
         case .s3Compatible: return S3CompatibleProvider()
         case .box: return BoxProvider()
         case .seafile: return SeafileProvider()
+        case .filen: return FilenProvider()
         }
     }
 }

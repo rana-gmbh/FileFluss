@@ -34,6 +34,8 @@ struct AddCloudAccountView: View {
     @State private var seafileOTP = ""
     @State private var seafileAllowSelfSigned = false
 
+    @State private var filenTwoFactor = ""
+
     enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
         case browser = "Browser Login"
         case appPassword = "App Password"
@@ -57,7 +59,7 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .gmxCloud, .googleDrive, .iCloud, .kDrive,
+        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .kDrive,
         .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2,
     ]
 
@@ -182,6 +184,8 @@ struct AddCloudAccountView: View {
                 boxFields
             case .seafile:
                 seafileFields
+            case .filen:
+                filenFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -214,6 +218,7 @@ struct AddCloudAccountView: View {
                     synologyAllowSelfSigned = true
                     seafileOTP = ""
                     seafileAllowSelfSigned = false
+                    filenTwoFactor = ""
                     synologyC2AccessKeyId = ""
                     synologyC2SecretAccessKey = ""
                     synologyC2Region = ""
@@ -672,6 +677,27 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var filenFields: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+            TextField("Two-factor code (only if enabled)", text: $filenTwoFactor)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            Text("Filen is end-to-end encrypted, so there's no browser OAuth — the password is used locally to derive your master key, then discarded. Only v2 accounts are supported in this release; new Filen accounts default to v2.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
     private var megaFields: some View {
         VStack(spacing: 12) {
             Text("Sign in with your Mega email and password.")
@@ -892,6 +918,7 @@ struct AddCloudAccountView: View {
         case .iCloud: return false
         case .box: return false
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
+        case .filen: return email.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -994,6 +1021,13 @@ struct AddCloudAccountView: View {
                     password: password,
                     otp: otp.isEmpty ? nil : otp,
                     allowSelfSignedCertificate: seafileAllowSelfSigned
+                )
+            case .filen:
+                let code = filenTwoFactor.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addFilenAccount(
+                    email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    twoFactorCode: code
                 )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)

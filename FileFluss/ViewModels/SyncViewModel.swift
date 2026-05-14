@@ -377,6 +377,27 @@ final class SyncViewModel {
         }
     }
 
+    func addFilenAccount(email: String, password: String, twoFactorCode: String) async {
+        let account = CloudAccount(providerType: .filen)
+        let provider = FilenProvider(accountId: account.id)
+        authError = nil
+        do {
+            let credentials = try await provider.authenticate(
+                email: email,
+                password: password,
+                twoFactorCode: twoFactorCode
+            )
+            var connectedAccount = account
+            connectedAccount.displayName = "Filen (\(credentials.email))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addICloudAccount() async {
         authError = nil
         // Disallow more than one iCloud account — they all back the same
@@ -750,6 +771,11 @@ final class SyncViewModel {
                 }
             case .seafile:
                 let provider = SeafileProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .filen:
+                let provider = FilenProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
