@@ -23,6 +23,14 @@ actor DropboxAPIClient {
     private(set) var credentials: DropboxCredentials
     private let session: URLSession
 
+    /// When a token refresh is in flight, concurrent callers must await
+    /// the same Task rather than firing parallel POSTs to /oauth2/token.
+    /// Dropbox rotates refresh tokens — a parallel refresh races and one
+    /// caller comes back with invalid_grant → notAuthenticated. Actor
+    /// isolation alone doesn't fix this because every `await` releases
+    /// the actor.
+    private var inflightRefresh: Task<DropboxCredentials, Error>?
+
     private static let rpcURL = "https://api.dropboxapi.com/2"
     private static let contentURL = "https://content.dropboxapi.com/2"
 
@@ -222,44 +230,13 @@ actor DropboxAPIClient {
     // MARK: - Token Refresh
 
     func refreshTokenIfNeeded() async throws -> DropboxCredentials {
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
         guard Date() >= credentials.expiresAt.addingTimeInterval(-60) else {
             return credentials
         }
-
-        guard !credentials.refreshToken.isEmpty else {
-            throw CloudProviderError.notAuthenticated
-        }
-
-        let url = URL(string: "https://api.dropboxapi.com/oauth2/token")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-
-        let body = [
-            "grant_type=refresh_token",
-            "refresh_token=\(credentials.refreshToken)",
-            "client_id=\(Self.appKey)",
-            "client_secret=\(Self.appSecret)",
-        ].joined(separator: "&")
-        request.httpBody = body.data(using: .utf8)
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let http = response as? HTTPURLResponse
-            dropboxLog.error("[Dropbox] Token refresh failed: HTTP \(http?.statusCode ?? 0)")
-            throw CloudProviderError.notAuthenticated
-        }
-
-        let tokenResponse = try JSONDecoder().decode(DropboxTokenResponse.self, from: data)
-        let newCreds = DropboxCredentials(
-            accessToken: tokenResponse.access_token,
-            refreshToken: tokenResponse.refresh_token ?? credentials.refreshToken,
-            expiresAt: Date().addingTimeInterval(TimeInterval(tokenResponse.expires_in)),
-            accountId: credentials.accountId,
-            displayName: credentials.displayName
-        )
-        credentials = newCreds
-        return newCreds
+        return try await startRefresh()
     }
 
     func userDisplayName() async throws -> String {
@@ -640,12 +617,36 @@ actor DropboxAPIClient {
 
     // MARK: - RPC Helper
 
-    /// Force-refresh the token (ignoring expiry check) and update credentials.
+    /// Force a refresh regardless of the cached `expiresAt`. Used after a
+    /// 401 from an API call — servers can invalidate access tokens before
+    /// our local expiry kicks in, so the "is the token expiring soon?"
+    /// guard isn't enough.
     private func forceRefreshToken() async throws -> DropboxCredentials {
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
+        return try await startRefresh()
+    }
+
+    private func startRefresh() async throws -> DropboxCredentials {
         guard !credentials.refreshToken.isEmpty else {
             throw CloudProviderError.notAuthenticated
         }
+        let task = Task<DropboxCredentials, Error> { [self] in
+            try await self.performTokenRefresh()
+        }
+        inflightRefresh = task
+        do {
+            let creds = try await task.value
+            inflightRefresh = nil
+            return creds
+        } catch {
+            inflightRefresh = nil
+            throw error
+        }
+    }
 
+    private func performTokenRefresh() async throws -> DropboxCredentials {
         let url = URL(string: "https://api.dropboxapi.com/oauth2/token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -662,7 +663,7 @@ actor DropboxAPIClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
-            dropboxLog.error("[Dropbox] Force token refresh failed: HTTP \(http?.statusCode ?? 0)")
+            dropboxLog.error("[Dropbox] Token refresh failed: HTTP \(http?.statusCode ?? 0)")
             throw CloudProviderError.notAuthenticated
         }
 

@@ -7,7 +7,9 @@ struct AddSyncRuleView: View {
     @State private var localPath: URL?
     @State private var remotePath: String = "/"
     @State private var selectedAccountId: UUID?
-    @State private var direction: SyncDirection = .bidirectional
+    // Default to upload-only — bidirectional is hidden from the picker
+    // for v1.0 because SyncEngine has no conflict-detection yet.
+    @State private var direction: SyncDirection = .upload
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,8 +47,11 @@ struct AddSyncRuleView: View {
                 }
 
                 Section("Direction") {
+                    // Bidirectional is intentionally omitted in v1.0 — the
+                    // sync engine doesn't do conflict detection yet, so
+                    // running it both ways can overwrite or duplicate files.
                     Picker("Sync Direction", selection: $direction) {
-                        ForEach(SyncDirection.allCases, id: \.self) { dir in
+                        ForEach([SyncDirection.upload, .download], id: \.self) { dir in
                             Label(dir.displayName, systemImage: dir.icon)
                                 .tag(dir)
                         }

@@ -366,7 +366,10 @@ actor SFTPAPIClient {
                 let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
                 let stderr = String(data: stderrData, encoding: .utf8) ?? ""
 
-                // Debug: write to log file
+                #if DEBUG
+                // Debug-only file mirror — release builds must not write
+                // server hostnames / paths / stderr (which can contain
+                // credentials on auth failure) to a world-readable file.
                 let debugLine = "[SFTP] exit=\(proc.terminationStatus) stdout=\(stdout.prefix(500)) stderr=\(stderr.prefix(500))\n"
                 let logPath = "/tmp/filefluss-sftp.log"
                 if let fh = FileHandle(forWritingAtPath: logPath) {
@@ -376,6 +379,7 @@ actor SFTPAPIClient {
                 } else {
                     FileManager.default.createFile(atPath: logPath, contents: Data(debugLine.utf8))
                 }
+                #endif
 
                 if proc.terminationStatus != 0 {
                     let exit = Int(proc.terminationStatus)

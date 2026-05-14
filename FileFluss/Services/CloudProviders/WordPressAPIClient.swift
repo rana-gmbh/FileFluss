@@ -197,7 +197,10 @@ actor WordPressAPIClient {
     func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let sourceURL = try await resolveSourceURL(for: remotePath)
 
-        var request = URLRequest(url: URL(string: sourceURL)!)
+        guard let url = URL(string: sourceURL) else {
+            throw CloudProviderError.invalidResponse
+        }
+        var request = URLRequest(url: url)
         request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
 
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)

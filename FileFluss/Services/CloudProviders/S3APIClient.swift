@@ -456,7 +456,9 @@ actor S3APIClient {
             let (_, response) = try await session.data(for: request)
             try validate(response, body: nil)
 
-            let http = response as! HTTPURLResponse
+            guard let http = response as? HTTPURLResponse else {
+                throw CloudProviderError.invalidResponse
+            }
             let size = (http.value(forHTTPHeaderField: "Content-Length") as NSString?)?.longLongValue ?? 0
             let etag = http.value(forHTTPHeaderField: "ETag")
             let lastModified = (http.value(forHTTPHeaderField: "Last-Modified")).flatMap(parseHTTPDate)

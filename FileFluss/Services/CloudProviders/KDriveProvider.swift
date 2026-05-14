@@ -8,15 +8,23 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
 
     static func log(_ msg: String) {
         kDriveLog.info("\(msg)")
+        #if DEBUG
+        // Plain-text mirror in the temp dir helps debug kDrive-specific
+        // issues without scraping Console.app. Debug-only — release builds
+        // must not write potentially sensitive paths/tokens to a world-
+        // readable location.
         let logFile = FileManager.default.temporaryDirectory.appendingPathComponent("filefluss_kdrive.log")
         let line = "\(Date()): \(msg)\n"
         if let handle = try? FileHandle(forWritingTo: logFile) {
             handle.seekToEndOfFile()
-            handle.write(line.data(using: .utf8)!)
+            if let lineData = line.data(using: .utf8) {
+                handle.write(lineData)
+            }
             handle.closeFile()
         } else {
             try? line.write(to: logFile, atomically: true, encoding: .utf8)
         }
+        #endif
     }
 
     private var apiClient: KDriveAPIClient?

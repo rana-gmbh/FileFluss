@@ -831,8 +831,13 @@ final class SyncViewModel {
     // MARK: - Persistence
 
     func saveAccounts() {
-        if let data = try? JSONEncoder().encode(accounts) {
+        do {
+            let data = try JSONEncoder().encode(accounts)
             UserDefaults.standard.set(data, forKey: Self.accountsKey)
+        } catch {
+            // A silent failure here would lose accounts the user just added —
+            // surface it in the log so support has something to work with.
+            NSLog("[FileFluss] saveAccounts failed: \(error.localizedDescription)")
         }
     }
 

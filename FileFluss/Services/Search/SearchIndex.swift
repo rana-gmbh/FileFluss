@@ -1,6 +1,14 @@
 import Foundation
 import SQLite3
 
+/// `SQLITE_TRANSIENT` instructs sqlite3 to make its own copy of the bound
+/// bytes before returning. The C macro doesn't import to Swift, so we
+/// reconstruct it. Required for every `sqlite3_bind_text` site that passes
+/// a Swift-bridged C string — the bridged buffer may be released before
+/// `sqlite3_step` runs, leaving SQLite to read freed memory and store
+/// garbage (or zero bytes) in the column.
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 actor SearchIndex {
     static let shared = SearchIndex()
 
@@ -142,14 +150,14 @@ actor SearchIndex {
 
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for item in items {
-            sqlite3_bind_text(stmt, 1, (accountStr as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (item.path as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (item.name as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (accountStr as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (item.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (item.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(stmt, 4, item.isDirectory ? 1 : 0)
             sqlite3_bind_int64(stmt, 5, item.size)
             sqlite3_bind_double(stmt, 6, item.modificationDate.timeIntervalSince1970)
             if let checksum = item.checksum {
-                sqlite3_bind_text(stmt, 7, (checksum as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 7, (checksum as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 7)
             }
@@ -167,8 +175,8 @@ actor SearchIndex {
             let sql = "DELETE FROM cloud_files WHERE account_id = ? AND path = ?"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { continue }
-            sqlite3_bind_text(stmt, 1, (accountStr as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (path as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (accountStr as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (path as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
             sqlite3_finalize(stmt)
         }
@@ -179,7 +187,7 @@ actor SearchIndex {
         let sql = "DELETE FROM cloud_files WHERE account_id = ?"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_step(stmt)
         sqlite3_finalize(stmt)
     }
@@ -213,9 +221,9 @@ actor SearchIndex {
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
 
-        sqlite3_bind_text(stmt, 1, (ftsQuery as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (ftsQuery as NSString).utf8String, -1, SQLITE_TRANSIENT)
         if let accountId {
-            sqlite3_bind_text(stmt, 2, (accountId.uuidString as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(stmt, 3, Int32(limit))
         } else {
             sqlite3_bind_int(stmt, 2, Int32(limit))
@@ -282,13 +290,13 @@ actor SearchIndex {
         // Wipe prior rows for this source.
         var del: OpaquePointer?
         sqlite3_prepare_v2(db, "DELETE FROM indexed_files WHERE source_id = ?", -1, &del, nil)
-        sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_step(del)
         sqlite3_finalize(del)
 
         var delFts: OpaquePointer?
         sqlite3_prepare_v2(db, "DELETE FROM indexed_files_fts WHERE source_id = ?", -1, &delFts, nil)
-        sqlite3_bind_text(delFts, 1, (sourceId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(delFts, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_step(delFts)
         sqlite3_finalize(delFts)
 
@@ -308,19 +316,19 @@ actor SearchIndex {
         var totalBytes: Int64 = 0
 
         for f in files {
-            sqlite3_bind_text(ins, 1, (f.sourceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(ins, 2, (f.path as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(ins, 3, (f.parentPath as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(ins, 4, (f.name as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(ins, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(ins, 2, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(ins, 3, (f.parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(ins, 4, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(ins, 5, f.isDirectory ? 1 : 0)
             sqlite3_bind_int64(ins, 6, f.size)
             sqlite3_bind_double(ins, 7, f.modificationDate.timeIntervalSince1970)
             sqlite3_step(ins)
             sqlite3_reset(ins)
 
-            sqlite3_bind_text(fts, 1, (f.sourceId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(fts, 2, (f.name as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(fts, 3, (f.path as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(fts, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(fts, 2, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(fts, 3, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(fts)
             sqlite3_reset(fts)
 
@@ -345,9 +353,9 @@ actor SearchIndex {
         """
         var up: OpaquePointer?
         sqlite3_prepare_v2(db, upSrc, -1, &up, nil)
-        sqlite3_bind_text(up, 1, (sourceId as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(up, 2, (kind as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(up, 3, (displayName as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(up, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(up, 2, (kind as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(up, 3, (displayName as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(up, 4, Date().timeIntervalSince1970)
         sqlite3_bind_int(up, 5, Int32(totalFiles))
         sqlite3_bind_int64(up, 6, totalBytes)
@@ -368,7 +376,7 @@ actor SearchIndex {
         ] {
             var stmt: OpaquePointer?
             sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
-            sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_step(stmt)
             sqlite3_finalize(stmt)
         }
@@ -382,7 +390,7 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         let kind = String(cString: sqlite3_column_text(stmt, 1))
         let name = String(cString: sqlite3_column_text(stmt, 2))
@@ -423,8 +431,8 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         var rows: [IndexedFile] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
@@ -456,8 +464,8 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         var rows: [IndexedFile] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
@@ -498,10 +506,10 @@ actor SearchIndex {
         defer { sqlite3_finalize(stmt) }
 
         var bindIdx: Int32 = 1
-        sqlite3_bind_text(stmt, bindIdx, (fts as NSString).utf8String, -1, nil); bindIdx += 1
+        sqlite3_bind_text(stmt, bindIdx, (fts as NSString).utf8String, -1, SQLITE_TRANSIENT); bindIdx += 1
         if let ids = sourceIds {
             for id in ids {
-                sqlite3_bind_text(stmt, bindIdx, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, bindIdx, (id as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 bindIdx += 1
             }
         }
@@ -545,9 +553,9 @@ actor SearchIndex {
         defer { sqlite3_finalize(stmt) }
 
         var idx: Int32 = 1
-        sqlite3_bind_text(stmt, idx, (fts as NSString).utf8String, -1, nil); idx += 1
+        sqlite3_bind_text(stmt, idx, (fts as NSString).utf8String, -1, SQLITE_TRANSIENT); idx += 1
         for accountId in accountIds {
-            sqlite3_bind_text(stmt, idx, (accountId.uuidString as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, idx, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
             idx += 1
         }
         sqlite3_bind_int(stmt, idx, Int32(limit))
@@ -633,7 +641,7 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         return (Int(sqlite3_column_int(stmt, 0)), Int(sqlite3_column_int(stmt, 1)))
     }
@@ -655,7 +663,7 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
         if sqlite3_column_type(stmt, 0) == SQLITE_NULL { return nil }
         let last = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0))
@@ -696,11 +704,11 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
         if rootPath != "/" {
             let escaped = Self.escapeLike(prefix)
-            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, SQLITE_TRANSIENT)
         }
         var rows: [IndexedFile] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
@@ -749,11 +757,11 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
         if rootPath != "/" {
             let escaped = Self.escapeLike(prefix)
-            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 2, (rootPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, ((escaped + "%") as NSString).utf8String, -1, SQLITE_TRANSIENT)
         }
         var rows: [CloudIndexedFile] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
@@ -805,17 +813,9 @@ actor SearchIndex {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
-        // Bind every text via NSString.utf8String — passing a Swift String
-        // literal directly to sqlite3_bind_text with a nil destructor
-        // (SQLITE_STATIC) lands a dangling pointer here: Swift's auto-bridge
-        // to `const char *` only keeps the C buffer alive for the duration
-        // of the bind call, but SQLite reads the bytes lazily during step().
-        // The result is an empty string in the `kind` column for every
-        // cloud account ever indexed. Routing through NSString keeps the
-        // backing buffer alive for the scope of the local, which is enough.
-        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 2, ("cloud" as NSString).utf8String, -1, nil)
-        sqlite3_bind_text(stmt, 3, (displayName as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, ("cloud" as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, (displayName as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 4, summary.lastIndexed.timeIntervalSince1970)
         sqlite3_bind_int(stmt, 5, Int32(summary.totalFiles))
         sqlite3_bind_int64(stmt, 6, summary.totalBytes)
@@ -829,7 +829,7 @@ actor SearchIndex {
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         var del: OpaquePointer?
         sqlite3_prepare_v2(db, "DELETE FROM cloud_files WHERE account_id = ?", -1, &del, nil)
-        sqlite3_bind_text(del, 1, (accountId.uuidString as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(del, 1, (accountId.uuidString as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_step(del)
         sqlite3_finalize(del)
         sqlite3_exec(db, "COMMIT", nil, nil, nil)

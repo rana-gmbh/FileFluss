@@ -29,6 +29,13 @@ actor GoogleDriveAPIClient {
     private let apiURL = "https://www.googleapis.com/drive/v3"
     private let uploadURL = "https://www.googleapis.com/upload/drive/v3"
 
+    /// When a token refresh is in flight, concurrent callers must await
+    /// the same Task rather than firing parallel POSTs. Without this,
+    /// two callers can both pass the expiry guard while the other is
+    /// suspended in URLSession.data and both fire /token with the same
+    /// refresh token — Google may invalidate one of them.
+    private var inflightRefresh: Task<GoogleDriveCredentials, Error>?
+
     // Cache path → (file ID, mimeType) lookups to avoid repeated resolution
     private var pathIdCache: [String: CachedFile] = ["/" : CachedFile(id: "root", mimeType: "application/vnd.google-apps.folder")]
 
@@ -268,14 +275,44 @@ actor GoogleDriveAPIClient {
     // MARK: - Token Refresh
 
     func refreshTokenIfNeeded() async throws -> GoogleDriveCredentials {
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
         guard Date() >= credentials.expiresAt.addingTimeInterval(-60) else {
             return credentials
         }
+        return try await startRefresh()
+    }
 
+    /// Force a refresh regardless of the cached `expiresAt`. Used after a
+    /// 401 from an API call — Google can invalidate access tokens server-side
+    /// before our local expiry kicks in.
+    private func forceRefresh() async throws -> GoogleDriveCredentials {
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
+        return try await startRefresh()
+    }
+
+    private func startRefresh() async throws -> GoogleDriveCredentials {
         guard !credentials.refreshToken.isEmpty else {
             throw CloudProviderError.notAuthenticated
         }
+        let task = Task<GoogleDriveCredentials, Error> { [self] in
+            try await self.performTokenRefresh()
+        }
+        inflightRefresh = task
+        do {
+            let creds = try await task.value
+            inflightRefresh = nil
+            return creds
+        } catch {
+            inflightRefresh = nil
+            throw error
+        }
+    }
 
+    private func performTokenRefresh() async throws -> GoogleDriveCredentials {
         let url = URL(string: "https://oauth2.googleapis.com/token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -753,11 +790,14 @@ actor GoogleDriveAPIClient {
         }
 
         let components = path.split(separator: "/", omittingEmptySubsequences: true)
+        guard let rootCached = pathIdCache["/"] else {
+            throw CloudProviderError.notAuthenticated
+        }
         if components.isEmpty {
-            return pathIdCache["/"]!
+            return rootCached
         }
 
-        var currentCached = pathIdCache["/"]!
+        var currentCached = rootCached
         var currentPath = ""
 
         for component in components {
@@ -840,22 +880,32 @@ actor GoogleDriveAPIClient {
         guard let url = components.url else {
             throw CloudProviderError.invalidResponse
         }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        let creds = try await refreshTokenIfNeeded()
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-
+        let encodedBody: Data?
         if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(body)
+            encodedBody = try JSONEncoder().encode(body)
+        } else {
+            encodedBody = nil
         }
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CloudProviderError.invalidResponse
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = method.rawValue
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            if let encodedBody {
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = encodedBody
+            }
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
         }
 
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            googleLog.info("[Google] \(method.rawValue) \(path) → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             googleLog.error("[Google] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(1000))")
@@ -870,16 +920,21 @@ actor GoogleDriveAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        let creds = try await refreshTokenIfNeeded()
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CloudProviderError.invalidResponse
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = method.rawValue
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
         }
 
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            googleLog.info("[Google] \(method.rawValue) \(path) → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
         guard (200...299).contains(http.statusCode) || http.statusCode == 204 else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             googleLog.error("[Google] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(1000))")

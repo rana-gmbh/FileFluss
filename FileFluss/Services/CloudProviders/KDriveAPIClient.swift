@@ -344,7 +344,9 @@ actor KDriveAPIClient {
 
         // Resolve component by component
         let components = path.split(separator: "/", omittingEmptySubsequences: true)
-        var currentId = pathToId["/"]!
+        guard var currentId = pathToId["/"] else {
+            throw CloudProviderError.notAuthenticated
+        }
         var currentPath = ""
 
         for component in components {
