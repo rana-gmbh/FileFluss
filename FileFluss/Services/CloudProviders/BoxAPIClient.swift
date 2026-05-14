@@ -47,6 +47,13 @@ actor BoxAPIClient {
     /// subsequent operations on the same path are O(1).
     private var pathIdCache: [String: String] = ["/": "0"]
 
+    /// When a token refresh is in flight, concurrent callers must await
+    /// the same Task rather than firing parallel POSTs to /oauth2/token.
+    /// Box rotates refresh tokens single-use, so a parallel refresh always
+    /// fails with invalid_grant → .notAuthenticated. Actor isolation alone
+    /// doesn't fix this because every `await` releases the actor.
+    private var inflightRefresh: Task<BoxCredentials, Error>?
+
     init(credentials: BoxCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
@@ -239,13 +246,50 @@ actor BoxAPIClient {
     /// tokens — every successful refresh returns a new refresh token that
     /// invalidates the previous one, so we always persist the latest.
     func refreshTokenIfNeeded() async throws -> BoxCredentials {
+        // If another caller is already refreshing, await its result instead
+        // of firing a parallel /oauth2/token POST that Box would reject as
+        // invalid_grant (the refresh token is single-use).
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
+
         guard Date() >= credentials.expiresAt.addingTimeInterval(-60) else {
             return credentials
         }
+        return try await startRefresh()
+    }
+
+    /// Force a refresh regardless of the cached `expiresAt`. Used after a
+    /// 401 from an API call — Box may invalidate access tokens server-side
+    /// (refresh-token rotation, forced logout, suspicious activity) before
+    /// our local expiry kicks in, so the "is the token expiring soon?"
+    /// guard isn't enough.
+    func forceRefresh() async throws -> BoxCredentials {
+        if let inflight = inflightRefresh {
+            return try await inflight.value
+        }
+        return try await startRefresh()
+    }
+
+    private func startRefresh() async throws -> BoxCredentials {
         guard !credentials.refreshToken.isEmpty else {
             throw CloudProviderError.notAuthenticated
         }
+        let task = Task<BoxCredentials, Error> { [self] in
+            try await self.performTokenRefresh()
+        }
+        inflightRefresh = task
+        do {
+            let creds = try await task.value
+            inflightRefresh = nil
+            return creds
+        } catch {
+            inflightRefresh = nil
+            throw error
+        }
+    }
 
+    private func performTokenRefresh() async throws -> BoxCredentials {
         let url = URL(string: Self.tokenURL)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -704,20 +748,37 @@ actor BoxAPIClient {
             components.queryItems = (components.queryItems ?? []) + queryItems
         }
         guard let url = components.url else { throw CloudProviderError.invalidResponse }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        let creds = try await refreshTokenIfNeeded()
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        let encodedBody: Data?
         if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(body)
+            encodedBody = try JSONEncoder().encode(body)
+        } else {
+            encodedBody = nil
         }
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = method.rawValue
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            if let encodedBody {
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = encodedBody
+            }
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        // 401 with a non-empty access token usually means Box invalidated
+        // it server-side ahead of our local expiry. Force-refresh and retry
+        // once before surfacing notAuthenticated to the user.
+        if http.statusCode == 401 {
+            boxLog.info("[Box] \(method.rawValue) \(path) → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             boxLog.error("[Box] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
@@ -728,14 +789,24 @@ actor BoxAPIClient {
 
     private func apiRequestVoid(_ method: HTTPMethod, path: String) async throws {
         guard let url = URL(string: "\(Self.apiURL)\(path)") else { throw CloudProviderError.invalidResponse }
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        let creds = try await refreshTokenIfNeeded()
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = method.rawValue
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            boxLog.info("[Box] \(method.rawValue) \(path) → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
         guard (200...299).contains(http.statusCode) || http.statusCode == 204 else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             boxLog.error("[Box] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
