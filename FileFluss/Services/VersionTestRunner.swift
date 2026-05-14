@@ -281,10 +281,13 @@ enum VersionTestRunner {
                 diagnostics: { await listingDiagnostic(provider: provider, parent: parentPath, expectedName: filename) }
             ) {
                 try await provider.deleteItem(at: destPath)
-                let contents = (try? await provider.listDirectory(at: parentPath)) ?? []
-                if contents.contains(where: { $0.name == filename && !$0.isDirectory }) {
-                    throw VersionTestError.verificationFailed("file still present after delete")
-                }
+                // Use the same retry-with-backoff helper the cleanup step
+                // uses. S3-flavoured providers (notably Synology C2) hit
+                // list-after-delete eventual consistency: the DELETE call
+                // returns 2xx but the very next LIST still shows the
+                // object for a few hundred ms. A single immediate listing
+                // intermittently false-fails the test.
+                try await verifyAbsent(parent: parentPath, name: filename, on: provider, kindLabel: "file")
             }
             deletes.append(step)
         }
@@ -295,7 +298,7 @@ enum VersionTestRunner {
             diagnostics: { await listingDiagnostic(provider: provider, parent: "/", expectedName: testFolderName) }
         ) {
             try await provider.deleteItem(at: testFolderPath)
-            try await verifyAbsent(parent: "/", name: testFolderName, on: provider)
+            try await verifyAbsent(parent: "/", name: testFolderName, on: provider, kindLabel: "folder")
         }
 
         return AccountResult(
@@ -305,9 +308,18 @@ enum VersionTestRunner {
         )
     }
 
-    private static func verifyAbsent(parent: String, name: String, on provider: any CloudProvider) async throws {
-        // Mirror of verifyPresent for deletion — pCloud's listfolder occasionally
-        // still includes a just-deleted folder on the immediate next call.
+    private static func verifyAbsent(
+        parent: String,
+        name: String,
+        on provider: any CloudProvider,
+        kindLabel: String = "folder"
+    ) async throws {
+        // Mirror of verifyPresent for deletion. Two known offenders:
+        //   - pCloud's listfolder occasionally still includes a just-deleted
+        //     folder on the immediate next call.
+        //   - Synology C2 (S3 API) is eventually consistent for list-after-
+        //     delete: the DELETE returns 2xx but the next LIST briefly still
+        //     shows the object.
         let delaysMs: [UInt64] = [0, 250, 500, 1000]
         for delayMs in delaysMs {
             if delayMs > 0 {
@@ -318,7 +330,7 @@ enum VersionTestRunner {
                 return
             }
         }
-        throw VersionTestError.verificationFailed("folder still present after cleanup")
+        throw VersionTestError.verificationFailed("\(kindLabel) still present after delete")
     }
 
     private static func verifyPresent(destPath: String, on provider: any CloudProvider, expectedDirectory: Bool) async throws {
@@ -356,7 +368,11 @@ enum VersionTestRunner {
     /// If listing fails or there are no buckets, fall through to `"/"`
     /// and let the create step surface the underlying error.
     private static func resolveTestRoot(provider: any CloudProvider, account: CloudAccount) async -> String {
-        let bucketRooted: Set<CloudProviderType> = [.s3, .s3Compatible, .synologyC2]
+        // Library-/bucket-rooted providers: the root listing is the set of
+        // top-level containers (S3 buckets, Seafile libraries) rather than a
+        // navigable file tree. Creating a folder at "/" fails on those, so
+        // nest the test inside the first existing container instead.
+        let bucketRooted: Set<CloudProviderType> = [.s3, .s3Compatible, .synologyC2, .seafile]
         guard bucketRooted.contains(account.providerType) else { return "/" }
         do {
             let buckets = try await provider.listDirectory(at: "/")
