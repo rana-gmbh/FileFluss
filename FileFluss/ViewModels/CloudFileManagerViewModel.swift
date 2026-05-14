@@ -144,6 +144,23 @@ final class CloudFileManagerViewModel {
 
     func loadDirectory(at path: String? = nil) async {
         let targetPath = path ?? currentPath
+        // Explicit navigation (caller passed a path that's not where we
+        // already are) flips the panel to the destination *immediately*:
+        // path bar, items, selection all reset before the network call
+        // begins. Without this, switching between cloud accounts — or any
+        // navigation that goes through the sidebar — leaves the panel
+        // showing the previous folder's items while the new path bar has
+        // already moved on, which looks broken (the bug that surfaced in
+        // testing: cloud A panel shows folder X but breadcrumb is at root
+        // after coming back from cloud B). For pure refreshes
+        // (path == nil) we keep showing the current items so a re-list
+        // doesn't blink the panel.
+        if let path, path != self.currentPath {
+            self.currentPath = path
+            pushToHistory(path)
+            self.items = []
+            self.selectedItemIDs.removeAll()
+        }
         isLoading = true
         error = nil
         needsReAuth = false
@@ -158,6 +175,12 @@ final class CloudFileManagerViewModel {
 
             let loadedItems = try await provider.listDirectory(at: targetPath)
 
+            // A racing load might have already moved the panel elsewhere
+            // (the user clicked rapidly through folders). Drop the result
+            // if the user has navigated past us — items must always match
+            // currentPath, not whatever was current when we started.
+            guard self.currentPath == targetPath else { return }
+
             // Feed into search index (fire-and-forget)
             let accId = self.accountId
             Task.detached(priority: .utility) {
@@ -165,13 +188,13 @@ final class CloudFileManagerViewModel {
             }
 
             self.items = loadedItems
-            if let path, path != self.currentPath {
-                self.currentPath = path
-                pushToHistory(path)
-            }
             self.selectedItemIDs.removeAll()
             self.isLoading = false
         } catch {
+            // Same staleness guard for the error path — if the user has
+            // moved on, the failure was for the *previous* folder and
+            // shouldn't clobber the current panel state.
+            guard self.currentPath == targetPath else { return }
             self.error = error.localizedDescription
             if let cpe = error as? CloudProviderError {
                 switch cpe {
@@ -185,8 +208,16 @@ final class CloudFileManagerViewModel {
         }
     }
 
+    /// Navigate to `path`. Unlike the previous "skip when the path didn't
+    /// change" guard, this always issues a fresh load — clicking the
+    /// current cloud account again in the sidebar should re-fetch the
+    /// folder, since the sidebar is the user's "take me back here" lever.
+    /// Pure no-op short-circuiting moves to `navigateTo(_:forceRefresh:)`
+    /// when we need it.
     func navigateTo(_ path: String) async {
-        if path != currentPath {
+        if path == currentPath {
+            await loadDirectory()
+        } else {
             await loadDirectory(at: path)
         }
     }
@@ -201,16 +232,19 @@ final class CloudFileManagerViewModel {
         guard canGoBack else { return }
         pathHistoryIndex -= 1
         let path = pathHistory[pathHistoryIndex]
-        currentPath = path
-        await loadDirectory()
+        // Funnel through loadDirectory so the items + path bar reset
+        // happens atomically — see the comment on loadDirectory. The
+        // history-position bookkeeping is already done by the index
+        // adjustment above; pushToHistory inside loadDirectory is a
+        // no-op for a value that matches the current cursor.
+        await loadDirectory(at: path)
     }
 
     func navigateForward() async {
         guard canGoForward else { return }
         pathHistoryIndex += 1
         let path = pathHistory[pathHistoryIndex]
-        currentPath = path
-        await loadDirectory()
+        await loadDirectory(at: path)
     }
 
     func refresh() async {
@@ -1045,6 +1079,16 @@ final class CloudFileManagerViewModel {
     // MARK: - Private
 
     private func pushToHistory(_ path: String) {
+        // No-op when the cursor is already on this path — navigateBack /
+        // navigateForward funnel through loadDirectory(at:), which calls
+        // pushToHistory after they've already moved the cursor. Without
+        // this guard a back-navigation would truncate the forward stack
+        // and re-append, breaking go-forward.
+        if pathHistoryIndex >= 0,
+           pathHistoryIndex < pathHistory.count,
+           pathHistory[pathHistoryIndex] == path {
+            return
+        }
         if pathHistoryIndex < pathHistory.count - 1 {
             pathHistory.removeSubrange((pathHistoryIndex + 1)...)
         }
