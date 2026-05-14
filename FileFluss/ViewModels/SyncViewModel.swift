@@ -235,13 +235,13 @@ final class SyncViewModel {
         }
     }
 
-    func addMegaAccount(email: String, password: String) async {
+    func addMegaAccount(email: String, password: String, mfaCode: String? = nil) async {
         let account = CloudAccount(providerType: .mega)
         let provider = MegaProvider(accountId: account.id)
         authError = nil
 
         do {
-            try await provider.authenticate(email: email, password: password)
+            try await provider.authenticate(email: email, password: password, mfaCode: mfaCode)
             var connectedAccount = account
 
             let userName = try? await provider.userDisplayName()

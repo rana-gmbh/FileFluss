@@ -36,6 +36,8 @@ struct AddCloudAccountView: View {
 
     @State private var filenTwoFactor = ""
 
+    @State private var megaOTP = ""
+
     enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
         case browser = "Browser Login"
         case appPassword = "App Password"
@@ -219,6 +221,7 @@ struct AddCloudAccountView: View {
                     seafileOTP = ""
                     seafileAllowSelfSigned = false
                     filenTwoFactor = ""
+                    megaOTP = ""
                     synologyC2AccessKeyId = ""
                     synologyC2SecretAccessKey = ""
                     synologyC2Region = ""
@@ -715,6 +718,12 @@ struct AddCloudAccountView: View {
                 .textContentType(.password)
                 .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            TextField("Two-factor code (only if enabled)", text: $megaOTP)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.oneTimeCode)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
         }
     }
 
@@ -948,7 +957,12 @@ struct AddCloudAccountView: View {
             case .koofr:
                 await appState.syncManager.addKoofrAccount(email: email, appPassword: password)
             case .mega:
-                await appState.syncManager.addMegaAccount(email: email, password: password)
+                let otp = megaOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addMegaAccount(
+                    email: email,
+                    password: password,
+                    mfaCode: otp.isEmpty ? nil : otp
+                )
             case .webDAV:
                 await appState.syncManager.addWebDAVAccount(serverURL: serverURL, username: username, password: password)
             case .sftp:

@@ -34,7 +34,7 @@ actor MegaAPIClient {
 
     // MARK: - Authentication
 
-    static func login(email: String, password: String) async throws -> MegaCredentials {
+    static func login(email: String, password: String, mfaCode: String? = nil) async throws -> MegaCredentials {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         let session = URLSession(configuration: config)
@@ -84,6 +84,12 @@ actor MegaAPIClient {
         if version == 2 {
             loginCmd["sek"] = NSNull() // Not using session encryption key
         }
+        if let mfaCode, !mfaCode.isEmpty {
+            // MEGA expects the 6-digit TOTP in the "mfa" field of the `us`
+            // command when 2FA is enabled on the account. Omitting it makes
+            // the server return -26 (EMFAREQUIRED).
+            loginCmd["mfa"] = mfaCode
+        }
 
         let loginResult = try await apiRequest(
             session: session,
@@ -94,12 +100,7 @@ actor MegaAPIClient {
         guard let loginData = loginResult.first as? [String: Any] else {
             // Check for error code
             if let errorCode = loginResult.first as? Int {
-                switch errorCode {
-                case -2: throw CloudProviderError.invalidCredentials
-                case -9: throw CloudProviderError.unauthorized
-                case -16: throw CloudProviderError.rateLimited
-                default: throw CloudProviderError.serverError(errorCode)
-                }
+                throw mapError(code: errorCode)
             }
             throw CloudProviderError.invalidResponse
         }
@@ -1037,6 +1038,7 @@ actor MegaAPIClient {
         case -15: return .serverError(code) // Session expired
         case -16: return .rateLimited
         case -17: return .quotaExceeded // Over quota
+        case -26: return .twoFactorRequired // EMFAREQUIRED — 2FA code missing/wrong
         default: return .serverError(code)
         }
     }

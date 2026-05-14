@@ -25,8 +25,8 @@ final class MegaProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
-    func authenticate(email: String, password: String) async throws {
-        let credentials = try await MegaAPIClient.login(email: email, password: password)
+    func authenticate(email: String, password: String, mfaCode: String? = nil) async throws {
+        let credentials = try await MegaAPIClient.login(email: email, password: password, mfaCode: mfaCode)
         self.apiClient = MegaAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
         megaProviderLog.info("[Mega] Authenticated as \(email)")
