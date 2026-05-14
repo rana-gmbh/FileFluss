@@ -46,7 +46,7 @@ struct NativeFileList: NSViewRepresentable {
         // Name column (always visible)
         let nameCol = NSTableColumn(identifier: .nameColumn)
         nameCol.title = "Name"
-        nameCol.minWidth = 200
+        nameCol.minWidth = FileListNameColumn.minWidth
         nameCol.sortDescriptorPrototype = NSSortDescriptor(key: "name", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
         tableView.addTableColumn(nameCol)
 
@@ -141,6 +141,7 @@ struct NativeFileList: NSViewRepresentable {
         scrollView.autohidesScrollers = true
 
         coordinator.tableView = tableView
+        coordinator.installNameColumnResizing(scrollView: scrollView)
 
         return scrollView
     }
@@ -333,6 +334,10 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
     nonisolated(unsafe) private var columnsObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var boundsObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var frameObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var activationObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var deminiaturizeObserver: NSObjectProtocol?
 
     // Resolved items being dragged (set when drag starts)
     private var currentDragItems: [FileItem] = []
@@ -357,8 +362,38 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 
     deinit {
-        if let columnsObserver {
-            NotificationCenter.default.removeObserver(columnsObserver)
+        let nc = NotificationCenter.default
+        if let columnsObserver { nc.removeObserver(columnsObserver) }
+        if let boundsObserver { nc.removeObserver(boundsObserver) }
+        if let frameObserver { nc.removeObserver(frameObserver) }
+        if let activationObserver { nc.removeObserver(activationObserver) }
+        if let deminiaturizeObserver { nc.removeObserver(deminiaturizeObserver) }
+    }
+
+    /// Keep the Name column sized to fit the panel as the scroll view's clip
+    /// view resizes (HSplitView drag, window resize) and when the app/window
+    /// returns to the foreground after being hidden or minimized.
+    func installNameColumnResizing(scrollView: NSScrollView) {
+        let clipView = scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        clipView.postsFrameChangedNotifications = true
+
+        let nc = NotificationCenter.default
+        let resize: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let tv = self.tableView else { return }
+                FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .nameColumn)
+            }
+        }
+        boundsObserver = nc.addObserver(forName: NSView.boundsDidChangeNotification, object: clipView, queue: .main, using: resize)
+        frameObserver = nc.addObserver(forName: NSView.frameDidChangeNotification, object: clipView, queue: .main, using: resize)
+        activationObserver = nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main, using: resize)
+        deminiaturizeObserver = nc.addObserver(forName: NSWindow.didDeminiaturizeNotification, object: nil, queue: .main, using: resize)
+
+        // Initial fit, after the scroll view has been placed in the view tree.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let tv = self.tableView else { return }
+            FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .nameColumn)
         }
     }
 
@@ -378,6 +413,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 break
             }
         }
+        FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .nameColumn)
     }
 
     private static let dateFormatter: DateFormatter = {

@@ -73,3 +73,41 @@ enum FileListColumnPrefs {
 extension Notification.Name {
     static let fileListColumnsChanged = Notification.Name("fileListColumnsChanged")
 }
+
+// MARK: - Name-column elastic sizing
+//
+// When the enclosing panel shrinks (HSplitView drag, window resize, restore
+// from minimize, app foreground), AppKit cannot shrink the Name column past
+// its minWidth — so the row clips and the Name column scrolls out of view.
+// We compute the available width and set the Name column directly so it stays
+// visible at any pane size.
+enum FileListNameColumn {
+    /// Floor for the Name column so the title text stays readable at very
+    /// narrow pane widths. Picked low enough that the column never overflows
+    /// in realistic two-panel layouts.
+    static let minWidth: CGFloat = 80
+
+    /// Resize the Name column to fill whatever width is left after the other
+    /// visible columns and intercell spacing.
+    @MainActor
+    static func resizeNameColumn(
+        in tableView: NSTableView,
+        nameColumnID: NSUserInterfaceItemIdentifier
+    ) {
+        guard let nameCol = tableView.tableColumns.first(where: { $0.identifier == nameColumnID }) else {
+            return
+        }
+        let clipWidth = tableView.enclosingScrollView?.contentView.bounds.width ?? tableView.bounds.width
+        guard clipWidth > 0 else { return }
+
+        let visibleOthers = tableView.tableColumns.filter { $0.identifier != nameColumnID && !$0.isHidden }
+        let othersWidth = visibleOthers.reduce(CGFloat(0)) { $0 + $1.width }
+        // Gaps between the (N other + 1 name) visible columns = visibleOthers.count.
+        let spacing = tableView.intercellSpacing.width * CGFloat(visibleOthers.count)
+
+        let target = max(minWidth, clipWidth - othersWidth - spacing)
+        if abs(nameCol.width - target) > 0.5 {
+            nameCol.width = target
+        }
+    }
+}
