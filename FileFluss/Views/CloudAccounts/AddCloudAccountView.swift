@@ -37,6 +37,11 @@ struct AddCloudAccountView: View {
     @State private var filenTwoFactor = ""
 
     @State private var megaOTP = ""
+    /// MEGA's login hits an anti-abuse proof-of-work (hashcash) that can
+    /// take 10s–60s of SHA-256 churn before a Login response comes back.
+    /// We surface a hint after 3s so the spinner doesn't look frozen.
+    @State private var megaSlowLoginVisible = false
+    @State private var megaSlowLoginTask: Task<Void, Never>?
 
     enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
         case browser = "Browser Login"
@@ -724,7 +729,16 @@ struct AddCloudAccountView: View {
                 .textContentType(.oneTimeCode)
                 .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            if megaSlowLoginVisible {
+                Text("Solving security challenge — may take a moment…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: megaSlowLoginVisible)
     }
 
     private var iCloudFields: some View {
@@ -935,6 +949,20 @@ struct AddCloudAccountView: View {
     private func login() {
         guard !isAuthenticating else { return }
         isAuthenticating = true
+
+        // MEGA only: show a "Solving security challenge…" hint after 3s
+        // so the user knows the spinner isn't frozen during hashcash PoW.
+        if selectedProvider == .mega {
+            megaSlowLoginVisible = false
+            megaSlowLoginTask?.cancel()
+            megaSlowLoginTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                if !Task.isCancelled {
+                    megaSlowLoginVisible = true
+                }
+            }
+        }
+
         Task {
             switch selectedProvider {
             case .kDrive:
@@ -1053,6 +1081,9 @@ struct AddCloudAccountView: View {
             default:
                 break
             }
+            megaSlowLoginTask?.cancel()
+            megaSlowLoginTask = nil
+            megaSlowLoginVisible = false
             if appState.syncManager.authError == nil {
                 dismiss()
             }
