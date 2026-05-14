@@ -67,18 +67,43 @@ final class SyncViewModel {
         }
     }
 
-    func addKDriveAccount(apiToken: String) async {
+    /// Probe an API token before committing it as an account. The UI uses
+    /// this to drive a drive picker — kDrive's "organization" plan exposes
+    /// a personal drive plus one or more shared workspaces, each a separate
+    /// drive in Infomaniak's model.
+    func discoverKDriveDrives(apiToken: String) async throws -> KDriveProvider.Discovery {
+        try await KDriveProvider.discoverDrives(apiToken: apiToken)
+    }
+
+    /// `driveId == nil` adds the first drive (original behaviour). Pass an
+    /// explicit id to add a specific workspace. `driveName` is folded into
+    /// the displayName when present so the user can tell `kDrive (me)` apart
+    /// from `kDrive (me · Common Documents)` in the account list.
+    func addKDriveAccount(apiToken: String, driveId: Int? = nil, driveName: String? = nil) async {
         let account = CloudAccount(providerType: .kDrive)
         let provider = KDriveProvider(accountId: account.id)
         authError = nil
 
         do {
-            try await provider.authenticate(apiToken: apiToken)
+            try await provider.authenticate(apiToken: apiToken, driveId: driveId)
             var connectedAccount = account
 
             let userName = try? await provider.userDisplayName()
+            let userPart: String
             if let userName, !userName.isEmpty {
-                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+                userPart = userName
+            } else {
+                userPart = ""
+            }
+            let label: String
+            switch (userPart.isEmpty, driveName?.isEmpty ?? true) {
+            case (false, false): label = "\(userPart) · \(driveName!)"
+            case (false, true): label = userPart
+            case (true, false): label = driveName!
+            case (true, true): label = ""
+            }
+            if !label.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(label))"
             }
 
             connectedAccount.isConnected = true

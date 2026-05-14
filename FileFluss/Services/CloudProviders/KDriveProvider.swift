@@ -46,7 +46,29 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
-    func authenticate(apiToken: String) async throws {
+    /// Result of pre-auth discovery: the drives the user has access to plus
+    /// the display name we'll embed in the persisted account label.
+    struct Discovery: Sendable {
+        let userDisplayName: String
+        let drives: [KDriveDriveListItem]
+    }
+
+    /// Probe the API token without creating an account. Used by the add-
+    /// account flow so the UI can present a drive picker when an org account
+    /// has more than one drive (e.g. personal + "Common Documents"). Each
+    /// kDrive workspace is a separate drive in Infomaniak's model and must
+    /// be addressed by its own `driveId` for uploads/creates.
+    static func discoverDrives(apiToken: String) async throws -> Discovery {
+        let probe = KDriveProvider()
+        let profile = try await probe.fetchProfile(token: apiToken)
+        let drives = try await probe.fetchDrives(token: apiToken, accountId: profile.accountId)
+        let displayName = profile.displayName.isEmpty ? profile.email : profile.displayName
+        return Discovery(userDisplayName: displayName, drives: drives)
+    }
+
+    /// `driveId == nil` keeps the original behaviour (use the first drive the
+    /// API returns). Pass a specific id to add a non-default workspace.
+    func authenticate(apiToken: String, driveId: Int? = nil) async throws {
         // Get user profile to find account ID
         let profile = try await fetchProfile(token: apiToken)
         KDriveProvider.log("[kDrive] Profile: \(profile.email), accountId=\(profile.accountId)")
@@ -59,16 +81,21 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
             KDriveProvider.log("[kDrive] fetchDrives failed: \(error)")
             throw error
         }
-        guard let firstDrive = drives.first else {
+        let chosen: KDriveDriveListItem
+        if let driveId, let match = drives.first(where: { $0.id == driveId }) {
+            chosen = match
+        } else if let first = drives.first {
+            chosen = first
+        } else {
             throw CloudProviderError.notFound("No kDrive found for this account")
         }
-        KDriveProvider.log("[kDrive] Using drive: id=\(firstDrive.id) name=\(firstDrive.name)")
+        KDriveProvider.log("[kDrive] Using drive: id=\(chosen.id) name=\(chosen.name)")
 
         let email = profile.displayName.isEmpty ? profile.email : profile.displayName
 
         let credentials = KDriveCredentials(
             apiToken: apiToken,
-            driveId: firstDrive.id,
+            driveId: chosen.id,
             userEmail: email
         )
         self.apiClient = KDriveAPIClient(credentials: credentials)

@@ -43,6 +43,15 @@ struct AddCloudAccountView: View {
     @State private var megaSlowLoginVisible = false
     @State private var megaSlowLoginTask: Task<Void, Never>?
 
+    /// kDrive multi-drive picker state. After the user pastes a token and
+    /// clicks Connect, we probe the token to enumerate the drives they have
+    /// access to (organisation accounts have a personal drive + shared
+    /// workspaces). If only one drive comes back we finalize immediately;
+    /// otherwise we surface a picker so the user adds the specific workspace.
+    @State private var kDriveDiscovery: KDriveProvider.Discovery?
+    @State private var kDriveSelectedDriveId: Int?
+    @State private var kDriveIsDiscovering = false
+
     enum NextCloudAuthMode: String, CaseIterable, Hashable, Identifiable {
         case browser = "Browser Login"
         case appPassword = "App Password"
@@ -227,6 +236,9 @@ struct AddCloudAccountView: View {
                     seafileAllowSelfSigned = false
                     filenTwoFactor = ""
                     megaOTP = ""
+                    kDriveDiscovery = nil
+                    kDriveSelectedDriveId = nil
+                    kDriveIsDiscovering = false
                     synologyC2AccessKeyId = ""
                     synologyC2SecretAccessKey = ""
                     synologyC2Region = ""
@@ -324,15 +336,55 @@ struct AddCloudAccountView: View {
 
     private var kDriveFields: some View {
         VStack(spacing: 12) {
-            Text("Create an API token at manager.infomaniak.com with kDrive access, then paste it below.")
+            Text("Create an API token in your Infomaniak account, then paste it below.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
+            // Free-account managers don't expose the token UI in the sidebar;
+            // the direct URL works for every plan, so we surface it here.
+            Button {
+                if let url = URL(string: "https://manager.infomaniak.com/v3/ng/profile/user/token/list") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label("Open Infomaniak token page", systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
             SecureField("API Token", text: $apiToken)
                 .textFieldStyle(.roundedBorder)
-                .disabled(isAuthenticating)
+                .disabled(isAuthenticating || kDriveDiscovery != nil)
                 .onSubmit { login() }
+
+            if kDriveIsDiscovering {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.7)
+                    Text("Looking up your drives…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let discovery = kDriveDiscovery, discovery.drives.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Choose a drive to add")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Picker("Drive", selection: $kDriveSelectedDriveId) {
+                        ForEach(discovery.drives, id: \.id) { drive in
+                            Text(drive.name).tag(drive.id as Int?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    Text("To use more than one drive, add the kDrive account again with the same token and pick a different drive.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -966,7 +1018,43 @@ struct AddCloudAccountView: View {
         Task {
             switch selectedProvider {
             case .kDrive:
-                await appState.syncManager.addKDriveAccount(apiToken: apiToken)
+                let token = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let discovery = kDriveDiscovery {
+                    // Second click — finalize with the chosen drive.
+                    let chosenId = kDriveSelectedDriveId ?? discovery.drives.first?.id
+                    let chosenName = discovery.drives.first(where: { $0.id == chosenId })?.name
+                    await appState.syncManager.addKDriveAccount(
+                        apiToken: token,
+                        driveId: chosenId,
+                        driveName: chosenName
+                    )
+                } else {
+                    // First click — discover drives and decide whether to prompt.
+                    do {
+                        kDriveIsDiscovering = true
+                        let discovery = try await appState.syncManager.discoverKDriveDrives(apiToken: token)
+                        kDriveIsDiscovering = false
+                        if discovery.drives.count <= 1 {
+                            // One drive (or none) — finalize directly, no extra click.
+                            let only = discovery.drives.first
+                            await appState.syncManager.addKDriveAccount(
+                                apiToken: token,
+                                driveId: only?.id,
+                                driveName: only?.name
+                            )
+                        } else {
+                            kDriveDiscovery = discovery
+                            kDriveSelectedDriveId = discovery.drives.first?.id
+                            // Keep the sheet open so the user can pick.
+                            appState.syncManager.authError = nil
+                            isAuthenticating = false
+                            return
+                        }
+                    } catch {
+                        kDriveIsDiscovering = false
+                        appState.syncManager.authError = error.localizedDescription
+                    }
+                }
             case .oneDrive:
                 await appState.syncManager.addOneDriveAccount()
             case .googleDrive:
