@@ -51,7 +51,7 @@ private enum DevCredentialStore {
 }
 #endif
 
-enum KeychainService {
+public enum KeychainService {
     private static let serviceName = "com.rana-gmbh.FileFluss"
 
     /// Legacy login keychain. macOS Release builds signed with Developer ID
@@ -70,7 +70,7 @@ enum KeychainService {
         ]
     }
 
-    static func save(key: String, data: Data) throws {
+    public static func save(key: String, data: Data) throws {
         #if DEBUG
         try DevCredentialStore.save(key: key, data: data)
         return
@@ -87,7 +87,7 @@ enum KeychainService {
         #endif
     }
 
-    static func load(key: String) -> Data? {
+    public static func load(key: String) -> Data? {
         #if DEBUG
         if let data = DevCredentialStore.load(key: key) {
             return data
@@ -121,7 +121,7 @@ enum KeychainService {
         #endif
     }
 
-    static func delete(key: String) throws {
+    public static func delete(key: String) throws {
         #if DEBUG
         try DevCredentialStore.delete(key: key)
         return
@@ -133,22 +133,22 @@ enum KeychainService {
         #endif
     }
 
-    static func save<T: Encodable>(key: String, value: T) throws {
+    public static func save<T: Encodable>(key: String, value: T) throws {
         let data = try JSONEncoder().encode(value)
         try save(key: key, data: data)
     }
 
-    static func load<T: Decodable>(key: String, as type: T.Type) -> T? {
+    public static func load<T: Decodable>(key: String, as type: T.Type) -> T? {
         guard let data = load(key: key) else { return nil }
         return try? JSONDecoder().decode(type, from: data)
     }
 }
 
-enum KeychainError: LocalizedError {
+public enum KeychainError: LocalizedError {
     case saveFailed(OSStatus)
     case deleteFailed(OSStatus)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .saveFailed(let status):
             return "Keychain save failed (OSStatus \(status))"

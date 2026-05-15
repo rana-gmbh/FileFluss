@@ -8,10 +8,15 @@
 //   3. CloudProviderError  ✅ landed
 //   4. CloudFileItem + CloudProvider protocol + ByteProgressHandler  ✅ landed
 //      (enforceUploadSizeLimit helper folded back into CloudProviderError.swift)
-//   5. Provider implementations one at a time, easiest (Dropbox, Box, GoogleDrive…)
-//      first because OAuth flows already share a clean abstraction.
-//   6. SearchIndex, SyncEngine, CacheManager — pure-Swift services with no AppKit.
-//   7. KeychainService (last, since every provider depends on it).
+//   5. KeychainService  ✅ landed (reordered earlier — providers reference it
+//      directly, so it had to come before step 6's provider moves)
+//   6. Provider implementations — in batches by AppKit dependency.
+//      First wave (no AppKit): pCloud, kDrive, Koofr, Mega, Filen, GMX,
+//      Seafile, SFTP, WebDAV, WordPress, S3, S3Compatible, Synology C2,
+//      Synology Drive, iCloud, plus the NextCloud appPassword path.
+//      Second wave (needs a platform shim for NSWorkspace.shared.open):
+//      Box, Dropbox, Google Drive, OneDrive, NextCloud browser-OAuth.
+//   7. SearchIndex, SyncEngine, CacheManager — pure-Swift services with no AppKit.
 //
 // FileItem stays in the macOS app (it ties to NSWorkspace icons and the
 // dual-panel local-folder browser, both macOS-specific). Mobile uses
