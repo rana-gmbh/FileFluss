@@ -19,8 +19,19 @@ struct GoogleDriveDeviceAuth: Sendable {
 }
 
 public actor GoogleDriveAPIClient {
+    // Google requires a separate OAuth client per platform. The macOS
+    // client is a "Desktop application" type which only accepts loopback
+    // (`http://127.0.0.1:<port>`) redirects, while the iOS client is an
+    // "iOS application" type tied to the bundle ID with a Google-issued
+    // reverse-DNS URL scheme. Desktop clients ship with a client secret;
+    // iOS clients are public (PKCE-only, no secret).
+    #if os(iOS)
+    static let clientId = "682536313816-b4u25bsv7mfljajnm9rfg0hju0peai86.apps.googleusercontent.com"
+    static let clientSecret: String? = nil
+    #else
     static let clientId = "682536313816-j07jrk2kbff3sljb16vfal5soqs8vte9.apps.googleusercontent.com"
-    static let clientSecret = "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"
+    static let clientSecret: String? = "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"
+    #endif
     static let scopes = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
 
     private(set) var credentials: GoogleDriveCredentials
@@ -76,8 +87,14 @@ public actor GoogleDriveAPIClient {
 
     /// URL scheme the iOS host registers in Info.plist so
     /// ASWebAuthenticationSession's redirect lands back in the app.
-    /// Ignored by the macOS loopback authenticator.
+    /// Ignored by the macOS loopback authenticator. Google's iOS client
+    /// type insists on the reverse-DNS form of the iOS client ID —
+    /// arbitrary schemes are rejected at the authorize endpoint.
+    #if os(iOS)
+    public static let oauthCallbackScheme = "com.googleusercontent.apps.682536313816-b4u25bsv7mfljajnm9rfg0hju0peai86"
+    #else
     public static let oauthCallbackScheme = "filefluss-oauth"
+    #endif
 
     public static func startOAuthFlow() async throws -> GoogleDriveCredentials {
         let codeVerifier = generateCodeVerifier()
@@ -128,14 +145,19 @@ public actor GoogleDriveAPIClient {
         let encode = { (s: String) -> String in
             s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s
         }
-        let bodyParams = [
+        var paramList = [
             "code=\(encode(code))",
             "client_id=\(encode(clientId))",
-            "client_secret=\(encode(clientSecret))",
             "redirect_uri=\(encode(redirectURI))",
             "grant_type=authorization_code",
             "code_verifier=\(encode(codeVerifier))",
-        ].joined(separator: "&")
+        ]
+        // iOS clients are public (PKCE-only) and must not send a secret —
+        // Google rejects the exchange if one is present on an iOS client.
+        if let secret = clientSecret {
+            paramList.append("client_secret=\(encode(secret))")
+        }
+        let bodyParams = paramList.joined(separator: "&")
         request.httpBody = bodyParams.data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -226,12 +248,16 @@ public actor GoogleDriveAPIClient {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = [
+        var bodyParts = [
             "client_id=\(Self.clientId)",
-            "client_secret=\(Self.clientSecret)",
             "refresh_token=\(credentials.refreshToken)",
             "grant_type=refresh_token",
-        ].joined(separator: "&")
+        ]
+        // Public iOS clients have no secret — see startOAuthFlow's note.
+        if let secret = Self.clientSecret {
+            bodyParts.append("client_secret=\(secret)")
+        }
+        let body = bodyParts.joined(separator: "&")
         request.httpBody = body.data(using: .utf8)
 
         let (data, response) = try await session.data(for: request)
