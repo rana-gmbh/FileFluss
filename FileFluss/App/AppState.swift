@@ -1350,6 +1350,12 @@ final class AppState {
         Task {
             await syncManager.reconnectSavedAccounts()
             try? await SearchIndex.shared.open()
+            // Drop orphan indexed_sources rows from prior account incarnations
+            // (remove-then-re-add cycles in earlier builds left behind rows
+            // keyed by the old account UUID). Runs on every launch — cheap
+            // when there are no orphans.
+            let liveIds = Set(syncManager.accounts.map(\.id))
+            await SearchIndex.shared.purgeOrphanCloudSources(keepAccountIds: liveIds)
             await refreshIndexInfo()
             await Self.runCacheMaintenanceIfEnabled()
         }

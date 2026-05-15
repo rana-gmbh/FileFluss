@@ -822,6 +822,83 @@ actor SearchIndex {
         sqlite3_step(stmt)
     }
 
+    /// Drop the `indexed_sources` row, the `indexed_files` rows and the
+    /// `cloud_files` cache for one cloud account. Called when the user
+    /// removes the account — otherwise these rows stick around as orphans
+    /// in Settings → Index Status with the captured display name.
+    func dropIndexedCloudSource(accountId: UUID) {
+        guard let db else { return }
+        let uuid = accountId.uuidString
+        sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
+        for sql in [
+            "DELETE FROM indexed_sources WHERE source_id = ?",
+            "DELETE FROM indexed_files WHERE source_id = ?",
+            "DELETE FROM indexed_files_fts WHERE source_id = ?",
+            "DELETE FROM cloud_files WHERE account_id = ?"
+        ] {
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { continue }
+            sqlite3_bind_text(stmt, 1, (uuid as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+    }
+
+    /// One-shot cleanup: delete cloud-kind `indexed_sources` rows whose
+    /// source_id isn't in `keepIds`. Used at app launch to clear orphans
+    /// left behind by earlier remove/re-add cycles, before this build
+    /// started dropping them on account removal.
+    func purgeOrphanCloudSources(keepAccountIds: Set<UUID>) {
+        guard let db else { return }
+        let keep = Set(keepAccountIds.map { $0.uuidString })
+        // Collect candidate orphans first so we can then run the same
+        // drop logic across all four tables — keeps the per-row teardown
+        // identical to dropIndexedCloudSource.
+        var orphans: [String] = []
+        var stmt: OpaquePointer?
+        let listSQL = "SELECT source_id FROM indexed_sources WHERE kind = 'cloud'"
+        if sqlite3_prepare_v2(db, listSQL, -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = String(cString: sqlite3_column_text(stmt, 0))
+                if !keep.contains(id) {
+                    orphans.append(id)
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+        guard !orphans.isEmpty else { return }
+        sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
+        for orphanId in orphans {
+            for sql in [
+                "DELETE FROM indexed_sources WHERE source_id = ?",
+                "DELETE FROM indexed_files WHERE source_id = ?",
+                "DELETE FROM indexed_files_fts WHERE source_id = ?",
+                "DELETE FROM cloud_files WHERE account_id = ?"
+            ] {
+                var del: OpaquePointer?
+                guard sqlite3_prepare_v2(db, sql, -1, &del, nil) == SQLITE_OK else { continue }
+                sqlite3_bind_text(del, 1, (orphanId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_step(del)
+                sqlite3_finalize(del)
+            }
+        }
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+    }
+
+    /// Update only the display name for an indexed source. Called when the
+    /// user renames a cloud account so Settings → Index Status shows the
+    /// new name without waiting for a re-index.
+    func renameIndexedSource(sourceId: String, to newName: String) {
+        guard let db else { return }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "UPDATE indexed_sources SET display_name = ? WHERE source_id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (newName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_step(stmt)
+    }
+
     /// Drops the cloud cache rows for an account. Used by the "Erase All"
     /// action in Settings → Index Status.
     func dropCloudAccount(accountId: UUID) {

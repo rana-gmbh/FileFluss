@@ -631,6 +631,9 @@ final class SyncViewModel {
         syncRules.removeAll { $0.accountId == account.id }
         await syncEngine.removeProvider(for: account.id)
         saveAccounts()
+        // Drop search-index rows so the account no longer surfaces under
+        // Settings → Index Status as an orphan with a stale name.
+        await SearchIndex.shared.dropIndexedCloudSource(accountId: account.id)
     }
 
     /// Flip the user-controlled offline-mode flag. When on, the sidebar
@@ -649,6 +652,13 @@ final class SyncViewModel {
         if let idx = accounts.firstIndex(where: { $0.id == id }) {
             accounts[idx].displayName = newName
             saveAccounts()
+            // Keep Settings → Index Status in sync — `indexed_sources`
+            // stores a snapshot of the display name captured at indexing
+            // time, so rename it directly instead of waiting for the next
+            // full crawl to overwrite it.
+            Task.detached {
+                await SearchIndex.shared.renameIndexedSource(sourceId: id.uuidString, to: newName)
+            }
         }
     }
 

@@ -293,7 +293,12 @@ struct IndexStatusSettingsView: View {
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.displayName)
+                // Resolve display name live from `syncManager.accounts` so a
+                // rename in the Cloud Accounts panel updates this row without
+                // requiring a refresh. Drive rows and orphaned cloud rows
+                // (account deleted but indexed_sources entry still present)
+                // fall through to the value captured at indexing time.
+                Text(currentDisplayName(for: row))
                     .font(.callout.weight(.medium))
                 HStack(spacing: 6) {
                     Text(row.kindLabel)
@@ -393,6 +398,20 @@ struct IndexStatusSettingsView: View {
 
     private func refreshAll() {
         for row in rows where canRefresh(row) { refresh(row: row) }
+    }
+
+    /// For cloud rows, return the current display name from
+    /// `syncManager.accounts` so rename edits in the Cloud Accounts panel
+    /// surface here immediately. Drive rows and orphaned cloud rows
+    /// (account removed but indexed_sources entry still present) keep the
+    /// value persisted at indexing time.
+    private func currentDisplayName(for row: IndexStatusRow) -> String {
+        if case .cloud(let accountId) = row.origin,
+           let live = appState.syncManager.accounts.first(where: { $0.id == accountId })?.displayName,
+           !live.isEmpty {
+            return live
+        }
+        return row.displayName
     }
 
     private func canRefresh(_ row: IndexStatusRow) -> Bool {
