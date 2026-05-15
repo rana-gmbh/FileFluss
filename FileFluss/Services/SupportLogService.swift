@@ -1,44 +1,7 @@
 import Foundation
+import FileFlussCore
 import SwiftUI
 import AppKit
-
-/// Always-on, in-memory ring buffer of file/cloud operation events. Cheap to
-/// call from any thread; SupportLogService snapshots entries within the
-/// recording window when the user saves a support log.
-final class SupportLogger: @unchecked Sendable {
-    static let shared = SupportLogger()
-
-    struct Entry: Sendable {
-        let date: Date
-        let level: Level
-        let category: String
-        let message: String
-    }
-
-    enum Level: String, Sendable {
-        case info, notice, error
-    }
-
-    private let lock = NSLock()
-    private var entries: [Entry] = []
-    private let maxEntries = 5000
-
-    func log(_ message: String, category: String = "general", level: Level = .info) {
-        let entry = Entry(date: Date(), level: level, category: category, message: message)
-        lock.lock()
-        entries.append(entry)
-        if entries.count > maxEntries {
-            entries.removeFirst(entries.count - maxEntries)
-        }
-        lock.unlock()
-    }
-
-    func snapshot(since date: Date) -> [Entry] {
-        lock.lock()
-        defer { lock.unlock() }
-        return entries.filter { $0.date >= date }
-    }
-}
 
 /// Records a 60-second window of support events, then prompts the user to
 /// save the bundle for bug reports.

@@ -1,7 +1,7 @@
 import Foundation
 
-actor FileSystemService {
-    static let shared = FileSystemService()
+public actor FileSystemService {
+    public static let shared = FileSystemService()
 
     private static let resourceKeys: Set<URLResourceKey> = [
         .nameKey, .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
@@ -9,7 +9,7 @@ actor FileSystemService {
         .isSymbolicLinkKey, .contentTypeKey
     ]
 
-    func listDirectory(at url: URL, showHidden: Bool = false) throws -> [FileItem] {
+    public func listDirectory(at url: URL, showHidden: Bool = false) throws -> [FileItem] {
         let contents = try Foundation.FileManager.default.contentsOfDirectory(
             at: url,
             includingPropertiesForKeys: Array(Self.resourceKeys),
@@ -22,7 +22,7 @@ actor FileSystemService {
         }
     }
 
-    func createDirectory(at url: URL) throws {
+    public func createDirectory(at url: URL) throws {
         do {
             try Foundation.FileManager.default.createDirectory(
                 at: url,
@@ -35,7 +35,7 @@ actor FileSystemService {
         }
     }
 
-    func deleteItem(at url: URL) throws {
+    public func deleteItem(at url: URL) throws {
         do {
             try Foundation.FileManager.default.removeItem(at: url)
             SupportLogger.shared.log("deleteItem: \(url.path)", category: "fs")
@@ -45,7 +45,7 @@ actor FileSystemService {
         }
     }
 
-    func trashItem(at url: URL) throws {
+    public func trashItem(at url: URL) throws {
         do {
             try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
             SupportLogger.shared.log("trashItem: \(url.path)", category: "fs")
@@ -55,7 +55,7 @@ actor FileSystemService {
         }
     }
 
-    func moveItem(from source: URL, to destination: URL) throws {
+    public func moveItem(from source: URL, to destination: URL) throws {
         do {
             try Foundation.FileManager.default.moveItem(at: source, to: destination)
             SupportLogger.shared.log("moveItem: \(source.path) → \(destination.path)", category: "fs")
@@ -65,7 +65,7 @@ actor FileSystemService {
         }
     }
 
-    func copyItem(from source: URL, to destination: URL) throws {
+    public func copyItem(from source: URL, to destination: URL) throws {
         do {
             try Foundation.FileManager.default.copyItem(at: source, to: destination)
             SupportLogger.shared.log("copyItem: \(source.path) → \(destination.path)", category: "fs")
@@ -75,11 +75,11 @@ actor FileSystemService {
         }
     }
 
-    func itemExists(at url: URL) -> Bool {
+    public func itemExists(at url: URL) -> Bool {
         Foundation.FileManager.default.fileExists(atPath: url.path())
     }
 
-    func directorySize(at url: URL) throws -> Int64 {
+    public func directorySize(at url: URL) throws -> Int64 {
         let fm = Foundation.FileManager.default
         let enumerator = fm.enumerator(
             at: url,

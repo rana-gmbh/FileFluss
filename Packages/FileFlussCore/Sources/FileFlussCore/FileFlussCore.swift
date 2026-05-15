@@ -21,7 +21,13 @@
 //      ASWebAuthenticationSession in Phase 1):
 //      Box, Dropbox, Google Drive, OneDrive, NextCloud browser-OAuth
 //      ✅ landed.
-//   7. SearchIndex, SyncEngine, CacheManager — pure-Swift services with no AppKit.
+//   7. SearchIndex, SyncEngine, CacheManager  ✅ landed. Also pulled along:
+//      FileSystemService (SyncEngine depends on it for the local side of
+//      cloud↔local sync), SupportLogger (extracted out of SupportLogService —
+//      FileSystemService logs every op through it; the save-to-disk side of
+//      the support-log feature stays in the macOS app), and FileItem
+//      (turns out it's pure Foundation + UniformTypeIdentifiers, not
+//      AppKit — my earlier "stays in macOS" guess was wrong).
 //
 // FileItem stays in the macOS app (it ties to NSWorkspace icons and the
 // dual-panel local-folder browser, both macOS-specific). Mobile uses

@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 /// Manages the on-disk preview/download cache used by `CloudFileManagerViewModel`
 /// (`FileFluss-cloud-<account-uuid>` directories under the system temp dir).
@@ -13,18 +13,18 @@ import SwiftUI
 ///   when auto-management runs.
 @MainActor
 @Observable
-final class CacheManager {
-    static let shared = CacheManager()
+public final class CacheManager {
+    public static let shared = CacheManager()
 
     /// Last measured cache size in bytes. `nil` until first refresh.
-    var currentSize: Int64?
-    var isCalculating = false
-    var isClearing = false
+    public var currentSize: Int64?
+    public var isCalculating = false
+    public var isClearing = false
 
-    static let defaultMaxSizeMB: Int = 1000
-    static let defaultAutoDeleteDays: Int = 7
-    static let minSizeMB: Double = 100
-    static let maxSizeMB: Double = 10_000
+    public static let defaultMaxSizeMB: Int = 1000
+    public static let defaultAutoDeleteDays: Int = 7
+    public static let minSizeMB: Double = 100
+    public static let maxSizeMB: Double = 10_000
 
     private init() {}
 
@@ -40,7 +40,7 @@ final class CacheManager {
         return contents.filter { $0.lastPathComponent.hasPrefix("FileFluss-cloud-") }
     }
 
-    func refreshSize() async {
+    public func refreshSize() async {
         isCalculating = true
         let urls = cacheDirectoryURLs()
         let size = await Task.detached(priority: .utility) {
@@ -50,7 +50,7 @@ final class CacheManager {
         isCalculating = false
     }
 
-    func clearAll() async {
+    public func clearAll() async {
         isClearing = true
         let urls = cacheDirectoryURLs()
         await Task.detached(priority: .utility) {
@@ -65,7 +65,7 @@ final class CacheManager {
 
     /// Runs the user's configured maintenance: prune by age, then enforce
     /// the size cap. Safe to call on launch — finishes off the main thread.
-    func runAutoMaintenance(maxAgeDays: Int, maxSizeMB: Int) async {
+    public func runAutoMaintenance(maxAgeDays: Int, maxSizeMB: Int) async {
         let urls = cacheDirectoryURLs()
         let cutoff = Date().addingTimeInterval(-Double(maxAgeDays) * 86_400)
         let maxBytes = Int64(maxSizeMB) * 1_024 * 1_024
@@ -80,7 +80,7 @@ final class CacheManager {
 
     /// Enforces the size cap without pruning by age. Used when the user
     /// changes the slider and wants the new limit applied immediately.
-    func enforceMaxSize(_ maxSizeMB: Int) async {
+    public func enforceMaxSize(_ maxSizeMB: Int) async {
         let urls = cacheDirectoryURLs()
         let maxBytes = Int64(maxSizeMB) * 1_024 * 1_024
         await Task.detached(priority: .utility) {

@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 /// Read-only browser shown when the user navigates to an offline indexed
 /// source — an unmounted external drive, a disconnected network mount, or

@@ -1,5 +1,4 @@
 import Foundation
-import FileFlussCore
 import SQLite3
 
 /// `SQLITE_TRANSIENT` instructs sqlite3 to make its own copy of the bound
@@ -10,8 +9,8 @@ import SQLite3
 /// garbage (or zero bytes) in the column.
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-actor SearchIndex {
-    static let shared = SearchIndex()
+public actor SearchIndex {
+    public static let shared = SearchIndex()
 
     private var db: OpaquePointer?
     private let dbPath: String
@@ -23,7 +22,7 @@ actor SearchIndex {
         self.dbPath = dir.appendingPathComponent("search_index.db").path
     }
 
-    func open() throws {
+    public func open() throws {
         guard db == nil else { return }
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
             throw SearchIndexError.openFailed(String(cString: sqlite3_errmsg(db)))
@@ -127,14 +126,14 @@ actor SearchIndex {
         """)
     }
 
-    func close() {
+    public func close() {
         if let db {
             sqlite3_close(db)
         }
         db = nil
     }
 
-    func upsertItems(_ items: [CloudFileItem], accountId: UUID) {
+    public func upsertItems(_ items: [CloudFileItem], accountId: UUID) {
         guard let db else { return }
         let accountStr = accountId.uuidString
         let now = Date().timeIntervalSince1970
@@ -169,7 +168,7 @@ actor SearchIndex {
         sqlite3_exec(db, "COMMIT", nil, nil, nil)
     }
 
-    func removeItems(accountId: UUID, paths: [String]) {
+    public func removeItems(accountId: UUID, paths: [String]) {
         guard let db else { return }
         let accountStr = accountId.uuidString
         for path in paths {
@@ -183,7 +182,7 @@ actor SearchIndex {
         }
     }
 
-    func removeAllItems(accountId: UUID) {
+    public func removeAllItems(accountId: UUID) {
         guard let db else { return }
         let sql = "DELETE FROM cloud_files WHERE account_id = ?"
         var stmt: OpaquePointer?
@@ -193,7 +192,7 @@ actor SearchIndex {
         sqlite3_finalize(stmt)
     }
 
-    func search(query: String, accountId: UUID?, limit: Int = 500) -> [IndexedCloudFile] {
+    public func search(query: String, accountId: UUID?, limit: Int = 500) -> [IndexedCloudFile] {
         guard let db else { return [] }
 
         let ftsQuery = Self.makeFTSQuery(from: query)
@@ -260,31 +259,41 @@ actor SearchIndex {
 
     // MARK: - Unified indexed_files / indexed_sources API
 
-    struct IndexedFile: Sendable, Hashable, Identifiable {
-        let sourceId: String
-        let path: String
-        let parentPath: String
-        let name: String
-        let isDirectory: Bool
-        let size: Int64
-        let modificationDate: Date
+    public struct IndexedFile: Sendable, Hashable, Identifiable {
+        public let sourceId: String
+        public let path: String
+        public let parentPath: String
+        public let name: String
+        public let isDirectory: Bool
+        public let size: Int64
+        public let modificationDate: Date
 
-        var id: String { "\(sourceId)|\(path)" }
+        public var id: String { "\(sourceId)|\(path)" }
+
+        public init(sourceId: String, path: String, parentPath: String, name: String, isDirectory: Bool, size: Int64, modificationDate: Date) {
+            self.sourceId = sourceId
+            self.path = path
+            self.parentPath = parentPath
+            self.name = name
+            self.isDirectory = isDirectory
+            self.size = size
+            self.modificationDate = modificationDate
+        }
     }
 
-    struct IndexedSource: Sendable, Hashable {
-        let sourceId: String
-        let kind: String
-        let displayName: String
-        let lastIndexed: Date?
-        let totalFiles: Int
-        let totalBytes: Int64
+    public struct IndexedSource: Sendable, Hashable {
+        public let sourceId: String
+        public let kind: String
+        public let displayName: String
+        public let lastIndexed: Date?
+        public let totalFiles: Int
+        public let totalBytes: Int64
     }
 
     /// Replace this source's stored file rows with `files`. Caller is
     /// responsible for providing a fully-walked snapshot; partial updates
     /// would corrupt the index. Runs in a single transaction.
-    func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) {
+    public func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) {
         guard let db else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
 
@@ -367,7 +376,7 @@ actor SearchIndex {
     }
 
     /// Drop every indexed_files row for this source plus its source row.
-    func dropSource(sourceId: String) {
+    public func dropSource(sourceId: String) {
         guard let db else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for sql in [
@@ -385,7 +394,7 @@ actor SearchIndex {
     }
 
     /// Fetch source metadata (used to render "last indexed N days ago").
-    func source(_ sourceId: String) -> IndexedSource? {
+    public func source(_ sourceId: String) -> IndexedSource? {
         guard let db else { return nil }
         let sql = "SELECT source_id, kind, display_name, last_indexed, total_files, total_bytes FROM indexed_sources WHERE source_id = ?"
         var stmt: OpaquePointer?
@@ -412,7 +421,7 @@ actor SearchIndex {
     /// column (the drive table has it explicitly). Derive it from `path`
     /// in SQL so the offline cloud browser can drill folder by folder
     /// without changing the schema.
-    func listCloudChildren(accountId: UUID, parentPath: String) -> [IndexedFile] {
+    public func listCloudChildren(accountId: UUID, parentPath: String) -> [IndexedFile] {
         guard let db else { return [] }
         // `path` is always "/foo/bar"; the parent path is everything up
         // to (but not including) the last "/". Special-case root because
@@ -454,7 +463,7 @@ actor SearchIndex {
 
     /// List entries whose parent path equals `parentPath`. Used by the
     /// offline browser to walk an indexed source folder-by-folder.
-    func listChildren(sourceId: String, parentPath: String) -> [IndexedFile] {
+    public func listChildren(sourceId: String, parentPath: String) -> [IndexedFile] {
         guard let db else { return [] }
         let sql = """
             SELECT path, parent_path, name, is_directory, size, modification_date
@@ -485,7 +494,7 @@ actor SearchIndex {
 
     /// Full-text search of indexed files. If `sourceIds` is non-nil, only
     /// those sources are queried; otherwise all sources are searched.
-    func searchIndexed(query: String, sourceIds: [String]? = nil, limit: Int = 500) -> [IndexedFile] {
+    public func searchIndexed(query: String, sourceIds: [String]? = nil, limit: Int = 500) -> [IndexedFile] {
         guard let db else { return [] }
         let fts = Self.makeFTSQuery(from: query)
         guard !fts.isEmpty else { return [] }
@@ -534,7 +543,7 @@ actor SearchIndex {
     /// Returns the union of cached cloud_files matches for the given offline
     /// accounts. Used by SearchCoordinator when "show offline results" is on
     /// and a cloud account is not currently connected.
-    func searchCloudCached(query: String, accountIds: [UUID], limit: Int = 500) -> [IndexedCloudFile] {
+    public func searchCloudCached(query: String, accountIds: [UUID], limit: Int = 500) -> [IndexedCloudFile] {
         guard let db, !accountIds.isEmpty else { return [] }
         let fts = Self.makeFTSQuery(from: query)
         guard !fts.isEmpty else { return [] }
@@ -592,7 +601,7 @@ actor SearchIndex {
     /// prefix matching, and AND them together. Without this, a query like
     /// `store.txt` is passed verbatim and never matches files whose name
     /// was tokenized into `store` / `txt`.
-    static func makeFTSQuery(from raw: String) -> String {
+    public static func makeFTSQuery(from raw: String) -> String {
         let separators = CharacterSet.alphanumerics.inverted
         let tokens = raw.components(separatedBy: separators).filter { !$0.isEmpty }
         return tokens.map { "\($0)*" }.joined(separator: " ")
@@ -603,15 +612,15 @@ actor SearchIndex {
     /// Snapshot of every indexed source — both drives (in `indexed_sources`)
     /// and cloud accounts (aggregated from `cloud_files`). Used by the
     /// Settings panel to show what's been indexed.
-    struct IndexedAccountSummary: Sendable, Hashable, Identifiable {
-        let id: UUID
-        let lastIndexed: Date
-        let totalFiles: Int
-        let totalFolders: Int
-        let totalBytes: Int64
+    public struct IndexedAccountSummary: Sendable, Hashable, Identifiable {
+        public let id: UUID
+        public let lastIndexed: Date
+        public let totalFiles: Int
+        public let totalFolders: Int
+        public let totalBytes: Int64
     }
 
-    func listIndexedSources() -> [IndexedSource] {
+    public func listIndexedSources() -> [IndexedSource] {
         guard let db else { return [] }
         let sql = "SELECT source_id, kind, display_name, last_indexed, total_files, total_bytes FROM indexed_sources ORDER BY display_name COLLATE NOCASE"
         var stmt: OpaquePointer?
@@ -636,7 +645,7 @@ actor SearchIndex {
     /// File/folder counts for one source, used to display granular numbers
     /// in Settings without keeping them in indexed_sources (which already
     /// has total_files counting only non-directories).
-    func sourceCounts(_ sourceId: String) -> (files: Int, folders: Int)? {
+    public func sourceCounts(_ sourceId: String) -> (files: Int, folders: Int)? {
         guard let db else { return nil }
         let sql = "SELECT SUM(CASE WHEN is_directory=0 THEN 1 ELSE 0 END), SUM(CASE WHEN is_directory=1 THEN 1 ELSE 0 END) FROM indexed_files WHERE source_id = ?"
         var stmt: OpaquePointer?
@@ -650,7 +659,7 @@ actor SearchIndex {
     /// Per-account aggregate over the cloud cache. Returns nil if the
     /// account has no rows. Counts non-directory and directory entries
     /// separately, and uses the freshest `last_indexed` as the timestamp.
-    func cloudAccountSummary(accountId: UUID) -> IndexedAccountSummary? {
+    public func cloudAccountSummary(accountId: UUID) -> IndexedAccountSummary? {
         guard let db else { return nil }
         let sql = """
             SELECT
@@ -683,7 +692,7 @@ actor SearchIndex {
 
     /// Bulk read for Compare: every indexed_files row whose absolute path
     /// is at or beneath `rootPath`. Caller computes relative paths.
-    func indexedFilesUnder(sourceId: String, rootPath: String) -> [IndexedFile] {
+    public func indexedFilesUnder(sourceId: String, rootPath: String) -> [IndexedFile] {
         guard let db else { return [] }
         let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
         let sql: String
@@ -726,17 +735,17 @@ actor SearchIndex {
         return rows
     }
 
-    struct CloudIndexedFile: Sendable, Hashable {
-        let accountId: UUID
-        let path: String
-        let name: String
-        let isDirectory: Bool
-        let size: Int64
-        let modificationDate: Date
+    public struct CloudIndexedFile: Sendable, Hashable {
+        public let accountId: UUID
+        public let path: String
+        public let name: String
+        public let isDirectory: Bool
+        public let size: Int64
+        public let modificationDate: Date
     }
 
     /// Bulk read for Compare from `cloud_files` (the cloud index cache).
-    func cloudFilesUnder(accountId: UUID, rootPath: String) -> [CloudIndexedFile] {
+    public func cloudFilesUnder(accountId: UUID, rootPath: String) -> [CloudIndexedFile] {
         guard let db else { return [] }
         let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
         let sql: String
@@ -795,7 +804,7 @@ actor SearchIndex {
     /// Settings → Index Status tab and the right-click context menu can
     /// treat cloud and drive sources uniformly. Called after a successful
     /// walkCloud completes.
-    func recordCloudSource(accountId: UUID, displayName: String, summary: IndexedAccountSummary) {
+    public func recordCloudSource(accountId: UUID, displayName: String, summary: IndexedAccountSummary) {
         guard let db else { return }
         // Update `kind` on conflict too — older builds had a bind bug that
         // wrote an empty string for `kind`, so re-indexing must be able to
@@ -827,7 +836,7 @@ actor SearchIndex {
     /// `cloud_files` cache for one cloud account. Called when the user
     /// removes the account — otherwise these rows stick around as orphans
     /// in Settings → Index Status with the captured display name.
-    func dropIndexedCloudSource(accountId: UUID) {
+    public func dropIndexedCloudSource(accountId: UUID) {
         guard let db else { return }
         let uuid = accountId.uuidString
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
@@ -850,7 +859,7 @@ actor SearchIndex {
     /// source_id isn't in `keepIds`. Used at app launch to clear orphans
     /// left behind by earlier remove/re-add cycles, before this build
     /// started dropping them on account removal.
-    func purgeOrphanCloudSources(keepAccountIds: Set<UUID>) {
+    public func purgeOrphanCloudSources(keepAccountIds: Set<UUID>) {
         guard let db else { return }
         let keep = Set(keepAccountIds.map { $0.uuidString })
         // Collect candidate orphans first so we can then run the same
@@ -890,7 +899,7 @@ actor SearchIndex {
     /// Update only the display name for an indexed source. Called when the
     /// user renames a cloud account so Settings → Index Status shows the
     /// new name without waiting for a re-index.
-    func renameIndexedSource(sourceId: String, to newName: String) {
+    public func renameIndexedSource(sourceId: String, to newName: String) {
         guard let db else { return }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "UPDATE indexed_sources SET display_name = ? WHERE source_id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
@@ -902,7 +911,7 @@ actor SearchIndex {
 
     /// Drops the cloud cache rows for an account. Used by the "Erase All"
     /// action in Settings → Index Status.
-    func dropCloudAccount(accountId: UUID) {
+    public func dropCloudAccount(accountId: UUID) {
         guard let db else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         var del: OpaquePointer?
@@ -914,7 +923,7 @@ actor SearchIndex {
     }
 
     /// Wipes every indexed row across both unified and cloud-cache tables.
-    func wipeAll() {
+    public func wipeAll() {
         guard let db else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for sql in [
@@ -938,17 +947,17 @@ actor SearchIndex {
         }
     }
 
-    struct IndexedCloudFile: Sendable {
-        let accountId: UUID
-        let item: CloudFileItem
-        let lastIndexed: Date
+    public struct IndexedCloudFile: Sendable {
+        public let accountId: UUID
+        public let item: CloudFileItem
+        public let lastIndexed: Date
     }
 
-    enum SearchIndexError: LocalizedError {
+    public enum SearchIndexError: LocalizedError {
         case openFailed(String)
         case executionFailed(String)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .openFailed(let msg): return "Failed to open search index: \(msg)"
             case .executionFailed(let msg): return "Search index error: \(msg)"

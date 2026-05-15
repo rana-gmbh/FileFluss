@@ -1,25 +1,24 @@
 import Foundation
-import FileFlussCore
 
-actor SyncEngine {
-    static let shared = SyncEngine()
+public actor SyncEngine {
+    public static let shared = SyncEngine()
 
     private var providers: [UUID: any CloudProvider] = [:]
     private var activeSyncs: Set<UUID> = []
 
-    func registerProvider(for accountId: UUID, provider: any CloudProvider) {
+    public func registerProvider(for accountId: UUID, provider: any CloudProvider) {
         providers[accountId] = provider
     }
 
-    func removeProvider(for accountId: UUID) {
+    public func removeProvider(for accountId: UUID) {
         providers.removeValue(forKey: accountId)
     }
 
-    func provider(for accountId: UUID) -> (any CloudProvider)? {
+    public func provider(for accountId: UUID) -> (any CloudProvider)? {
         providers[accountId]
     }
 
-    func sync(rule: SyncRule) async throws {
+    public func sync(rule: SyncRule) async throws {
         guard let provider = providers[rule.accountId] else {
             throw CloudProviderError.notAuthenticated
         }
@@ -62,7 +61,7 @@ actor SyncEngine {
         try await syncDownload(rule: rule, provider: provider)
     }
 
-    func createProvider(for type: CloudProviderType) -> any CloudProvider {
+    public func createProvider(for type: CloudProviderType) -> any CloudProvider {
         switch type {
         case .pCloud: return PCloudProvider()
         case .kDrive: return KDriveProvider()

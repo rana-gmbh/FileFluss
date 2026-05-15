@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct FileRowView: View {
     let item: FileItem

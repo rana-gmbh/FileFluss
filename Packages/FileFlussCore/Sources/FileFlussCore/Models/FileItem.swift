@@ -1,19 +1,19 @@
 import Foundation
 import UniformTypeIdentifiers
 
-struct FileItem: Identifiable, Hashable, Sendable {
-    let id: String
-    let url: URL
-    let name: String
-    let isDirectory: Bool
-    let size: Int64
-    let modificationDate: Date
-    let creationDate: Date
-    let isHidden: Bool
-    let isSymlink: Bool
-    let contentType: UTType?
+public struct FileItem: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let url: URL
+    public let name: String
+    public let isDirectory: Bool
+    public let size: Int64
+    public let modificationDate: Date
+    public let creationDate: Date
+    public let isHidden: Bool
+    public let isSymlink: Bool
+    public let contentType: UTType?
 
-    init(url: URL) {
+    public init(url: URL) {
         let keys: Set<URLResourceKey> = [
             .nameKey, .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
             .contentModificationDateKey, .creationDateKey, .isHiddenKey,
@@ -23,7 +23,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.init(url: url, resourceValues: values)
     }
 
-    init(url: URL, resourceValues: URLResourceValues) {
+    public init(url: URL, resourceValues: URLResourceValues) {
         self.id = url.path()
         self.url = url
         self.name = resourceValues.name ?? url.lastPathComponent
@@ -36,7 +36,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.contentType = resourceValues.contentType
     }
 
-    var icon: String {
+    public var icon: String {
         if isDirectory {
             return "folder.fill"
         }
@@ -51,21 +51,21 @@ struct FileItem: Identifiable, Hashable, Sendable {
         return "doc"
     }
 
-    var formattedSize: String {
+    public var formattedSize: String {
         if isDirectory { return "--" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
-    var formattedDate: String {
+    public var formattedDate: String {
         Self.dateFormatter.string(from: modificationDate)
     }
 
-    var formattedCreationDate: String {
+    public var formattedCreationDate: String {
         if creationDate == .distantPast { return "--" }
         return Self.dateFormatter.string(from: creationDate)
     }
 
-    var kind: String {
+    public var kind: String {
         if isDirectory { return "Folder" }
         if let contentType, let description = contentType.localizedDescription {
             return description

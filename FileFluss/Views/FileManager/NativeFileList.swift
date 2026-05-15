@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 import AppKit
 import UniformTypeIdentifiers
 import QuickLookUI

@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 import QuickLookUI
 
 @Observable @MainActor

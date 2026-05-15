@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 actor SearchCoordinator {
     static let shared = SearchCoordinator()
