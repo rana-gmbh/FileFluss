@@ -67,11 +67,12 @@ final class CloudFileManagerViewModel {
         self.providerType = providerType
         self.tempDownloadDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("FileFluss-cloud-\(accountId.uuidString)", isDirectory: true)
-        // Purge cache on launch so stale/corrupt previews from earlier builds
-        // aren't served. The cache is keyed by size only, so a file that was
-        // decrypted incorrectly by a previous build would otherwise be returned
-        // on every subsequent preview request.
-        try? FileManager.default.removeItem(at: tempDownloadDir)
+        // The cache survives across navigations so Quick Look / downloads
+        // don't have to redo the network round-trip on every open and
+        // Settings → Storage shows a non-zero value. Stale-content safety
+        // is enforced at the read path below: a cached entry is only
+        // returned when both size AND modification-date match the remote
+        // item, so a re-uploaded file invalidates its cached copy.
         try? FileManager.default.createDirectory(at: tempDownloadDir, withIntermediateDirectories: true)
     }
 
