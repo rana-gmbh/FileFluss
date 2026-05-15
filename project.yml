@@ -13,12 +13,23 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: true
 
+packages:
+  FileFlussCore:
+    # Shared Foundation/SQLite/Security-only core consumed by both the
+    # macOS app (this repo) and the iOS app (FileFluss Mobile, separate
+    # repo). Lives at the workspace root so XcodeGen picks it up as a
+    # local Swift package. Empty for now — file moves are landing
+    # incrementally per follow-up commit.
+    path: Packages/FileFlussCore
+
 targets:
   FileFluss:
     type: application
     platform: macOS
     sources:
       - FileFluss
+    dependencies:
+      - package: FileFlussCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rana-gmbh.FileFluss

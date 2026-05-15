@@ -7,7 +7,10 @@ DerivedData/
 
 # Swift Package Manager
 .build/
-Packages/
+# Ignore resolved/cached SPM checkouts (Packages/) without swallowing our
+# own local packages — those are part of the source tree.
+Packages/*
+!Packages/FileFlussCore
 Package.resolved
 
 # macOS
