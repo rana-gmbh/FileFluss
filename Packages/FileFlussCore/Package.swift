@@ -13,13 +13,15 @@ import PackageDescription
 /// macOS app continues to compile its sources directly and the only effect
 /// of importing FileFlussCore is to materialize the dependency.
 ///
-/// macOS-only for now. Lifts to `.iOS(.v17)` once the providers' AppKit
-/// dependencies (NSWorkspace browser-open in OAuth flows etc.) are
-/// abstracted behind a platform shim in Phase 1.
+/// Cross-platform: macOS 14+ and iOS 17+. The OAuth flow providers go
+/// through `BrowserOpener` (a registry the host app populates at startup
+/// — macOS plugs in NSWorkspace, iOS will plug in ASWebAuthenticationSession),
+/// so the package itself has no AppKit or UIKit dependency.
 let package = Package(
     name: "FileFlussCore",
     platforms: [
         .macOS(.v14),
+        .iOS(.v17),
     ],
     products: [
         .library(name: "FileFlussCore", targets: ["FileFlussCore"]),

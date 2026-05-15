@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import os
 
@@ -126,3 +127,4 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
         }
     }
 }
+#endif

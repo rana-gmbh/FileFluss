@@ -68,13 +68,23 @@ public actor SyncEngine {
         case .oneDrive: return OneDriveProvider()
         case .googleDrive: return GoogleDriveProvider()
         case .nextCloud: return NextCloudProvider()
-        case .iCloud: return ICloudProvider()
         case .koofr: return KoofrProvider()
         case .dropbox: return DropboxProvider()
         case .mega: return MegaProvider()
         case .webDAV: return WebDAVProvider()
-        case .sftp: return SFTPProvider()
         case .wordpress: return WordPressProvider()
+        #if os(macOS)
+        // ICloudProvider relies on FileManager.homeDirectoryForCurrentUser
+        // and the user-visible CloudDocs folder, neither of which exist on
+        // iOS — Files-app picker handles iCloud Drive there instead.
+        // SFTPProvider shells out to /usr/bin/ssh via Foundation.Process,
+        // which iOS doesn't expose. Both providers are macOS-only.
+        case .iCloud: return ICloudProvider()
+        case .sftp: return SFTPProvider()
+        #else
+        case .iCloud, .sftp:
+            fatalError("Provider \(type) is macOS-only and shouldn't reach createProvider on iOS")
+        #endif
         case .gmxCloud: return GMXCloudProvider()
         case .s3: return S3Provider()
         case .synologyDrive: return SynologyDriveProvider()

@@ -1,3 +1,5 @@
+#if os(macOS)
+#if os(macOS)
 import Foundation
 import os
 
@@ -322,3 +324,5 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 }
+#endif
+#endif

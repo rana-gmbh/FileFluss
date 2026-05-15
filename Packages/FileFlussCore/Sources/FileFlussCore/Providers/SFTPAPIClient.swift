@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import os
 
@@ -607,3 +608,4 @@ public actor SFTPAPIClient {
         return String(bytes: bytes, encoding: .utf8) ?? input
     }
 }
+#endif
