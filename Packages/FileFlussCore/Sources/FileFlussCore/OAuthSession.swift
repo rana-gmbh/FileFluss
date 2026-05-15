@@ -43,8 +43,22 @@ public protocol OAuthAuthenticator: Sendable {
     ///   with the exact redirect-URI string used — the provider must pass
     ///   that same string back to the token-exchange POST so the server's
     ///   redirect_uri cross-check passes.
+    /// - Parameters:
+    ///   - callbackURLScheme: scheme that the OAuth server should redirect
+    ///     to. Used by the iOS authenticator to match the redirect; the
+    ///     macOS authenticator ignores it (loopback gets a localhost URL).
+    ///   - callbackPath: portion of the redirect URI after the scheme
+    ///     colon. Defaults to `//callback` (producing
+    ///     `<scheme>://callback`), which Box/Dropbox/OneDrive accept once
+    ///     registered. Google's iOS client type rejects double-slash URIs
+    ///     and demands the single-slash form `/oauth2redirect`. macOS
+    ///     ignores this argument (loopback uses `http://localhost:<port>`).
+    ///   - authURLBuilder: invoked once the authenticator knows what the
+    ///     redirect URI will be. The provider returns its fully-formed
+    ///     authorize URL with that redirect baked in.
     func authenticate(
         callbackURLScheme: String,
+        callbackPath: String,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback
 }
@@ -61,6 +75,7 @@ public enum OAuthSession {
 
     public static func authenticate(
         callbackURLScheme: String,
+        callbackPath: String = "//callback",
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback {
         guard let authenticator else {
@@ -69,6 +84,7 @@ public enum OAuthSession {
         }
         return try await authenticator.authenticate(
             callbackURLScheme: callbackURLScheme,
+            callbackPath: callbackPath,
             authURLBuilder: authURLBuilder
         )
     }

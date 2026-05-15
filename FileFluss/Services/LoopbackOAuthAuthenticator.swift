@@ -27,6 +27,7 @@ struct LoopbackOAuthAuthenticator: OAuthAuthenticator {
 
     func authenticate(
         callbackURLScheme _: String,
+        callbackPath _: String,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback {
         let listener = try NWListener(using: .tcp, on: .any)

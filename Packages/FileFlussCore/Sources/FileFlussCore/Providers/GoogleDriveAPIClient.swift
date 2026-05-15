@@ -102,7 +102,12 @@ public actor GoogleDriveAPIClient {
         let expectedState = generateState()
 
         let result = try await OAuthSession.authenticate(
-            callbackURLScheme: oauthCallbackScheme
+            callbackURLScheme: oauthCallbackScheme,
+            // Google's iOS OAuth client type insists on a single-slash
+            // redirect URI form (`<scheme>:/path`) — `<scheme>://callback`
+            // gets rejected at the authorize endpoint with invalid_request.
+            // macOS is on a Desktop client and ignores this argument.
+            callbackPath: "/oauth2redirect"
         ) { redirectURI in
             var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
             components.queryItems = [
