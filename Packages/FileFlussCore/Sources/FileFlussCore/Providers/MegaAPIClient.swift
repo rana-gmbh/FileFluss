@@ -1,17 +1,16 @@
 import Foundation
-import FileFlussCore
 import CommonCrypto
 import os
 
 private let megaLog = Logger(subsystem: "com.rana.FileFluss", category: "mega")
 
-struct MegaCredentials: Codable, Sendable {
+public struct MegaCredentials: Codable, Sendable {
     let sessionId: String
     let masterKey: [UInt32] // 4 x UInt32 = 128-bit AES key
     let email: String
 }
 
-actor MegaAPIClient {
+public actor MegaAPIClient {
     private static let apiURL = "https://g.api.mega.co.nz/cs"
 
     private(set) var credentials: MegaCredentials
@@ -25,7 +24,7 @@ actor MegaAPIClient {
     /// Cached decrypted file keys: handle → full 8-word decrypted key (for files) or 4-word key (for folders)
     private var nodeKeys: [String: [UInt32]] = [:]
 
-    init(credentials: MegaCredentials) {
+    public init(credentials: MegaCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -35,7 +34,7 @@ actor MegaAPIClient {
 
     // MARK: - Authentication
 
-    static func login(email: String, password: String, mfaCode: String? = nil) async throws -> MegaCredentials {
+    public static func login(email: String, password: String, mfaCode: String? = nil) async throws -> MegaCredentials {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         let session = URLSession(configuration: config)
@@ -161,7 +160,7 @@ actor MegaAPIClient {
 
     // MARK: - File Operations
 
-    func fetchNodes() async throws {
+    public func fetchNodes() async throws {
         let result = try await apiCall([["a": "f", "c": 1]])
 
         guard let filesData = result.first as? [String: Any],
@@ -210,7 +209,7 @@ actor MegaAPIClient {
         megaLog.debug("[Mega] Loaded \(self.nodes.count) nodes, root=\(self.rootHandle ?? "nil")")
     }
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -237,11 +236,11 @@ actor MegaAPIClient {
             }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -287,11 +286,11 @@ actor MegaAPIClient {
         try decryptedData.write(to: localURL)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
         try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -399,12 +398,12 @@ actor MegaAPIClient {
         }
     }
 
-    func deleteItem(handle: String) async throws {
+    public func deleteItem(handle: String) async throws {
         let _ = try await apiCall([["a": "d", "n": handle]])
         nodes.removeValue(forKey: handle)
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -412,7 +411,7 @@ actor MegaAPIClient {
         try await deleteItem(handle: handle)
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -460,7 +459,7 @@ actor MegaAPIClient {
         }
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -487,7 +486,7 @@ actor MegaAPIClient {
         )
     }
 
-    func stat(at path: String) async throws -> CloudFileItem {
+    public func stat(at path: String) async throws -> CloudFileItem {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -508,7 +507,7 @@ actor MegaAPIClient {
         )
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -517,7 +516,7 @@ actor MegaAPIClient {
         return computeFolderSize(handle: handle)
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         if nodes.isEmpty {
             try await fetchNodes()
         }
@@ -553,7 +552,7 @@ actor MegaAPIClient {
             }
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         credentials.email
     }
 
@@ -1248,7 +1247,7 @@ private struct BigUInt {
     // Digits stored in little-endian order (least significant first), base 2^32
     var digits: [UInt32]
 
-    init(data bytes: [UInt8]) {
+    public init(data bytes: [UInt8]) {
         // Convert big-endian bytes to little-endian UInt32 digits
         var result: [UInt32] = []
         var i = bytes.count
@@ -1266,7 +1265,7 @@ private struct BigUInt {
         self.digits = result
     }
 
-    init(digits: [UInt32]) {
+    public init(digits: [UInt32]) {
         var d = digits
         while d.count > 1 && d.last == 0 { d.removeLast() }
         self.digits = d
@@ -1277,7 +1276,7 @@ private struct BigUInt {
 
     var isZero: Bool { digits.count == 1 && digits[0] == 0 }
 
-    func toBytes() -> [UInt8] {
+    public func toBytes() -> [UInt8] {
         var result: [UInt8] = []
         for i in stride(from: digits.count - 1, through: 0, by: -1) {
             let word = digits[i]
@@ -1292,7 +1291,7 @@ private struct BigUInt {
     }
 
     // Compare
-    func compare(_ other: BigUInt) -> Int {
+    public func compare(_ other: BigUInt) -> Int {
         if digits.count != other.digits.count {
             return digits.count < other.digits.count ? -1 : 1
         }
@@ -1356,7 +1355,7 @@ private struct BigUInt {
     }
 
     // Division and remainder
-    static func divmod(_ lhs: BigUInt, _ rhs: BigUInt) -> (quotient: BigUInt, remainder: BigUInt) {
+    public static func divmod(_ lhs: BigUInt, _ rhs: BigUInt) -> (quotient: BigUInt, remainder: BigUInt) {
         if rhs.isZero { fatalError("Division by zero") }
         if lhs.compare(rhs) < 0 { return (.zero, lhs) }
         if rhs.digits.count == 1 {
@@ -1409,7 +1408,7 @@ private struct BigUInt {
         divmod(lhs, rhs).remainder
     }
 
-    func multiplySingle(_ s: UInt32) -> BigUInt {
+    public func multiplySingle(_ s: UInt32) -> BigUInt {
         if s == 0 { return .zero }
         var result = [UInt32](repeating: 0, count: digits.count + 1)
         var carry: UInt64 = 0
@@ -1422,7 +1421,7 @@ private struct BigUInt {
         return BigUInt(digits: result)
     }
 
-    func shiftLeft(_ bits: Int) -> BigUInt {
+    public func shiftLeft(_ bits: Int) -> BigUInt {
         guard bits > 0 else { return self }
         let wordShift = bits / 32
         let bitShift = bits % 32
@@ -1438,7 +1437,7 @@ private struct BigUInt {
     }
 
     // Modular exponentiation (square-and-multiply)
-    func modPow(_ exp: BigUInt, _ mod: BigUInt) -> BigUInt {
+    public func modPow(_ exp: BigUInt, _ mod: BigUInt) -> BigUInt {
         if mod.digits == [1] { return .zero }
         var result = BigUInt.one
         var base = BigUInt.divmod(self, mod).remainder
@@ -1483,7 +1482,7 @@ extension Data {
         self.init(base64Encoded: base64)
     }
 
-    func base64MegaEncode() -> String {
+    public func base64MegaEncode() -> String {
         self.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")

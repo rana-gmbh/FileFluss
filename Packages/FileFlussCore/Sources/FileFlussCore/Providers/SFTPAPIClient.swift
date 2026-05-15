@@ -1,29 +1,28 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let sftpLog = Logger(subsystem: "com.rana.FileFluss", category: "sftp")
 
-struct SFTPCredentials: Codable, Sendable {
-    enum AuthMethod: String, Codable, Sendable {
+public struct SFTPCredentials: Codable, Sendable {
+    public enum AuthMethod: String, Codable, Sendable {
         case password
         case privateKey
     }
 
-    let host: String
-    let port: Int
-    let username: String
-    let authMethod: AuthMethod
+    public let host: String
+    public let port: Int
+    public let username: String
+    public let authMethod: AuthMethod
     /// Set when authMethod == .password.
-    let password: String?
+    public let password: String?
     /// Raw PEM contents of the private key — set when authMethod == .privateKey.
-    let privateKey: String?
+    public let privateKey: String?
     /// Optional passphrase for the private key. nil when the key is unencrypted.
-    let passphrase: String?
+    public let passphrase: String?
     /// Initial directory the panel lands in. "/" by default.
-    let remotePath: String
+    public let remotePath: String
 
-    init(
+    public init(
         host: String,
         port: Int,
         username: String,
@@ -43,7 +42,7 @@ struct SFTPCredentials: Codable, Sendable {
         self.remotePath = remotePath
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         host = try c.decode(String.self, forKey: .host)
         port = try c.decode(Int.self, forKey: .port)
@@ -58,7 +57,7 @@ struct SFTPCredentials: Codable, Sendable {
     }
 }
 
-actor SFTPAPIClient {
+public actor SFTPAPIClient {
     let credentials: SFTPCredentials
     private let controlPath: String
     /// SSH_ASKPASS script — echoes the password or the key passphrase.
@@ -76,7 +75,7 @@ actor SFTPAPIClient {
     /// `ls` command that doesn't recognise `-L`.
     private var lsSupportsDereference: Bool? = nil
 
-    init(credentials: SFTPCredentials) {
+    public init(credentials: SFTPCredentials) {
         self.credentials = credentials
         let id = UUID().uuidString.prefix(8)
         self.controlPath = NSTemporaryDirectory() + "filefluss-sftp-\(id)"
@@ -114,7 +113,7 @@ actor SFTPAPIClient {
 
     // MARK: - Authentication
 
-    static func authenticate(
+    public static func authenticate(
         host: String,
         port: Int,
         username: String,
@@ -142,13 +141,13 @@ actor SFTPAPIClient {
         return creds
     }
 
-    func userDisplayName() -> String {
+    public func userDisplayName() -> String {
         "\(credentials.username)@\(credentials.host)"
     }
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let output = try await runListing(path: path)
         return parseListing(output: output, basePath: path)
     }
@@ -201,11 +200,11 @@ actor SFTPAPIClient {
             || lower.contains("unrecognized option `-l")
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         _ = try await runBatch(commands: ["get \(shellEscape(remotePath)) \(shellEscape(localURL.path))"])
         if let onBytes,
            let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path),
@@ -214,11 +213,11 @@ actor SFTPAPIClient {
         }
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileSize: Int64 = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
         // `put -p` preserves the source file's modification time and perms so
         // sync diffs stay stable across re-uploads.
@@ -226,7 +225,7 @@ actor SFTPAPIClient {
         onBytes?(fileSize)
     }
 
-    func deleteItem(at path: String, isDirectory: Bool) async throws {
+    public func deleteItem(at path: String, isDirectory: Bool) async throws {
         if isDirectory {
             // Remove directory contents recursively, then the directory
             let items = try await listFolder(path: path)
@@ -239,12 +238,12 @@ actor SFTPAPIClient {
         }
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         if (try? await getFileInfo(at: path)) != nil { return }
         _ = try await runBatch(commands: ["mkdir \(shellEscape(path))"])
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let parentPath = (path as NSString).deletingLastPathComponent
         let destinationPath: String
         if parentPath == "/" {
@@ -255,7 +254,7 @@ actor SFTPAPIClient {
         _ = try await runBatch(commands: ["rename \(shellEscape(path)) \(shellEscape(destinationPath))"])
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let parentPath = (path as NSString).deletingLastPathComponent
         let fileName = (path as NSString).lastPathComponent
         let output = try await runListing(path: parentPath)
@@ -266,7 +265,7 @@ actor SFTPAPIClient {
         return item
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         let items = try await listFolder(path: path)
         var total: Int64 = 0
         for item in items {
@@ -279,7 +278,7 @@ actor SFTPAPIClient {
         return total
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let searchPath = path ?? "/"
         let allItems = try await listAllRecursively(path: searchPath)
         let lowered = query.lowercased()

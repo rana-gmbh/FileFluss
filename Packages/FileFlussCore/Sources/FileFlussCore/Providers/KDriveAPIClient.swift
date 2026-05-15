@@ -1,13 +1,12 @@
 import Foundation
-import FileFlussCore
 
-struct KDriveCredentials: Codable, Sendable {
+public struct KDriveCredentials: Codable, Sendable {
     let apiToken: String
     let driveId: Int
     let userEmail: String
 }
 
-actor KDriveAPIClient {
+public actor KDriveAPIClient {
     let credentials: KDriveCredentials
     private let session: URLSession
     private let baseURL = "https://api.infomaniak.com"
@@ -15,7 +14,7 @@ actor KDriveAPIClient {
     // Cache path → fileId mapping for navigation
     private var pathToId: [String: Int] = ["/": 0] // root placeholder, set after init
 
-    init(credentials: KDriveCredentials) {
+    public init(credentials: KDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -27,7 +26,7 @@ actor KDriveAPIClient {
 
     // MARK: - Drive Info
 
-    func fetchRootFileId() async throws -> Int {
+    public func fetchRootFileId() async throws -> Int {
         // Try to get root file ID from drive info
         if let response: KDriveResponse<KDriveDriveInfo> = try? await request(.get, path: "/2/drive/\(credentials.driveId)") {
             return response.data.rootFileId
@@ -38,7 +37,7 @@ actor KDriveAPIClient {
         return 1
     }
 
-    func setRootId(_ id: Int) {
+    public func setRootId(_ id: Int) {
         pathToId["/"] = id
     }
 
@@ -69,13 +68,13 @@ actor KDriveAPIClient {
         return allItems
     }
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let fileId = try await resolvePathToId(path)
         let items = try await listFolder(fileId: fileId)
         return items.map { $0.toCloudFileItem(parentPath: path) }
     }
 
-    func createFolder(parentId: Int, name: String) async throws {
+    public func createFolder(parentId: Int, name: String) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(parentId)/directory")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -92,7 +91,7 @@ actor KDriveAPIClient {
         }
     }
 
-    func createFolder(path: String) async throws {
+    public func createFolder(path: String) async throws {
         if (try? await resolvePathToId(path)) != nil { return }
 
         let parentPath = (path as NSString).deletingLastPathComponent
@@ -108,7 +107,7 @@ actor KDriveAPIClient {
 
     // MARK: - File Operations
 
-    func downloadFile(fileId: Int, to localURL: URL, onBytes: ByteProgressHandler? = nil) async throws {
+    public func downloadFile(fileId: Int, to localURL: URL, onBytes: ByteProgressHandler? = nil) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/download")!
         var request = URLRequest(url: url)
         request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
@@ -122,16 +121,16 @@ actor KDriveAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let fileId = try await resolvePathToId(remotePath)
         try await downloadFile(fileId: fileId, to: localURL, onBytes: onBytes)
     }
 
-    func uploadFile(from localURL: URL, toFolderId folderId: Int, fileName: String, onBytes: ByteProgressHandler? = nil) async throws {
+    public func uploadFile(from localURL: URL, toFolderId folderId: Int, fileName: String, onBytes: ByteProgressHandler? = nil) async throws {
         let fileData = try Data(contentsOf: localURL)
 
         var queryItems: [URLQueryItem] = [
@@ -185,7 +184,7 @@ actor KDriveAPIClient {
         }
     }
 
-    func deleteFile(fileId: Int) async throws {
+    public func deleteFile(fileId: Int) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)")!
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
@@ -200,13 +199,13 @@ actor KDriveAPIClient {
         }
     }
 
-    func deleteFile(path: String) async throws {
+    public func deleteFile(path: String) async throws {
         let fileId = try await resolvePathToId(path)
         try await deleteFile(fileId: fileId)
         pathToId.removeValue(forKey: path)
     }
 
-    func renameFile(fileId: Int, to newName: String) async throws {
+    public func renameFile(fileId: Int, to newName: String) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/rename")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -223,7 +222,7 @@ actor KDriveAPIClient {
         }
     }
 
-    func renameFile(path: String, to newName: String) async throws {
+    public func renameFile(path: String, to newName: String) async throws {
         let fileId = try await resolvePathToId(path)
         try await renameFile(fileId: fileId, to: newName)
         // Update cache: remove old path, add new path
@@ -238,7 +237,7 @@ actor KDriveAPIClient {
     /// Infomaniak's `move` endpoint relocates a file/folder to a new
     /// directory. Pass `newName` to rename atomically; omit to keep the
     /// existing name.
-    func moveFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
+    public func moveFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/move/\(toDirectoryId)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -257,7 +256,7 @@ actor KDriveAPIClient {
     }
 
     /// Server-side copy via Infomaniak's `duplicate` endpoint.
-    func duplicateFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
+    public func duplicateFile(fileId: Int, toDirectoryId: Int, newName: String?) async throws {
         let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/duplicate/\(toDirectoryId)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -275,7 +274,7 @@ actor KDriveAPIClient {
         }
     }
 
-    func moveItem(path: String, toPath newPath: String) async throws {
+    public func moveItem(path: String, toPath newPath: String) async throws {
         let fileId = try await resolvePathToId(path)
         let destParentPath = (newPath as NSString).deletingLastPathComponent
         let destName = (newPath as NSString).lastPathComponent
@@ -291,7 +290,7 @@ actor KDriveAPIClient {
         pathToId[newPath] = fileId
     }
 
-    func copyItem(path: String, toPath newPath: String) async throws {
+    public func copyItem(path: String, toPath newPath: String) async throws {
         let fileId = try await resolvePathToId(path)
         let destParentPath = (newPath as NSString).deletingLastPathComponent
         let destName = (newPath as NSString).lastPathComponent
@@ -312,7 +311,7 @@ actor KDriveAPIClient {
         return response.data
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         let fileId = try await resolvePathToId(path)
         return try await calculateFolderSizeRecursively(fileId: fileId)
     }
@@ -332,13 +331,13 @@ actor KDriveAPIClient {
 
     // MARK: - User Info
 
-    func userInfo() async throws -> String {
+    public func userInfo() async throws -> String {
         return credentials.userEmail
     }
 
     // MARK: - Path Resolution
 
-    func resolvePathToId(_ path: String) async throws -> Int {
+    public func resolvePathToId(_ path: String) async throws -> Int {
         if let cached = pathToId[path] {
             return cached
         }
@@ -366,7 +365,7 @@ actor KDriveAPIClient {
         return currentId
     }
 
-    func cachePath(_ path: String, fileId: Int) {
+    public func cachePath(_ path: String, fileId: Int) {
         pathToId[path] = fileId
     }
 
@@ -443,7 +442,7 @@ struct KDriveDriveInfo: Decodable {
 
     let rootFileId: Int
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
@@ -472,7 +471,7 @@ struct KDriveFileMetadata: Decodable {
 
     var isFolder: Bool { type == "dir" }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" {
             itemPath = "/\(name)"
@@ -499,7 +498,7 @@ struct KDriveFileMetadata: Decodable {
     }
 }
 
-struct KDriveDriveListItem: Decodable {
-    let id: Int
-    let name: String
+public struct KDriveDriveListItem: Decodable, Sendable {
+    public let id: Int
+    public let name: String
 }

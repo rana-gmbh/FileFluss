@@ -1,10 +1,9 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let wpLog = Logger(subsystem: "com.rana.FileFluss", category: "wordpress")
 
-struct WordPressCredentials: Codable, Sendable {
+public struct WordPressCredentials: Codable, Sendable {
     let siteURL: String
     let username: String
     let password: String
@@ -58,7 +57,7 @@ private struct WPMediaItem: Decodable {
 /// Preserves Authorization header, HTTP method, and body on same-host redirects.
 /// URLSession strips auth headers and converts POST→GET on redirects by default.
 private final class WPSessionDelegate: NSObject, URLSessionTaskDelegate, Sendable {
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+    public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
         guard let original = task.originalRequest,
               original.url?.host == request.url?.host else {
@@ -81,7 +80,7 @@ private final class WPSessionDelegate: NSObject, URLSessionTaskDelegate, Sendabl
     }
 }
 
-actor WordPressAPIClient {
+public actor WordPressAPIClient {
     let credentials: WordPressCredentials
     private let session: URLSession
     private let baseAPIURL: String
@@ -89,7 +88,7 @@ actor WordPressAPIClient {
     /// Cache mapping virtual paths to WordPress media IDs for delete/rename operations.
     private var mediaIdCache: [String: Int] = [:]
 
-    init(credentials: WordPressCredentials) {
+    public init(credentials: WordPressCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -106,7 +105,7 @@ actor WordPressAPIClient {
 
     // MARK: - Authentication
 
-    static func authenticate(siteURL: String, username: String, password: String) async throws -> WordPressCredentials {
+    public static func authenticate(siteURL: String, username: String, password: String) async throws -> WordPressCredentials {
         let creds = WordPressCredentials(siteURL: siteURL, username: username, password: password, displayName: "")
         let client = WordPressAPIClient(credentials: creds)
         return try await client.verifyAndGetCredentials()
@@ -154,7 +153,7 @@ actor WordPressAPIClient {
         return WordPressCredentials(siteURL: self.credentials.siteURL, username: self.credentials.username, password: self.credentials.password, displayName: displayName)
     }
 
-    func userDisplayName() -> String {
+    public func userDisplayName() -> String {
         if !credentials.displayName.isEmpty {
             return credentials.displayName
         }
@@ -167,7 +166,7 @@ actor WordPressAPIClient {
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let normalizedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
         if normalizedPath.isEmpty {
@@ -191,11 +190,11 @@ actor WordPressAPIClient {
         return []
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let sourceURL = try await resolveSourceURL(for: remotePath)
 
         guard let url = URL(string: sourceURL) else {
@@ -212,11 +211,11 @@ actor WordPressAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileName = localURL.lastPathComponent
         let fileData = try Data(contentsOf: localURL)
 
@@ -258,7 +257,7 @@ actor WordPressAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let mediaId = try await resolveMediaId(for: path)
 
         var request = try makeRequest(path: "/media/\(mediaId)", query: [("force", "true")])
@@ -272,7 +271,7 @@ actor WordPressAPIClient {
         mediaIdCache.removeValue(forKey: path)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let mediaId = try await resolveMediaId(for: path)
 
         // WordPress rename updates the title only — the actual file URL remains unchanged
@@ -290,7 +289,7 @@ actor WordPressAPIClient {
         }
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let mediaId = try await resolveMediaId(for: path)
 
         let request = try makeRequest(path: "/media/\(mediaId)", query: [])
@@ -303,7 +302,7 @@ actor WordPressAPIClient {
         return mediaItemToCloudFile(item, basePath: (path as NSString).deletingLastPathComponent)
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         let items = try await listFolder(path: path)
         var total: Int64 = 0
         for item in items {
@@ -316,7 +315,7 @@ actor WordPressAPIClient {
         return total
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         var allItems: [CloudFileItem] = []
         var page = 1
         let perPage = 100

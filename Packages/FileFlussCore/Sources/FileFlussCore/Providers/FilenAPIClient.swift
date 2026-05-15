@@ -1,5 +1,4 @@
 import CommonCrypto
-import FileFlussCore
 import CryptoKit
 import Foundation
 import Security
@@ -14,18 +13,18 @@ private let filenLog = Logger(subsystem: "com.rana.FileFluss", category: "filen"
 /// add-account time for an API key + a set of master keys; the password
 /// itself is never stored. Master keys decrypt every file/folder metadata
 /// blob we receive from the server.
-struct FilenCredentials: Codable, Sendable {
-    let email: String
+public struct FilenCredentials: Codable, Sendable {
+    public let email: String
     /// Bearer token sent on every gateway API call after login.
-    let apiKey: String
+    public let apiKey: String
     /// One or more 64-char hex master keys, freshest first. Newer keys are
     /// generated each time the user changes their password; we keep every
     /// one we've received because older items may still be encrypted with
     /// an older key.
-    let masterKeys: [String]
+    public let masterKeys: [String]
     /// UUID of the user's "Cloud Drive" root — returned from /v3/user/baseFolder.
     /// All directory listings start from this UUID.
-    let rootFolderUuid: String
+    public let rootFolderUuid: String
 }
 
 // MARK: - Filen API client
@@ -76,7 +75,7 @@ struct FilenCredentials: Codable, Sendable {
 //   We keep them in the order returned, with the derived key inserted at the
 //   front, and try each in turn when decrypting metadata.
 
-actor FilenAPIClient {
+public actor FilenAPIClient {
     static let baseURL = "https://gateway.filen.io"
     static let egestURL = "https://egest.filen.io"
     /// Plaintext chunk size used by Filen for content encryption. Each
@@ -102,7 +101,7 @@ actor FilenAPIClient {
     private(set) var credentials: FilenCredentials
     private let session: URLSession
 
-    init(credentials: FilenCredentials) {
+    public init(credentials: FilenCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -115,7 +114,7 @@ actor FilenAPIClient {
     /// Run the full Filen login flow. Returns a credentials struct ready to
     /// persist in the keychain. The password is held only locally for the
     /// duration of this call; the persisted blob never contains it.
-    static func login(email: String, password: String, twoFactorCode: String) async throws -> FilenCredentials {
+    public static func login(email: String, password: String, twoFactorCode: String) async throws -> FilenCredentials {
         let info = try await fetchAuthInfo(email: email)
         guard info.authVersion == 2 else {
             throw CloudProviderError.commandFailed(
@@ -176,7 +175,7 @@ actor FilenAPIClient {
     /// listing the parent and decrypting every child's metadata until the
     /// name matches — Filen's API is UUID-keyed, so we have no way to
     /// resolve a path in one round-trip.
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let targetUuid = try await resolveUuid(forPath: path)
         return try await listChildren(parentUuid: targetUuid, parentPath: path)
     }
@@ -276,7 +275,7 @@ actor FilenAPIClient {
     /// the SDK's `FileKey`, the 32-char ASCII key string IS the AES-256 key
     /// in raw bytes — no derivation. Each chunk on the wire is
     /// `12-byte nonce || ciphertext || 16-byte tag`.
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         // resolveUuid only walks directory paths, so we list the file's
         // parent and find the file by name from the returned items. The
         // listing also populates `fileChunkInfo` for the file's UUID,
@@ -352,7 +351,7 @@ actor FilenAPIClient {
     /// key, POSTed to a random ingest host, then a final /v3/upload/done
     /// publishes the file. Mostly transliterated from filen-sdk-rs's
     /// FileWriter — see filen-sdk-rs/src/fs/file/write.rs.
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let name = (remotePath as NSString).lastPathComponent
         let parentUuid = try await resolveUuid(forPath: parentPath.isEmpty ? "/" : parentPath)
@@ -523,7 +522,7 @@ actor FilenAPIClient {
     /// is stored encrypted (master-key "002" envelope) under `name`, and a
     /// non-reversible v2 hash of the lower-cased name goes in `name_hashed`
     /// for server-side search/indexing.
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         let parent = (path as NSString).deletingLastPathComponent
         let name = (path as NSString).lastPathComponent
         let parentUuid = try await resolveUuid(forPath: parent.isEmpty ? "/" : parent)
@@ -550,7 +549,7 @@ actor FilenAPIClient {
     /// Trash a file or folder by panel path. Filen has two endpoints —
     /// `/v3/dir/trash` and `/v3/file/trash` — both take `{uuid}` and route
     /// the item into the user's trash (not a hard delete).
-    func trashItem(at path: String) async throws {
+    public func trashItem(at path: String) async throws {
         // Find the item in its parent's listing so we can pick the right
         // endpoint (dir vs file) and pull the UUID. The CloudFileItem id
         // we minted in `listChildren` carries both as a "d:<uuid>" / "f:<uuid>" tag.
@@ -570,7 +569,7 @@ actor FilenAPIClient {
     /// different payloads — folders just need the new encrypted folder-meta
     /// blob; files also need a standalone encrypted name (encrypted with
     /// the per-file key, like at upload time).
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let parent = (path as NSString).deletingLastPathComponent
         let oldName = (path as NSString).lastPathComponent
         let entries = try await listFolder(path: parent.isEmpty ? "/" : parent)
@@ -800,7 +799,7 @@ enum FilenCrypto {
     /// PBKDF2-HMAC-SHA512 with 200_000 iterations and a 64-byte output, then
     /// the split-then-SHA512-the-second-half dance described in
     /// filen-sdk-rs/src/crypto/v2.rs::derive_password_and_mk.
-    static func deriveV2Login(password: String, salt: String) throws -> V2LoginDerivation {
+    public static func deriveV2Login(password: String, salt: String) throws -> V2LoginDerivation {
         // Filen feeds the *bytes of the salt string* to PBKDF2 — not a
         // base64 or hex decode — matching the comment in filen-types/api/auth/info.rs
         // ("this is not base64 or hex encoded, so probably bad practice").
@@ -825,7 +824,7 @@ enum FilenCrypto {
     /// looks redundant — using the same value as password and salt with one
     /// iteration is essentially a hash — but it's the algorithm the SDK uses,
     /// so we mirror it.
-    static func aesKeyFromV2MasterKey(_ keyAscii: String) throws -> SymmetricKey {
+    public static func aesKeyFromV2MasterKey(_ keyAscii: String) throws -> SymmetricKey {
         let bytes = try pbkdf2SHA512(
             password: Array(keyAscii.utf8),
             salt: Array(keyAscii.utf8),
@@ -838,7 +837,7 @@ enum FilenCrypto {
     /// Encrypt a single plaintext chunk for upload. Output layout matches
     /// what `decryptFileChunk` consumes: 12-byte raw nonce || ciphertext
     /// || 16-byte tag. AES-256-GCM, no AAD.
-    static func encryptFileChunk(_ plain: Data, aesKey: SymmetricKey) throws -> Data {
+    public static func encryptFileChunk(_ plain: Data, aesKey: SymmetricKey) throws -> Data {
         var nonceBytes = [UInt8](repeating: 0, count: 12)
         _ = SecRandomCopyBytes(kSecRandomDefault, 12, &nonceBytes)
         let nonce = try AES.GCM.Nonce(data: Data(nonceBytes))
@@ -850,7 +849,7 @@ enum FilenCrypto {
     ///   12-byte raw nonce || ciphertext || 16-byte tag.
     /// Same AES-256-GCM cipher as metadata, just a different envelope —
     /// see filen-sdk-rs/src/crypto/shared.rs::decrypt_data.
-    static func decryptFileChunk(_ data: Data, aesKey: SymmetricKey) throws -> Data {
+    public static func decryptFileChunk(_ data: Data, aesKey: SymmetricKey) throws -> Data {
         guard data.count >= 12 + 16 else {
             throw CloudProviderError.invalidResponse
         }
@@ -868,7 +867,7 @@ enum FilenCrypto {
     /// ASCII nonce per call (matching the SDK's BadNonce — chars from
     /// `[A-Za-z0-9]` so the server can store the envelope as a single
     /// UTF-8 string).
-    static func encryptMetadata(_ plaintext: String, aesKey: SymmetricKey) throws -> String {
+    public static func encryptMetadata(_ plaintext: String, aesKey: SymmetricKey) throws -> String {
         var nonceBytes = [UInt8](repeating: 0, count: 12)
         // The SDK uses a 62-character alphabet for the printable nonce.
         // SecRandomCopyBytes-derived index keeps the nonce uniformly random.
@@ -891,7 +890,7 @@ enum FilenCrypto {
     /// → 40-char lowercase hex. Mirrors filen-sdk-rs/src/crypto/v2.rs::hash.
     /// Used as the server-side index value for filename / foldername
     /// searches; the server never sees the cleartext name.
-    static func v2HashName(_ name: String) -> String {
+    public static func v2HashName(_ name: String) -> String {
         let lower = name.lowercased()
         let sha512 = Data(SHA512.hash(data: Data(lower.utf8)))
         let hexBytes = Array(sha512.map { String(format: "%02x", $0) }.joined().utf8)
@@ -902,7 +901,7 @@ enum FilenCrypto {
     /// Decrypt a Filen "002" metadata envelope:
     ///   "002" || 12-byte ASCII nonce || base64(ciphertext || 16-byte tag).
     /// AES-256-GCM, no AAD, 12-byte nonce, 16-byte tag.
-    static func decryptMetadata(_ encrypted: String, aesKey: SymmetricKey) throws -> String {
+    public static func decryptMetadata(_ encrypted: String, aesKey: SymmetricKey) throws -> String {
         guard encrypted.count >= 15, encrypted.hasPrefix("002") else {
             throw CloudProviderError.invalidResponse
         }
@@ -933,7 +932,7 @@ enum FilenCrypto {
 
     /// PBKDF2-HMAC-SHA512 via CommonCrypto. CryptoKit doesn't expose PBKDF2
     /// directly on macOS 14, so we drop to the C API.
-    static func pbkdf2SHA512(password: [UInt8], salt: [UInt8], iterations: UInt32, outputBytes: Int) throws -> Data {
+    public static func pbkdf2SHA512(password: [UInt8], salt: [UInt8], iterations: UInt32, outputBytes: Int) throws -> Data {
         var derived = [UInt8](repeating: 0, count: outputBytes)
         let status = password.withUnsafeBufferPointer { pwPtr in
             salt.withUnsafeBufferPointer { saltPtr in

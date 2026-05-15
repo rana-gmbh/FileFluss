@@ -1,17 +1,16 @@
 import Foundation
-import FileFlussCore
 
-struct PCloudCredentials: Codable, Sendable {
+public struct PCloudCredentials: Codable, Sendable {
     let accessToken: String
     let hostname: String
     let userId: UInt64
 }
 
-actor PCloudAPIClient {
+public actor PCloudAPIClient {
     let credentials: PCloudCredentials
     private let session: URLSession
 
-    init(credentials: PCloudCredentials) {
+    public init(credentials: PCloudCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -23,7 +22,7 @@ actor PCloudAPIClient {
 
     // MARK: - Folder Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let params = [
             "path": path,
             "timeformat": "timestamp",
@@ -32,7 +31,7 @@ actor PCloudAPIClient {
         return response.metadata.contents?.map { $0.toCloudFileItem(parentPath: path) } ?? []
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         let params = [
             "path": path,
             "recursive": "1",
@@ -56,22 +55,22 @@ actor PCloudAPIClient {
         return total
     }
 
-    func createFolder(path: String) async throws {
+    public func createFolder(path: String) async throws {
         let params = ["path": path]
         let _: PCloudBasicResponse = try await request("createfolderifnotexists", params: params)
     }
 
-    func deleteFolder(path: String) async throws {
+    public func deleteFolder(path: String) async throws {
         let params = ["path": path]
         let _: PCloudBasicResponse = try await request("deletefolderrecursive", params: params)
     }
 
-    func renameFile(path: String, toName newName: String) async throws {
+    public func renameFile(path: String, toName newName: String) async throws {
         let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
         try await renameFile(path: path, toPath: toPath)
     }
 
-    func renameFolder(path: String, toName newName: String) async throws {
+    public func renameFolder(path: String, toName newName: String) async throws {
         let toPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
         try await renameFolder(path: path, toPath: toPath)
     }
@@ -79,29 +78,29 @@ actor PCloudAPIClient {
     /// pCloud's `renamefile` accepts an arbitrary destination path, so it
     /// doubles as a server-side cross-folder move. The same is true of
     /// `renamefolder` for directories.
-    func renameFile(path: String, toPath: String) async throws {
+    public func renameFile(path: String, toPath: String) async throws {
         let params = ["path": path, "topath": toPath]
         let _: PCloudBasicResponse = try await request("renamefile", params: params)
     }
 
-    func renameFolder(path: String, toPath: String) async throws {
+    public func renameFolder(path: String, toPath: String) async throws {
         let params = ["path": path, "topath": toPath]
         let _: PCloudBasicResponse = try await request("renamefolder", params: params)
     }
 
-    func copyFile(path: String, toPath: String) async throws {
+    public func copyFile(path: String, toPath: String) async throws {
         let params = ["path": path, "topath": toPath]
         let _: PCloudBasicResponse = try await request("copyfile", params: params)
     }
 
-    func copyFolder(path: String, toPath: String) async throws {
+    public func copyFolder(path: String, toPath: String) async throws {
         let params = ["path": path, "topath": toPath]
         let _: PCloudBasicResponse = try await request("copyfolder", params: params)
     }
 
     // MARK: - File Operations
 
-    func stat(path: String) async throws -> CloudFileItem {
+    public func stat(path: String) async throws -> CloudFileItem {
         let params = [
             "path": path,
             "timeformat": "timestamp",
@@ -111,7 +110,7 @@ actor PCloudAPIClient {
         return response.metadata.toCloudFileItem(parentPath: parentPath)
     }
 
-    func deleteFile(path: String) async throws {
+    public func deleteFile(path: String) async throws {
         // pCloud quirks this handles:
         //   * Error 2055 on the first deletes after a bulk upload — the
         //     file's metadata is briefly locked while pCloud processes the
@@ -148,7 +147,7 @@ actor PCloudAPIClient {
         }
     }
 
-    func getFileLink(path: String) async throws -> URL {
+    public func getFileLink(path: String) async throws -> URL {
         let params = ["path": path]
         let response: PCloudFileLinkResponse = try await request("getfilelink", params: params)
         guard let host = response.hosts?.first, let filePath = response.path else {
@@ -160,11 +159,11 @@ actor PCloudAPIClient {
         return url
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let downloadURL = try await getFileLink(path: remotePath)
         let request = URLRequest(url: downloadURL)
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
@@ -176,11 +175,11 @@ actor PCloudAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
         try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         var urlString = "\(baseURL)/uploadfile?auth=\(credentials.accessToken)&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
 
         if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
@@ -220,7 +219,7 @@ actor PCloudAPIClient {
 
     /// Updates a file's mtime via pCloud's `setfilemtime` endpoint so
     /// cross-source copies preserve the original "Date Modified".
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         let encoded = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
         let params: [String: String] = [
             "path": encoded,
@@ -231,7 +230,7 @@ actor PCloudAPIClient {
 
     // MARK: - User Info
 
-    func userInfo() async throws -> PCloudUserInfo {
+    public func userInfo() async throws -> PCloudUserInfo {
         let response: PCloudUserInfoResponse = try await request("userinfo", params: [:])
         return PCloudUserInfo(
             email: response.email ?? "",
@@ -342,7 +341,7 @@ struct PCloudItemMetadata: Decodable {
         return PCloudFolderMetadata(name: name, folderid: folderid, contents: contents)
     }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" {
             itemPath = "/\(name)"
@@ -369,9 +368,16 @@ struct PCloudItemMetadata: Decodable {
     }
 }
 
-struct PCloudUserInfo: Sendable {
-    let email: String
-    let userId: UInt64
-    let quota: Int64
-    let usedQuota: Int64
+public struct PCloudUserInfo: Sendable {
+    public let email: String
+    public let userId: UInt64
+    public let quota: Int64
+    public let usedQuota: Int64
+
+    public init(email: String, userId: UInt64, quota: Int64, usedQuota: Int64) {
+        self.email = email
+        self.userId = userId
+        self.quota = quota
+        self.usedQuota = usedQuota
+    }
 }

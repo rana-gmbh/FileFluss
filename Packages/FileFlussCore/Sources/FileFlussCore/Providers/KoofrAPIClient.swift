@@ -1,23 +1,22 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let koofrLog = Logger(subsystem: "com.rana.FileFluss", category: "koofr")
 
-struct KoofrCredentials: Codable, Sendable {
+public struct KoofrCredentials: Codable, Sendable {
     let email: String
     let appPassword: String
     let primaryMountId: String
     let displayName: String
 }
 
-actor KoofrAPIClient {
+public actor KoofrAPIClient {
     let credentials: KoofrCredentials
     private let session: URLSession
     private let baseURL = "https://app.koofr.net/api/v2"
     private let contentURL = "https://app.koofr.net/content/api/v2"
 
-    init(credentials: KoofrCredentials) {
+    public init(credentials: KoofrCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -35,7 +34,7 @@ actor KoofrAPIClient {
 
     // MARK: - Authentication & User Info
 
-    static func authenticate(email: String, appPassword: String) async throws -> KoofrCredentials {
+    public static func authenticate(email: String, appPassword: String) async throws -> KoofrCredentials {
         let baseURL = "https://app.koofr.net/api/v2"
         let cred = "\(email):\(appPassword)"
         let encoded = Data(cred.utf8).base64EncodedString()
@@ -92,13 +91,13 @@ actor KoofrAPIClient {
         )
     }
 
-    func userDisplayName() -> String {
+    public func userDisplayName() -> String {
         credentials.displayName
     }
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         let response: KoofrFilesResponse = try await request(
             .get,
@@ -108,11 +107,11 @@ actor KoofrAPIClient {
         return response.files.map { $0.toCloudFileItem(parentPath: path) }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
         let urlString = "\(contentURL)/mounts/\(mountId)/files/get?path=\(encodedPath)"
         guard let url = URL(string: urlString) else {
@@ -131,11 +130,11 @@ actor KoofrAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
         try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath
         let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName
         var urlString = "\(contentURL)/mounts/\(mountId)/files/put?path=\(encodedPath)&filename=\(encodedName)&autorename=false&overwrite=true"
@@ -173,12 +172,12 @@ actor KoofrAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         try await requestVoid(.delete, path: "/mounts/\(mountId)/files/remove", queryString: "path=\(encodedPath)")
     }
 
-    func createFolder(parentPath: String, name: String) async throws {
+    public func createFolder(parentPath: String, name: String) async throws {
         let fullPath = parentPath == "/" ? "/\(name)" : "\(parentPath)/\(name)"
         if (try? await getFileInfo(at: fullPath)) != nil { return }
 
@@ -192,7 +191,7 @@ actor KoofrAPIClient {
         )
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         struct RenameBody: Encodable { let name: String }
         try await requestVoidWithBody(
@@ -203,7 +202,7 @@ actor KoofrAPIClient {
         )
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         let info: KoofrFileInfo = try await request(
             .get,
@@ -214,7 +213,7 @@ actor KoofrAPIClient {
         return info.toCloudFileItem(parentPath: parentPath)
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -370,7 +369,7 @@ struct KoofrFileInfo: Decodable {
 
     var isDirectory: Bool { type == "dir" }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" {
             itemPath = "/\(name)"

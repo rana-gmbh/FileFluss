@@ -1,13 +1,12 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let kDriveLog = Logger(subsystem: "com.rana.FileFluss", category: "kDrive")
 
-final class KDriveProvider: CloudProvider, @unchecked Sendable {
-    let providerType: CloudProviderType = .kDrive
+public final class KDriveProvider: CloudProvider, @unchecked Sendable {
+    public let providerType: CloudProviderType = .kDrive
 
-    static func log(_ msg: String) {
+    public static func log(_ msg: String) {
         kDriveLog.info("\(msg)")
         #if DEBUG
         // Plain-text mirror in the temp dir helps debug kDrive-specific
@@ -31,16 +30,16 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
     private var apiClient: KDriveAPIClient?
     private let keychainKey: String
 
-    var isAuthenticated: Bool {
+    public var isAuthenticated: Bool {
         get async { apiClient != nil }
     }
 
-    init(accountId: UUID = UUID()) {
+    public init(accountId: UUID = UUID()) {
         self.keychainKey = "kdrive.\(accountId.uuidString)"
         restoreCredentials()
     }
 
-    init(credentials: KDriveCredentials) {
+    public init(credentials: KDriveCredentials) {
         self.keychainKey = "kdrive.\(credentials.driveId)"
         self.apiClient = KDriveAPIClient(credentials: credentials)
     }
@@ -49,9 +48,13 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
 
     /// Result of pre-auth discovery: the drives the user has access to plus
     /// the display name we'll embed in the persisted account label.
-    struct Discovery: Sendable {
-        let userDisplayName: String
-        let drives: [KDriveDriveListItem]
+    public struct Discovery: Sendable {
+        public let userDisplayName: String
+        public let drives: [KDriveDriveListItem]
+        public init(userDisplayName: String, drives: [KDriveDriveListItem]) {
+            self.userDisplayName = userDisplayName
+            self.drives = drives
+        }
     }
 
     /// Probe the API token without creating an account. Used by the add-
@@ -59,7 +62,7 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
     /// has more than one drive (e.g. personal + "Common Documents"). Each
     /// kDrive workspace is a separate drive in Infomaniak's model and must
     /// be addressed by its own `driveId` for uploads/creates.
-    static func discoverDrives(apiToken: String) async throws -> Discovery {
+    public static func discoverDrives(apiToken: String) async throws -> Discovery {
         let probe = KDriveProvider()
         let profile = try await probe.fetchProfile(token: apiToken)
         let drives = try await probe.fetchDrives(token: apiToken, accountId: profile.accountId)
@@ -69,7 +72,7 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
 
     /// `driveId == nil` keeps the original behaviour (use the first drive the
     /// API returns). Pass a specific id to add a non-default workspace.
-    func authenticate(apiToken: String, driveId: Int? = nil) async throws {
+    public func authenticate(apiToken: String, driveId: Int? = nil) async throws {
         // Get user profile to find account ID
         let profile = try await fetchProfile(token: apiToken)
         KDriveProvider.log("[kDrive] Profile: \(profile.email), accountId=\(profile.accountId)")
@@ -108,23 +111,23 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         try KeychainService.save(key: keychainKey, value: credentials)
     }
 
-    func authenticate() async throws {
+    public func authenticate() async throws {
         throw CloudProviderError.notAuthenticated
     }
 
-    func disconnect() async throws {
+    public func disconnect() async throws {
         apiClient = nil
         try KeychainService.delete(key: keychainKey)
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.userInfo()
     }
 
     // MARK: - File Operations
 
-    func listDirectory(at path: String) async throws -> [CloudFileItem] {
+    public func listDirectory(at path: String) async throws -> [CloudFileItem] {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let items = try await client.listFolder(path: path)
         // Cache all returned items' paths
@@ -137,20 +140,20 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         return items
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.downloadFile(remotePath: remotePath, to: localURL, onBytes: onBytes)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let folderPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
@@ -158,17 +161,17 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         try await client.uploadFile(from: localURL, toFolderId: folderId, fileName: fileName, onBytes: onBytes)
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.deleteFile(path: path)
     }
 
-    func createDirectory(at path: String) async throws {
+    public func createDirectory(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.createFolder(path: path)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.renameFile(path: path, to: newName)
     }
@@ -180,7 +183,7 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
     // download+upload path. The API client retains the method implementations
     // so the fix is a one-liner once the correct endpoint is confirmed.
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let fileId = try await client.resolvePathToId(path)
         let metadata = try await client.stat(fileId: fileId)
@@ -188,7 +191,7 @@ final class KDriveProvider: CloudProvider, @unchecked Sendable {
         return metadata.toCloudFileItem(parentPath: parentPath)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.folderSize(path: path)
     }

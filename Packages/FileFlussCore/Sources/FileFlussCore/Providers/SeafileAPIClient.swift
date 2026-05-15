@@ -1,5 +1,4 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let seafileLog = Logger(subsystem: "com.rana.FileFluss", category: "seafile")
@@ -9,10 +8,10 @@ private let seafileLog = Logger(subsystem: "com.rana.FileFluss", category: "seaf
 /// fixed clock — it's only invalidated by the server admin or a password
 /// change). The username is stored alongside purely so we can render a
 /// helpful display name; only `token` matters for API calls.
-struct SeafileCredentials: Codable, Sendable {
-    let serverURL: String
-    let username: String
-    let token: String
+public struct SeafileCredentials: Codable, Sendable {
+    public let serverURL: String
+    public let username: String
+    public let token: String
     /// When true, the URLSession used to talk to this server is configured
     /// with a trust delegate that accepts any certificate the server
     /// presents (limited to that exact host). Required for self-hosted
@@ -25,14 +24,14 @@ struct SeafileCredentials: Codable, Sendable {
         case serverURL, username, token, allowSelfSignedCertificate
     }
 
-    init(serverURL: String, username: String, token: String, allowSelfSignedCertificate: Bool = false) {
+    public init(serverURL: String, username: String, token: String, allowSelfSignedCertificate: Bool = false) {
         self.serverURL = serverURL
         self.username = username
         self.token = token
         self.allowSelfSignedCertificate = allowSelfSignedCertificate
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         serverURL = try c.decode(String.self, forKey: .serverURL)
         username = try c.decode(String.self, forKey: .username)
@@ -61,7 +60,7 @@ private struct SeafileDirEntry: Decodable, Sendable {
     let modifier_email: String?
 }
 
-actor SeafileAPIClient {
+public actor SeafileAPIClient {
     private(set) var credentials: SeafileCredentials
     private let session: URLSession
 
@@ -71,7 +70,7 @@ actor SeafileAPIClient {
     private var libraryIdByName: [String: String] = [:]
     private var lastLibraryListAt: Date = .distantPast
 
-    init(credentials: SeafileCredentials) {
+    public init(credentials: SeafileCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -124,7 +123,7 @@ actor SeafileAPIClient {
     /// Exchange username + password (+ optional 2FA token) for a long-lived
     /// auth token via `POST /api2/auth-token/`. Returns the token together
     /// with the trimmed server URL — never the password.
-    static func obtainToken(
+    public static func obtainToken(
         serverURL: String,
         username: String,
         password: String,
@@ -195,7 +194,7 @@ actor SeafileAPIClient {
     /// Verify the stored token still works by hitting `/api2/server-info/`
     /// (a lightweight read-only endpoint that requires auth). The cloud
     /// panel's "Sign In Again" flow runs this before listing.
-    func verifyToken() async throws {
+    public func verifyToken() async throws {
         var request = try authenticatedRequest(path: "/api2/server-info/")
         request.httpMethod = "GET"
         let (_, response) = try await session.data(for: request)
@@ -204,7 +203,7 @@ actor SeafileAPIClient {
         }
     }
 
-    func userDisplayName() async -> String {
+    public func userDisplayName() async -> String {
         credentials.username
     }
 
@@ -322,7 +321,7 @@ actor SeafileAPIClient {
 
     // MARK: - Directory listing
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         if let resolved = try await resolveLibrary(forPath: path) {
             return try await listLibraryPath(repoId: resolved.repoId, innerPath: resolved.innerPath, parentPath: path)
         }
@@ -371,7 +370,7 @@ actor SeafileAPIClient {
 
     // MARK: - File operations
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         guard let resolved = try await resolveLibrary(forPath: remotePath) else {
             throw CloudProviderError.notFound(remotePath)
         }
@@ -403,7 +402,7 @@ actor SeafileAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let resolved = try await resolveLibrary(forPath: remotePath) else {
             throw CloudProviderError.commandFailed("Cannot upload directly to the Seafile library root — pick a library first.")
         }
@@ -465,7 +464,7 @@ actor SeafileAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         guard let resolved = try await resolveLibrary(forPath: path) else {
             // Deleting a whole library is destructive enough that we leave
             // it to the Seafile web UI rather than expose it accidentally
@@ -486,7 +485,7 @@ actor SeafileAPIClient {
         }
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         guard let resolved = try await resolveLibrary(forPath: path) else {
             throw CloudProviderError.commandFailed("Create a library in the Seafile web UI before adding folders.")
         }
@@ -502,7 +501,7 @@ actor SeafileAPIClient {
         }
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         guard let resolved = try await resolveLibrary(forPath: path), !resolved.innerPath.isEmpty, resolved.innerPath != "/" else {
             throw CloudProviderError.commandFailed("Rename a Seafile library from its web UI.")
         }
@@ -526,7 +525,7 @@ actor SeafileAPIClient {
         }
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let resolved = try await resolveLibrary(forPath: path) else {
             throw CloudProviderError.commandFailed("Library root has no file metadata.")
         }
@@ -565,7 +564,7 @@ actor SeafileAPIClient {
         throw CloudProviderError.notFound(path)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         let entries = try await listFolder(path: path)
         var total: Int64 = 0
         for entry in entries {

@@ -1,10 +1,9 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let webDAVLog = Logger(subsystem: "com.rana.FileFluss", category: "webDAV")
 
-struct WebDAVCredentials: Codable, Sendable {
+public struct WebDAVCredentials: Codable, Sendable {
     let serverURL: String
     let username: String
     let password: String
@@ -14,7 +13,7 @@ struct WebDAVCredentials: Codable, Sendable {
 /// URLSession delegate that preserves the Authorization header on same-host redirects.
 /// WebDAV servers often redirect (e.g. /path → /path/) and URLSession strips auth headers by default.
 private final class WebDAVSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+    public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
         if let originalHost = task.originalRequest?.url?.host,
            let redirectHost = request.url?.host,
@@ -26,13 +25,13 @@ private final class WebDAVSessionDelegate: NSObject, URLSessionTaskDelegate, @un
     }
 }
 
-actor WebDAVAPIClient {
+public actor WebDAVAPIClient {
     let credentials: WebDAVCredentials
     private let session: URLSession
     private let sessionDelegate = WebDAVSessionDelegate()
     let davBaseURL: String
 
-    init(credentials: WebDAVCredentials) {
+    public init(credentials: WebDAVCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -52,7 +51,7 @@ actor WebDAVAPIClient {
 
     // MARK: - Authentication
 
-    static func authenticate(serverURL: String, username: String, password: String) async throws -> WebDAVCredentials {
+    public static func authenticate(serverURL: String, username: String, password: String) async throws -> WebDAVCredentials {
         var base = serverURL
         if base.hasSuffix("/") { base = String(base.dropLast()) }
 
@@ -127,13 +126,13 @@ actor WebDAVAPIClient {
         )
     }
 
-    func userDisplayName() -> String {
+    public func userDisplayName() -> String {
         credentials.displayName
     }
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -161,11 +160,11 @@ actor WebDAVAPIClient {
         return items.dropFirst().map { $0 }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -184,11 +183,11 @@ actor WebDAVAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -224,7 +223,7 @@ actor WebDAVAPIClient {
     /// if the server rejects the request — many WebDAV implementations
     /// don't permit setting `getlastmodified` (it's read-only in RFC 4918),
     /// but Nextcloud/ownCloud and a few others honor it as an extension.
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -257,7 +256,7 @@ actor WebDAVAPIClient {
         return f
     }()
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -276,7 +275,7 @@ actor WebDAVAPIClient {
         }
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         let davPath = buildDAVPath(path)
 
         // Try MKCOL with and without trailing slash — some servers require one or the other
@@ -305,17 +304,17 @@ actor WebDAVAPIClient {
         // If both variants returned 405, the folder likely already exists
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let parentPath = (path as NSString).deletingLastPathComponent
         let destinationPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
         try await moveItem(at: path, toPath: destinationPath)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         try await davMoveOrCopy(method: "MOVE", from: path, toPath: newPath)
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         try await davMoveOrCopy(method: "COPY", from: path, toPath: newPath)
     }
 
@@ -342,7 +341,7 @@ actor WebDAVAPIClient {
         }
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -368,7 +367,7 @@ actor WebDAVAPIClient {
         return item
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -387,7 +386,7 @@ actor WebDAVAPIClient {
 
     // MARK: - Search (client-side filtering via recursive PROPFIND)
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let searchPath = path ?? "/"
         let allItems = try await listAllRecursively(path: searchPath)
         let lowered = query.lowercased()

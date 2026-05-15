@@ -13,7 +13,9 @@
 //   6. Provider implementations — in batches by AppKit dependency.
 //      First wave (no AppKit): pCloud, kDrive, Koofr, Mega, Filen, GMX,
 //      Seafile, SFTP, WebDAV, WordPress, S3, S3Compatible, Synology C2,
-//      Synology Drive, iCloud, plus the NextCloud appPassword path.
+//      Synology Drive, iCloud  ✅ landed (6a iCloud, 6b the rest, plus the
+//      S3 XML parsers and the WebDAV PROPFIND parser pulled out of
+//      NextCloudAPIClient since WebDAV consumes it).
 //      Second wave (needs a platform shim for NSWorkspace.shared.open):
 //      Box, Dropbox, Google Drive, OneDrive, NextCloud browser-OAuth.
 //   7. SearchIndex, SyncEngine, CacheManager — pure-Swift services with no AppKit.

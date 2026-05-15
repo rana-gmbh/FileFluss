@@ -1,11 +1,10 @@
 import Foundation
-import FileFlussCore
 import CryptoKit
 import os
 
 private let s3Log = Logger(subsystem: "com.rana.FileFluss", category: "s3")
 
-struct S3Credentials: Codable, Sendable {
+public struct S3Credentials: Codable, Sendable {
     let accessKeyId: String
     let secretAccessKey: String
     let region: String
@@ -15,7 +14,7 @@ struct S3Credentials: Codable, Sendable {
     /// `eu-001.s3.synologyc2.net`). When nil the client uses AWS S3 defaults.
     let endpointHost: String?
 
-    init(
+    public init(
         accessKeyId: String,
         secretAccessKey: String,
         region: String,
@@ -29,7 +28,7 @@ struct S3Credentials: Codable, Sendable {
         self.endpointHost = endpointHost
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         accessKeyId = try c.decode(String.self, forKey: .accessKeyId)
         secretAccessKey = try c.decode(String.self, forKey: .secretAccessKey)
@@ -50,8 +49,8 @@ private enum S3InternalError: Error {
 /// Suppresses URLSession's built-in redirect handling so SigV4 errors
 /// surface cleanly — we want to handle 301/307 ourselves so we can
 /// re-sign for the correct region.
-final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    func urlSession(_ session: URLSession,
+public final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    public func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,
@@ -60,14 +59,14 @@ final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sen
     }
 }
 
-actor S3APIClient {
+public actor S3APIClient {
     let credentials: S3Credentials
     private let session: URLSession
     /// Cache of bucket → region discovered via 301 redirects. Avoids a
     /// round-trip cost on every subsequent request for the same bucket.
     private var bucketRegions: [String: String] = [:]
 
-    init(credentials: S3Credentials) {
+    public init(credentials: S3Credentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
@@ -115,7 +114,7 @@ actor S3APIClient {
     /// Validates the credentials by issuing a minimal `ListBuckets` request
     /// (`GET /`). On success, returns a `S3Credentials` with a sensible
     /// display name so the account label can show the access-key id.
-    static func authenticate(accessKeyId: String, secretAccessKey: String, region: String) async throws -> S3Credentials {
+    public static func authenticate(accessKeyId: String, secretAccessKey: String, region: String) async throws -> S3Credentials {
         let displayName = "AWS S3 (\(maskedAccessKey(accessKeyId)))"
         let creds = S3Credentials(
             accessKeyId: accessKeyId,
@@ -129,7 +128,7 @@ actor S3APIClient {
         return creds
     }
 
-    func userDisplayName() -> String { credentials.displayName }
+    public func userDisplayName() -> String { credentials.displayName }
 
     // MARK: - Public listing API
 
@@ -137,7 +136,7 @@ actor S3APIClient {
     ///   - "/"         → buckets as folders.
     ///   - "/bucket"   → top-level entries inside `bucket`.
     ///   - "/bucket/sub" → entries inside `sub/` within `bucket`.
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let cleaned = path.hasPrefix("/") ? String(path.dropFirst()) : path
         if cleaned.isEmpty {
             return try await listBuckets()
@@ -154,7 +153,7 @@ actor S3APIClient {
         return try await listObjects(bucket: bucket, prefix: prefix, basePath: "/" + bucket + "/")
     }
 
-    func listBuckets() async throws -> [CloudFileItem] {
+    public func listBuckets() async throws -> [CloudFileItem] {
         let host = topLevelHost(region: credentials.region)
         guard !host.isEmpty, let url = URL(string: "https://\(host)/") else {
             throw CloudProviderError.commandFailed("S3 endpoint URL is invalid (host: \"\(host)\"). Double-check the Endpoint URL field.")
@@ -183,7 +182,7 @@ actor S3APIClient {
     /// Single page of `ListObjectsV2` results turned into folder rows
     /// (CommonPrefixes) plus file rows (Contents). `basePath` is prepended
     /// to every emitted item path so the caller doesn't have to.
-    func listObjects(bucket: String, prefix: String, basePath: String) async throws -> [CloudFileItem] {
+    public func listObjects(bucket: String, prefix: String, basePath: String) async throws -> [CloudFileItem] {
         try await withResolvedRegion(bucket: bucket) {
             try await listObjectsRaw(bucket: bucket, prefix: prefix, basePath: basePath)
         }
@@ -256,7 +255,7 @@ actor S3APIClient {
 
     // MARK: - File operations
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let (bucket, key) = try splitPath(remotePath)
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
@@ -277,7 +276,7 @@ actor S3APIClient {
         }
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let (bucket, key) = try splitPath(remotePath)
         try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
@@ -305,7 +304,7 @@ actor S3APIClient {
         }
     }
 
-    func deleteItem(at remotePath: String) async throws {
+    public func deleteItem(at remotePath: String) async throws {
         let (bucket, key) = try splitPath(remotePath)
         // Folders in S3 are prefixes — to "delete" a folder we delete every
         // object underneath it.
@@ -381,7 +380,7 @@ actor S3APIClient {
         } while continuationToken != nil
     }
 
-    func createFolder(at remotePath: String) async throws {
+    public func createFolder(at remotePath: String) async throws {
         // S3 folders are virtual — create a zero-byte object whose key
         // ends in "/" so subsequent listings show the empty prefix.
         let (bucket, key) = try splitPath(remotePath)
@@ -402,7 +401,7 @@ actor S3APIClient {
         }
     }
 
-    func renameItem(at remotePath: String, to newName: String) async throws {
+    public func renameItem(at remotePath: String, to newName: String) async throws {
         let (bucket, key) = try splitPath(remotePath)
         let parent = (key as NSString).deletingLastPathComponent
         let newKey = parent.isEmpty ? newName : parent + "/" + newName
@@ -410,14 +409,14 @@ actor S3APIClient {
         try await deleteObject(bucket: bucket, key: key)
     }
 
-    func moveItem(at remotePath: String, toPath newPath: String) async throws {
+    public func moveItem(at remotePath: String, toPath newPath: String) async throws {
         let (sb, sk) = try splitPath(remotePath)
         let (db, dk) = try splitPath(newPath)
         try await copyObject(sourceBucket: sb, sourceKey: sk, destBucket: db, destKey: dk)
         try await deleteObject(bucket: sb, key: sk)
     }
 
-    func copyItem(at remotePath: String, toPath newPath: String) async throws {
+    public func copyItem(at remotePath: String, toPath newPath: String) async throws {
         let (sb, sk) = try splitPath(remotePath)
         let (db, dk) = try splitPath(newPath)
         try await copyObject(sourceBucket: sb, sourceKey: sk, destBucket: db, destKey: dk)
@@ -443,7 +442,7 @@ actor S3APIClient {
         }
     }
 
-    func getFileInfo(at remotePath: String) async throws -> CloudFileItem {
+    public func getFileInfo(at remotePath: String) async throws -> CloudFileItem {
         let (bucket, key) = try splitPath(remotePath)
         return try await withResolvedRegion(bucket: bucket) {
             let region = regionFor(bucket: bucket)
@@ -477,7 +476,7 @@ actor S3APIClient {
         }
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         let cleaned = path.hasPrefix("/") ? String(path.dropFirst()) : path
         if cleaned.isEmpty {
             // Sum across every bucket — too expensive; return 0.

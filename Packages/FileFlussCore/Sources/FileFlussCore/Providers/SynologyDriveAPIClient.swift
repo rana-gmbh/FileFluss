@@ -1,10 +1,9 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let synologyLog = Logger(subsystem: "com.rana.FileFluss", category: "synologyDrive")
 
-struct SynologyDriveCredentials: Codable, Sendable {
+public struct SynologyDriveCredentials: Codable, Sendable {
     let serverURL: String
     let username: String
     let password: String
@@ -16,14 +15,14 @@ struct SynologyDriveCredentials: Codable, Sendable {
 /// running on the user's NAS. The same API every other third-party tool
 /// (rclone, Mountain Duck, the official Drive client) uses — works for
 /// any Synology NAS reachable on the network or via QuickConnect.
-actor SynologyDriveAPIClient {
+public actor SynologyDriveAPIClient {
     let credentials: SynologyDriveCredentials
     private let session: URLSession
     /// Session ID returned by `SYNO.API.Auth` on login. Re-login when nil
     /// or after the server reports it has expired.
     private var sid: String?
 
-    init(credentials: SynologyDriveCredentials) {
+    public init(credentials: SynologyDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
@@ -39,13 +38,13 @@ actor SynologyDriveAPIClient {
         }
     }
 
-    func userDisplayName() -> String { credentials.displayName }
+    public func userDisplayName() -> String { credentials.displayName }
 
     // MARK: - Authentication
 
     /// Validates credentials by logging in. Stores the SID for use by
     /// subsequent calls. `otp` is required when the account has 2FA on.
-    static func authenticate(
+    public static func authenticate(
         serverURL: String,
         username: String,
         password: String,
@@ -100,7 +99,7 @@ actor SynologyDriveAPIClient {
 
     // MARK: - Listing
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let cleaned = path.isEmpty ? "/" : path
         if cleaned == "/" {
             return try await listShares()
@@ -156,7 +155,7 @@ actor SynologyDriveAPIClient {
 
     // MARK: - File operations
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let sid = try await ensureSession()
         let url = try buildURL(
             path: "/webapi/entry.cgi",
@@ -178,7 +177,7 @@ actor SynologyDriveAPIClient {
         try FileManager.default.moveItem(at: tmp, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let sid = try await ensureSession()
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
@@ -243,7 +242,7 @@ actor SynologyDriveAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         // Synchronous mode (`recursive=true`) handles directories + their
         // contents in one call without needing to poll a task id.
         let _: SynologyEmptyData = try await call(
@@ -257,7 +256,7 @@ actor SynologyDriveAPIClient {
         )
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         let parent = (path as NSString).deletingLastPathComponent
         let name = (path as NSString).lastPathComponent
         let _: SynologyCreateFolderData = try await call(
@@ -272,7 +271,7 @@ actor SynologyDriveAPIClient {
         )
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let _: SynologyEmptyData = try await call(
             api: "SYNO.FileStation.Rename",
             version: "2",
@@ -285,7 +284,7 @@ actor SynologyDriveAPIClient {
     }
 
     /// Server-side move/copy. `removeSrc=true` for move, `false` for copy.
-    func copyMove(path: String, toFolderPath destFolder: String, removeSrc: Bool) async throws {
+    public func copyMove(path: String, toFolderPath destFolder: String, removeSrc: Bool) async throws {
         // Polling-based async API; we issue start, then poll status until
         // finished. Most ops complete in a single status call.
         let start: SynologyTaskStartData = try await call(
@@ -314,7 +313,7 @@ actor SynologyDriveAPIClient {
         }
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let result: SynologyGetInfoData = try await call(
             api: "SYNO.FileStation.List",
             version: "2",
@@ -336,7 +335,7 @@ actor SynologyDriveAPIClient {
         )
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         // Recursive enumeration. NAS shares can be huge; cap at first
         // 5000 items so we don't hammer the device for hours on a giant
         // share — the user can get an exact size from DSM directly.
@@ -359,7 +358,7 @@ actor SynologyDriveAPIClient {
         return total
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         // Fire a search task on the chosen folder (or root) and poll until
         // it finishes, then fetch the result list.
         let folderPath = path ?? "/"
@@ -546,11 +545,11 @@ actor SynologyDriveAPIClient {
 /// Trusts the certificate presented by the configured Synology host even
 /// when it doesn't chain to a system-trusted CA. Used only when the user
 /// opts in via the "Allow self-signed certificate" checkbox.
-final class SynologyTrustingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
+public final class SynologyTrustingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
     let host: String
-    init(host: String) { self.host = host }
+    public init(host: String) { self.host = host }
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
@@ -568,7 +567,7 @@ final class SynologyTrustingDelegate: NSObject, URLSessionDelegate, URLSessionTa
     // The download/upload delegate methods are inherited via NSObject; this
     // class just acts as the SSL trust evaluator and stays out of the way
     // for everything else.
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 }
 
 // MARK: - JSON envelope models

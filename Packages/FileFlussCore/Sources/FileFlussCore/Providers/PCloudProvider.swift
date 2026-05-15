@@ -1,36 +1,35 @@
 import Foundation
-import FileFlussCore
 import CryptoKit
 
-final class PCloudProvider: CloudProvider, @unchecked Sendable {
-    let providerType: CloudProviderType = .pCloud
+public final class PCloudProvider: CloudProvider, @unchecked Sendable {
+    public let providerType: CloudProviderType = .pCloud
 
     private var apiClient: PCloudAPIClient?
     private let keychainKey: String
 
-    var isAuthenticated: Bool {
+    public var isAuthenticated: Bool {
         get async { apiClient != nil }
     }
 
-    init(accountId: UUID = UUID()) {
+    public init(accountId: UUID = UUID()) {
         self.keychainKey = "pcloud.\(accountId.uuidString)"
         restoreCredentials()
     }
 
-    init(credentials: PCloudCredentials) {
+    public init(credentials: PCloudCredentials) {
         self.keychainKey = "pcloud.\(credentials.userId)"
         self.apiClient = PCloudAPIClient(credentials: credentials)
     }
 
     // MARK: - Authentication
 
-    func authenticate(email: String, password: String) async throws {
+    public func authenticate(email: String, password: String) async throws {
         let credentials = try await loginWithPassword(email: email, password: password)
         self.apiClient = PCloudAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
     }
 
-    func authenticate(accessToken: String) async throws {
+    public func authenticate(accessToken: String) async throws {
         let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else { throw CloudProviderError.unauthorized }
         let credentials = try await validateToken(token)
@@ -38,16 +37,16 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         try KeychainService.save(key: keychainKey, value: credentials)
     }
 
-    func authenticate() async throws {
+    public func authenticate() async throws {
         throw CloudProviderError.notAuthenticated
     }
 
-    func disconnect() async throws {
+    public func disconnect() async throws {
         apiClient = nil
         try KeychainService.delete(key: keychainKey)
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let info = try await client.userInfo()
         return info.email
@@ -55,32 +54,32 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - File Operations
 
-    func listDirectory(at path: String) async throws -> [CloudFileItem] {
+    public func listDirectory(at path: String) async throws -> [CloudFileItem] {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.listFolder(path: path)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.downloadFile(remotePath: remotePath, to: localURL, onBytes: onBytes)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let folderPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
         try await client.uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: onBytes)
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         do {
             try await client.deleteFile(path: path)
@@ -89,12 +88,12 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func createDirectory(at path: String) async throws {
+    public func createDirectory(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.createFolder(path: path)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let metadata = try await client.stat(path: path)
         if metadata.isDirectory {
@@ -104,7 +103,7 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let metadata = try await client.stat(path: path)
         if metadata.isDirectory {
@@ -114,12 +113,12 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.setModificationDate(at: remotePath, to: date)
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let metadata = try await client.stat(path: path)
         if metadata.isDirectory {
@@ -129,12 +128,12 @@ final class PCloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.stat(path: path)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.folderSize(path: path)
     }
