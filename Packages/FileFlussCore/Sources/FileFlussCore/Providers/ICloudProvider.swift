@@ -1,5 +1,4 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let iCloudLog = Logger(subsystem: "com.rana.FileFluss", category: "iCloud")
@@ -11,14 +10,14 @@ private let iCloudLog = Logger(subsystem: "com.rana.FileFluss", category: "iClou
 /// upload, conflict resolution, and eviction. The only iCloud-specific
 /// work is materialising evicted files on demand via
 /// `FileManager.startDownloadingUbiquitousItem(at:)` before reading.
-final class ICloudProvider: CloudProvider, @unchecked Sendable {
-    let providerType: CloudProviderType = .iCloud
+public final class ICloudProvider: CloudProvider, @unchecked Sendable {
+    public let providerType: CloudProviderType = .iCloud
 
     /// Root of iCloud Drive's user-visible files. We don't use
     /// `FileManager.url(forUbiquityContainerIdentifier:)` because that
     /// requires the iCloud entitlement — and we only need the public
     /// CloudDocs path, which any app with file access can read.
-    static let rootURL: URL = FileManager.default
+    public static let rootURL: URL = FileManager.default
         .homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
 
@@ -34,18 +33,18 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
     /// shouldn't pin a transfer indefinitely.
     private static let downloadTimeout: TimeInterval = 60 * 30
 
-    init() {}
+    public init() {}
 
     // MARK: - Authentication
 
-    var isAuthenticated: Bool {
+    public var isAuthenticated: Bool {
         get async {
             FileManager.default.ubiquityIdentityToken != nil
                 && FileManager.default.fileExists(atPath: Self.rootURL.path)
         }
     }
 
-    func authenticate() async throws {
+    public func authenticate() async throws {
         guard FileManager.default.ubiquityIdentityToken != nil else {
             throw CloudProviderError.commandFailed(
                 "You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on."
@@ -59,9 +58,9 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         iCloudLog.info("[iCloud] Authenticated, root=\(Self.rootURL.path)")
     }
 
-    func disconnect() async throws {}
+    public func disconnect() async throws {}
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         // No reliable public API to read the iCloud account name without
         // entitlements. The display name on the account row is set by
         // SyncViewModel using a fixed "iCloud Drive" label.
@@ -70,7 +69,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Listing
 
-    func listDirectory(at path: String) async throws -> [CloudFileItem] {
+    public func listDirectory(at path: String) async throws -> [CloudFileItem] {
         let dir = url(forRemotePath: path)
         guard FileManager.default.fileExists(atPath: dir.path) else {
             throw CloudProviderError.notFound(path)
@@ -100,7 +99,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         return items
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let fileURL = url(forRemotePath: path)
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw CloudProviderError.notFound(path)
@@ -108,7 +107,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         return makeItem(at: fileURL, remotePath: path, displayName: fileURL.lastPathComponent)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         let dir = url(forRemotePath: path)
         guard let enumerator = FileManager.default.enumerator(
             at: dir,
@@ -128,7 +127,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         return total
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         // Could be implemented with NSMetadataQuery against
         // NSMetadataQueryUbiquitousDocumentsScope. Out of scope for v1.
         return nil
@@ -136,11 +135,11 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - File operations
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let source = url(forRemotePath: remotePath)
         try await materialise(source)
         try? FileManager.default.removeItem(at: localURL)
@@ -151,11 +150,11 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let dest = url(forRemotePath: remotePath)
         try ensureParentDirectory(for: dest)
         if FileManager.default.fileExists(atPath: dest.path) {
@@ -168,7 +167,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let target = url(forRemotePath: path)
         guard FileManager.default.fileExists(atPath: target.path) else {
             throw CloudProviderError.notFound(path)
@@ -176,32 +175,32 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
         try FileManager.default.removeItem(at: target)
     }
 
-    func createDirectory(at path: String) async throws {
+    public func createDirectory(at path: String) async throws {
         let target = url(forRemotePath: path)
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let source = url(forRemotePath: path)
         let dest = source.deletingLastPathComponent().appendingPathComponent(newName)
         try FileManager.default.moveItem(at: source, to: dest)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         let source = url(forRemotePath: path)
         let dest = url(forRemotePath: newPath)
         try ensureParentDirectory(for: dest)
         try FileManager.default.moveItem(at: source, to: dest)
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         let source = url(forRemotePath: path)
         let dest = url(forRemotePath: newPath)
         try ensureParentDirectory(for: dest)
         try FileManager.default.copyItem(at: source, to: dest)
     }
 
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         let target = url(forRemotePath: remotePath)
         try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: target.path)
     }
@@ -210,7 +209,7 @@ final class ICloudProvider: CloudProvider, @unchecked Sendable {
 
     /// Builds an absolute file URL beneath the CloudDocs root from a
     /// provider-style remote path (`/foo/bar.txt`).
-    func url(forRemotePath remotePath: String) -> URL {
+    public func url(forRemotePath remotePath: String) -> URL {
         var trimmed = remotePath
         while trimmed.hasPrefix("/") { trimmed.removeFirst() }
         if trimmed.isEmpty { return Self.rootURL }
