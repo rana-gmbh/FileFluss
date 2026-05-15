@@ -41,133 +41,51 @@ public actor OneDriveAPIClient {
 
     // MARK: - OAuth2 (Loopback Redirect with PKCE)
 
-    /// Opens the user's browser at the Microsoft sign-in page and waits for
-    /// the authorization code on a one-shot loopback HTTP server. Mirrors
-    /// the Google/Dropbox/Box flow so OneDrive re-auth slots into the same
-    /// path (`SyncViewModel.reauthenticate(accountId:)`).
+    /// URL scheme the iOS host registers in Info.plist so
+    /// ASWebAuthenticationSession's redirect lands back in the app.
+    /// Ignored by the macOS loopback authenticator.
+    public static let oauthCallbackScheme = "filefluss-oauth"
+
     public static func startOAuthFlow() async throws -> OneDriveCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         let expectedState = generateState()
 
-        let (port, authCode) = try await listenForAuthCode(codeChallenge: codeChallenge, expectedState: expectedState)
-        return try await exchangeCodeForTokens(code: authCode, codeVerifier: codeVerifier, redirectPort: port)
-    }
-
-    private static func listenForAuthCode(codeChallenge: String, expectedState: String) async throws -> (UInt16, String) {
-        let listener = try NWListener(using: .tcp, on: .any)
-        let guard_ = OneDriveContinuationGuard<(UInt16, String)>()
-
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(UInt16, String), Error>) in
-            guard_.setContinuation(continuation)
-
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard let port = listener.port?.rawValue else { return }
-
-                    var components = URLComponents(string: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize")!
-                    components.queryItems = [
-                        URLQueryItem(name: "client_id", value: clientId),
-                        URLQueryItem(name: "redirect_uri", value: "http://localhost:\(port)"),
-                        URLQueryItem(name: "response_type", value: "code"),
-                        URLQueryItem(name: "response_mode", value: "query"),
-                        URLQueryItem(name: "scope", value: scopes),
-                        URLQueryItem(name: "code_challenge", value: codeChallenge),
-                        URLQueryItem(name: "code_challenge_method", value: "S256"),
-                        URLQueryItem(name: "prompt", value: "select_account"),
-                        URLQueryItem(name: "state", value: expectedState),
-                    ]
-
-                    if let url = components.url {
-                        DispatchQueue.main.async {
-                            BrowserOpener.open(url)
-                        }
-                    }
-
-                case .failed(let error):
-                    guard_.resume(throwing: CloudProviderError.networkError(error))
-                default:
-                    break
-                }
-            }
-
-            listener.newConnectionHandler = { connection in
-                connection.start(queue: .global())
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
-                    guard let data, let requestString = String(data: data, encoding: .utf8) else {
-                        connection.cancel()
-                        return
-                    }
-
-                    oneDriveLog.debug("[OneDrive] OAuth callback received: \(requestString.prefix(300))")
-
-                    guard let firstLine = requestString.components(separatedBy: "\r\n").first,
-                          let urlPart = firstLine.split(separator: " ").dropFirst().first else {
-                        connection.cancel()
-                        return
-                    }
-
-                    let components = URLComponents(string: "http://localhost\(urlPart)")
-
-                    if let errorParam = components?.queryItems?.first(where: { $0.name == "error" })?.value {
-                        oneDriveLog.error("[OneDrive] OAuth error: \(errorParam)")
-                        let errorHTML = "<!DOCTYPE html><html><body><h2>Authentication failed</h2><p>\(errorParam)</p><p>You can close this window.</p></body></html>"
-                        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(errorHTML.utf8.count)\r\nConnection: close\r\n\r\n\(errorHTML)"
-                        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        listener.cancel()
-                        guard_.resume(throwing: CloudProviderError.unauthorized)
-                        return
-                    }
-
-                    guard let code = components?.queryItems?.first(where: { $0.name == "code" })?.value else {
-                        oneDriveLog.debug("[OneDrive] Ignoring non-auth request: \(String(urlPart).prefix(100))")
-                        let emptyResponse = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                        connection.send(content: emptyResponse.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        return
-                    }
-
-                    // CSRF defence: reject any callback whose `state` doesn't
-                    // match the value we sent in the authorize URL.
-                    let returnedState = components?.queryItems?.first(where: { $0.name == "state" })?.value
-                    if returnedState != expectedState {
-                        oneDriveLog.error("[OneDrive] OAuth state mismatch — rejecting callback")
-                        let errorHTML = "<!DOCTYPE html><html><body><h2>Authentication failed</h2><p>Invalid state parameter. You can close this window.</p></body></html>"
-                        let response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\nContent-Length: \(errorHTML.utf8.count)\r\nConnection: close\r\n\r\n\(errorHTML)"
-                        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        listener.cancel()
-                        guard_.resume(throwing: CloudProviderError.unauthorized)
-                        return
-                    }
-
-                    let successHTML = "<!DOCTYPE html><html><body><h2>Signed in to OneDrive</h2><p>You can close this window and return to FileFluss.</p></body></html>"
-                    let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(successHTML.utf8.count)\r\nConnection: close\r\n\r\n\(successHTML)"
-                    connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                        connection.cancel()
-                    })
-
-                    let port = listener.port?.rawValue ?? 0
-                    listener.cancel()
-                    guard_.resume(returning: (port, code))
-                }
-            }
-
-            listener.start(queue: .global())
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + 300) {
-                listener.cancel()
-                guard_.resume(throwing: CloudProviderError.notAuthenticated)
-            }
+        let result = try await OAuthSession.authenticate(
+            callbackURLScheme: oauthCallbackScheme
+        ) { redirectURI in
+            var components = URLComponents(string: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize")!
+            components.queryItems = [
+                URLQueryItem(name: "client_id", value: clientId),
+                URLQueryItem(name: "redirect_uri", value: redirectURI),
+                URLQueryItem(name: "response_type", value: "code"),
+                URLQueryItem(name: "response_mode", value: "query"),
+                URLQueryItem(name: "scope", value: scopes),
+                URLQueryItem(name: "code_challenge", value: codeChallenge),
+                URLQueryItem(name: "code_challenge_method", value: "S256"),
+                URLQueryItem(name: "prompt", value: "select_account"),
+                URLQueryItem(name: "state", value: expectedState),
+            ]
+            return components.url!
         }
+
+        let callbackParams = URLComponents(url: result.callbackURL, resolvingAgainstBaseURL: false)?.queryItems
+        let returnedState = callbackParams?.first(where: { $0.name == "state" })?.value
+        guard returnedState == expectedState else {
+            oneDriveLog.error("[OneDrive] OAuth state mismatch — rejecting callback")
+            throw CloudProviderError.unauthorized
+        }
+        if let errorParam = callbackParams?.first(where: { $0.name == "error" })?.value {
+            oneDriveLog.error("[OneDrive] OAuth error: \(errorParam)")
+            throw CloudProviderError.unauthorized
+        }
+        guard let code = callbackParams?.first(where: { $0.name == "code" })?.value else {
+            throw CloudProviderError.invalidResponse
+        }
+        return try await exchangeCodeForTokens(code: code, codeVerifier: codeVerifier, redirectURI: result.redirectURI)
     }
 
-    private static func exchangeCodeForTokens(code: String, codeVerifier: String, redirectPort: UInt16) async throws -> OneDriveCredentials {
+    private static func exchangeCodeForTokens(code: String, codeVerifier: String, redirectURI: String) async throws -> OneDriveCredentials {
         let url = URL(string: "https://login.microsoftonline.com/common/oauth2/v2.0/token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -180,7 +98,7 @@ public actor OneDriveAPIClient {
             "client_id=\(encode(clientId))",
             "scope=\(encode(scopes))",
             "code=\(encode(code))",
-            "redirect_uri=\(encode("http://localhost:\(redirectPort)"))",
+            "redirect_uri=\(encode(redirectURI))",
             "grant_type=authorization_code",
             "code_verifier=\(encode(codeVerifier))",
         ].joined(separator: "&")

@@ -41,131 +41,51 @@ public actor DropboxAPIClient {
         self.session = URLSession(configuration: config)
     }
 
-    // MARK: - OAuth2 (PKCE Loopback Redirect)
+    // MARK: - OAuth2 (PKCE)
 
     public static func startOAuthFlow() async throws -> DropboxCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         let expectedState = generateState()
 
-        let (port, authCode) = try await listenForAuthCode(codeVerifier: codeVerifier, codeChallenge: codeChallenge, expectedState: expectedState)
-
-        let credentials = try await exchangeCodeForTokens(code: authCode, codeVerifier: codeVerifier, redirectPort: port)
-        return credentials
-    }
-
-    private static func listenForAuthCode(codeVerifier: String, codeChallenge: String, expectedState: String) async throws -> (UInt16, String) {
-        let listener = try NWListener(using: .tcp, on: .any)
-        let guard_ = ContinuationGuard<(UInt16, String)>()
-
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(UInt16, String), Error>) in
-            guard_.setContinuation(continuation)
-
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard let port = listener.port?.rawValue else { return }
-
-                    var components = URLComponents(string: "https://www.dropbox.com/oauth2/authorize")!
-                    components.queryItems = [
-                        URLQueryItem(name: "client_id", value: appKey),
-                        URLQueryItem(name: "redirect_uri", value: "http://localhost:\(port)"),
-                        URLQueryItem(name: "response_type", value: "code"),
-                        URLQueryItem(name: "code_challenge", value: codeChallenge),
-                        URLQueryItem(name: "code_challenge_method", value: "S256"),
-                        URLQueryItem(name: "token_access_type", value: "offline"),
-                        URLQueryItem(name: "state", value: expectedState),
-                    ]
-
-                    if let url = components.url {
-                        DispatchQueue.main.async {
-                            BrowserOpener.open(url)
-                        }
-                    }
-
-                case .failed(let error):
-                    guard_.resume(throwing: CloudProviderError.networkError(error))
-                default:
-                    break
-                }
-            }
-
-            listener.newConnectionHandler = { connection in
-                connection.start(queue: .global())
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
-                    guard let data, let requestString = String(data: data, encoding: .utf8) else {
-                        connection.cancel()
-                        return
-                    }
-
-                    dropboxLog.debug("[Dropbox] OAuth callback received: \(requestString.prefix(300))")
-
-                    guard let firstLine = requestString.components(separatedBy: "\r\n").first,
-                          let urlPart = firstLine.split(separator: " ").dropFirst().first else {
-                        connection.cancel()
-                        return
-                    }
-
-                    let components = URLComponents(string: "http://localhost\(urlPart)")
-
-                    if let errorParam = components?.queryItems?.first(where: { $0.name == "error" })?.value {
-                        dropboxLog.error("[Dropbox] OAuth error: \(errorParam)")
-                        let errorHTML = "<!DOCTYPE html><html><body><h2>Authentication failed</h2><p>\(errorParam)</p><p>You can close this window.</p></body></html>"
-                        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(errorHTML.utf8.count)\r\nConnection: close\r\n\r\n\(errorHTML)"
-                        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        listener.cancel()
-                        guard_.resume(throwing: CloudProviderError.unauthorized)
-                        return
-                    }
-
-                    guard let code = components?.queryItems?.first(where: { $0.name == "code" })?.value else {
-                        dropboxLog.debug("[Dropbox] Ignoring non-auth request: \(String(urlPart).prefix(100))")
-                        let emptyResponse = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                        connection.send(content: emptyResponse.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        return
-                    }
-
-                    // CSRF defence: reject any callback whose `state` doesn't
-                    // match the value we sent in the authorize URL.
-                    let returnedState = components?.queryItems?.first(where: { $0.name == "state" })?.value
-                    if returnedState != expectedState {
-                        dropboxLog.error("[Dropbox] OAuth state mismatch — rejecting callback")
-                        let errorHTML = "<!DOCTYPE html><html><body><h2>Authentication failed</h2><p>Invalid state parameter. You can close this window.</p></body></html>"
-                        let response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\nContent-Length: \(errorHTML.utf8.count)\r\nConnection: close\r\n\r\n\(errorHTML)"
-                        connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                            connection.cancel()
-                        })
-                        listener.cancel()
-                        guard_.resume(throwing: CloudProviderError.unauthorized)
-                        return
-                    }
-
-                    let successHTML = "<!DOCTYPE html><html><body><h2>Signed in to Dropbox</h2><p>You can close this window and return to FileFluss.</p></body></html>"
-                    let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: \(successHTML.utf8.count)\r\nConnection: close\r\n\r\n\(successHTML)"
-                    connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                        connection.cancel()
-                    })
-
-                    let port = listener.port?.rawValue ?? 0
-                    listener.cancel()
-                    guard_.resume(returning: (port, code))
-                }
-            }
-
-            listener.start(queue: .global())
-
-            DispatchQueue.global().asyncAfter(deadline: .now() + 300) {
-                listener.cancel()
-                guard_.resume(throwing: CloudProviderError.notAuthenticated)
-            }
+        let result = try await OAuthSession.authenticate(
+            callbackURLScheme: oauthCallbackScheme
+        ) { redirectURI in
+            var components = URLComponents(string: "https://www.dropbox.com/oauth2/authorize")!
+            components.queryItems = [
+                URLQueryItem(name: "client_id", value: appKey),
+                URLQueryItem(name: "redirect_uri", value: redirectURI),
+                URLQueryItem(name: "response_type", value: "code"),
+                URLQueryItem(name: "code_challenge", value: codeChallenge),
+                URLQueryItem(name: "code_challenge_method", value: "S256"),
+                URLQueryItem(name: "token_access_type", value: "offline"),
+                URLQueryItem(name: "state", value: expectedState),
+            ]
+            return components.url!
         }
+
+        let callbackParams = URLComponents(url: result.callbackURL, resolvingAgainstBaseURL: false)?.queryItems
+        let returnedState = callbackParams?.first(where: { $0.name == "state" })?.value
+        guard returnedState == expectedState else {
+            dropboxLog.error("[Dropbox] OAuth state mismatch — rejecting callback")
+            throw CloudProviderError.unauthorized
+        }
+        if let errorParam = callbackParams?.first(where: { $0.name == "error" })?.value {
+            dropboxLog.error("[Dropbox] OAuth error: \(errorParam)")
+            throw CloudProviderError.unauthorized
+        }
+        guard let code = callbackParams?.first(where: { $0.name == "code" })?.value else {
+            throw CloudProviderError.invalidResponse
+        }
+        return try await exchangeCodeForTokens(code: code, codeVerifier: codeVerifier, redirectURI: result.redirectURI)
     }
 
-    private static func exchangeCodeForTokens(code: String, codeVerifier: String, redirectPort: UInt16) async throws -> DropboxCredentials {
+    /// URL scheme the iOS host registers in Info.plist so
+    /// ASWebAuthenticationSession's redirect lands back in the app.
+    /// Ignored by the macOS loopback authenticator.
+    public static let oauthCallbackScheme = "filefluss-oauth"
+
+    private static func exchangeCodeForTokens(code: String, codeVerifier: String, redirectURI: String) async throws -> DropboxCredentials {
         let url = URL(string: "https://api.dropboxapi.com/oauth2/token")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -179,7 +99,7 @@ public actor DropboxAPIClient {
             "grant_type=authorization_code",
             "client_id=\(encode(appKey))",
             "client_secret=\(encode(appSecret))",
-            "redirect_uri=\(encode("http://localhost:\(redirectPort)"))",
+            "redirect_uri=\(encode(redirectURI))",
             "code_verifier=\(encode(codeVerifier))",
         ].joined(separator: "&")
         request.httpBody = bodyParams.data(using: .utf8)
