@@ -1,6 +1,6 @@
 import Foundation
 
-enum CloudProviderError: LocalizedError {
+public enum CloudProviderError: LocalizedError {
     case notAuthenticated
     case notImplemented
     case networkError(Error)
@@ -23,7 +23,7 @@ enum CloudProviderError: LocalizedError {
     /// known (nil if we only know the file got rejected).
     case fileTooLarge(fileBytes: Int64, providerLimitBytes: Int64?)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .notAuthenticated: return "Not authenticated. Please sign in."
         case .notImplemented: return "This feature is not yet implemented."
@@ -49,23 +49,11 @@ enum CloudProviderError: LocalizedError {
 }
 
 extension CloudProviderError {
-    /// Pre-flight: throw `.fileTooLarge` if `localFile` exceeds the
-    /// provider's documented per-file upload limit. Saves a wasted upload
-    /// when we already know the server will refuse.
-    static func enforceUploadSizeLimit(_ localFile: URL, provider: CloudProvider) async throws {
-        guard let limit = await provider.maxUploadFileSize else { return }
-        let attrs = try? FileManager.default.attributesOfItem(atPath: localFile.path)
-        let fileBytes = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        if fileBytes > limit {
-            throw CloudProviderError.fileTooLarge(fileBytes: fileBytes, providerLimitBytes: limit)
-        }
-    }
-
     /// Helper used by upload paths: if the server returned a status that
     /// commonly indicates a size-limit rejection (413 always, 422 only when
     /// the file is suspiciously large), translate it to `.fileTooLarge`.
     /// Returns `nil` if the response is unrelated to file size.
-    static func sizeLimitError(forStatus status: Int, localFile: URL) -> CloudProviderError? {
+    public static func sizeLimitError(forStatus status: Int, localFile: URL) -> CloudProviderError? {
         let attrs = try? FileManager.default.attributesOfItem(atPath: localFile.path)
         let fileBytes = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
         switch status {

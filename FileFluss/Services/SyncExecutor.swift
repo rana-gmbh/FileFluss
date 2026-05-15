@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 /// Executes a SyncPlan by performing the requested operations against the two endpoints.
 /// Reports progress by mutating the supplied TransferProgress on the main actor.

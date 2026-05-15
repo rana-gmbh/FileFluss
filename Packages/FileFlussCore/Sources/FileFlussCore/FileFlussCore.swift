@@ -5,7 +5,9 @@
 // Order of incoming moves, smallest blast radius first:
 //   1. SyncRule + SyncDirection  ✅ landed
 //   2. CloudAccount + CloudProviderType  ✅ landed
-//   3. CloudProviderError  (~43 consumers — but a single enum, mostly mechanical)
+//   3. CloudProviderError  ✅ landed (enforceUploadSizeLimit helper still in
+//      macOS app at CloudProviderError+Upload.swift, folds back into the
+//      package once step 4 takes CloudProvider)
 //   4. CloudFileItem + CloudProvider protocol + ByteProgressHandler
 //   5. Provider implementations one at a time, easiest (Dropbox, Box, GoogleDrive…)
 //      first because OAuth flows already share a clean abstraction.

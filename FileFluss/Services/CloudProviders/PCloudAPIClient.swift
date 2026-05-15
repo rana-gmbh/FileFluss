@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 struct PCloudCredentials: Codable, Sendable {
     let accessToken: String

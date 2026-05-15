@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 struct KDriveCredentials: Codable, Sendable {
     let apiToken: String

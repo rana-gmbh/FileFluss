@@ -1,4 +1,5 @@
 import AppKit
+import FileFlussCore
 import Foundation
 import Network
 import os

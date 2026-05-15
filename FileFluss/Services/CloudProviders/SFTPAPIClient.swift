@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import os
 
 private let sftpLog = Logger(subsystem: "com.rana.FileFluss", category: "sftp")
