@@ -11,8 +11,8 @@ Indexed cloud accounts now work even when you're offline — or when you want th
 - The unified search bar (⌘F) now searches *every* connected cloud account at once, plus any indexed drives — and includes offline accounts in the results.
 - **Settings → Index Status** is a new panel that lists every indexed source (cloud account or drive) with last-indexed date, file/folder counts, total bytes, and a per-source refresh button.
 
-![Offline Mode](Screenshots/FileFluss%20Offline%20Mode.webp)
-![Index Status](Screenshots/FileFluss%20Index%20Status.webp)
+![Offline Mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Offline%20Mode.webp)
+![Index Status](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Index%20Status.webp)
 
 ## Customizable keyboard shortcuts
 
@@ -21,7 +21,7 @@ A new **Settings → Keyboard** panel lets you remap every common file-manager c
 - Single keys (`F5` to copy, `F6` to move, etc.) or full modifier chords (`⌘C` / `⌃X`) are all supported.
 - The active preset is recorded in your preferences, so "Reset to defaults" restores the preset you picked instead of throwing it away.
 
-![Keyboard Map](Screenshots/FileFluss%20Keyboard%20Map.webp)
+![Keyboard Map](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Keyboard%20Map.webp)
 
 ## New supported protocols and cloud accounts
 
@@ -36,7 +36,7 @@ Six new providers in this release. The Cloud Accounts settings panel handles eac
 
 OneDrive's auth now uses loopback OAuth with PKCE under a FileFluss-owned client ID (no more device-code flow). MEGA gained 2FA support — the add-account form has a dedicated 6-digit code field plus a "Solving security challenge…" hint when MEGA's anti-abuse proof-of-work takes a moment. kDrive's add-account flow now offers a drive picker for Infomaniak Organization accounts that have shared workspaces alongside the personal drive.
 
-![Cloud accounts](Screenshots/FileFluss%20cloud%20accounts%202.webp)
+![Cloud accounts](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20cloud%20accounts%202.webp)
 
 ## Cache management
 
@@ -47,7 +47,7 @@ The Storage settings panel that's been gradually filling in over the 1.x series 
 - Optional auto-management on launch: prune entries older than N days, then enforce a size cap.
 - Tunable max size (slider + numeric field) and auto-delete age.
 
-![Storage settings](Screenshots/FileFluss%20storage%20settings.webp)
+![Storage settings](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20storage%20settings.webp)
 
 ## Smaller changes
 
