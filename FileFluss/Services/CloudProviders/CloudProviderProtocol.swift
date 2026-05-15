@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import UniformTypeIdentifiers
 
 /// Whether the file is fully present locally or held remotely (only

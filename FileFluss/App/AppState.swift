@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 enum PanelSide: Hashable {
     case left, right

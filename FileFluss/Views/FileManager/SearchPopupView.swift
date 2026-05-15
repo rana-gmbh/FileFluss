@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct SearchPopupView: View {
     @Environment(AppState.self) private var appState

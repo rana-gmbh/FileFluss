@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 /// Displays the official logo for cloud providers that have one,
 /// falling back to an SF Symbol for the rest.

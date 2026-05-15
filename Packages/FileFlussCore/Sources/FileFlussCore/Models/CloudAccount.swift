@@ -1,6 +1,6 @@
 import Foundation
 
-enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
+public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Sendable {
     case pCloud
     case kDrive
     case oneDrive
@@ -22,9 +22,9 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     case seafile
     case filen
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .pCloud: return "pCloud"
         case .kDrive: return "kDrive"
@@ -49,7 +49,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var icon: String {
+    public var icon: String {
         switch self {
         case .pCloud: return "cloud"
         case .kDrive: return "externaldrive.badge.icloud"
@@ -75,7 +75,7 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     }
 
     /// Asset catalog name for providers with official logos; nil falls back to SF Symbol `icon`.
-    var logoAssetName: String? {
+    public var logoAssetName: String? {
         switch self {
         case .pCloud: return "pCloudLogo"
         case .kDrive: return "kDriveLogo"
@@ -101,13 +101,13 @@ enum CloudProviderType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct CloudAccount: Identifiable, Hashable, Codable {
-    let id: UUID
-    let providerType: CloudProviderType
-    var displayName: String
-    var isConnected: Bool
-    var rootPath: String
-    var lastSyncDate: Date?
+public struct CloudAccount: Identifiable, Hashable, Codable, Sendable {
+    public let id: UUID
+    public let providerType: CloudProviderType
+    public var displayName: String
+    public var isConnected: Bool
+    public var rootPath: String
+    public var lastSyncDate: Date?
     /// User-forced offline mode. When true, the panel reads from the local
     /// offline index (`cloud_files`) instead of talking to the provider —
     /// the user has explicitly said "treat this account as offline" even if
@@ -116,13 +116,13 @@ struct CloudAccount: Identifiable, Hashable, Codable {
     /// registered in `SyncEngine`. An account in offline mode is treated
     /// the same as a disconnected one by the UI (offline source view,
     /// included in offline search, etc.).
-    var isOfflineMode: Bool
+    public var isOfflineMode: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, providerType, displayName, isConnected, rootPath, lastSyncDate, isOfflineMode
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         providerType: CloudProviderType,
         displayName: String? = nil,
@@ -140,7 +140,7 @@ struct CloudAccount: Identifiable, Hashable, Codable {
         self.isOfflineMode = isOfflineMode
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         providerType = try c.decode(CloudProviderType.self, forKey: .providerType)

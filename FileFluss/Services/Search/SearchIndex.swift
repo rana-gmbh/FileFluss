@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import SQLite3
 
 /// `SQLITE_TRANSIENT` instructs sqlite3 to make its own copy of the bound

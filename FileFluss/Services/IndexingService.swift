@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 /// Indexes a drive's filesystem or a cloud account's tree into `SearchIndex`
 /// so the files remain searchable while the source is offline.

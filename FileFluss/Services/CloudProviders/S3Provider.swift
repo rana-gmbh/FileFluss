@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import os
 
 private let s3ProviderLog = Logger(subsystem: "com.rana.FileFluss", category: "s3Provider")

@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import os
 
 private let synologyC2Log = Logger(subsystem: "com.rana.FileFluss", category: "synologyC2")

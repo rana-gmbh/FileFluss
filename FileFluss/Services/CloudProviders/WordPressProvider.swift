@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import os
 
 private let wpProviderLog = Logger(subsystem: "com.rana.FileFluss", category: "wordpressProvider")

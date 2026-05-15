@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import CryptoKit
 
 final class PCloudProvider: CloudProvider, @unchecked Sendable {

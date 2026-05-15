@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import os
 
 private let s3CompatLog = Logger(subsystem: "com.rana.FileFluss", category: "s3Compatible")

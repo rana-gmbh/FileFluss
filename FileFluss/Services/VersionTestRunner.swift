@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import AppKit
 
 /// Dev-only smoke test that exercises every connected cloud account end-to-end:
