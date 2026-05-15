@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 actor SyncEngine {
     static let shared = SyncEngine()

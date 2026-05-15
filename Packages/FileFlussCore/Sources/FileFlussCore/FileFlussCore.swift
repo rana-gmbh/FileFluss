@@ -3,7 +3,7 @@
 // for the rationale).
 //
 // Order of incoming moves, smallest blast radius first:
-//   1. SyncRule + SyncDirection  (~4 consumers)
+//   1. SyncRule + SyncDirection  ✅ landed
 //   2. CloudAccount + CloudProviderType  (~9 consumers, ~30 enum refs)
 //   3. CloudProviderError  (~43 consumers — but a single enum, mostly mechanical)
 //   4. CloudFileItem + CloudProvider protocol + ByteProgressHandler

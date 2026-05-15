@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 @Observable @MainActor
 final class SyncViewModel {

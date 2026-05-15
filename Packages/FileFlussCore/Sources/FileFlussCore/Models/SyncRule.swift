@@ -1,11 +1,11 @@
 import Foundation
 
-enum SyncDirection: String, Codable, CaseIterable {
+public enum SyncDirection: String, Codable, CaseIterable, Sendable {
     case upload
     case download
     case bidirectional
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .upload: return "Upload Only"
         case .download: return "Download Only"
@@ -13,7 +13,7 @@ enum SyncDirection: String, Codable, CaseIterable {
         }
     }
 
-    var icon: String {
+    public var icon: String {
         switch self {
         case .upload: return "arrow.up.circle"
         case .download: return "arrow.down.circle"
@@ -22,13 +22,13 @@ enum SyncDirection: String, Codable, CaseIterable {
     }
 }
 
-enum SyncStatus: String, Codable {
+public enum SyncStatus: String, Codable, Sendable {
     case idle
     case syncing
     case paused
     case error
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .idle: return "Up to date"
         case .syncing: return "Syncing..."
@@ -38,19 +38,19 @@ enum SyncStatus: String, Codable {
     }
 }
 
-struct SyncRule: Identifiable, Codable {
-    let id: UUID
-    var localPath: URL
-    var remotePath: String
-    var accountId: UUID
-    var direction: SyncDirection
-    var isEnabled: Bool
-    var status: SyncStatus
-    var excludePatterns: [String]
-    var lastSyncDate: Date?
-    var errorMessage: String?
+public struct SyncRule: Identifiable, Codable, Sendable {
+    public let id: UUID
+    public var localPath: URL
+    public var remotePath: String
+    public var accountId: UUID
+    public var direction: SyncDirection
+    public var isEnabled: Bool
+    public var status: SyncStatus
+    public var excludePatterns: [String]
+    public var lastSyncDate: Date?
+    public var errorMessage: String?
 
-    init(
+    public init(
         id: UUID = UUID(),
         localPath: URL,
         remotePath: String,
