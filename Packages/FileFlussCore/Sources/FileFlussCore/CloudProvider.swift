@@ -1,91 +1,6 @@
 import Foundation
-import FileFlussCore
-import UniformTypeIdentifiers
 
-/// Whether the file is fully present locally or held remotely (only
-/// meaningful for providers that have a partial-local concept — today
-/// that's iCloud Drive's evicted files).
-enum CloudDownloadStatus: Hashable, Sendable {
-    case local
-    case evicted
-    case downloading
-}
-
-struct CloudFileItem: Identifiable, Hashable, Sendable {
-    let id: String
-    let name: String
-    let path: String
-    let isDirectory: Bool
-    let size: Int64
-    let modificationDate: Date
-    let checksum: String?
-    let downloadStatus: CloudDownloadStatus
-
-    init(
-        id: String,
-        name: String,
-        path: String,
-        isDirectory: Bool,
-        size: Int64,
-        modificationDate: Date,
-        checksum: String?,
-        downloadStatus: CloudDownloadStatus = .local
-    ) {
-        self.id = id
-        self.name = name
-        self.path = path
-        self.isDirectory = isDirectory
-        self.size = size
-        self.modificationDate = modificationDate
-        self.checksum = checksum
-        self.downloadStatus = downloadStatus
-    }
-
-    var icon: String {
-        if isDirectory { return "folder.fill" }
-        let ext = (name as NSString).pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg", "png", "gif", "heic", "webp", "tiff": return "photo"
-        case "mp4", "mov", "avi", "mkv": return "film"
-        case "mp3", "aac", "wav", "flac", "m4a": return "music.note"
-        case "pdf": return "doc.richtext"
-        case "zip", "tar", "gz", "rar", "7z": return "doc.zipper"
-        case "swift", "py", "js", "ts", "html", "css", "json", "xml":
-            return "chevron.left.forwardslash.chevron.right"
-        case "txt", "md", "rtf": return "doc.text"
-        default: return "doc"
-        }
-    }
-
-    var formattedSize: String {
-        if isDirectory { return "--" }
-        return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
-    }
-
-    var formattedDate: String {
-        if modificationDate == .distantPast { return "--" }
-        return Self.dateFormatter.string(from: modificationDate)
-    }
-
-    var kind: String {
-        if isDirectory { return "Folder" }
-        let ext = (name as NSString).pathExtension
-        if !ext.isEmpty, let utType = UTType(filenameExtension: ext),
-           let description = utType.localizedDescription {
-            return description
-        }
-        return ext.isEmpty ? "Document" : ext.uppercased()
-    }
-
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
-}
-
-protocol CloudProvider: Sendable {
+public protocol CloudProvider: Sendable {
     var providerType: CloudProviderType { get }
 
     func authenticate() async throws
@@ -139,27 +54,27 @@ protocol CloudProvider: Sendable {
 }
 
 extension CloudProvider {
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         nil
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         try await uploadFile(from: localURL, to: remotePath)
     }
 
-    var maxUploadFileSize: Int64? {
+    public var maxUploadFileSize: Int64? {
         get async { nil }
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         throw CloudProviderError.notImplemented
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         throw CloudProviderError.notImplemented
     }
 
@@ -167,7 +82,7 @@ extension CloudProvider {
     /// the call. Each transfer path uses `try?` so an unsupported provider
     /// never blocks the operation; the file will land with the server's
     /// upload time, which is the existing pre-fix behaviour.
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         throw CloudProviderError.notImplemented
     }
 }

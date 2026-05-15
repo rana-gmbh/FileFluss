@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 enum SearchScope: Hashable, CaseIterable, Sendable {
     case currentFolder

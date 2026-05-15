@@ -49,6 +49,18 @@ public enum CloudProviderError: LocalizedError {
 }
 
 extension CloudProviderError {
+    /// Pre-flight: throw `.fileTooLarge` if `localFile` exceeds the
+    /// provider's documented per-file upload limit. Saves a wasted upload
+    /// when we already know the server will refuse.
+    public static func enforceUploadSizeLimit(_ localFile: URL, provider: CloudProvider) async throws {
+        guard let limit = await provider.maxUploadFileSize else { return }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: localFile.path)
+        let fileBytes = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+        if fileBytes > limit {
+            throw CloudProviderError.fileTooLarge(fileBytes: fileBytes, providerLimitBytes: limit)
+        }
+    }
+
     /// Helper used by upload paths: if the server returned a status that
     /// commonly indicates a size-limit rejection (413 always, 422 only when
     /// the file is suspiciously large), translate it to `.fileTooLarge`.

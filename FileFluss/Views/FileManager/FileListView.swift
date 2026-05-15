@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct FileListView: View {
     let panelSide: PanelSide

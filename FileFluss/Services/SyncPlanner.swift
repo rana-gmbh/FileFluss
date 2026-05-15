@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 /// One side of a sync: either a local directory or a cloud folder on a specific account.
 enum SyncEndpoint: Sendable {

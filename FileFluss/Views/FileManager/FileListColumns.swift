@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 import AppKit
 
 enum FileListColumnID: String, CaseIterable {

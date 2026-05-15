@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct CloudFileListView: View {
     let panelSide: PanelSide

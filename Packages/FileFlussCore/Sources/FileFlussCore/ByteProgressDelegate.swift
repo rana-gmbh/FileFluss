@@ -6,21 +6,21 @@ import Foundation
 /// or `session.upload(for:from:delegate:)` for uploads (receives `didSendBodyData`).
 /// The `onBytes` closure is called with the byte *delta* since the last report,
 /// so callers can simply accumulate.
-final class ByteProgressDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
+public final class ByteProgressDelegate: NSObject, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
     private let onBytes: @Sendable (Int64) -> Void
     private var lastSent: Int64 = 0
     private var lastWritten: Int64 = 0
 
-    init(onBytes: @escaping @Sendable (Int64) -> Void) {
+    public init(onBytes: @escaping @Sendable (Int64) -> Void) {
         self.onBytes = onBytes
     }
 
     // Upload progress
-    func urlSession(_ session: URLSession,
-                    task: URLSessionTask,
-                    didSendBodyData bytesSent: Int64,
-                    totalBytesSent: Int64,
-                    totalBytesExpectedToSend: Int64) {
+    public func urlSession(_ session: URLSession,
+                           task: URLSessionTask,
+                           didSendBodyData bytesSent: Int64,
+                           totalBytesSent: Int64,
+                           totalBytesExpectedToSend: Int64) {
         let delta = totalBytesSent - lastSent
         if delta > 0 {
             lastSent = totalBytesSent
@@ -29,11 +29,11 @@ final class ByteProgressDelegate: NSObject, URLSessionTaskDelegate, URLSessionDo
     }
 
     // Download progress
-    func urlSession(_ session: URLSession,
-                    downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
+    public func urlSession(_ session: URLSession,
+                           downloadTask: URLSessionDownloadTask,
+                           didWriteData bytesWritten: Int64,
+                           totalBytesWritten: Int64,
+                           totalBytesExpectedToWrite: Int64) {
         let delta = totalBytesWritten - lastWritten
         if delta > 0 {
             lastWritten = totalBytesWritten
@@ -42,14 +42,14 @@ final class ByteProgressDelegate: NSObject, URLSessionTaskDelegate, URLSessionDo
     }
 
     // Required by URLSessionDownloadDelegate — no-op; the async API returns the file URL directly.
-    func urlSession(_ session: URLSession,
-                    downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {}
+    public func urlSession(_ session: URLSession,
+                           downloadTask: URLSessionDownloadTask,
+                           didFinishDownloadingTo location: URL) {}
 }
 
 /// Closure passed to provider downloadFile/uploadFile to report byte-level deltas.
 /// `@Sendable` because URLSession delegates are invoked off the main actor.
-typealias ByteProgressHandler = @Sendable (Int64) -> Void
+public typealias ByteProgressHandler = @Sendable (Int64) -> Void
 
 /// URLSessionDownloadDelegate that handles a single download, reporting bytes and
 /// resuming a continuation on completion. Owns the temp file so URLSession's own
@@ -112,7 +112,7 @@ private final class DownloadProgressHandler: NSObject, URLSessionDownloadDelegat
 extension URLSession {
     /// Download the request to a temp URL; reports byte progress if `onBytes` is non-nil.
     /// Returns (tempFileURL, URLResponse) like `session.download(for:)`.
-    func downloadReportingProgress(for request: URLRequest, onBytes: ByteProgressHandler?) async throws -> (URL, URLResponse) {
+    public func downloadReportingProgress(for request: URLRequest, onBytes: ByteProgressHandler?) async throws -> (URL, URLResponse) {
         guard let onBytes else {
             return try await download(for: request)
         }
@@ -135,7 +135,7 @@ extension URLSession {
     }
 
     /// Upload `body` and return (responseData, URLResponse). Reports byte progress if `onBytes` is non-nil.
-    func uploadReportingProgress(for request: URLRequest, body: Data, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
+    public func uploadReportingProgress(for request: URLRequest, body: Data, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
         if let onBytes {
             let delegate = ByteProgressDelegate(onBytes: onBytes)
             return try await upload(for: request, from: body, delegate: delegate)
