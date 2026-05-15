@@ -32,6 +32,11 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         BrowserOpener.register { url in
             NSWorkspace.shared.open(url)
         }
+
+        // OAuth-flow providers in the package call OAuthSession.authenticate
+        // for the full open-browser → await-redirect round-trip. macOS uses
+        // a TCP loopback listener; iOS will register ASWebAuthenticationSession.
+        OAuthSession.register(LoopbackOAuthAuthenticator())
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
