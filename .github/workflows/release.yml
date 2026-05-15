@@ -48,6 +48,29 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
+      - name: Install provisioning profile
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          # The Release entitlements pin keychain-access-groups, which only
+          # resolves through a real Developer ID provisioning profile —
+          # CODE_SIGN_STYLE=Manual + DEVELOPMENT_TEAM alone isn't enough
+          # because Xcode refuses to claim restricted entitlements without
+          # a profile listing them.
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 -d > "$RUNNER_TEMP/profile.provisionprofile"
+
+          # Extract the profile UUID and name so we can pass them to xcodebuild.
+          PROFILE_PLIST=$(security cms -D -i "$RUNNER_TEMP/profile.provisionprofile")
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< "$PROFILE_PLIST")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin <<< "$PROFILE_PLIST")
+          echo "PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+
+          # Xcode looks up profiles by UUID under this directory.
+          cp "$RUNNER_TEMP/profile.provisionprofile" "$PROFILE_DIR/$PROFILE_UUID.provisionprofile"
+
       - name: Build archive
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -61,11 +84,14 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
-            DEVELOPMENT_TEAM="$TEAM_ID"
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
 
       - name: Export app
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          cat > $RUNNER_TEMP/ExportOptions.plist << 'PLIST'
+          cat > $RUNNER_TEMP/ExportOptions.plist << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
             "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -74,11 +100,16 @@ jobs:
             <key>method</key>
             <string>developer-id</string>
             <key>teamID</key>
-            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <string>${TEAM_ID}</string>
             <key>signingStyle</key>
             <string>manual</string>
             <key>signingCertificate</key>
             <string>Developer ID Application</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.rana-gmbh.FileFluss</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
           </dict>
           </plist>
           PLIST
