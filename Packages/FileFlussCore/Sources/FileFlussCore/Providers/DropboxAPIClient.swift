@@ -1,5 +1,3 @@
-import AppKit
-import FileFlussCore
 import Foundation
 import Network
 import os
@@ -8,15 +6,15 @@ import CommonCrypto
 
 private let dropboxLog = Logger(subsystem: "com.rana.FileFluss", category: "dropbox")
 
-struct DropboxCredentials: Codable, Sendable {
-    let accessToken: String
-    let refreshToken: String
-    let expiresAt: Date
-    let accountId: String
-    let displayName: String
+public struct DropboxCredentials: Codable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String
+    public let expiresAt: Date
+    public let accountId: String
+    public let displayName: String
 }
 
-actor DropboxAPIClient {
+public actor DropboxAPIClient {
     // Dropbox App Key (PKCE flow — no client secret needed)
     static let appKey = "b5v4zgbnycbuimj"
     static let appSecret = "xcvb8frfc2jyzvj"
@@ -35,7 +33,7 @@ actor DropboxAPIClient {
     private static let rpcURL = "https://api.dropboxapi.com/2"
     private static let contentURL = "https://content.dropboxapi.com/2"
 
-    init(credentials: DropboxCredentials) {
+    public init(credentials: DropboxCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -45,7 +43,7 @@ actor DropboxAPIClient {
 
     // MARK: - OAuth2 (PKCE Loopback Redirect)
 
-    static func startOAuthFlow() async throws -> DropboxCredentials {
+    public static func startOAuthFlow() async throws -> DropboxCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         let expectedState = generateState()
@@ -81,7 +79,7 @@ actor DropboxAPIClient {
 
                     if let url = components.url {
                         DispatchQueue.main.async {
-                            NSWorkspace.shared.open(url)
+                            BrowserOpener.open(url)
                         }
                     }
 
@@ -230,7 +228,7 @@ actor DropboxAPIClient {
 
     // MARK: - Token Refresh
 
-    func refreshTokenIfNeeded() async throws -> DropboxCredentials {
+    public func refreshTokenIfNeeded() async throws -> DropboxCredentials {
         if let inflight = inflightRefresh {
             return try await inflight.value
         }
@@ -240,7 +238,7 @@ actor DropboxAPIClient {
         return try await startRefresh()
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         credentials.displayName
     }
 
@@ -253,7 +251,7 @@ actor DropboxAPIClient {
         return p
     }
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let dbPath = dropboxPath(path)
 
         struct ListFolderRequest: Encodable {
@@ -297,11 +295,11 @@ actor DropboxAPIClient {
         return allEntries.compactMap { $0.toCloudFileItem() }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
 
         struct DownloadArg: Encodable {
@@ -341,11 +339,11 @@ actor DropboxAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
         let fileData = try Data(contentsOf: localURL)
         let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date
@@ -521,7 +519,7 @@ actor DropboxAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let dbPath = dropboxPath(path)
 
         struct DeleteArg: Encodable {
@@ -534,7 +532,7 @@ actor DropboxAPIClient {
         )
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         if (try? await getFileMetadata(at: path)) != nil { return }
 
         let dbPath = dropboxPath(path)
@@ -550,14 +548,14 @@ actor DropboxAPIClient {
         )
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let dbPath = dropboxPath(path)
         let parentPath = (dbPath as NSString).deletingLastPathComponent
         let newPath = parentPath.isEmpty ? "/\(newName)" : "\(parentPath)/\(newName)"
         try await moveItem(at: path, toPath: newPath)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         struct MoveArg: Encodable {
             let from_path: String
             let to_path: String
@@ -569,7 +567,7 @@ actor DropboxAPIClient {
         )
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         struct CopyArg: Encodable {
             let from_path: String
             let to_path: String
@@ -581,7 +579,7 @@ actor DropboxAPIClient {
         )
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let dbPath = dropboxPath(path)
 
         struct MetadataArg: Encodable {
@@ -599,7 +597,7 @@ actor DropboxAPIClient {
         return item
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -682,7 +680,7 @@ actor DropboxAPIClient {
 
     // MARK: - Search
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         struct SearchRequest: Encodable {
             let query: String
             let options: SearchOptions?
@@ -882,11 +880,11 @@ private final class ContinuationGuard<T: Sendable>: Sendable {
         var resumed = false
     }
 
-    func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
+    public func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
         state.withLock { $0.continuation = continuation }
     }
 
-    func resume(returning value: T) {
+    public func resume(returning value: T) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -895,7 +893,7 @@ private final class ContinuationGuard<T: Sendable>: Sendable {
         }
     }
 
-    func resume(throwing error: Error) {
+    public func resume(throwing error: Error) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -953,7 +951,7 @@ struct DropboxEntry: Decodable {
 
     var isFolder: Bool { tag == "folder" }
 
-    func toCloudFileItem() -> CloudFileItem? {
+    public func toCloudFileItem() -> CloudFileItem? {
         guard tag == "file" || tag == "folder" else { return nil }
         let itemPath = path_display ?? path_lower ?? "/\(name)"
 

@@ -1,32 +1,31 @@
 import Foundation
-import FileFlussCore
 import os
 
 private let nextCloudProviderLog = Logger(subsystem: "com.rana.FileFluss", category: "nextCloudProvider")
 
-final class NextCloudProvider: CloudProvider, @unchecked Sendable {
-    let providerType: CloudProviderType = .nextCloud
+public final class NextCloudProvider: CloudProvider, @unchecked Sendable {
+    public let providerType: CloudProviderType = .nextCloud
 
     private var apiClient: NextCloudAPIClient?
     private let keychainKey: String
 
-    var isAuthenticated: Bool {
+    public var isAuthenticated: Bool {
         get async { apiClient != nil }
     }
 
-    init(accountId: UUID = UUID()) {
+    public init(accountId: UUID = UUID()) {
         self.keychainKey = "nextcloud.\(accountId.uuidString)"
         restoreCredentials()
     }
 
-    init(credentials: NextCloudCredentials) {
+    public init(credentials: NextCloudCredentials) {
         self.keychainKey = "nextcloud.\(credentials.username)"
         self.apiClient = NextCloudAPIClient(credentials: credentials)
     }
 
     // MARK: - Authentication
 
-    func authenticate(serverURL: String, username: String, appPassword: String) async throws {
+    public func authenticate(serverURL: String, username: String, appPassword: String) async throws {
         let credentials = try await NextCloudAPIClient.authenticate(
             serverURL: serverURL,
             username: username,
@@ -40,7 +39,7 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
     /// Browser-based sign-in using Nextcloud's Login Flow v2. Returns the
     /// credentials so the caller can display the user's real name on the
     /// account row.
-    func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+    public func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
         let credentials = try await NextCloudAPIClient.startLoginFlowV2(serverURL: serverURL)
         self.apiClient = NextCloudAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
@@ -48,86 +47,86 @@ final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         return credentials
     }
 
-    func authenticate() async throws {
+    public func authenticate() async throws {
         throw CloudProviderError.notAuthenticated
     }
 
-    func disconnect() async throws {
+    public func disconnect() async throws {
         apiClient = nil
         try KeychainService.delete(key: keychainKey)
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return await client.userDisplayName()
     }
 
     // MARK: - File Operations
 
-    func listDirectory(at path: String) async throws -> [CloudFileItem] {
+    public func listDirectory(at path: String) async throws -> [CloudFileItem] {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.listFolder(path: path)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.downloadFile(remotePath: remotePath, to: localURL, onBytes: onBytes)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.uploadFile(from: localURL, to: remotePath, onBytes: onBytes)
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.deleteItem(at: path)
     }
 
-    func createDirectory(at path: String) async throws {
+    public func createDirectory(at path: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.createFolder(at: path)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.renameItem(at: path, to: newName)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.moveItem(at: path, toPath: newPath)
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.copyItem(at: path, toPath: newPath)
     }
 
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         try await client.setModificationDate(at: remotePath, to: date)
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.getFileInfo(at: path)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.folderSize(path: path)
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.searchFiles(query: query, path: path)
     }

@@ -1,5 +1,3 @@
-import AppKit
-import FileFlussCore
 import Foundation
 import Network
 import os
@@ -8,14 +6,14 @@ import CommonCrypto
 
 private let oneDriveLog = Logger(subsystem: "com.rana.FileFluss", category: "oneDrive")
 
-struct OneDriveCredentials: Codable, Sendable {
-    let accessToken: String
-    let refreshToken: String
-    let expiresAt: Date
-    let userEmail: String
+public struct OneDriveCredentials: Codable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String
+    public let expiresAt: Date
+    public let userEmail: String
 }
 
-actor OneDriveAPIClient {
+public actor OneDriveAPIClient {
     // FileFluss app registration in Microsoft Entra ID (Azure AD). Configured
     // as a public/Native client with `http://localhost` registered for the
     // "Mobile and desktop" platform — Microsoft accepts any port on that URI,
@@ -33,7 +31,7 @@ actor OneDriveAPIClient {
     /// alone doesn't fix this because every `await` releases the actor.
     private var inflightRefresh: Task<OneDriveCredentials, Error>?
 
-    init(credentials: OneDriveCredentials) {
+    public init(credentials: OneDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -47,7 +45,7 @@ actor OneDriveAPIClient {
     /// the authorization code on a one-shot loopback HTTP server. Mirrors
     /// the Google/Dropbox/Box flow so OneDrive re-auth slots into the same
     /// path (`SyncViewModel.reauthenticate(accountId:)`).
-    static func startOAuthFlow() async throws -> OneDriveCredentials {
+    public static func startOAuthFlow() async throws -> OneDriveCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         let expectedState = generateState()
@@ -83,7 +81,7 @@ actor OneDriveAPIClient {
 
                     if let url = components.url {
                         DispatchQueue.main.async {
-                            NSWorkspace.shared.open(url)
+                            BrowserOpener.open(url)
                         }
                     }
 
@@ -262,7 +260,7 @@ actor OneDriveAPIClient {
         return user.displayName ?? user.mail ?? user.userPrincipalName ?? "Unknown"
     }
 
-    func refreshTokenIfNeeded() async throws -> OneDriveCredentials {
+    public func refreshTokenIfNeeded() async throws -> OneDriveCredentials {
         if let inflight = inflightRefresh {
             return try await inflight.value
         }
@@ -329,7 +327,7 @@ actor OneDriveAPIClient {
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let endpoint: String
         if path == "/" || path.isEmpty {
             endpoint = "/me/drive/root/children"
@@ -351,11 +349,11 @@ actor OneDriveAPIClient {
         return all.map { $0.toCloudFileItem(parentPath: path) }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
         let endpoint = "/me/drive/root:\(encodedPath):/content"
 
@@ -373,11 +371,11 @@ actor OneDriveAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileData = try Data(contentsOf: localURL)
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
         let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
@@ -502,13 +500,13 @@ actor OneDriveAPIClient {
         }
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         let endpoint = "/me/drive/root:\(encodedPath):"
         try await graphRequestVoid(.delete, path: endpoint)
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         if (try? await getFileMetadata(at: path)) != nil { return }
 
         let parentPath = (path as NSString).deletingLastPathComponent
@@ -544,7 +542,7 @@ actor OneDriveAPIClient {
         let _: GraphDriveItem = try await graphRequest(.post, path: endpoint, body: body)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         let endpoint = "/me/drive/root:\(encodedPath):"
 
@@ -555,7 +553,7 @@ actor OneDriveAPIClient {
         let _: GraphDriveItem = try await graphRequest(.patch, path: endpoint, body: RenameBody(name: newName))
     }
 
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         // Microsoft Graph stores the client-visible mtime in
         // `fileSystemInfo.lastModifiedDateTime`. PATCHing the drive item
         // updates it without re-uploading content.
@@ -573,7 +571,7 @@ actor OneDriveAPIClient {
         let _: GraphDriveItem = try await graphRequest(.patch, path: endpoint, body: body)
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         let endpoint = "/me/drive/root:\(encodedPath):"
         let item: GraphDriveItem = try await graphRequest(.get, path: endpoint)
@@ -581,7 +579,7 @@ actor OneDriveAPIClient {
         return item.toCloudFileItem(parentPath: parentPath)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         // Get the folder item which includes a size property for the subtree
         let encodedPath: String
         if path == "/" || path.isEmpty {
@@ -612,14 +610,14 @@ actor OneDriveAPIClient {
         return total
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         let creds = try await refreshTokenIfNeeded()
         return creds.userEmail
     }
 
     // MARK: - Search
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let endpoint: String
         if let path, path != "/" {
             let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
@@ -762,11 +760,11 @@ private final class OneDriveContinuationGuard<T: Sendable>: Sendable {
         var resumed = false
     }
 
-    func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
+    public func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
         state.withLock { $0.continuation = continuation }
     }
 
-    func resume(returning value: T) {
+    public func resume(returning value: T) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -775,7 +773,7 @@ private final class OneDriveContinuationGuard<T: Sendable>: Sendable {
         }
     }
 
-    func resume(throwing error: Error) {
+    public func resume(throwing error: Error) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -828,7 +826,7 @@ struct GraphDriveItem: Decodable {
 
     var isDirectory: Bool { folder != nil }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" {
             itemPath = "/\(name)"

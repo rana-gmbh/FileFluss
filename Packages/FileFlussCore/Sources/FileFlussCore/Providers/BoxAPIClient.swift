@@ -1,5 +1,3 @@
-import AppKit
-import FileFlussCore
 import Foundation
 import Network
 import os
@@ -8,15 +6,15 @@ import CommonCrypto
 
 private let boxLog = Logger(subsystem: "com.rana.FileFluss", category: "box")
 
-struct BoxCredentials: Codable, Sendable {
-    let accessToken: String
-    let refreshToken: String
-    let expiresAt: Date
-    let userLogin: String
-    let displayName: String
+public struct BoxCredentials: Codable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String
+    public let expiresAt: Date
+    public let userLogin: String
+    public let displayName: String
 }
 
-actor BoxAPIClient {
+public actor BoxAPIClient {
     /// OAuth 2.0 credentials registered for FileFluss.
     /// Box uses the confidential-client model — both id and secret are
     /// required for token exchange. Treat the secret as sensitive even
@@ -55,7 +53,7 @@ actor BoxAPIClient {
     /// doesn't fix this because every `await` releases the actor.
     private var inflightRefresh: Task<BoxCredentials, Error>?
 
-    init(credentials: BoxCredentials) {
+    public init(credentials: BoxCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -65,7 +63,7 @@ actor BoxAPIClient {
 
     // MARK: - OAuth2 (Loopback Redirect)
 
-    static func startOAuthFlow() async throws -> BoxCredentials {
+    public static func startOAuthFlow() async throws -> BoxCredentials {
         let expectedState = generateState()
         let (port, authCode) = try await listenForAuthCode(expectedState: expectedState)
         return try await exchangeCodeForTokens(code: authCode, redirectPort: port)
@@ -91,7 +89,7 @@ actor BoxAPIClient {
                     ]
                     if let url = components.url {
                         DispatchQueue.main.async {
-                            NSWorkspace.shared.open(url)
+                            BrowserOpener.open(url)
                         }
                     }
                 case .failed(let error):
@@ -246,7 +244,7 @@ actor BoxAPIClient {
     /// Refreshes credentials when within 60s of expiry. Box rotates refresh
     /// tokens — every successful refresh returns a new refresh token that
     /// invalidates the previous one, so we always persist the latest.
-    func refreshTokenIfNeeded() async throws -> BoxCredentials {
+    public func refreshTokenIfNeeded() async throws -> BoxCredentials {
         // If another caller is already refreshing, await its result instead
         // of firing a parallel /oauth2/token POST that Box would reject as
         // invalid_grant (the refresh token is single-use).
@@ -265,7 +263,7 @@ actor BoxAPIClient {
     /// (refresh-token rotation, forced logout, suspicious activity) before
     /// our local expiry kicks in, so the "is the token expiring soon?"
     /// guard isn't enough.
-    func forceRefresh() async throws -> BoxCredentials {
+    public func forceRefresh() async throws -> BoxCredentials {
         if let inflight = inflightRefresh {
             return try await inflight.value
         }
@@ -323,13 +321,13 @@ actor BoxAPIClient {
         return newCreds
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         credentials.displayName
     }
 
     // MARK: - File operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let folderId = try await resolvePathToId(path)
 
         let fields = "id,type,name,size,modified_at,content_modified_at,sha1"
@@ -359,11 +357,11 @@ actor BoxAPIClient {
         return allEntries.map { $0.toCloudFileItem(parentPath: path) }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let fileId = try await resolvePathToId(remotePath)
         let creds = try await refreshTokenIfNeeded()
 
@@ -387,11 +385,11 @@ actor BoxAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
         guard fileSize <= Self.singlePutMaxBytes else {
             throw CloudProviderError.fileTooLarge(fileBytes: fileSize, providerLimitBytes: Self.singlePutMaxBytes)
@@ -529,14 +527,14 @@ actor BoxAPIClient {
         return "{}"
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let entry = try await resolvePathToEntry(path)
         let suffix = entry.isFolder ? "/folders/\(entry.id)?recursive=true" : "/files/\(entry.id)"
         try await apiRequestVoid(.delete, path: suffix)
         pathIdCache.removeValue(forKey: path)
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         // Box rejects duplicate folder names under the same parent with
         // 409, so short-circuit when the folder already exists.
         if (try? await resolvePathToId(path)) != nil { return }
@@ -554,7 +552,7 @@ actor BoxAPIClient {
         pathIdCache[path] = created.id
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let entry = try await resolvePathToEntry(path)
         let suffix = entry.isFolder ? "/folders/\(entry.id)" : "/files/\(entry.id)"
         struct RenameBody: Encodable { let name: String }
@@ -568,7 +566,7 @@ actor BoxAPIClient {
 
     /// Server-side move. Box accepts a parent change on `PUT /files/{id}`
     /// and `PUT /folders/{id}`; no download/re-upload needed.
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         let entry = try await resolvePathToEntry(path)
         let newParentPath = (newPath as NSString).deletingLastPathComponent
         let newName = (newPath as NSString).lastPathComponent
@@ -593,7 +591,7 @@ actor BoxAPIClient {
 
     /// Server-side copy. Folder copies use `POST /folders/{id}/copy` and
     /// recursively duplicate the tree on Box's side.
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         let entry = try await resolvePathToEntry(path)
         let newParentPath = (newPath as NSString).deletingLastPathComponent
         let newName = (newPath as NSString).lastPathComponent
@@ -609,7 +607,7 @@ actor BoxAPIClient {
         pathIdCache[newPath] = copied.id
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let entry = try await resolvePathToEntry(path)
         let parentPath = (path as NSString).deletingLastPathComponent
         let fields = "id,type,name,size,modified_at,content_modified_at,sha1"
@@ -618,7 +616,7 @@ actor BoxAPIClient {
         return item.toCloudFileItem(parentPath: parentPath)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -635,7 +633,7 @@ actor BoxAPIClient {
         return total
     }
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         var queryItems = [
             URLQueryItem(name: "query", value: query),
             URLQueryItem(name: "limit", value: "200"),
@@ -877,11 +875,11 @@ private final class BoxContinuationGuard<T: Sendable>: Sendable {
         var resumed = false
     }
 
-    func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
+    public func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
         state.withLock { $0.continuation = continuation }
     }
 
-    func resume(returning value: T) {
+    public func resume(returning value: T) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -890,7 +888,7 @@ private final class BoxContinuationGuard<T: Sendable>: Sendable {
         }
     }
 
-    func resume(throwing error: Error) {
+    public func resume(throwing error: Error) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -926,7 +924,7 @@ struct BoxItem: Decodable {
 
     var isFolder: Bool { type == "folder" }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" { itemPath = "/\(name)" }
         else { itemPath = "\(parentPath)/\(name)" }

@@ -1,4 +1,5 @@
 import AppKit
+import FileFlussCore
 
 /// Provides the custom Dock right-click menu so secondary windows (Search,
 /// Compare Folders) are reachable from the Dock just like the main window.
@@ -24,6 +25,13 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
         // issue #11 where the dark icon stayed stuck on light for some
         // users (suspected launch-time race on effectiveAppearance).
         applyAppIconForCurrentAppearance()
+
+        // Hand the AppKit-free FileFlussCore providers a way to launch
+        // the system browser for OAuth loopback flows. iOS will register
+        // an ASWebAuthenticationSession-backed handler in Phase 1.
+        BrowserOpener.register { url in
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

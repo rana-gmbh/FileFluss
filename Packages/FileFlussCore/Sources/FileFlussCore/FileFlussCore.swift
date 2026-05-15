@@ -16,8 +16,11 @@
 //      Synology Drive, iCloud  ✅ landed (6a iCloud, 6b the rest, plus the
 //      S3 XML parsers and the WebDAV PROPFIND parser pulled out of
 //      NextCloudAPIClient since WebDAV consumes it).
-//      Second wave (needs a platform shim for NSWorkspace.shared.open):
-//      Box, Dropbox, Google Drive, OneDrive, NextCloud browser-OAuth.
+//      Second wave (uses the BrowserOpener shim — macOS app registers
+//      an NSWorkspace.shared.open handler at startup; iOS will plug in
+//      ASWebAuthenticationSession in Phase 1):
+//      Box, Dropbox, Google Drive, OneDrive, NextCloud browser-OAuth
+//      ✅ landed.
 //   7. SearchIndex, SyncEngine, CacheManager — pure-Swift services with no AppKit.
 //
 // FileItem stays in the macOS app (it ties to NSWorkspace icons and the

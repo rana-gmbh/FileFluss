@@ -1,5 +1,3 @@
-import AppKit
-import FileFlussCore
 import Foundation
 import Network
 import os
@@ -7,12 +5,12 @@ import Security
 
 private let googleLog = Logger(subsystem: "com.rana.FileFluss", category: "googleDrive")
 
-struct GoogleDriveCredentials: Codable, Sendable {
-    let accessToken: String
-    let refreshToken: String
-    let expiresAt: Date
-    let userEmail: String
-    let displayName: String
+public struct GoogleDriveCredentials: Codable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String
+    public let expiresAt: Date
+    public let userEmail: String
+    public let displayName: String
 }
 
 struct GoogleDriveDeviceAuth: Sendable {
@@ -20,7 +18,7 @@ struct GoogleDriveDeviceAuth: Sendable {
     let port: UInt16
 }
 
-actor GoogleDriveAPIClient {
+public actor GoogleDriveAPIClient {
     static let clientId = "682536313816-j07jrk2kbff3sljb16vfal5soqs8vte9.apps.googleusercontent.com"
     static let clientSecret = "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"
     static let scopes = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email"
@@ -66,7 +64,7 @@ actor GoogleDriveAPIClient {
         "application/vnd.google-apps.drawing": "pdf",
     ]
 
-    init(credentials: GoogleDriveCredentials) {
+    public init(credentials: GoogleDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -78,7 +76,7 @@ actor GoogleDriveAPIClient {
 
     /// Start the OAuth flow: opens the user's browser for Google sign-in.
     /// Returns the authorization code via a loopback HTTP server.
-    static func startOAuthFlow() async throws -> GoogleDriveCredentials {
+    public static func startOAuthFlow() async throws -> GoogleDriveCredentials {
         let codeVerifier = generateCodeVerifier()
         let codeChallenge = generateCodeChallenge(from: codeVerifier)
         let expectedState = generateState()
@@ -117,7 +115,7 @@ actor GoogleDriveAPIClient {
 
                     if let url = components.url {
                         DispatchQueue.main.async {
-                            NSWorkspace.shared.open(url)
+                            BrowserOpener.open(url)
                         }
                     }
 
@@ -275,7 +273,7 @@ actor GoogleDriveAPIClient {
 
     // MARK: - Token Refresh
 
-    func refreshTokenIfNeeded() async throws -> GoogleDriveCredentials {
+    public func refreshTokenIfNeeded() async throws -> GoogleDriveCredentials {
         if let inflight = inflightRefresh {
             return try await inflight.value
         }
@@ -346,13 +344,13 @@ actor GoogleDriveAPIClient {
         return newCreds
     }
 
-    func userDisplayName() async throws -> String {
+    public func userDisplayName() async throws -> String {
         credentials.displayName
     }
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let folderId = (try await resolvePathToCachedFile(path)).id
 
         var allItems: [GoogleDriveFile] = []
@@ -383,11 +381,11 @@ actor GoogleDriveAPIClient {
         return allItems.map { $0.toCloudFileItem(parentPath: path) }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let cached = try await resolvePathToCachedFile(remotePath)
         let creds = try await refreshTokenIfNeeded()
 
@@ -422,7 +420,7 @@ actor GoogleDriveAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: actualLocalURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
@@ -445,7 +443,7 @@ actor GoogleDriveAPIClient {
         return "{}"
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
         let parentId = (try await resolvePathToCachedFile(parentPath)).id
@@ -488,7 +486,7 @@ actor GoogleDriveAPIClient {
     /// Public path-keyed wrapper around `patchFileTimestamps` so callers
     /// outside the upload path (clipboard paste, drag-drop) can preserve
     /// the source's mtime on a cross-source copy.
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         let cached = try await resolvePathToCachedFile(remotePath)
         try await patchFileTimestamps(fileId: cached.id, modDate: date, createdDate: nil)
     }
@@ -669,13 +667,13 @@ actor GoogleDriveAPIClient {
         return try JSONDecoder().decode(GoogleDriveFile.self, from: finalResponseData)
     }
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let cached = try await resolvePathToCachedFile(path)
         try await apiRequestVoid(.delete, path: "/files/\(cached.id)")
         pathIdCache.removeValue(forKey: path)
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         // Idempotent: Google Drive allows duplicate folder names under the same
         // parent, so a naive create multiplies folders on each retry. Short-
         // circuit when the folder already exists at this path.
@@ -720,7 +718,7 @@ actor GoogleDriveAPIClient {
         }
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let cached = try await resolvePathToCachedFile(path)
         let fileId = cached.id
 
@@ -737,7 +735,7 @@ actor GoogleDriveAPIClient {
         pathIdCache[newPath] = CachedFile(id: fileId, mimeType: cached.mimeType)
     }
 
-    func getFileMetadata(at path: String) async throws -> CloudFileItem {
+    public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let fileId = (try await resolvePathToCachedFile(path)).id
 
         var components = URLComponents(string: "\(apiURL)/files/\(fileId)")!
@@ -764,7 +762,7 @@ actor GoogleDriveAPIClient {
         return file.toCloudFileItem(parentPath: parentPath)
     }
 
-    func folderSize(at path: String) async throws -> Int64 {
+    public func folderSize(at path: String) async throws -> Int64 {
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -833,7 +831,7 @@ actor GoogleDriveAPIClient {
 
     // MARK: - Search
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let escapedQuery = query.replacingOccurrences(of: "'", with: "\\'")
         var q = "name contains '\(escapedQuery)' and trashed = false"
 
@@ -1022,11 +1020,11 @@ private final class ContinuationGuard<T: Sendable>: Sendable {
         var resumed = false
     }
 
-    func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
+    public func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
         state.withLock { $0.continuation = continuation }
     }
 
-    func resume(returning value: T) {
+    public func resume(returning value: T) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -1035,7 +1033,7 @@ private final class ContinuationGuard<T: Sendable>: Sendable {
         }
     }
 
-    func resume(throwing error: Error) {
+    public func resume(throwing error: Error) {
         state.withLock { state in
             guard !state.resumed, let cont = state.continuation else { return }
             state.resumed = true
@@ -1077,7 +1075,7 @@ struct GoogleDriveFile: Decodable {
         mimeType == "application/vnd.google-apps.folder"
     }
 
-    func toCloudFileItem(parentPath: String) -> CloudFileItem {
+    public func toCloudFileItem(parentPath: String) -> CloudFileItem {
         let itemPath: String
         if parentPath == "/" {
             itemPath = "/\(name)"

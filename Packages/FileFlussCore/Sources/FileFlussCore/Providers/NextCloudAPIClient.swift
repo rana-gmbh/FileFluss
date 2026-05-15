@@ -1,23 +1,21 @@
-import AppKit
-import FileFlussCore
 import Foundation
 import os
 
 private let nextCloudLog = Logger(subsystem: "com.rana.FileFluss", category: "nextCloud")
 
-struct NextCloudCredentials: Codable, Sendable {
-    let serverURL: String
-    let username: String
-    let appPassword: String
-    let displayName: String
+public struct NextCloudCredentials: Codable, Sendable {
+    public let serverURL: String
+    public let username: String
+    public let appPassword: String
+    public let displayName: String
 }
 
-actor NextCloudAPIClient {
+public actor NextCloudAPIClient {
     let credentials: NextCloudCredentials
     private let session: URLSession
     private let davBaseURL: String
 
-    init(credentials: NextCloudCredentials) {
+    public init(credentials: NextCloudCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -48,7 +46,7 @@ actor NextCloudAPIClient {
     /// hands back a freshly-minted app-password; we never see the user's
     /// real password, and 2FA is handled entirely by the browser.
     /// See https://docs.nextcloud.com/server/latest/developer_manual/client_apis/LoginFlow/index.html
-    static func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+    public static func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
         let normalized = normalizeServerURL(serverURL)
         guard let initURL = URL(string: "\(normalized)/index.php/login/v2") else {
             throw CloudProviderError.invalidResponse
@@ -83,7 +81,7 @@ actor NextCloudAPIClient {
         // Open the browser. Has to hop to the main actor since
         // NSWorkspace requires it.
         await MainActor.run {
-            NSWorkspace.shared.open(loginURL)
+            BrowserOpener.open(loginURL)
         }
 
         // Poll every 3 seconds. NextCloud's docs recommend ≥ 5 s but in
@@ -163,7 +161,7 @@ actor NextCloudAPIClient {
         return s
     }
 
-    static func authenticate(serverURL: String, username: String, appPassword: String) async throws -> NextCloudCredentials {
+    public static func authenticate(serverURL: String, username: String, appPassword: String) async throws -> NextCloudCredentials {
         let base = serverURL.hasSuffix("/") ? String(serverURL.dropLast()) : serverURL
         let ocsURL = URL(string: "\(base)/ocs/v1.php/cloud/user")!
 
@@ -198,13 +196,13 @@ actor NextCloudAPIClient {
         )
     }
 
-    func userDisplayName() -> String {
+    public func userDisplayName() -> String {
         credentials.displayName
     }
 
     // MARK: - File Operations
 
-    func listFolder(path: String) async throws -> [CloudFileItem] {
+    public func listFolder(path: String) async throws -> [CloudFileItem] {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -232,11 +230,11 @@ actor NextCloudAPIClient {
         return items.dropFirst().map { $0 }
     }
 
-    func downloadFile(remotePath: String, to localURL: URL) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL) async throws {
         try await downloadFile(remotePath: remotePath, to: localURL, onBytes: nil)
     }
 
-    func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+    public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -255,11 +253,11 @@ actor NextCloudAPIClient {
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
-    func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
+    public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let davPath = buildDAVPath(remotePath)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -290,7 +288,7 @@ actor NextCloudAPIClient {
         }
     }
 
-    func setModificationDate(at remotePath: String, to date: Date) async throws {
+    public func setModificationDate(at remotePath: String, to date: Date) async throws {
         // NextCloud / ownCloud support setting mtime via the proprietary
         // PROPPATCH on the `getlastmodified` property. Provides Finder-
         // style mtime preservation when the file came from outside the
@@ -331,7 +329,7 @@ actor NextCloudAPIClient {
         return f
     }()
 
-    func deleteItem(at path: String) async throws {
+    public func deleteItem(at path: String) async throws {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -350,7 +348,7 @@ actor NextCloudAPIClient {
         }
     }
 
-    func createFolder(at path: String) async throws {
+    public func createFolder(at path: String) async throws {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -379,17 +377,17 @@ actor NextCloudAPIClient {
         throw Self.mapHTTPError(statusCode: http.statusCode)
     }
 
-    func renameItem(at path: String, to newName: String) async throws {
+    public func renameItem(at path: String, to newName: String) async throws {
         let parentPath = (path as NSString).deletingLastPathComponent
         let destinationPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
         try await moveItem(at: path, toPath: destinationPath)
     }
 
-    func moveItem(at path: String, toPath newPath: String) async throws {
+    public func moveItem(at path: String, toPath newPath: String) async throws {
         try await davMoveOrCopy(method: "MOVE", from: path, toPath: newPath)
     }
 
-    func copyItem(at path: String, toPath newPath: String) async throws {
+    public func copyItem(at path: String, toPath newPath: String) async throws {
         try await davMoveOrCopy(method: "COPY", from: path, toPath: newPath)
     }
 
@@ -416,7 +414,7 @@ actor NextCloudAPIClient {
         }
     }
 
-    func getFileInfo(at path: String) async throws -> CloudFileItem {
+    public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let davPath = buildDAVPath(path)
         guard let url = URL(string: davPath) else {
             throw CloudProviderError.invalidResponse
@@ -442,7 +440,7 @@ actor NextCloudAPIClient {
         return item
     }
 
-    func folderSize(path: String) async throws -> Int64 {
+    public func folderSize(path: String) async throws -> Int64 {
         return try await calculateFolderSizeRecursively(path: path)
     }
 
@@ -461,7 +459,7 @@ actor NextCloudAPIClient {
 
     // MARK: - Search
 
-    func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
+    public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let searchPath = path ?? "/"
         let davPath = buildDAVPath(searchPath)
         guard let url = URL(string: davPath) else {
@@ -583,16 +581,16 @@ private final class OCSDisplayNameParser: NSObject, XMLParserDelegate, @unchecke
     private var currentElement = ""
     private var currentText = ""
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+    public func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
         currentElement = elementName
         currentText = ""
     }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
+    public func parser(_ parser: XMLParser, foundCharacters string: String) {
         currentText += string
     }
 
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+    public func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
         if elementName == "displayname" {
             displayName = currentText
         }
