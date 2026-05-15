@@ -21,20 +21,58 @@ FileFluss puts a left and a right panel side by side. Each panel can show a loca
 
 Connect once in Settings → Cloud Accounts and the account appears in both panels' sidebars.
 
-- pCloud
-- kDrive (Infomaniak)
-- OneDrive (Microsoft)
+![Cloud accounts](Screenshots/FileFluss%20cloud%20accounts%202.webp)
+
 - Google Drive
 - Dropbox
-- Mega
+- OneDrive (Microsoft)
+- Box
+- iCloud Drive
+- pCloud
+- kDrive (Infomaniak)
+- Mega (with 2FA)
 - Koofr
+- Filen (filen.io)
 - NextCloud
-- WebDAV
-- SFTP
+- Seafile
+- Synology Drive
+- Synology C2
 - WordPress (Media Library)
 - GMX Cloud (MediaCenter)
+- AWS S3
+- Generic S3-compatible (Hetzner Object Storage, MinIO, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces, …)
+- WebDAV
+- SFTP
 
 Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPTX on download, modification dates preserved.
+
+### Offline Mode & offline search
+
+![Offline Mode](Screenshots/FileFluss%20Offline%20Mode.webp)
+
+Index any connected cloud account once and you keep browsing — and searching — even when you're offline.
+
+- Right-click an indexed cloud account in the sidebar → **Go Offline** / **Go Online** to flip the flag on the fly.
+- Offline accounts serve their cached file tree from the local search index, so file names and folder structure stay available without a connection.
+- Universal search (⌘F) covers every connected cloud account and indexed drive at once, including offline accounts.
+
+### Index Status
+
+![Index Status](Screenshots/FileFluss%20Index%20Status.webp)
+
+Settings → Index Status lists every indexed source with last-indexed date, file and folder counts, total bytes, and a per-source refresh button. Renames in the sidebar are reflected here immediately; removing an account drops its indexed rows so they don't linger.
+
+### Customizable keyboard shortcuts
+
+![Keyboard Map](Screenshots/FileFluss%20Keyboard%20Map.webp)
+
+Settings → Keyboard lets you remap every common file-manager command. Pick one of three presets — **Finder-like**, **Total Commander**, or **Norton Commander** — or build your own. Single keys (`F5` to copy, `F6` to move) or full modifier chords (`⌘C` / `⌃X`) are all supported.
+
+### Cache management
+
+![Storage settings](Screenshots/FileFluss%20storage%20settings.webp)
+
+Settings → Storage shows a live cache size and offers a one-click *Clear*. Optional auto-management on launch prunes entries older than N days, then enforces a size cap. Slider + numeric field for the max size, and a separate slider for auto-delete age.
 
 ### Drag & drop, with shortcuts
 
