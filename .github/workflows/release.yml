@@ -206,12 +206,11 @@ jobs:
         with:
           files: ${{ env.DMG_PATH }}
           body_path: RELEASE_NOTES.md
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           name: FileFluss ${{ github.ref_name }}
 
       - name: Update Homebrew tap cask
-        if: ${{ false }}  # tap bump disabled while v1.1 is a pre-release — re-enable once promoted
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |

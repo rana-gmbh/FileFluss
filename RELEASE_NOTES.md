@@ -1,68 +1,18 @@
-# FileFluss 1.1
+# FileFluss 1.1.1
 
-FileFluss 1.1 is a much bigger update than the small version jump suggests.
+Fixes a critical credential-persistence bug in 1.1.
 
-## Offline Mode with offline file search
+## What was broken in 1.1
 
-Indexed cloud accounts now work even when you're offline — or when you want them to.
+After adding a cloud account in 1.1, closing the app, and reopening it, every account showed **"Cloud account not connected."** Re-adding worked for the duration of the session but didn't survive a relaunch either.
 
-- **Right-click an indexed cloud account in the sidebar → Go Offline / Go Online.** Toggle on the fly without touching network settings.
-- Offline accounts show their last-indexed file tree from the local search index, so you can keep browsing structure and find files by name without a connection.
-- The unified search bar (⌘F) now searches *every* connected cloud account at once, plus any indexed drives — and includes offline accounts in the results.
-- **Settings → Index Status** is a new panel that lists every indexed source (cloud account or drive) with last-indexed date, file/folder counts, total bytes, and a per-source refresh button.
+The cause: 1.1's `KeychainService` switched to the macOS data-protection keychain via `kSecUseDataProtectionKeychain: true`. On Developer ID-signed builds, `SecItemAdd` returned success but items did not actually persist across process launches. Save → close → reopen → load returned nothing.
 
-![Offline Mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Offline%20Mode.webp)
-![Index Status](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Index%20Status.webp)
+## Fix in 1.1.1
 
-## Customizable keyboard shortcuts
+`KeychainService` now uses the legacy login keychain — the same store 1.0.1 used and that has reliably persisted FileFluss credentials for the entire 1.0.x series. No code-signing or entitlement change required.
 
-A new **Settings → Keyboard** panel lets you remap every common file-manager command. Pick one of three presets — Finder-like, Total Commander, or Norton Commander — or build your own.
-
-- Single keys (`F5` to copy, `F6` to move, etc.) or full modifier chords (`⌘C` / `⌃X`) are all supported.
-- The active preset is recorded in your preferences, so "Reset to defaults" restores the preset you picked instead of throwing it away.
-
-![Keyboard Map](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Keyboard%20Map.webp)
-
-## New supported protocols and cloud accounts
-
-Six new providers in this release. The Cloud Accounts settings panel handles each one with its own connection flow:
-
-- **Box** — Loopback OAuth with PKCE under a FileFluss-owned client ID.
-- **Filen (filen.io)** — Pure-Swift implementation of Filen's v2 client crypto (PBKDF2 login + AES-256-GCM metadata / chunked file ops), so no third-party SDK ships in the binary.
-- **Seafile** — Self-hosted and the public service. Password → API-token exchange on add, with opt-in self-signed certificate support for LAN servers.
-- **Synology Drive** and **Synology C2** — Now distinct providers (one is the on-NAS Drive Server, the other is Synology's S3-compatible C2 cloud).
-- **Generic S3-compatible** — Bring-your-own-endpoint provider that covers Hetzner Object Storage, MinIO, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces, Linode, and most other S3-API services.
-- **AWS S3**, **WordPress (Media Library)**, **WebDAV**, and **GMX Cloud** rounded out earlier in the 1.x series remain fully supported.
-
-OneDrive's auth now uses loopback OAuth with PKCE under a FileFluss-owned client ID (no more device-code flow). MEGA gained 2FA support — the add-account form has a dedicated 6-digit code field plus a "Solving security challenge…" hint when MEGA's anti-abuse proof-of-work takes a moment. kDrive's add-account flow now offers a drive picker for Infomaniak Organization accounts that have shared workspaces alongside the personal drive.
-
-![Cloud accounts](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20cloud%20accounts%202.webp)
-
-## Cache management
-
-The Storage settings panel that's been gradually filling in over the 1.x series is finished:
-
-- A live, accurate "Current cache size" reading (cached cloud previews and downloads).
-- "Clear cache" with confirmation.
-- Optional auto-management on launch: prune entries older than N days, then enforce a size cap.
-- Tunable max size (slider + numeric field) and auto-delete age.
-
-![Storage settings](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20storage%20settings.webp)
-
-## Smaller changes
-
-- **App icon** — new Light and Dark variants. The Dock swaps live when macOS toggles appearance.
-- **Window resize / splitter drag** — the file list's Name column now stays fitted to the panel width, so dragging the splitter or restoring from minimize no longer hides file names off-screen (#21).
-- **Cloud panel navigation** — switching between two cloud accounts no longer briefly shows stale entries from the previous one.
-- **Index Status panel** — renaming a cloud account reflects immediately; removing an account also drops its indexed rows so old incarnations don't linger.
-- **Drag & drop** — cloud-to-cloud paste progress no longer lags behind the actual byte count.
-- **Sync** — bidirectional sync is hidden in v1.1 until proper conflict detection ships. Upload-only and download-only continue to work as before.
-- **About window** — icon stays crisp at every size after the multi-slice icns regeneration.
-- Several security and stability updates.
-
-## Thanks
-
-App icon by [@JohnnyFireOne](https://github.com/JohnnyFireOne) — thank you for the beautiful new artwork.
+After upgrading from 1.1 you will need to **add your cloud accounts again, once** — any 1.1 saves are gone with the data-protection keychain. From there on, accounts stick across launches as they did in 1.0.1.
 
 ## Installation
 
@@ -74,7 +24,7 @@ brew upgrade --cask filefluss
 
 ### Manual
 
-Download `FileFluss-v1.1.dmg` below and drag FileFluss.app into your Applications folder.
+Download `FileFluss-v1.1.1.dmg` below and drag FileFluss.app into your Applications folder.
 
 ## Requirements
 

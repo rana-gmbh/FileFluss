@@ -54,23 +54,15 @@ private enum DevCredentialStore {
 enum KeychainService {
     private static let serviceName = "com.rana-gmbh.FileFluss"
 
-    /// Modern data-protection keychain. Sandboxed per-bundle-id rather
-    /// than per-code-signature, so ad-hoc-signed dev builds don't trigger
-    /// the "FileFluss wants to access the keychain" prompt every rebuild
-    /// the way the legacy keychain does.
+    /// Legacy login keychain. macOS Release builds signed with Developer ID
+    /// persist items here reliably across process restarts. The
+    /// data-protection keychain (`kSecUseDataProtectionKeychain: true`) was
+    /// briefly tried in 1.1 to dodge the admin-password prompt on ad-hoc
+    /// re-signed dev builds; turns out save returned errSecSuccess but the
+    /// items didn't survive a process restart, breaking add-account on
+    /// every release-build relaunch. Debug builds don't hit either path —
+    /// they short-circuit to `DevCredentialStore` below.
     private static func baseQuery(key: String) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: true,
-        ]
-    }
-
-    /// Legacy file-keychain query — only used during the one-time
-    /// migration on first read after upgrading to the data-protection
-    /// store. Once an item is migrated, the legacy copy is deleted.
-    private static func legacyQuery(key: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
@@ -83,7 +75,6 @@ enum KeychainService {
         try DevCredentialStore.save(key: key, data: data)
         return
         #else
-        // Replace any existing item in the modern store, then write.
         var query = baseQuery(key: key)
         SecItemDelete(query as CFDictionary)
         query[kSecValueData as String] = data
@@ -93,10 +84,6 @@ enum KeychainService {
         guard status == errSecSuccess else {
             throw KeychainError.saveFailed(status)
         }
-
-        // Best-effort cleanup of any leftover legacy entry under the same
-        // key so we don't silently keep two copies in sync.
-        SecItemDelete(legacyQuery(key: key) as CFDictionary)
         #endif
     }
 
@@ -105,12 +92,17 @@ enum KeychainService {
         if let data = DevCredentialStore.load(key: key) {
             return data
         }
-        // One-shot migration: read any pre-existing keychain entry left
-        // behind by earlier builds and copy it into the dev folder so
-        // future reads are silent. macOS will prompt once per account
-        // during this pass (because the old keychain ACL points at a
-        // previous build's code signature), then never again.
-        if let data = loadFromKeychain(key: key) {
+        // One-shot pull-from-keychain for items left over by older dev
+        // builds that wrote to the system keychain. Copies the value into
+        // the dev folder so future reads are silent. macOS may prompt
+        // once per account during this pass when the original keychain
+        // ACL points at a previous code signature.
+        var query = baseQuery(key: key)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let data = result as? Data {
             try? DevCredentialStore.save(key: key, data: data)
             return data
         }
@@ -122,64 +114,11 @@ enum KeychainService {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let data = result as? Data {
-            return data
-        }
-
-        // Transparent migration: fall back to the legacy keychain for
-        // users upgrading from an earlier build, then move the value into
-        // the modern store so future reads hit the fast path.
-        return migrateFromLegacy(key: key)
-        #endif
-    }
-
-    private static func migrateFromLegacy(key: String) -> Data? {
-        var legacy = legacyQuery(key: key)
-        legacy[kSecReturnData as String] = true
-        legacy[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(legacy as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else {
-            if status != errSecItemNotFound {
-                keychainLog.info("[keychain] migrate key=\(key) legacy-read failed status=\(status)")
-            }
             return nil
         }
-
-        do {
-            try save(key: key, data: data)
-            keychainLog.info("[keychain] migrate key=\(key) legacy → modern OK")
-        } catch {
-            // Modern-store write failed — keep returning the legacy
-            // data so callers continue working; next launch will retry.
-            keychainLog.info("[keychain] migrate key=\(key) legacy hit, modern write failed (\(error.localizedDescription))")
-        }
         return data
-    }
-
-    /// Reads the keychain (modern data-protection store first, then the
-    /// legacy file store) without writing back. Used by the DEBUG-only
-    /// migration that copies pre-existing entries into the dev folder.
-    private static func loadFromKeychain(key: String) -> Data? {
-        var modern = baseQuery(key: key)
-        modern[kSecReturnData as String] = true
-        modern[kSecMatchLimit as String] = kSecMatchLimitOne
-        var modernResult: AnyObject?
-        let modernStatus = SecItemCopyMatching(modern as CFDictionary, &modernResult)
-        if modernStatus == errSecSuccess, let data = modernResult as? Data {
-            return data
-        }
-
-        var legacy = legacyQuery(key: key)
-        legacy[kSecReturnData as String] = true
-        legacy[kSecMatchLimit as String] = kSecMatchLimitOne
-        var legacyResult: AnyObject?
-        let legacyStatus = SecItemCopyMatching(legacy as CFDictionary, &legacyResult)
-        if legacyStatus == errSecSuccess, let data = legacyResult as? Data {
-            return data
-        }
-        return nil
+        #endif
     }
 
     static func delete(key: String) throws {
@@ -187,15 +126,9 @@ enum KeychainService {
         try DevCredentialStore.delete(key: key)
         return
         #else
-        // Wipe both stores so a re-add starts from a clean slate.
-        let modernStatus = SecItemDelete(baseQuery(key: key) as CFDictionary)
-        let legacyStatus = SecItemDelete(legacyQuery(key: key) as CFDictionary)
-        let acceptable: Set<OSStatus> = [errSecSuccess, errSecItemNotFound]
-        if !acceptable.contains(modernStatus) {
-            throw KeychainError.deleteFailed(modernStatus)
-        }
-        if !acceptable.contains(legacyStatus) {
-            throw KeychainError.deleteFailed(legacyStatus)
+        let status = SecItemDelete(baseQuery(key: key) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.deleteFailed(status)
         }
         #endif
     }
