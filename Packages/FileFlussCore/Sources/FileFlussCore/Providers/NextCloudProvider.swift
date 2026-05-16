@@ -47,6 +47,33 @@ public final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         return credentials
     }
 
+    /// Result of `prepareLoginFlowV2(serverURL:)`: the login URL and a
+    /// closure that polls until the user completes the browser handshake,
+    /// then writes the resulting credentials into this provider's
+    /// keychain entry. iOS callers present the loginURL in an
+    /// SFSafariViewController and await `completeLogin()` in parallel.
+    public struct PreparedLoginFlowV2: Sendable {
+        public let loginURL: URL
+        public let completeLogin: @Sendable () async throws -> NextCloudCredentials
+    }
+
+    /// iOS-friendly split of `startLoginFlowV2`: returns the browser URL
+    /// up-front so the host can present its own browser surface
+    /// (SFSafariViewController), then drive the polling closure to
+    /// completion.
+    public func prepareLoginFlowV2(serverURL: String) async throws -> PreparedLoginFlowV2 {
+        let flow = try await NextCloudAPIClient.prepareLoginFlowV2(serverURL: serverURL)
+        let keychainKey = self.keychainKey
+        let completeLogin: @Sendable () async throws -> NextCloudCredentials = { [weak self] in
+            let credentials = try await flow.poll()
+            self?.apiClient = NextCloudAPIClient(credentials: credentials)
+            try KeychainService.save(key: keychainKey, value: credentials)
+            nextCloudProviderLog.info("[NextCloud] Login Flow v2 succeeded for \(credentials.displayName)")
+            return credentials
+        }
+        return PreparedLoginFlowV2(loginURL: flow.loginURL, completeLogin: completeLogin)
+    }
+
     public func authenticate() async throws {
         throw CloudProviderError.notAuthenticated
     }

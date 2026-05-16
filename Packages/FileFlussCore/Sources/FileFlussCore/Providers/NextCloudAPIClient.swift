@@ -38,15 +38,27 @@ public actor NextCloudAPIClient {
 
     // MARK: - Login Flow v2 (Browser-based)
 
+    /// Result of `prepareLoginFlowV2(serverURL:)`: the login URL the host
+    /// must open in a browser (macOS: NSWorkspace; iOS: SFSafariViewController)
+    /// and a closure that polls the server-side handshake until the user
+    /// finishes signing in. Splitting prepare from open-and-poll lets each
+    /// platform drive its own browser surface without a BrowserOpener shim
+    /// — iOS needs a UIKit sheet, not a fire-and-forget URL open.
+    public struct NextCloudLoginFlowV2: Sendable {
+        public let loginURL: URL
+        public let poll: @Sendable () async throws -> NextCloudCredentials
+    }
+
     /// Kicks off NextCloud's "Login Flow v2" — the server-side standard
     /// for getting an app-password without making the user manually
-    /// create one in the web UI. We POST to `/index.php/login/v2`, open
-    /// the returned `login` URL in the user's browser, and poll the
-    /// `poll.endpoint` until the user finishes signing in. The server
-    /// hands back a freshly-minted app-password; we never see the user's
-    /// real password, and 2FA is handled entirely by the browser.
+    /// create one in the web UI. POSTs to `/index.php/login/v2` and
+    /// returns the user-facing login URL plus a poll closure. The poll
+    /// closure hits the `poll.endpoint` every 3 s until the user finishes
+    /// signing in (server hands back a freshly-minted app-password) or
+    /// the 5-minute deadline expires. We never see the user's real
+    /// password; 2FA is handled entirely by the browser.
     /// See https://docs.nextcloud.com/server/latest/developer_manual/client_apis/LoginFlow/index.html
-    public static func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+    public static func prepareLoginFlowV2(serverURL: String) async throws -> NextCloudLoginFlowV2 {
         let normalized = normalizeServerURL(serverURL)
         guard let initURL = URL(string: "\(normalized)/index.php/login/v2") else {
             throw CloudProviderError.invalidResponse
@@ -54,7 +66,7 @@ public actor NextCloudAPIClient {
 
         var initRequest = URLRequest(url: initURL)
         initRequest.httpMethod = "POST"
-        initRequest.setValue("FileFluss (macOS)", forHTTPHeaderField: "User-Agent")
+        initRequest.setValue("FileFluss", forHTTPHeaderField: "User-Agent")
         initRequest.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (initData, initResponse) = try await URLSession.shared.data(for: initRequest)
@@ -62,10 +74,6 @@ public actor NextCloudAPIClient {
         guard (200...299).contains(initHTTP.statusCode) else {
             let body = String(data: initData, encoding: .utf8) ?? ""
             nextCloudLog.error("[NextCloud] Login flow init failed: HTTP \(initHTTP.statusCode) body=\(body.prefix(300))")
-            // 404 = server doesn't have the endpoint (Nextcloud < 16 or
-            // a third-party fork that disabled it). Surface a clear hint
-            // so the user knows the legacy app-password path is what
-            // they need instead.
             if initHTTP.statusCode == 404 {
                 throw CloudProviderError.commandFailed("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.")
             }
@@ -78,59 +86,64 @@ public actor NextCloudAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        // Open the browser. Has to hop to the main actor since
-        // NSWorkspace requires it.
-        await MainActor.run {
-            BrowserOpener.open(loginURL)
+        let token = flow.poll.token
+        let pollClosure: @Sendable () async throws -> NextCloudCredentials = {
+            // Poll every 3 seconds. NextCloud's docs recommend ≥ 5 s but
+            // 3 s gives the snappiest UX without hammering the server.
+            // Cap at 5 minutes — beyond that the user has wandered off.
+            let pollInterval: UInt64 = 3 * 1_000_000_000
+            let deadline = Date().addingTimeInterval(5 * 60)
+
+            while Date() < deadline {
+                if Task.isCancelled { throw CancellationError() }
+                try await Task.sleep(nanoseconds: pollInterval)
+
+                var pollRequest = URLRequest(url: pollURL)
+                pollRequest.httpMethod = "POST"
+                pollRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+                pollRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+                pollRequest.setValue("FileFluss", forHTTPHeaderField: "User-Agent")
+                let bodyStr = "token=\(token)"
+                pollRequest.httpBody = bodyStr.data(using: .utf8)
+
+                let (pollData, pollResponse) = try await URLSession.shared.data(for: pollRequest)
+                guard let pollHTTP = pollResponse as? HTTPURLResponse else { continue }
+
+                if pollHTTP.statusCode == 200 {
+                    let result = try JSONDecoder().decode(NextCloudLoginFlowResult.self, from: pollData)
+                    let displayName = (try? await fetchDisplayName(
+                        serverURL: result.server,
+                        username: result.loginName,
+                        appPassword: result.appPassword
+                    )) ?? result.loginName
+                    nextCloudLog.info("[NextCloud] Login Flow v2 succeeded for \(displayName)")
+                    return NextCloudCredentials(
+                        serverURL: normalizeServerURL(result.server),
+                        username: result.loginName,
+                        appPassword: result.appPassword,
+                        displayName: displayName
+                    )
+                }
+                if pollHTTP.statusCode == 404 {
+                    // Still pending — user hasn't finished the browser flow.
+                    continue
+                }
+                nextCloudLog.error("[NextCloud] Login Flow v2 poll failed: HTTP \(pollHTTP.statusCode)")
+                throw Self.mapHTTPError(statusCode: pollHTTP.statusCode)
+            }
+
+            throw CloudProviderError.commandFailed("Timed out waiting for browser sign-in.")
         }
 
-        // Poll every 3 seconds. NextCloud's docs recommend ≥ 5 s but in
-        // practice 3 s gives the snappiest UX without hammering the
-        // server. Cap at 5 minutes — beyond that the user has clearly
-        // wandered off and we should free the polling task.
-        let pollInterval: UInt64 = 3 * 1_000_000_000
-        let deadline = Date().addingTimeInterval(5 * 60)
+        return NextCloudLoginFlowV2(loginURL: loginURL, poll: pollClosure)
+    }
 
-        while Date() < deadline {
-            if Task.isCancelled { throw CancellationError() }
-            try await Task.sleep(nanoseconds: pollInterval)
-
-            var pollRequest = URLRequest(url: pollURL)
-            pollRequest.httpMethod = "POST"
-            pollRequest.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            pollRequest.setValue("application/json", forHTTPHeaderField: "Accept")
-            pollRequest.setValue("FileFluss (macOS)", forHTTPHeaderField: "User-Agent")
-            let bodyStr = "token=\(flow.poll.token)"
-            pollRequest.httpBody = bodyStr.data(using: .utf8)
-
-            let (pollData, pollResponse) = try await URLSession.shared.data(for: pollRequest)
-            guard let pollHTTP = pollResponse as? HTTPURLResponse else { continue }
-
-            if pollHTTP.statusCode == 200 {
-                let result = try JSONDecoder().decode(NextCloudLoginFlowResult.self, from: pollData)
-                let displayName = (try? await fetchDisplayName(
-                    serverURL: result.server,
-                    username: result.loginName,
-                    appPassword: result.appPassword
-                )) ?? result.loginName
-                nextCloudLog.info("[NextCloud] Login Flow v2 succeeded for \(displayName)")
-                return NextCloudCredentials(
-                    serverURL: normalizeServerURL(result.server),
-                    username: result.loginName,
-                    appPassword: result.appPassword,
-                    displayName: displayName
-                )
-            }
-            if pollHTTP.statusCode == 404 {
-                // Still pending — user hasn't finished the browser flow.
-                continue
-            }
-            // Anything else is unexpected — fail fast.
-            nextCloudLog.error("[NextCloud] Login Flow v2 poll failed: HTTP \(pollHTTP.statusCode)")
-            throw Self.mapHTTPError(statusCode: pollHTTP.statusCode)
-        }
-
-        throw CloudProviderError.commandFailed("Timed out waiting for browser sign-in.")
+    /// Thin wrapper for macOS callers that don't want to drive the
+    /// browser surface themselves: prepare → BrowserOpener.open → poll.
+    public static func startLoginFlowV2(serverURL: String) async throws -> NextCloudCredentials {
+        let flow = try await prepareLoginFlowV2(serverURL: serverURL)
+        await MainActor.run { BrowserOpener.open(flow.loginURL) }
+        return try await flow.poll()
     }
 
     /// One-shot user-info fetch used by Login Flow v2 to pull a real
