@@ -72,6 +72,11 @@ struct SidebarView: View {
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
     @State private var pendingRemoveAccount: CloudAccount?
+    /// Drives the blue insertion line that follows the cursor when a
+    /// folder is being dragged onto Favorites. nil = no drag in flight
+    /// over the section; otherwise the position in the favorites
+    /// array where the dropped folder would land.
+    @State private var favoritesInsertIndex: Int?
     /// Mirrors the SyncManager's quota cache as a SwiftUI-observable
     /// dictionary so `.help(...)` can show the latest figure without
     /// each sidebar row spawning its own task. Refreshed in a single
@@ -140,6 +145,12 @@ struct SidebarView: View {
                 } icon: {
                     FavoriteIconView(icon: fav.icon)
                 }
+                // Stretch to fill the available row width so the drop
+                // indicator overlay (attached at the row scope below)
+                // spans the whole row instead of just the label's
+                // intrinsic content width.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .tag(SidebarItem.location(url))
             }
         case .cloudFolder:
@@ -149,6 +160,8 @@ struct SidebarView: View {
                 } icon: {
                     FavoriteIconView(icon: fav.icon)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .tag(SidebarItem.cloudFolder(accountId: accountId, path: path))
             }
         }
@@ -157,7 +170,8 @@ struct SidebarView: View {
     var body: some View {
         List(selection: selection) {
             Section(isExpanded: favoritesExpanded) {
-                ForEach(appState.favorites(for: panelSide)) { fav in
+                let favs = appState.favorites(for: panelSide)
+                ForEach(Array(favs.enumerated()), id: \.element.id) { idx, fav in
                     favoriteRow(fav)
                         .contextMenu {
                             Button("Rename") {
@@ -170,12 +184,52 @@ struct SidebarView: View {
                                 appState.removeFavorite(id: fav.id, from: panelSide)
                             }
                         }
+                        // Drop overlay sits on top of the Label so AppKit
+                        // routes the drag to us before SwiftUI's URL-tag
+                        // selection plumbing can intercept (defaults like
+                        // Home/Desktop are tagged with their own URLs and
+                        // otherwise reject the drop).
+                        .overlay {
+                            FavoritesDropTarget(
+                                panelSide: panelSide,
+                                appState: appState,
+                                position: .row(index: idx),
+                                setHoverInsertIndex: { favoritesInsertIndex = $0 }
+                            )
+                        }
+                        // Blue insertion line centred in the visible
+                        // gap between this row and the row above. The
+                        // overlay's y=0 is the Label's top edge, which
+                        // sits below the row-container top by the List
+                        // row's intrinsic vertical inset (~4pt). To
+                        // land the indicator midway between rows we
+                        // shift up by half the indicator's height plus
+                        // that inset. Bottom indicator mirrors it.
+                        .overlay(alignment: .top) {
+                            if favoritesInsertIndex == idx {
+                                FavoritesInsertionLine().offset(y: -10)
+                            }
+                        }
+                        .overlay(alignment: .bottom) {
+                            if idx == favs.count - 1, favoritesInsertIndex == favs.count {
+                                FavoritesInsertionLine().offset(y: 10)
+                            }
+                        }
                 }
                 .onMove { indices, destination in
                     appState.moveFavorites(in: panelSide, fromOffsets: indices, toOffset: destination)
                 }
             } header: {
                 Text("Favorites")
+                    // Dropping on the header inserts at the very top.
+                    .overlay {
+                        FavoritesDropTarget(
+                            panelSide: panelSide,
+                            appState: appState,
+                            position: .header,
+                            setHoverInsertIndex: { favoritesInsertIndex = $0 }
+                        )
+                    }
             }
 
             if !appState.driveMonitor.drives.isEmpty {

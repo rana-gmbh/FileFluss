@@ -253,14 +253,19 @@ final class AppState {
         side == .left ? leftFavorites : rightFavorites
     }
 
-    func addLocalFavorite(url: URL, to side: PanelSide) {
+    func addLocalFavorite(url: URL, to side: PanelSide, at insertIndex: Int? = nil) {
         var favs = favorites(for: side)
         guard !favs.contains(where: { $0.kind == .localPath && $0.url == url }) else { return }
-        favs.append(.local(name: url.lastPathComponent, icon: "folder.fill", url: url))
+        let entry = SidebarFavorite.local(name: url.lastPathComponent, icon: "folder.fill", url: url)
+        if let i = insertIndex, i >= 0, i <= favs.count {
+            favs.insert(entry, at: i)
+        } else {
+            favs.append(entry)
+        }
         write(favs, to: side)
     }
 
-    func addCloudFavorite(accountId: UUID, path: String, name: String, to side: PanelSide) {
+    func addCloudFavorite(accountId: UUID, path: String, name: String, to side: PanelSide, at insertIndex: Int? = nil) {
         var favs = favorites(for: side)
         guard !favs.contains(where: {
             $0.kind == .cloudFolder && $0.accountId == accountId && $0.cloudPath == path
@@ -268,12 +273,17 @@ final class AppState {
         let account = syncManager.accountFor(id: accountId)
         let providerSuffix = account?.providerType.displayName ?? "Cloud"
         let displayName = "\(name) (\(providerSuffix))"
-        favs.append(.cloud(
+        let entry = SidebarFavorite.cloud(
             name: displayName,
             accountId: accountId,
             path: path,
             providerType: account?.providerType ?? .pCloud
-        ))
+        )
+        if let i = insertIndex, i >= 0, i <= favs.count {
+            favs.insert(entry, at: i)
+        } else {
+            favs.append(entry)
+        }
         write(favs, to: side)
     }
 
@@ -1413,10 +1423,20 @@ struct SidebarFavorite: Identifiable, Hashable, Codable {
     }
 
     static func cloud(name: String, accountId: UUID, path: String, providerType: CloudProviderType) -> SidebarFavorite {
-        SidebarFavorite(
+        // Default the favorite's icon to the provider's own logo (e.g.
+        // the Dropbox / Google Drive mark) when one is shipped in the
+        // asset catalog. Falls back to the generic SF Symbol cloud only
+        // for providers without a branded logo asset.
+        let icon: String
+        if let asset = providerType.logoAssetName {
+            icon = .favoriteAssetIcon(asset)
+        } else {
+            icon = "cloud.fill"
+        }
+        return SidebarFavorite(
             kind: .cloudFolder,
             displayName: name,
-            icon: "cloud.fill",
+            icon: icon,
             accountId: accountId,
             cloudPath: path,
             providerType: providerType
