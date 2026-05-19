@@ -39,7 +39,7 @@ struct NativeFileList: NSViewRepresentable {
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = true
         tableView.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
-        tableView.rowHeight = 24
+        tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
         tableView.intercellSpacing = NSSize(width: 10, height: 4)
         tableView.headerView = NSTableHeaderView()
         tableView.gridStyleMask = []
@@ -342,6 +342,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     nonisolated(unsafe) private var frameObserver: NSObjectProtocol?
     nonisolated(unsafe) private var activationObserver: NSObjectProtocol?
     nonisolated(unsafe) private var deminiaturizeObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var rowSizeObserver: NSObjectProtocol?
 
     // Resolved items being dragged (set when drag starts)
     private var currentDragItems: [FileItem] = []
@@ -363,6 +364,24 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 self.applyColumnVisibility(to: tableView)
             }
         }
+        rowSizeObserver = NotificationCenter.default.addObserver(
+            forName: .fileListRowSizeChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applyRowSize()
+            }
+        }
+    }
+
+    @MainActor
+    private func applyRowSize() {
+        guard let tableView else { return }
+        tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
+        // reloadData re-routes through `viewFor:row:` so each cell's
+        // text field picks up the freshly-sized font.
+        tableView.reloadData()
     }
 
     deinit {
@@ -372,6 +391,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         if let frameObserver { nc.removeObserver(frameObserver) }
         if let activationObserver { nc.removeObserver(activationObserver) }
         if let deminiaturizeObserver { nc.removeObserver(deminiaturizeObserver) }
+        if let rowSizeObserver { nc.removeObserver(rowSizeObserver) }
     }
 
     /// Keep the Name column sized to fit the panel as the scroll view's clip
@@ -472,7 +492,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 in: tableView,
                 color: .secondaryLabelColor,
                 alignment: .right,
-                font: .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+                font: FileListRowSizePrefs.current.monospacedDigitFont
             )
         case .kindColumn:
             return makeTextCell(
@@ -868,6 +888,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
+        cell.textField?.font = FileListRowSizePrefs.current.systemFont
 
         let baseIcon: NSImage = item.isDirectory
             ? FileTypeIcon.folderIcon()
@@ -909,7 +930,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         in tableView: NSTableView,
         color: NSColor = .labelColor,
         alignment: NSTextAlignment = .left,
-        font: NSFont = .systemFont(ofSize: NSFont.systemFontSize)
+        font: NSFont = FileListRowSizePrefs.current.systemFont
     ) -> NSTableCellView {
         let id = NSUserInterfaceItemIdentifier(identifier.rawValue + "Cell")
         let cell: NSTableCellView

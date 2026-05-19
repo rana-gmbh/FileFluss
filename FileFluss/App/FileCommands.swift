@@ -18,6 +18,9 @@ struct FileCommands: Commands {
     let appState: AppState
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
+    /// Drives the enabled/disabled state of the Increase/Decrease Row
+    /// Size commands so SwiftUI re-evaluates them when the pref changes.
+    @AppStorage(FileListRowSizePrefs.storageKey) private var rowSizeRaw = FileListRowSize.regular.rawValue
 
     // Read manager via the singleton so SwiftUI observes its state and the
     // Commands rebuild when bindings change.
@@ -199,6 +202,25 @@ struct FileCommands: Commands {
             Toggle("Show Status Bar", isOn: $showStatusBar)
                 .keyboardShortcut("/", modifiers: [.command, .shift])
             Toggle("Hide File Extensions", isOn: $hideFileExtensions)
+
+            Divider()
+
+            // Finder/Preview-style row scaling. Bound to Cmd+Plus and
+            // Cmd+Minus matching the convention every other macOS app
+            // uses for zoom-in / zoom-out. Plus is declared with an
+            // explicit .shift so SwiftUI accepts the shortcut across
+            // keyboard layouts (on US the `+` key is shift-`=`).
+            Button("Increase Row Size") {
+                FileListRowSizePrefs.set(.large)
+            }
+            .keyboardShortcut("+", modifiers: .command)
+            .disabled(rowSizeRaw == FileListRowSize.large.rawValue)
+
+            Button("Decrease Row Size") {
+                FileListRowSizePrefs.set(.regular)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+            .disabled(rowSizeRaw == FileListRowSize.regular.rawValue)
         }
 
         CommandMenu("Tools") {

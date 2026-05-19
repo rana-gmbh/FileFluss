@@ -43,7 +43,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = true
         tableView.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
-        tableView.rowHeight = 24
+        tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
         tableView.intercellSpacing = NSSize(width: 10, height: 4)
         tableView.headerView = NSTableHeaderView()
         tableView.gridStyleMask = []
@@ -311,6 +311,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     nonisolated(unsafe) private var frameObserver: NSObjectProtocol?
     nonisolated(unsafe) private var activationObserver: NSObjectProtocol?
     nonisolated(unsafe) private var deminiaturizeObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var rowSizeObserver: NSObjectProtocol?
     let filePromiseDelegate = CloudFilePromiseDelegate()
 
     private var currentDragItems: [CloudFileItem] = []
@@ -329,6 +330,24 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 self.applyColumnVisibility(to: tableView)
             }
         }
+        rowSizeObserver = NotificationCenter.default.addObserver(
+            forName: .fileListRowSizeChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applyRowSize()
+            }
+        }
+    }
+
+    @MainActor
+    private func applyRowSize() {
+        guard let tableView else { return }
+        tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
+        // reloadData re-routes through `viewFor:row:` so each cell's
+        // text field picks up the freshly-sized font.
+        tableView.reloadData()
     }
 
     deinit {
@@ -338,6 +357,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         if let frameObserver { nc.removeObserver(frameObserver) }
         if let activationObserver { nc.removeObserver(activationObserver) }
         if let deminiaturizeObserver { nc.removeObserver(deminiaturizeObserver) }
+        if let rowSizeObserver { nc.removeObserver(rowSizeObserver) }
     }
 
     /// Keep the Name column sized to fit the panel as the scroll view's clip
@@ -428,7 +448,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 in: tableView,
                 color: .secondaryLabelColor,
                 alignment: .right,
-                font: .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+                font: FileListRowSizePrefs.current.monospacedDigitFont
             )
         case .cloudKindColumn:
             return makeTextCell(
@@ -801,6 +821,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
+        cell.textField?.font = FileListRowSizePrefs.current.systemFont
 
         if item.isDirectory {
             cell.imageView?.image = FileTypeIcon.folderIcon()
@@ -835,7 +856,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         in tableView: NSTableView,
         color: NSColor = .labelColor,
         alignment: NSTextAlignment = .left,
-        font: NSFont = .systemFont(ofSize: NSFont.systemFontSize)
+        font: NSFont = FileListRowSizePrefs.current.systemFont
     ) -> NSTableCellView {
         let id = NSUserInterfaceItemIdentifier(identifier.rawValue + "Cell")
         let cell: NSTableCellView
