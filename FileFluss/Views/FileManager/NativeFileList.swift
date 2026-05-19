@@ -188,6 +188,9 @@ struct NativeFileList: NSViewRepresentable {
 
         if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
+            // Items changing may shift the longest filename — re-floor
+            // the Name column so Auto Resize stays accurate.
+            coordinator.applyNameColumnAutoResize()
         }
 
         // Sync selection from SwiftUI → NSTableView (only if they differ)
@@ -382,8 +385,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         let nc = NotificationCenter.default
         let resize: @Sendable (Notification) -> Void = { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let tv = self.tableView else { return }
-                FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .nameColumn)
+                self?.applyNameColumnAutoResize()
             }
         }
         boundsObserver = nc.addObserver(forName: NSView.boundsDidChangeNotification, object: clipView, queue: .main, using: resize)
@@ -393,8 +395,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         // Initial fit, after the scroll view has been placed in the view tree.
         DispatchQueue.main.async { [weak self] in
-            guard let self, let tv = self.tableView else { return }
-            FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .nameColumn)
+            self?.applyNameColumnAutoResize()
         }
     }
 
@@ -414,7 +415,18 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 break
             }
         }
-        FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .nameColumn)
+        applyNameColumnAutoResize()
+    }
+
+    /// Re-runs the Name-column elastic sizing with a floor derived from
+    /// the current items when the Auto Resize preference is on for the
+    /// local file list.
+    func applyNameColumnAutoResize() {
+        guard let tableView else { return }
+        let floor: CGFloat? = FileListColumnPrefs.nameAutoResize(forCloud: false)
+            ? FileListNameColumn.widestRequiredWidth(forNames: items.map(\.name))
+            : nil
+        FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .nameColumn, floor: floor)
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -665,12 +677,42 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             item.state = visible.contains(column) ? .on : .off
             menu.addItem(item)
         }
+        // Per-column extras for the Name column. Limited to Name for
+        // now because the other columns hold compact fixed-format
+        // values (dates, sizes, kinds) that almost never need
+        // auto-resizing in practice.
+        if clickedHeaderColumnIdentifier() == .nameColumn {
+            menu.addItem(.separator())
+            let autoItem = NSMenuItem(title: "Auto Resize", action: #selector(toggleNameAutoResize(_:)), keyEquivalent: "")
+            autoItem.target = self
+            autoItem.state = FileListColumnPrefs.nameAutoResize(forCloud: false) ? .on : .off
+            menu.addItem(autoItem)
+        }
+    }
+
+    /// Which header column the user right-clicked, if any. NSMenu's
+    /// delegate doesn't carry the click location, so we read it off
+    /// the current event and map to a column index.
+    private func clickedHeaderColumnIdentifier() -> NSUserInterfaceItemIdentifier? {
+        guard let headerView = tableView?.headerView,
+              let event = NSApp.currentEvent else { return nil }
+        let pointInWindow = event.locationInWindow
+        let pointInHeader = headerView.convert(pointInWindow, from: nil)
+        let column = headerView.column(at: pointInHeader)
+        guard column >= 0, let cols = tableView?.tableColumns, column < cols.count else { return nil }
+        return cols[column].identifier
     }
 
     @objc func toggleColumn(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let id = FileListColumnID(rawValue: raw) else { return }
         FileListColumnPrefs.toggle(id, forCloud: false)
+    }
+
+    @objc func toggleNameAutoResize(_ sender: NSMenuItem) {
+        let next = !FileListColumnPrefs.nameAutoResize(forCloud: false)
+        FileListColumnPrefs.setNameAutoResize(next, forCloud: false)
+        applyNameColumnAutoResize()
     }
 
     // MARK: - Drag Source

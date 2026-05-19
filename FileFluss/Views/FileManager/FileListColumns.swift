@@ -34,7 +34,21 @@ enum FileListColumnID: String, CaseIterable {
 enum FileListColumnPrefs {
     private static let localKey = "FileList.local.visibleColumns"
     private static let cloudKey = "FileList.cloud.visibleColumns"
+    private static let localNameAutoResizeKey = "FileList.local.nameAutoResize"
+    private static let cloudNameAutoResizeKey = "FileList.cloud.nameAutoResize"
     private static let defaultIDs: Set<FileListColumnID> = [.dateModified, .size]
+
+    /// When true, the Name column's minimum width is pinned to the
+    /// longest visible filename + icon padding, so the user never has
+    /// to scroll horizontally just to see the end of a filename.
+    static func nameAutoResize(forCloud: Bool) -> Bool {
+        UserDefaults.standard.bool(forKey: forCloud ? cloudNameAutoResizeKey : localNameAutoResizeKey)
+    }
+
+    static func setNameAutoResize(_ value: Bool, forCloud: Bool) {
+        UserDefaults.standard.set(value, forKey: forCloud ? cloudNameAutoResizeKey : localNameAutoResizeKey)
+        NotificationCenter.default.post(name: .fileListColumnsChanged, object: forCloud)
+    }
 
     /// Cloud panels exclude Date Created — `CloudFileItem` does not carry a
     /// creation timestamp because most providers either don't expose one or
@@ -88,12 +102,22 @@ enum FileListNameColumn {
     /// in realistic two-panel layouts.
     static let minWidth: CGFloat = 80
 
-    /// Resize the Name column to fill whatever width is left after the other
-    /// visible columns and intercell spacing.
+    /// Width that an icon + intercell padding contribute to a Name cell
+    /// on top of the rendered text width — measured empirically against
+    /// the local/cloud list row layout.
+    static let iconAndPaddingWidth: CGFloat = 32
+
+    /// Resize the Name column to fill whatever width is left after the
+    /// other visible columns and intercell spacing. When `floor` is
+    /// provided (Auto Resize preference is on, callers compute it from
+    /// the longest visible filename), the column is never narrower
+    /// than that — even if the resulting width exceeds the visible
+    /// pane and forces horizontal scrolling.
     @MainActor
     static func resizeNameColumn(
         in tableView: NSTableView,
-        nameColumnID: NSUserInterfaceItemIdentifier
+        nameColumnID: NSUserInterfaceItemIdentifier,
+        floor floorOverride: CGFloat? = nil
     ) {
         guard let nameCol = tableView.tableColumns.first(where: { $0.identifier == nameColumnID }) else {
             return
@@ -106,9 +130,27 @@ enum FileListNameColumn {
         // Gaps between the (N other + 1 name) visible columns = visibleOthers.count.
         let spacing = tableView.intercellSpacing.width * CGFloat(visibleOthers.count)
 
-        let target = max(minWidth, clipWidth - othersWidth - spacing)
+        let effectiveFloor = max(minWidth, floorOverride ?? 0)
+        nameCol.minWidth = effectiveFloor
+        let target = max(effectiveFloor, clipWidth - othersWidth - spacing)
         if abs(nameCol.width - target) > 0.5 {
             nameCol.width = target
         }
+    }
+
+    /// Measures the widest of `names` using the standard table-row
+    /// font and returns text-width + icon/padding, suitable for use
+    /// as the Name column's minimum width.
+    static func widestRequiredWidth(forNames names: [String]) -> CGFloat {
+        guard !names.isEmpty else { return minWidth }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        ]
+        var widest: CGFloat = 0
+        for name in names {
+            let w = (name as NSString).size(withAttributes: attrs).width
+            if w > widest { widest = w }
+        }
+        return widest + iconAndPaddingWidth
     }
 }

@@ -170,6 +170,9 @@ struct NativeCloudFileList: NSViewRepresentable {
 
         if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
+            // Items changing may shift the longest filename — re-floor
+            // the Name column so Auto Resize stays accurate.
+            coordinator.applyNameColumnAutoResize()
         }
 
         let currentNSSelection = Set(tableView.selectedRowIndexes.compactMap { idx -> String? in
@@ -348,8 +351,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         let nc = NotificationCenter.default
         let resize: @Sendable (Notification) -> Void = { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let tv = self.tableView else { return }
-                FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .cloudNameColumn)
+                self?.applyNameColumnAutoResize()
             }
         }
         boundsObserver = nc.addObserver(forName: NSView.boundsDidChangeNotification, object: clipView, queue: .main, using: resize)
@@ -358,8 +360,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         deminiaturizeObserver = nc.addObserver(forName: NSWindow.didDeminiaturizeNotification, object: nil, queue: .main, using: resize)
 
         DispatchQueue.main.async { [weak self] in
-            guard let self, let tv = self.tableView else { return }
-            FileListNameColumn.resizeNameColumn(in: tv, nameColumnID: .cloudNameColumn)
+            self?.applyNameColumnAutoResize()
         }
     }
 
@@ -377,7 +378,18 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 break
             }
         }
-        FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .cloudNameColumn)
+        applyNameColumnAutoResize()
+    }
+
+    /// Cloud-list counterpart of the local file list helper. Pins the
+    /// Name column's minimum width to the widest visible filename when
+    /// the Auto Resize preference is on for cloud panels.
+    func applyNameColumnAutoResize() {
+        guard let tableView else { return }
+        let floor: CGFloat? = FileListColumnPrefs.nameAutoResize(forCloud: true)
+            ? FileListNameColumn.widestRequiredWidth(forNames: items.map(\.name))
+            : nil
+        FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .cloudNameColumn, floor: floor)
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -605,12 +617,38 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             item.state = visible.contains(column) ? .on : .off
             menu.addItem(item)
         }
+        if clickedHeaderColumnIdentifier() == .cloudNameColumn {
+            menu.addItem(.separator())
+            let autoItem = NSMenuItem(title: "Auto Resize", action: #selector(toggleNameAutoResize(_:)), keyEquivalent: "")
+            autoItem.target = self
+            autoItem.state = FileListColumnPrefs.nameAutoResize(forCloud: true) ? .on : .off
+            menu.addItem(autoItem)
+        }
+    }
+
+    /// Header column the user right-clicked, identified by its
+    /// NSUserInterfaceItemIdentifier. NSMenu's delegate doesn't surface
+    /// the click location, so read it off the current event.
+    private func clickedHeaderColumnIdentifier() -> NSUserInterfaceItemIdentifier? {
+        guard let headerView = tableView?.headerView,
+              let event = NSApp.currentEvent else { return nil }
+        let pointInWindow = event.locationInWindow
+        let pointInHeader = headerView.convert(pointInWindow, from: nil)
+        let column = headerView.column(at: pointInHeader)
+        guard column >= 0, let cols = tableView?.tableColumns, column < cols.count else { return nil }
+        return cols[column].identifier
     }
 
     @objc func toggleColumn(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let id = FileListColumnID(rawValue: raw) else { return }
         FileListColumnPrefs.toggle(id, forCloud: true)
+    }
+
+    @objc func toggleNameAutoResize(_ sender: NSMenuItem) {
+        let next = !FileListColumnPrefs.nameAutoResize(forCloud: true)
+        FileListColumnPrefs.setNameAutoResize(next, forCloud: true)
+        applyNameColumnAutoResize()
     }
 
     @objc func handleDeleteFromMenu(_ sender: NSMenuItem) {
