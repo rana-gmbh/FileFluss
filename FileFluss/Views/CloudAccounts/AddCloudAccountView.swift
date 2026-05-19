@@ -1,5 +1,38 @@
 import SwiftUI
+import AppKit
 import FileFlussCore
+
+/// Adds `.resizable` to the underlying NSWindow's style mask (sheets on
+/// macOS are non-resizable by default) and seeds an initial size derived
+/// from the active screen, so the picker never opens taller than the
+/// visible screen area on a 14" MacBook.
+private struct SheetWindowConfigurator: NSViewRepresentable {
+    @Binding var didConfigure: Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard !didConfigure, let window = view.window else { return }
+            didConfigure = true
+
+            window.styleMask.insert(.resizable)
+
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+                ?? CGRect(x: 0, y: 0, width: 1280, height: 800)
+            // Leave ~80pt of breathing room around the sheet so it never
+            // pins flush to the menu bar / dock on small displays.
+            let maxW = max(460, visible.width - 80)
+            let maxH = max(320, visible.height - 80)
+            let targetW = min(640, maxW)
+            let targetH = min(840, maxH)
+
+            window.minSize = NSSize(width: 460, height: 320)
+            window.setContentSize(NSSize(width: targetW, height: targetH))
+            window.center()
+        }
+    }
+}
 
 struct AddCloudAccountView: View {
     @Environment(AppState.self) private var appState
@@ -71,6 +104,7 @@ struct AddCloudAccountView: View {
     @State private var s3CompatibleDisplayName = ""
 
     @State private var isAuthenticating = false
+    @State private var didConfigureWindow = false
 
     /// Providers that show up under "Cloud Storage Providers". These are
     /// branded consumer/business cloud services. Sorted alphabetically
@@ -87,15 +121,19 @@ struct AddCloudAccountView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 20) {
-            if let selectedProvider {
-                loginForm(for: selectedProvider)
-            } else {
-                providerPicker
+        ScrollView {
+            VStack(spacing: 20) {
+                if let selectedProvider {
+                    loginForm(for: selectedProvider)
+                } else {
+                    providerPicker
+                }
             }
+            .padding(24)
+            .frame(maxWidth: .infinity)
         }
-        .padding(24)
-        .frame(width: 560)
+        .frame(minWidth: 460, minHeight: 320)
+        .background(SheetWindowConfigurator(didConfigure: $didConfigureWindow))
     }
 
     private var providerPicker: some View {
@@ -128,7 +166,7 @@ struct AddCloudAccountView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
                 ForEach(providers) { provider in
                     Button {
                         selectedProvider = provider
