@@ -389,10 +389,13 @@ final class AppState {
     }
 
     func addTransfer(_ transfer: TransferProgress, panel: PanelSide) {
+        // Insert at index 0 so the newest transfer renders at the top of
+        // the sidebar's Transfers section — users shouldn't have to scroll
+        // past completed jobs to see what just started or finished.
         if panel == .left {
-            leftTransfers.append(transfer)
+            leftTransfers.insert(transfer, at: 0)
         } else {
-            rightTransfers.append(transfer)
+            rightTransfers.insert(transfer, at: 0)
         }
     }
 
