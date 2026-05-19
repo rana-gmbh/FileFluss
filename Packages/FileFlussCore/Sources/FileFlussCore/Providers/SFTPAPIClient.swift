@@ -476,80 +476,171 @@ public actor SFTPAPIClient {
 
     private func parseListing(output: String, basePath: String) -> [CloudFileItem] {
         var items: [CloudFileItem] = []
-        let lines = output.components(separatedBy: "\n")
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { continue }
-
-            // Skip sftp prompt lines and non-listing lines
-            guard trimmed.first == "-" || trimmed.first == "d" || trimmed.first == "l" || trimmed.first == "c" || trimmed.first == "b" || trimmed.first == "p" || trimmed.first == "s" else { continue }
-
-            // Parse: permissions links owner group size month day time/year name
-            // Use regex for robust parsing with variable whitespace
-            let pattern = #"^([dlcbps-][rwxsStT@+-]{9,})\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\w+)\s+(\d{1,2})\s+([\d:]+|\d{4})\s+(.+)$"#
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) else {
-                continue
-            }
-
-            guard let permsRange = Range(match.range(at: 1), in: trimmed),
-                  let sizeRange = Range(match.range(at: 5), in: trimmed),
-                  let monthRange = Range(match.range(at: 6), in: trimmed),
-                  let dayRange = Range(match.range(at: 7), in: trimmed),
-                  let timeRange = Range(match.range(at: 8), in: trimmed),
-                  let nameRange = Range(match.range(at: 9), in: trimmed) else {
-                continue
-            }
-
-            let perms = String(trimmed[permsRange])
-            let size = Int64(trimmed[sizeRange]) ?? 0
-            let month = String(trimmed[monthRange])
-            let day = String(trimmed[dayRange])
-            let timeOrYear = String(trimmed[timeRange])
-            var name = Self.unescapeOctal(String(trimmed[nameRange]))
-
-            // Skip . and ..
-            if name == "." || name == ".." { continue }
-
-            // Handle symlinks: "name -> target"
-            if perms.first == "l", let arrowRange = name.range(of: " -> ") {
-                name = String(name[name.startIndex..<arrowRange.lowerBound])
-            }
-
-            let isDirectory = perms.first == "d"
-            let modDate = Self.parseDate(month: month, day: day, timeOrYear: timeOrYear)
-
+        for line in output.components(separatedBy: "\n") {
+            guard let parsed = Self.parseListingLine(line) else { continue }
             let itemPath: String
             if basePath == "/" {
-                itemPath = "/\(name)"
+                itemPath = "/\(parsed.name)"
             } else {
-                itemPath = "\(basePath)/\(name)"
+                itemPath = "\(basePath)/\(parsed.name)"
             }
-
-            let item = CloudFileItem(
-                id: isDirectory ? "d\(itemPath.hashValue)" : "f\(itemPath.hashValue)",
-                name: name,
+            items.append(CloudFileItem(
+                id: parsed.isDirectory ? "d\(itemPath.hashValue)" : "f\(itemPath.hashValue)",
+                name: parsed.name,
                 path: itemPath,
-                isDirectory: isDirectory,
-                size: isDirectory ? 0 : size,
-                modificationDate: modDate,
+                isDirectory: parsed.isDirectory,
+                size: parsed.isDirectory ? 0 : parsed.size,
+                modificationDate: parsed.modDate,
                 checksum: nil
+            ))
+        }
+
+        if items.isEmpty, Self.outputLooksLikeListing(output) {
+            // The server returned text that looks like a long listing (had
+            // at least one permissions-prefixed line) but none of our
+            // patterns matched. This is the symptom behind issue #31:
+            // ProFTPD/mod_sftp and a few other SFTP daemons emit ISO-style
+            // dates or other longname variants we don't yet recognise.
+            // Surfacing the raw sample turns the otherwise-silent
+            // empty-folder bug into something diagnosable from the
+            // support log.
+            sftpLog.error(
+                "[SFTP] Folder \(basePath, privacy: .public) parsed 0 items from listing-shaped output; unrecognised longname format. Sample: \(output.prefix(500), privacy: .public)"
             )
-            items.append(item)
         }
 
         return items
     }
 
+    /// Heuristic for "this output contains at least one line that looks
+    /// like a long-form `ls -la` row" — used to distinguish a genuinely
+    /// empty directory (no listing lines) from a parser miss.
+    public static func outputLooksLikeListing(_ output: String) -> Bool {
+        for raw in output.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard let first = line.first, "-dlcbps".contains(first) else { continue }
+            // Cheap structural check: leading filetype char + at least
+            // a few perms chars. Avoids false positives on prompt lines.
+            if line.count >= 10 {
+                let prefix = line.prefix(10)
+                if prefix.dropFirst().allSatisfy({ "rwxsStT@+.\\*-".contains($0) }) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Parsed shape returned by `parseListingLine` — kept narrow so the
+    /// caller (and tests) only see the fields they need.
+    public struct ParsedListingLine: Equatable, Sendable {
+        public let perms: String
+        public let size: Int64
+        public let isDirectory: Bool
+        public let modDate: Date
+        public let name: String
+    }
+
+    /// Parses one line of an SFTP server's long-form directory listing.
+    /// Returns `nil` for blank lines, prompt lines, `.`/`..` entries, or
+    /// rows that don't match any of the recognised longname formats.
+    ///
+    /// We try the classic OpenSSH `MONTH DAY TIME-OR-YEAR` form first
+    /// (preserves every working server) and only fall back to the ISO
+    /// `YYYY-MM-DD HH:MM[:SS]?` form emitted by ProFTPD `mod_sftp` and a
+    /// few other daemons. The permissions block also accepts `.` and `*`
+    /// suffix characters so SELinux-context rows (RHEL/CentOS) parse.
+    public static func parseListingLine(_ line: String) -> ParsedListingLine? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        // Permissions field must start with one of these filetype chars.
+        // Other leading chars (e.g. "total 4", "sftp>" prompts) are noise.
+        guard let first = trimmed.first, "-dlcbps".contains(first) else { return nil }
+
+        // Common prefix: perms LINKS OWNER GROUP SIZE
+        let permsClass = #"[dlcbps-][rwxsStT@+.\*\-]{9,}"#
+        let classicPattern = "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\S+)\\s+(\\d{1,2})\\s+([\\d:]+|\\d{4})\\s+(.+)$"
+        let isoPattern = "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
+
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+
+        if let regex = try? NSRegularExpression(pattern: classicPattern),
+           let match = regex.firstMatch(in: trimmed, range: range),
+           let permsRange = Range(match.range(at: 1), in: trimmed),
+           let sizeRange = Range(match.range(at: 5), in: trimmed),
+           let monthRange = Range(match.range(at: 6), in: trimmed),
+           let dayRange = Range(match.range(at: 7), in: trimmed),
+           let timeRange = Range(match.range(at: 8), in: trimmed),
+           let nameRange = Range(match.range(at: 9), in: trimmed) {
+            let perms = String(trimmed[permsRange])
+            // Sanity-check the month token — if it's not a recognised
+            // abbreviation we likely matched the wrong fields (e.g. a
+            // numeric "owner" was 1-char which the regex tolerated). Bail
+            // and let the ISO branch try.
+            let monthStr = String(trimmed[monthRange])
+            if Self.monthNumber(for: monthStr) != nil {
+                let size = Int64(trimmed[sizeRange]) ?? 0
+                let day = String(trimmed[dayRange])
+                let timeOrYear = String(trimmed[timeRange])
+                let modDate = Self.parseDate(month: monthStr, day: day, timeOrYear: timeOrYear)
+                let name = Self.cleanupListingName(rawName: String(trimmed[nameRange]), perms: perms)
+                if let name {
+                    return ParsedListingLine(
+                        perms: perms,
+                        size: size,
+                        isDirectory: perms.first == "d",
+                        modDate: modDate,
+                        name: name
+                    )
+                }
+            }
+        }
+
+        if let regex = try? NSRegularExpression(pattern: isoPattern),
+           let match = regex.firstMatch(in: trimmed, range: range),
+           let permsRange = Range(match.range(at: 1), in: trimmed),
+           let sizeRange = Range(match.range(at: 5), in: trimmed),
+           let dateRange = Range(match.range(at: 6), in: trimmed),
+           let nameRange = Range(match.range(at: 8), in: trimmed) {
+            let perms = String(trimmed[permsRange])
+            let size = Int64(trimmed[sizeRange]) ?? 0
+            let date = String(trimmed[dateRange])
+            let timeStr: String? = {
+                guard let r = Range(match.range(at: 7), in: trimmed) else { return nil }
+                return String(trimmed[r])
+            }()
+            let modDate = Self.parseISODate(date: date, time: timeStr)
+            let name = Self.cleanupListingName(rawName: String(trimmed[nameRange]), perms: perms)
+            if let name {
+                return ParsedListingLine(
+                    perms: perms,
+                    size: size,
+                    isDirectory: perms.first == "d",
+                    modDate: modDate,
+                    name: name
+                )
+            }
+        }
+
+        return nil
+    }
+
+    /// Octal-unescape the raw name field, drop `.`/`..` self-references,
+    /// and strip the `" -> target"` suffix for symlinks.
+    private static func cleanupListingName(rawName: String, perms: String) -> String? {
+        var name = Self.unescapeOctal(rawName)
+        if name == "." || name == ".." { return nil }
+        if perms.first == "l", let arrow = name.range(of: " -> ") {
+            name = String(name[name.startIndex..<arrow.lowerBound])
+        }
+        return name.isEmpty ? nil : name
+    }
+
     private static func parseDate(month: String, day: String, timeOrYear: String) -> Date {
         let calendar = Calendar.current
-        let now = Date()
-        let currentYear = calendar.component(.year, from: now)
+        let currentYear = calendar.component(.year, from: Date())
 
-        let months = ["Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
-                       "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12]
-        guard let monthNum = months[month], let dayNum = Int(day) else {
+        guard let monthNum = monthNumber(for: month), let dayNum = Int(day) else {
             return .distantPast
         }
 
@@ -558,17 +649,62 @@ public actor SFTPAPIClient {
         components.day = dayNum
 
         if timeOrYear.contains(":") {
-            // Time format: HH:MM — assume current year
+            // Time format: HH:MM — assume current year (matches the
+            // convention `ls` uses for files modified in the last 6 mo).
             let parts = timeOrYear.split(separator: ":")
             components.year = currentYear
             components.hour = Int(parts[0]) ?? 0
             components.minute = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
         } else {
-            // Year format
             components.year = Int(timeOrYear) ?? currentYear
         }
 
         return calendar.date(from: components) ?? .distantPast
+    }
+
+    /// ISO 8601-ish `YYYY-MM-DD [HH:MM[:SS]]` form used by ProFTPD
+    /// `mod_sftp` and a handful of other SFTP daemons.
+    private static func parseISODate(date: String, time: String?) -> Date {
+        let parts = date.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]) else {
+            return .distantPast
+        }
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        if let time {
+            let tp = time.split(separator: ":")
+            components.hour = tp.count > 0 ? Int(tp[0]) ?? 0 : 0
+            components.minute = tp.count > 1 ? Int(tp[1]) ?? 0 : 0
+            components.second = tp.count > 2 ? Int(tp[2]) ?? 0 : 0
+        }
+        return Calendar.current.date(from: components) ?? .distantPast
+    }
+
+    /// English month-abbreviation lookup plus the handful of German
+    /// abbreviations OpenSSH builds emit when forced into a non-C
+    /// locale (`Mär`, `Mrz`, `Okt`, `Dez`). `Mai` happens to match the
+    /// English `May` semantically so we get it for free.
+    private static func monthNumber(for token: String) -> Int? {
+        switch token {
+        case "Jan": return 1
+        case "Feb": return 2
+        case "Mar", "Mär", "Mrz": return 3
+        case "Apr": return 4
+        case "May", "Mai": return 5
+        case "Jun": return 6
+        case "Jul": return 7
+        case "Aug": return 8
+        case "Sep", "Sept": return 9
+        case "Oct", "Okt": return 10
+        case "Nov": return 11
+        case "Dec", "Dez": return 12
+        default: return nil
+        }
     }
 
     // MARK: - Helpers

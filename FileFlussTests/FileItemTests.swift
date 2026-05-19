@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import UniformTypeIdentifiers
+import FileFlussCore
 @testable import FileFluss
 
 @Suite("FileItem Tests")

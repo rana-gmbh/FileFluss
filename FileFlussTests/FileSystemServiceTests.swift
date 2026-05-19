@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FileFlussCore
 @testable import FileFluss
 
 @Suite("FileSystemService Tests")
