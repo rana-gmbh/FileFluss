@@ -451,7 +451,8 @@ final class SyncViewModel {
         secretAccessKey: String,
         endpoint: String,
         region: String,
-        displayName: String?
+        displayName: String?,
+        rootPath: String? = nil
     ) async {
         let account = CloudAccount(providerType: .s3Compatible)
         let provider = S3CompatibleProvider(accountId: account.id)
@@ -465,10 +466,20 @@ final class SyncViewModel {
                 region: region,
                 displayName: displayName
             )
+
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
+            if let normalizedRoot {
+                _ = try await provider.listDirectory(at: normalizedRoot)
+            }
+
             var connectedAccount = account
             let userName = try? await provider.userDisplayName()
             if let userName, !userName.isEmpty {
                 connectedAccount.displayName = userName
+            }
+            if let normalizedRoot {
+                connectedAccount.rootPath = normalizedRoot
+                connectedAccount.displayName = "\(connectedAccount.displayName) — \(normalizedRoot.dropFirst())"
             }
             connectedAccount.isConnected = true
             accounts.append(connectedAccount)
@@ -537,7 +548,12 @@ final class SyncViewModel {
         }
     }
 
-    func addS3Account(accessKeyId: String, secretAccessKey: String, region: String) async {
+    func addS3Account(
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        rootPath: String? = nil
+    ) async {
         let account = CloudAccount(providerType: .s3)
         let provider = S3Provider(accountId: account.id)
         authError = nil
@@ -548,11 +564,25 @@ final class SyncViewModel {
                 secretAccessKey: secretAccessKey,
                 region: region
             )
+
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
+            if let normalizedRoot {
+                // Probe the chosen bucket/prefix once so a typo or missing
+                // ListBucket permission surfaces as a clear connect-time
+                // error instead of producing an account that silently
+                // opens to an empty folder.
+                _ = try await provider.listDirectory(at: normalizedRoot)
+            }
+
             var connectedAccount = account
 
             let userName = try? await provider.userDisplayName()
             if let userName, !userName.isEmpty {
                 connectedAccount.displayName = userName
+            }
+            if let normalizedRoot {
+                connectedAccount.rootPath = normalizedRoot
+                connectedAccount.displayName = "\(connectedAccount.displayName) — \(normalizedRoot.dropFirst())"
             }
 
             connectedAccount.isConnected = true
@@ -562,6 +592,16 @@ final class SyncViewModel {
         } catch {
             authError = error.localizedDescription
         }
+    }
+
+    /// Trims whitespace and slashes off the user-supplied bucket/prefix
+    /// path and re-prefixes a single `/`. Returns nil for empty input so
+    /// the caller leaves the account's default rootPath alone.
+    static func normalizeS3RootPath(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return trimmed.isEmpty ? nil : "/\(trimmed)"
     }
 
     func addWebDAVAccount(serverURL: String, username: String, password: String) async {

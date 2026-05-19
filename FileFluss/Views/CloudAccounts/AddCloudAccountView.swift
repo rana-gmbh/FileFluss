@@ -48,6 +48,7 @@ struct AddCloudAccountView: View {
     @State private var s3AccessKeyId = ""
     @State private var s3SecretAccessKey = ""
     @State private var s3Region = "us-east-1"
+    @State private var s3Path = ""
 
     enum SFTPAuthMethod: String, CaseIterable, Hashable, Identifiable {
         case password = "Password"
@@ -102,6 +103,7 @@ struct AddCloudAccountView: View {
     @State private var s3CompatibleEndpoint = ""
     @State private var s3CompatibleRegion = ""
     @State private var s3CompatibleDisplayName = ""
+    @State private var s3CompatiblePath = ""
 
     @State private var isAuthenticating = false
     @State private var didConfigureWindow = false
@@ -263,6 +265,7 @@ struct AddCloudAccountView: View {
                     s3AccessKeyId = ""
                     s3SecretAccessKey = ""
                     s3Region = "us-east-1"
+                    s3Path = ""
                     sftpAuthMethod = .password
                     sftpRemotePath = "/"
                     sftpPassphrase = ""
@@ -286,6 +289,7 @@ struct AddCloudAccountView: View {
                     s3CompatibleEndpoint = ""
                     s3CompatibleRegion = ""
                     s3CompatibleDisplayName = ""
+                    s3CompatiblePath = ""
                 }
                 .disabled(isAuthenticating)
 
@@ -871,7 +875,15 @@ struct AddCloudAccountView: View {
             TextField("Display name (optional, e.g. \"Hetzner FSN1\")", text: $s3CompatibleDisplayName)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
+
+            TextField("Path (optional, e.g. my-bucket or my-bucket/my-folder)", text: $s3CompatiblePath)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            Text("Leave blank to see all buckets. Otherwise the panel opens directly at this bucket or sub-folder.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
             Text("Region tips: Hetzner uses the location code (fsn1, nbg1, hel1). Cloudflare R2 expects \"auto\". MinIO and most Backblaze B2 setups want \"us-east-1\".")
                 .font(.caption2)
@@ -973,7 +985,15 @@ struct AddCloudAccountView: View {
             TextField("Or type a custom region code", text: $s3Region)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
+
+            TextField("Path (optional, e.g. my-bucket or my-bucket/my-folder)", text: $s3Path)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
                 .onSubmit { login() }
+
+            Text("Leave blank to see all buckets. Otherwise the panel opens directly at this bucket or sub-folder.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -1151,7 +1171,8 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addS3Account(
                     accessKeyId: s3AccessKeyId.trimmingCharacters(in: .whitespacesAndNewlines),
                     secretAccessKey: s3SecretAccessKey,
-                    region: trimmedRegion.isEmpty ? "us-east-1" : trimmedRegion
+                    region: trimmedRegion.isEmpty ? "us-east-1" : trimmedRegion,
+                    rootPath: s3Path
                 )
             case .synologyDrive:
                 let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1176,7 +1197,8 @@ struct AddCloudAccountView: View {
                     secretAccessKey: s3CompatibleSecretAccessKey,
                     endpoint: s3CompatibleEndpoint.trimmingCharacters(in: .whitespacesAndNewlines),
                     region: s3CompatibleRegion.trimmingCharacters(in: .whitespacesAndNewlines),
-                    displayName: displayName.isEmpty ? nil : displayName
+                    displayName: displayName.isEmpty ? nil : displayName,
+                    rootPath: s3CompatiblePath
                 )
             case .iCloud:
                 await appState.syncManager.addICloudAccount()
