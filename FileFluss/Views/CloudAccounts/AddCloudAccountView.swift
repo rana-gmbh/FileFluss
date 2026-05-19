@@ -107,6 +107,28 @@ struct AddCloudAccountView: View {
 
     @State private var isAuthenticating = false
     @State private var didConfigureWindow = false
+    @State private var loginTask: Task<Void, Never>?
+
+    /// True iff the currently selected provider has an in-flight browser
+    /// OAuth round-trip. Used to swap the bottom action button between
+    /// Connect and Cancel Sign-In.
+    private var isPendingBrowserAuth: Bool {
+        switch selectedProvider {
+        case .googleDrive: return appState.syncManager.isAuthenticatingGoogleDrive
+        case .dropbox: return appState.syncManager.isAuthenticatingDropbox
+        case .oneDrive: return appState.syncManager.isAuthenticatingOneDrive
+        case .nextCloud: return appState.syncManager.isAuthenticatingNextCloud
+        case .box: return appState.syncManager.isAuthenticatingBox
+        default: return false
+        }
+    }
+
+    private func cancelPendingBrowserAuth() {
+        loginTask?.cancel()
+        loginTask = nil
+        appState.syncManager.cancelPendingBrowserAuth()
+        isAuthenticating = false
+    }
 
     /// Providers that show up under "Cloud Storage Providers". These are
     /// branded consumer/business cloud services. Sorted alphabetically
@@ -136,6 +158,15 @@ struct AddCloudAccountView: View {
         }
         .frame(minWidth: 460, minHeight: 320)
         .background(SheetWindowConfigurator(didConfigure: $didConfigureWindow))
+        .onDisappear {
+            // Safety net for Esc / parent-window close: if the user
+            // dismisses while a browser OAuth was pending, the flags
+            // would otherwise stick for the rest of the session and
+            // hide Connect the next time this sheet opens. See #24.
+            loginTask?.cancel()
+            loginTask = nil
+            appState.syncManager.cancelPendingBrowserAuth()
+        }
     }
 
     private var providerPicker: some View {
@@ -300,7 +331,11 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if !appState.syncManager.isAuthenticatingGoogleDrive && !appState.syncManager.isAuthenticatingDropbox && !appState.syncManager.isAuthenticatingBox && !appState.syncManager.isAuthenticatingNextCloud && !appState.syncManager.isAuthenticatingOneDrive {
+                if isPendingBrowserAuth {
+                    Button("Cancel Sign-In", role: .destructive) {
+                        cancelPendingBrowserAuth()
+                    }
+                } else {
                     Button("Connect") { login() }
                         .keyboardShortcut(.defaultAction)
                         .disabled(isLoginDisabled)
@@ -1074,7 +1109,7 @@ struct AddCloudAccountView: View {
             }
         }
 
-        Task {
+        loginTask = Task {
             switch selectedProvider {
             case .kDrive:
                 let token = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1237,6 +1272,7 @@ struct AddCloudAccountView: View {
                 dismiss()
             }
             isAuthenticating = false
+            loginTask = nil
         }
     }
 }

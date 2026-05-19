@@ -31,6 +31,21 @@ final class SyncViewModel {
         loadAccounts()
     }
 
+    /// Clears every browser-OAuth pending flag and any leftover auth
+    /// error. Called when the user aborts a pending sign-in (closes the
+    /// browser tab and hits Cancel in the Add Account sheet, or just
+    /// dismisses the sheet outright). Without this, the flags stay set
+    /// for the rest of the session and the Add Account dialog hides
+    /// the Connect button permanently — see issue #24.
+    func cancelPendingBrowserAuth() {
+        isAuthenticatingGoogleDrive = false
+        isAuthenticatingDropbox = false
+        isAuthenticatingOneDrive = false
+        isAuthenticatingNextCloud = false
+        isAuthenticatingBox = false
+        authError = nil
+    }
+
     func addPCloudAccount(email: String, password: String) async {
         await connectPCloud { provider in
             try await provider.authenticate(email: email, password: password)
