@@ -251,6 +251,29 @@ public actor BoxAPIClient {
         credentials.displayName
     }
 
+    /// Box `/users/me?fields=space_amount,space_used`. `space_amount`
+    /// is the user's total quota in bytes; -1 means "no quota assigned"
+    /// (typical for enterprise accounts), which we surface as `nil`.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct Me: Decodable {
+            let space_amount: Int64?
+            let space_used: Int64?
+        }
+        let creds = try await refreshTokenIfNeeded()
+        let url = URL(string: "\(Self.apiURL)/users/me?fields=space_amount,space_used")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        let me = try JSONDecoder().decode(Me.self, from: data)
+        let total = (me.space_amount ?? -1) > 0 ? me.space_amount : nil
+        return CloudStorageQuota(usedBytes: me.space_used ?? 0, totalBytes: total)
+    }
+
     // MARK: - File operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {

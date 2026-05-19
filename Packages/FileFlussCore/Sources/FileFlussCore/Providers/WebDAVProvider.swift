@@ -123,6 +123,11 @@ public final class WebDAVProvider: CloudProvider, @unchecked Sendable {
         return try await client.searchFiles(query: query, path: path)
     }
 
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        guard let client = apiClient else { return nil }
+        return try await client.storageQuota()
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

@@ -556,6 +556,32 @@ public actor MegaAPIClient {
         credentials.email
     }
 
+    /// MEGA `uq` (user quota) command. Returns the current storage
+    /// (`cstrg`) and the configured maximum (`mstrg`). Free accounts
+    /// carry a fixed cap (currently 20 GB but tunable by MEGA); paid
+    /// plans report their tier total. When `mstrg` is missing or 0 we
+    /// surface used-only.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        let result = try await apiCall([[
+            "a": "uq",
+            "strg": 1,
+            "v": 1,
+        ]])
+        guard let first = result.first as? [String: Any] else { return nil }
+        let used = Self.int64(first["cstrg"]) ?? 0
+        let total = Self.int64(first["mstrg"])
+        let resolvedTotal = (total ?? 0) > 0 ? total : nil
+        return CloudStorageQuota(usedBytes: used, totalBytes: resolvedTotal)
+    }
+
+    /// JSONSerialization gives back NSNumber or String for the numeric
+    /// fields depending on size — accept both.
+    private static func int64(_ value: Any?) -> Int64? {
+        if let n = value as? NSNumber { return n.int64Value }
+        if let s = value as? String { return Int64(s) }
+        return nil
+    }
+
     // MARK: - Private Helpers
 
     private func apiCall(_ commands: [[String: Any]]) async throws -> [Any] {

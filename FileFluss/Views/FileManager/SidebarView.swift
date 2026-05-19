@@ -72,6 +72,16 @@ struct SidebarView: View {
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
     @State private var pendingRemoveAccount: CloudAccount?
+    /// Mirrors the SyncManager's quota cache as a SwiftUI-observable
+    /// dictionary so `.help(...)` can show the latest figure without
+    /// each sidebar row spawning its own task. Refreshed in a single
+    /// .task block on the cloud-accounts Section below.
+    @State private var quotas: [UUID: CloudStorageQuota] = [:]
+
+    private func cloudAccountTooltip(for account: CloudAccount) -> String {
+        guard let quota = quotas[account.id] else { return account.displayName }
+        return CloudQuotaFormatter.summary(quota, accountDisplayName: account.displayName)
+    }
 
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
     /// the matching cloud provider's logo (when this is a cloud favorite)
@@ -216,6 +226,7 @@ struct SidebarView: View {
                             CloudProviderIcon(providerType: account.providerType, size: 16)
                         }
                         .tag(SidebarItem.cloudAccount(account))
+                        .help(cloudAccountTooltip(for: account))
                         .contextMenu {
                             Button("Rename...") {
                                 renamingAccountId = account.id
@@ -249,6 +260,16 @@ struct SidebarView: View {
                     }
                 } header: {
                     Text("Cloud Accounts")
+                }
+                .task(id: appState.syncManager.accounts.map(\.id)) {
+                    // Populate quota tooltips for every account once the
+                    // sidebar renders. Each call hits the SyncManager
+                    // cache (TTL 120s), so revisits are free.
+                    for account in appState.syncManager.accounts {
+                        if let quota = await appState.syncManager.storageQuota(for: account.id) {
+                            quotas[account.id] = quota
+                        }
+                    }
                 }
 
             if !appState.transfers(for: panelSide).isEmpty {

@@ -108,6 +108,11 @@ public final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.searchFiles(query: query, path: path)
     }
 
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        guard let client = apiClient else { return nil }
+        return try await client.storageQuota()
+    }
+
     // MARK: - Token Refresh
 
     public func refreshIfNeeded() async throws {

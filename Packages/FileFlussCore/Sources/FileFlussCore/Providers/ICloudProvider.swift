@@ -135,6 +135,14 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
         return nil
     }
 
+    // No storageQuota override: Apple doesn't expose the iCloud account
+    // quota through any public API without the iCloud entitlement. The
+    // local disk's capacity (.volumeTotalCapacityKey) would be misleading
+    // because iCloud Drive's used bytes ≠ Mac's used bytes — files can
+    // be evicted from local storage while still consuming iCloud quota.
+    // Falling through to the default nil impl keeps the status bar
+    // quota segment hidden for iCloud accounts.
+
     // MARK: - File operations
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {

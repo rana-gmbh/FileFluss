@@ -162,6 +162,38 @@ public actor DropboxAPIClient {
         credentials.displayName
     }
 
+    /// Dropbox `/users/get_space_usage`. The `allocation` block tells us
+    /// whether the account has a hard cap (individual plans) or is
+    /// shared/team (we still surface the team allocation, since that's
+    /// what the user will hit). `allocated == 0` happens on
+    /// Dropbox Business plans without an enforced quota; we treat that
+    /// as "no total" rather than "0 bytes total" so the status bar
+    /// renders just the used figure.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct SpaceUsage: Decodable {
+            let used: Int64
+            let allocation: Allocation
+            struct Allocation: Decodable {
+                let allocated: Int64?
+            }
+        }
+        let creds = try await refreshTokenIfNeeded()
+        let url = URL(string: "\(Self.rpcURL)/users/get_space_usage")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        // get_space_usage requires a null body, not an empty {}.
+        request.httpBody = "null".data(using: .utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        let usage = try JSONDecoder().decode(SpaceUsage.self, from: data)
+        let total = (usage.allocation.allocated ?? 0) > 0 ? usage.allocation.allocated : nil
+        return CloudStorageQuota(usedBytes: usage.used, totalBytes: total)
+    }
+
     // MARK: - File Operations
 
     /// Dropbox uses path-based access. Root is "" (empty string).

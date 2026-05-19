@@ -144,6 +144,13 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.searchFiles(query: query, path: path)
     }
 
+    // No storageQuota override: the DSM `SYNO.Core.Quota` API requires
+    // admin permissions or DSM-version-specific endpoints that vary
+    // across appliances. Falling through to the default nil impl keeps
+    // the status bar quota segment hidden for this provider until we
+    // can write a probe that works across DSM 6/7 with both
+    // admin and standard accounts.
+
     // MARK: - Private
 
     private func restoreCredentials() {

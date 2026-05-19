@@ -138,6 +138,15 @@ public final class PCloudProvider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(path: path)
     }
 
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        guard let client = apiClient else { return nil }
+        let info = try await client.userInfo()
+        return CloudStorageQuota(
+            usedBytes: info.usedQuota,
+            totalBytes: info.quota > 0 ? info.quota : nil
+        )
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

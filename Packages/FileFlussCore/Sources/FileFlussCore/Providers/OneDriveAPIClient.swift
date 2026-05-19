@@ -533,6 +533,31 @@ public actor OneDriveAPIClient {
         return creds.userEmail
     }
 
+    /// Microsoft Graph `/me/drive/quota`. The `total` and `used` fields
+    /// are documented as Int64 bytes; some tenants return `total == 0`
+    /// for unlimited Education / Business plans, which we surface as
+    /// `nil` so the status bar shows just the used figure.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct Drive: Decodable {
+            let quota: Quota
+            struct Quota: Decodable {
+                let total: Int64?
+                let used: Int64?
+            }
+        }
+        let creds = try await refreshTokenIfNeeded()
+        let url = URL(string: "\(graphURL)/me/drive?$select=quota")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        let drive = try JSONDecoder().decode(Drive.self, from: data)
+        let total = (drive.quota.total ?? 0) > 0 ? drive.quota.total : nil
+        return CloudStorageQuota(usedBytes: drive.quota.used ?? 0, totalBytes: total)
+    }
+
     // MARK: - Search
 
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {

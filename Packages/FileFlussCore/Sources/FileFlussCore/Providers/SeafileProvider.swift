@@ -112,6 +112,11 @@ public final class SeafileProvider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(at: path)
     }
 
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        guard let client = apiClient else { return nil }
+        return try await client.storageQuota()
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

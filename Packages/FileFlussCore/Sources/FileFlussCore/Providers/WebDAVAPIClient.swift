@@ -130,6 +130,58 @@ public actor WebDAVAPIClient {
         credentials.displayName
     }
 
+    /// RFC 4331 quota properties on the root collection. Servers that
+    /// don't implement RFC 4331 (some legacy WebDAV, certain
+    /// appliances) return PROPFIND without these properties; we
+    /// surface nil so the status bar simply omits the quota line.
+    /// `quota-available-bytes` is FREE space, not the total — total =
+    /// used + available.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        guard let url = URL(string: davBaseURL) else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PROPFIND"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("0", forHTTPHeaderField: "Depth")
+        request.setValue("application/xml", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.quotaPropfindBodyXML.data(using: .utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 207 else {
+            return nil
+        }
+        guard let parsed = Self.parseQuotaXML(data) else { return nil }
+        return parsed
+    }
+
+    private static let quotaPropfindBodyXML = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <D:propfind xmlns:D="DAV:">
+      <D:prop>
+        <D:quota-available-bytes/>
+        <D:quota-used-bytes/>
+      </D:prop>
+    </D:propfind>
+    """
+
+    /// Pulls `<D:quota-used-bytes>` and `<D:quota-available-bytes>` from
+    /// the response. Returns nil when neither property is present
+    /// (RFC 4331 unsupported by this server) so the caller can skip the
+    /// quota line entirely.
+    private static func parseQuotaXML(_ data: Data) -> CloudStorageQuota? {
+        let parser = WebDAVQuotaParser()
+        let xmlParser = XMLParser(data: data)
+        xmlParser.delegate = parser
+        xmlParser.parse()
+        guard let used = parser.used else { return nil }
+        let total: Int64?
+        if let avail = parser.available {
+            total = used + avail
+        } else {
+            total = nil
+        }
+        return CloudStorageQuota(usedBytes: used, totalBytes: total)
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
@@ -440,5 +492,42 @@ public actor WebDAVAPIClient {
         case 507: return .quotaExceeded
         default: return .serverError(statusCode)
         }
+    }
+}
+
+/// RFC 4331 `quota-used-bytes` / `quota-available-bytes` parser. Matches
+/// on the local element name only so any DAV namespace prefix the
+/// server emits (`D:`, `d:`, `dav:`, none) parses correctly.
+private final class WebDAVQuotaParser: NSObject, XMLParserDelegate, @unchecked Sendable {
+    var used: Int64?
+    var available: Int64?
+    private var currentText = ""
+    private var currentLocalName = ""
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+        currentLocalName = Self.localName(elementName)
+        currentText = ""
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+        let local = Self.localName(elementName)
+        let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if local == "quota-used-bytes", let v = Int64(trimmed) {
+            used = v
+        } else if local == "quota-available-bytes", let v = Int64(trimmed) {
+            available = v
+        }
+        _ = currentLocalName
+    }
+
+    private static func localName(_ qualified: String) -> String {
+        if let colon = qualified.lastIndex(of: ":") {
+            return String(qualified[qualified.index(after: colon)...])
+        }
+        return qualified
     }
 }

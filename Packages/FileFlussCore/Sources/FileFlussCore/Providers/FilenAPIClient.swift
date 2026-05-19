@@ -168,6 +168,23 @@ public actor FilenAPIClient {
         )
     }
 
+    /// Filen `/v3/user/info` returns `storage` (used bytes) and
+    /// `maxStorage` (account cap). Free accounts get a documented
+    /// 10 GB; paid plans report their tier limit. We surface used-only
+    /// when `maxStorage == 0` so a misconfigured account doesn't render
+    /// "0 of 0 bytes".
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        let response = try await postAuthenticated(
+            path: "/v3/user/info",
+            body: [:],
+            expectedKey: "data"
+        )
+        let used = (response["storage"] as? NSNumber)?.int64Value ?? 0
+        let max = (response["maxStorage"] as? NSNumber)?.int64Value ?? 0
+        let total: Int64? = max > 0 ? max : nil
+        return CloudStorageQuota(usedBytes: used, totalBytes: total)
+    }
+
     // MARK: - Listing
 
     /// Walk the directory tree from the account root and return the children

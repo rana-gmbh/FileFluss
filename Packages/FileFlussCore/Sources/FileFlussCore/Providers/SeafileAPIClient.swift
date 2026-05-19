@@ -207,6 +207,24 @@ public actor SeafileAPIClient {
         credentials.username
     }
 
+    /// Seafile `/api2/account/info/` returns `usage` and `total`
+    /// (bytes). Self-hosted Seafile communities often disable quotas,
+    /// in which case `total <= 0` and we surface used-only.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct AccountInfo: Decodable {
+            let usage: Int64?
+            let total: Int64?
+        }
+        let request = try authenticatedRequest(path: "/api2/account/info/")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        let info = try JSONDecoder().decode(AccountInfo.self, from: data)
+        let total = (info.total ?? 0) > 0 ? info.total : nil
+        return CloudStorageQuota(usedBytes: info.usage ?? 0, totalBytes: total)
+    }
+
     // MARK: - URL helpers
 
     /// Drop trailing slash + protocol-default any missing scheme so the

@@ -29,6 +29,10 @@ final class CloudFileManagerViewModel {
     /// listing. Mirrored to the local `FileManagerViewModel.showHiddenFiles`
     /// flag by the toolbar toggle.
     var showHiddenFiles: Bool = false
+    /// Cached storage quota snapshot for the panel's status bar. nil
+    /// either because the provider doesn't support quota (S3, SFTP,
+    /// WordPress) or because the first probe hasn't completed.
+    var storageQuota: CloudStorageQuota?
 
     let quickLookController = QuickLookController()
 

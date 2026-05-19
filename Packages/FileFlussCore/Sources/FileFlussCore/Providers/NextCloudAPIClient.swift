@@ -213,6 +213,38 @@ public actor NextCloudAPIClient {
         credentials.displayName
     }
 
+    /// NextCloud's `/ocs/v1.php/cloud/user` OCS endpoint returns the
+    /// signed-in user's quota in the same XML response we already use
+    /// for the display name. The `<quota>` block contains `<used>`,
+    /// `<total>`, and `<quota>` (configured limit: -3 means "default",
+    /// > 0 means a hard bytes cap). When `total <= 0` (admin
+    /// unlimited quotas) we surface used-only.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        let url = URL(string: "\(credentials.serverURL)/ocs/v1.php/cloud/user")!
+        var request = URLRequest(url: url)
+        let cred = "\(credentials.username):\(credentials.appPassword)"
+        let encoded = Data(cred.utf8).base64EncodedString()
+        request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/xml", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        return Self.parseQuota(from: data)
+    }
+
+    private static func parseQuota(from data: Data) -> CloudStorageQuota? {
+        let parser = OCSQuotaParser()
+        let xmlParser = XMLParser(data: data)
+        xmlParser.delegate = parser
+        xmlParser.parse()
+        guard let used = parser.used else { return nil }
+        let total = (parser.total ?? 0) > 0 ? parser.total : nil
+        return CloudStorageQuota(usedBytes: used, totalBytes: total)
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
@@ -606,6 +638,42 @@ private final class OCSDisplayNameParser: NSObject, XMLParserDelegate, @unchecke
     public func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
         if elementName == "displayname" {
             displayName = currentText
+        }
+    }
+}
+
+/// Pulls `<used>` and `<total>` out of the `<quota>` block returned by
+/// `ocs/v1.php/cloud/user`. We only capture elements nested under
+/// `<quota>` so a stray `<total>` somewhere else in the document can't
+/// confuse the parser.
+private final class OCSQuotaParser: NSObject, XMLParserDelegate, @unchecked Sendable {
+    var used: Int64?
+    var total: Int64?
+    private var inQuota = false
+    private var currentElement = ""
+    private var currentText = ""
+
+    public func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+        if elementName == "quota" { inQuota = true }
+        currentElement = elementName
+        currentText = ""
+    }
+
+    public func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    public func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+        if inQuota {
+            let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch elementName {
+            case "used": used = Int64(trimmed)
+            case "total": total = Int64(trimmed)
+            case "quota":
+                // Closing the outer wrapper — stop capturing.
+                inQuota = false
+            default: break
+            }
         }
     }
 }

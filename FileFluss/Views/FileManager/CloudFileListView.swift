@@ -271,6 +271,10 @@ struct CloudFileListView: View {
                     Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
                 }
             }
+            if let quota = vm.storageQuota {
+                Text("·")
+                Text(CloudQuotaFormatter.summary(quota, accountDisplayName: accountDisplayName))
+            }
             Spacer()
         }
         .font(.caption)
@@ -278,6 +282,20 @@ struct CloudFileListView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(.bar)
+        .task(id: accountId) {
+            // Initial probe when the panel attaches to a new account.
+            vm.storageQuota = await appState.syncManager.storageQuota(for: accountId)
+        }
+        .onChange(of: vm.items.count) { _, _ in
+            // Item count changing means an upload, delete, or folder-
+            // create completed and the listing was refreshed. Invalidate
+            // the quota cache and re-probe so the bar reflects the new
+            // usage without waiting for the 120s TTL.
+            Task {
+                appState.syncManager.invalidateQuota(for: accountId)
+                vm.storageQuota = await appState.syncManager.storageQuota(for: accountId)
+            }
+        }
     }
 
     private var cloudPathBar: some View {

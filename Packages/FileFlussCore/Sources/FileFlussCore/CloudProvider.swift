@@ -1,5 +1,21 @@
 import Foundation
 
+/// Storage usage snapshot for a single cloud account. Some providers
+/// (e.g. enterprise plans that haven't been provisioned with a quota)
+/// report no upper bound — `totalBytes` is nil in that case and the
+/// UI renders just the used figure.
+public struct CloudStorageQuota: Sendable, Equatable, Codable {
+    public let usedBytes: Int64
+    public let totalBytes: Int64?
+    public let fetchedAt: Date
+
+    public init(usedBytes: Int64, totalBytes: Int64?, fetchedAt: Date = Date()) {
+        self.usedBytes = usedBytes
+        self.totalBytes = totalBytes
+        self.fetchedAt = fetchedAt
+    }
+}
+
 public protocol CloudProvider: Sendable {
     var providerType: CloudProviderType { get }
 
@@ -51,6 +67,13 @@ public protocol CloudProvider: Sendable {
     /// mtime instead of stamping it with the upload time — matching Finder's
     /// behaviour across drives, local folders, and cloud accounts.
     func setModificationDate(at remotePath: String, to date: Date) async throws
+
+    /// Account-wide storage usage. Returning nil means the provider has no
+    /// quota API or hasn't been wired to surface one — the status bar then
+    /// renders no quota line for that account. The default implementation
+    /// returns nil so providers compile without touching their files.
+    /// Implementations should NOT cache here; the view model owns caching.
+    func storageQuota() async throws -> CloudStorageQuota?
 }
 
 extension CloudProvider {
@@ -84,5 +107,9 @@ extension CloudProvider {
     /// upload time, which is the existing pre-fix behaviour.
     public func setModificationDate(at remotePath: String, to date: Date) async throws {
         throw CloudProviderError.notImplemented
+    }
+
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        nil
     }
 }

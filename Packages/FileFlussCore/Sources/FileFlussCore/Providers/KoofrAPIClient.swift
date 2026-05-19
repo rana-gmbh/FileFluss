@@ -95,6 +95,23 @@ public actor KoofrAPIClient {
         credentials.displayName
     }
 
+    /// Koofr `/mounts/{mountId}` carries `spaceTotal` and `spaceUsed`
+    /// for the primary mount. Free Koofr accounts get a configured
+    /// quota; tier upgrades raise it. spaceTotal == 0 (rare —
+    /// happens on disabled mounts) returns nil.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct MountDetail: Decodable {
+            let spaceTotal: Int64?
+            let spaceUsed: Int64?
+        }
+        let mount: MountDetail = try await request(
+            .get,
+            path: "/mounts/\(mountId)"
+        )
+        let total = (mount.spaceTotal ?? 0) > 0 ? mount.spaceTotal : nil
+        return CloudStorageQuota(usedBytes: mount.spaceUsed ?? 0, totalBytes: total)
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {

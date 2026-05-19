@@ -31,6 +31,44 @@ final class SyncViewModel {
         loadAccounts()
     }
 
+    /// Per-account quota cache. In-memory only — fresh on every app
+    /// launch, refreshed in the background while a panel is open. A
+    /// short TTL avoids hammering the cloud APIs while still reflecting
+    /// recent uploads/deletes (each successful write also invalidates).
+    private var quotaCache: [UUID: CloudStorageQuota] = [:]
+    private static let quotaTTL: TimeInterval = 120
+
+    /// Returns the storage quota for an account, fetching when stale.
+    /// On network failure returns whatever value is currently cached
+    /// (or nil) so the status bar can keep showing the last-known
+    /// figure rather than flickering empty.
+    func storageQuota(for accountId: UUID) async -> CloudStorageQuota? {
+        if let cached = quotaCache[accountId],
+           Date().timeIntervalSince(cached.fetchedAt) < Self.quotaTTL {
+            return cached
+        }
+        guard let provider = await syncEngine.provider(for: accountId) else {
+            return quotaCache[accountId]
+        }
+        do {
+            if let fresh = try await provider.storageQuota() {
+                quotaCache[accountId] = fresh
+                return fresh
+            }
+        } catch {
+            // Best-effort — leave the cached entry alone so a transient
+            // failure doesn't blank the status bar.
+        }
+        return quotaCache[accountId]
+    }
+
+    /// Drops the cached entry so the next storageQuota(for:) call
+    /// hits the API. Use after a successful upload/delete/createFolder
+    /// from this account so the bar updates promptly.
+    func invalidateQuota(for accountId: UUID) {
+        quotaCache.removeValue(forKey: accountId)
+    }
+
     /// Clears every browser-OAuth pending flag and any leftover auth
     /// error. Called when the user aborts a pending sign-in (closes the
     /// browser tab and hits Cancel in the Add Account sheet, or just

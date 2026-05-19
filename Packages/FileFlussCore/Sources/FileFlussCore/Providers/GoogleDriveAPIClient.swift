@@ -288,6 +288,35 @@ public actor GoogleDriveAPIClient {
         credentials.displayName
     }
 
+    /// Google Drive `about.get` with the `storageQuota` field. The
+    /// returned `limit` is the total bytes allotted across Drive + Gmail
+    /// + Photos; `usage` is the combined consumption. Workspace
+    /// accounts with admin-set unlimited storage return no `limit`, in
+    /// which case we surface usage only.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct About: Decodable {
+            let storageQuota: Quota
+            struct Quota: Decodable {
+                let limit: String?
+                let usage: String?
+            }
+        }
+        let creds = try await refreshTokenIfNeeded()
+        let url = URL(string: "\(apiURL)/about?fields=storageQuota")!
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return nil
+        }
+        let about = try JSONDecoder().decode(About.self, from: data)
+        // Limits/usage come back as strings to safely carry int64 values
+        // beyond JS-safe-integer range (>2^53).
+        let used = Int64(about.storageQuota.usage ?? "0") ?? 0
+        let total = about.storageQuota.limit.flatMap(Int64.init)
+        return CloudStorageQuota(usedBytes: used, totalBytes: total)
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {

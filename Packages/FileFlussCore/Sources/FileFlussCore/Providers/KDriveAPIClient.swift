@@ -37,6 +37,29 @@ public actor KDriveAPIClient {
         return 1
     }
 
+    /// Infomaniak's `/drive/{driveId}` endpoint returns `size` (total
+    /// allotted bytes) and `used_size` (consumed bytes). Workspaces on
+    /// the Free tier have a fixed cap; paid tiers carry their pack's
+    /// configured limit. A 0 total means the API didn't surface the
+    /// figure, in which case we leave it nil so the bar renders just
+    /// used.
+    public func storageQuota() async throws -> CloudStorageQuota? {
+        struct Quota: Decodable {
+            let size: Int64?
+            let usedSize: Int64?
+            private enum CodingKeys: String, CodingKey {
+                case size
+                case usedSize = "used_size"
+            }
+        }
+        let response: KDriveResponse<Quota> = try await request(
+            .get,
+            path: "/2/drive/\(credentials.driveId)"
+        )
+        let total = (response.data.size ?? 0) > 0 ? response.data.size : nil
+        return CloudStorageQuota(usedBytes: response.data.usedSize ?? 0, totalBytes: total)
+    }
+
     public func setRootId(_ id: Int) {
         pathToId["/"] = id
     }
