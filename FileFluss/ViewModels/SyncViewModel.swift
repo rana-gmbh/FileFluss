@@ -957,6 +957,346 @@ final class SyncViewModel {
         accounts.first { $0.id == id }
     }
 
+    // MARK: - Account editing (re-authenticate existing accountId)
+    //
+    // Each method below mirrors the corresponding addXxxAccount, but
+    // re-uses an existing accountId so the keychain entry is overwritten
+    // in place, the SyncEngine provider is replaced for the same id, and
+    // sync rules / panel state / favourites referencing the account all
+    // survive. On failure, authError is surfaced and the existing
+    // connection is left untouched.
+
+    private func finalizeUpdate(
+        accountId: UUID,
+        provider: any CloudProvider,
+        derivedDisplayName: String? = nil
+    ) async {
+        await syncEngine.registerProvider(for: accountId, provider: provider)
+        if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+            accounts[idx].isConnected = true
+            if let derivedDisplayName, !derivedDisplayName.isEmpty {
+                accounts[idx].displayName = derivedDisplayName
+            }
+            saveAccounts()
+        }
+    }
+
+    func updateDropboxAccount(accountId: UUID) async {
+        authError = nil
+        do {
+            let provider = DropboxProvider(accountId: accountId)
+            _ = try await provider.startOAuthFlow()
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateGoogleDriveAccount(accountId: UUID) async {
+        authError = nil
+        do {
+            let provider = GoogleDriveProvider(accountId: accountId)
+            _ = try await provider.startOAuthFlow()
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateOneDriveAccount(accountId: UUID) async {
+        authError = nil
+        do {
+            let provider = OneDriveProvider(accountId: accountId)
+            _ = try await provider.startOAuthFlow()
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateBoxAccount(accountId: UUID) async {
+        authError = nil
+        do {
+            let provider = BoxProvider(accountId: accountId)
+            _ = try await provider.startOAuthFlow()
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateNextCloudAccountViaBrowser(accountId: UUID, serverURL: String) async {
+        authError = nil
+        isAuthenticatingNextCloud = true
+        defer { isAuthenticatingNextCloud = false }
+        do {
+            let provider = NextCloudProvider(accountId: accountId)
+            _ = try await provider.startLoginFlowV2(serverURL: serverURL)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateNextCloudAccount(accountId: UUID, serverURL: String, username: String, appPassword: String) async {
+        authError = nil
+        do {
+            let provider = NextCloudProvider(accountId: accountId)
+            try await provider.authenticate(serverURL: serverURL, username: username, appPassword: appPassword)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateKoofrAccount(accountId: UUID, email: String, appPassword: String) async {
+        authError = nil
+        do {
+            let provider = KoofrProvider(accountId: accountId)
+            try await provider.authenticate(email: email, appPassword: appPassword)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateMegaAccount(accountId: UUID, email: String, password: String, mfaCode: String?) async {
+        authError = nil
+        do {
+            let provider = MegaProvider(accountId: accountId)
+            try await provider.authenticate(email: email, password: password, mfaCode: mfaCode)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateGMXCloudAccount(accountId: UUID, email: String, password: String) async {
+        authError = nil
+        do {
+            let provider = GMXCloudProvider(accountId: accountId)
+            try await provider.authenticate(email: email, password: password)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateFilenAccount(accountId: UUID, email: String, password: String, twoFactorCode: String) async {
+        authError = nil
+        do {
+            let provider = FilenProvider(accountId: accountId)
+            _ = try await provider.authenticate(email: email, password: password, twoFactorCode: twoFactorCode)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateSeafileAccount(accountId: UUID, serverURL: String, username: String, password: String, otp: String?, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = SeafileProvider(accountId: accountId)
+            _ = try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateWebDAVAccount(accountId: UUID, serverURL: String, username: String, password: String) async {
+        authError = nil
+        do {
+            let provider = WebDAVProvider(accountId: accountId)
+            try await provider.authenticate(serverURL: serverURL, username: username, password: password)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateSynologyDriveAccount(accountId: UUID, serverURL: String, username: String, password: String, otp: String?, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = SynologyDriveProvider(accountId: accountId)
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateWordPressAccount(accountId: UUID, siteURL: String, username: String, appPassword: String) async {
+        authError = nil
+        do {
+            let provider = WordPressProvider(accountId: accountId)
+            try await provider.authenticate(siteURL: siteURL, username: username, appPassword: appPassword)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updatePCloudAccount(accountId: UUID, accessToken: String) async {
+        authError = nil
+        do {
+            let provider = PCloudProvider(accountId: accountId)
+            try await provider.authenticate(accessToken: accessToken)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updatePCloudAccount(accountId: UUID, email: String, password: String) async {
+        authError = nil
+        do {
+            let provider = PCloudProvider(accountId: accountId)
+            try await provider.authenticate(email: email, password: password)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateKDriveAccount(accountId: UUID, apiToken: String) async {
+        authError = nil
+        do {
+            // Preserve the existing driveId — the user can't change the
+            // workspace from Edit; if they want a different drive they
+            // add a second account.
+            let existingDriveId = (KeychainService.load(
+                key: "kdrive.\(accountId.uuidString)",
+                as: KDriveCredentials.self
+            ))?.driveId
+            let provider = KDriveProvider(accountId: accountId)
+            try await provider.authenticate(apiToken: apiToken, driveId: existingDriveId)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateS3Account(accountId: UUID, accessKeyId: String, secretAccessKey: String, region: String, rootPath: String?) async {
+        authError = nil
+        do {
+            let provider = S3Provider(accountId: accountId)
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                region: region
+            )
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
+            if let normalizedRoot {
+                _ = try await provider.listDirectory(at: normalizedRoot)
+            }
+            await syncEngine.registerProvider(for: accountId, provider: provider)
+            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                accounts[idx].isConnected = true
+                accounts[idx].rootPath = normalizedRoot ?? "/"
+                saveAccounts()
+            }
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateS3CompatibleAccount(accountId: UUID, accessKeyId: String, secretAccessKey: String, endpoint: String, region: String, displayName: String?, rootPath: String?) async {
+        authError = nil
+        do {
+            let provider = S3CompatibleProvider(accountId: accountId)
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                endpoint: endpoint,
+                region: region,
+                displayName: displayName
+            )
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
+            if let normalizedRoot {
+                _ = try await provider.listDirectory(at: normalizedRoot)
+            }
+            await syncEngine.registerProvider(for: accountId, provider: provider)
+            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                accounts[idx].isConnected = true
+                accounts[idx].rootPath = normalizedRoot ?? "/"
+                saveAccounts()
+            }
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateSynologyC2Account(accountId: UUID, accessKeyId: String, secretAccessKey: String, region: String) async {
+        authError = nil
+        do {
+            let provider = SynologyC2Provider(accountId: accountId)
+            try await provider.authenticate(
+                accessKeyId: accessKeyId,
+                secretAccessKey: secretAccessKey,
+                region: region
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateSFTPAccount(
+        accountId: UUID,
+        host: String,
+        port: Int,
+        username: String,
+        password: String? = nil,
+        privateKey: String? = nil,
+        passphrase: String? = nil,
+        remotePath: String
+    ) async {
+        authError = nil
+        do {
+            let resolvedRemote = remotePath.isEmpty ? "/" : remotePath
+            let provider = SFTPProvider(accountId: accountId)
+            if let privateKey, !privateKey.isEmpty {
+                try await provider.authenticate(
+                    host: host,
+                    port: port,
+                    username: username,
+                    privateKey: privateKey,
+                    passphrase: passphrase,
+                    remotePath: resolvedRemote
+                )
+            } else {
+                try await provider.authenticate(
+                    host: host,
+                    port: port,
+                    username: username,
+                    password: password ?? "",
+                    remotePath: resolvedRemote
+                )
+            }
+            await syncEngine.registerProvider(for: accountId, provider: provider)
+            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                accounts[idx].isConnected = true
+                accounts[idx].rootPath = resolvedRemote
+                saveAccounts()
+            }
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     // MARK: - Persistence
 
     func saveAccounts() {

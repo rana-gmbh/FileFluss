@@ -2,7 +2,9 @@ import Foundation
 
 public struct KDriveCredentials: Codable, Sendable {
     let apiToken: String
-    let driveId: Int
+    /// Not a secret — exposed publicly so callers (e.g. the edit-account
+    /// flow) can preserve the chosen workspace when re-authenticating.
+    public let driveId: Int
     let userEmail: String
 }
 

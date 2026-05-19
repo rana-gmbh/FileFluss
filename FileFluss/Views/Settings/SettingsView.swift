@@ -69,6 +69,7 @@ struct CloudSettingsView: View {
     /// would present two sheets at once — one anchored to the Settings
     /// window, one to the main window.
     @State private var showAddAccount = false
+    @State private var editingAccount: CloudAccount?
 
     var body: some View {
         Form {
@@ -92,6 +93,13 @@ struct CloudSettingsView: View {
                             Circle()
                                 .fill(account.isConnected ? .green : .gray)
                                 .frame(width: 8, height: 8)
+                            // iCloud uses the OS-level sign-in — nothing
+                            // editable from inside FileFluss.
+                            if account.providerType != .iCloud {
+                                Button("Edit…") {
+                                    editingAccount = account
+                                }
+                            }
                             Button("Remove", role: .destructive) {
                                 Task { await appState.syncManager.removeAccount(account) }
                             }
@@ -111,6 +119,10 @@ struct CloudSettingsView: View {
         .formStyle(.grouped)
         .sheet(isPresented: $showAddAccount) {
             AddCloudAccountView()
+        }
+        .sheet(item: $editingAccount) { account in
+            EditCloudAccountView(account: account)
+                .environment(appState)
         }
     }
 }
