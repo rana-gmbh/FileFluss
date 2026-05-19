@@ -39,6 +39,7 @@ struct GeneralSettingsView: View {
     @AppStorage("showHiddenFiles") private var showHiddenFiles = false
     @AppStorage("confirmDelete") private var confirmDelete = true
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
+    @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
 
     var body: some View {
@@ -46,6 +47,7 @@ struct GeneralSettingsView: View {
             Toggle("Show hidden files by default", isOn: $showHiddenFiles)
             Toggle("Confirm before deleting", isOn: $confirmDelete)
             Toggle("Show \"Add Cloud Account\" in sidebars", isOn: $showSidebarAddAccount)
+            Toggle("Allow removing cloud accounts from sidebar context menu", isOn: $allowSidebarRemoveAccount)
 
             Section {
                 Button("Show Welcome Screen Again") {

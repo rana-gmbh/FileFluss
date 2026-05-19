@@ -21,6 +21,7 @@ struct SidebarView: View {
     let panelSide: PanelSide
     @Environment(AppState.self) private var appState
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
+    @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
 
     // Section expansion is tracked per panel side so users can have different
     // sections collapsed on left vs right. The chooser between the two
@@ -70,6 +71,7 @@ struct SidebarView: View {
     @State private var renameText: String = ""
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
+    @State private var pendingRemoveAccount: CloudAccount?
 
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
     /// the matching cloud provider's logo (when this is a cloud favorite)
@@ -223,6 +225,12 @@ struct SidebarView: View {
                             offlineModeMenu(for: account)
                             Divider()
                             cloudIndexMenu(for: account)
+                            if allowSidebarRemoveAccount {
+                                Divider()
+                                Button("Remove from FileFluss…", role: .destructive) {
+                                    pendingRemoveAccount = account
+                                }
+                            }
                         }
                     }
                     .onMove { indices, destination in
@@ -345,6 +353,25 @@ struct SidebarView: View {
             }
         } message: {
             Text("Enter a new name for this cloud account.")
+        }
+        .confirmationDialog(
+            pendingRemoveAccount.map { "Remove \($0.displayName)?" } ?? "Remove Cloud Account?",
+            isPresented: Binding(
+                get: { pendingRemoveAccount != nil },
+                set: { if !$0 { pendingRemoveAccount = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingRemoveAccount
+        ) { account in
+            Button("Remove", role: .destructive) {
+                Task { await appState.syncManager.removeAccount(account) }
+                pendingRemoveAccount = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRemoveAccount = nil
+            }
+        } message: { account in
+            Text("This disconnects \(account.displayName) from FileFluss. Files in the cloud aren't deleted.")
         }
     }
 
