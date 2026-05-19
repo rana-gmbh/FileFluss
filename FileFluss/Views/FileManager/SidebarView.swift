@@ -17,8 +17,30 @@ private struct CalculatingLabel: View {
     }
 }
 
+/// Switches between the default title-and-icon rendering and an
+/// icon-only rendering, driven by the parent sidebar's `collapsed`
+/// state. Applied at the `List` scope in `SidebarView` so every
+/// `Label` underneath — including the ones inside cloud account rows
+/// with extra HStack content in their title slot — adopts the same
+/// behaviour without per-row branching.
+private struct CollapsibleSidebarLabelStyle: LabelStyle {
+    let collapsed: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if collapsed {
+            configuration.icon
+        } else {
+            Label(configuration)
+        }
+    }
+}
+
 struct SidebarView: View {
     let panelSide: PanelSide
+    /// True when the sidebar is narrower than the parent's collapse
+    /// threshold (default ~100pt). In that mode rows render their icon
+    /// only and the row's name moves to a `.help(...)` tooltip.
+    var collapsed: Bool = false
     @Environment(AppState.self) private var appState
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
@@ -151,6 +173,7 @@ struct SidebarView: View {
                 // intrinsic content width.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+                .help(fav.displayName)
                 .tag(SidebarItem.location(url))
             }
         case .cloudFolder:
@@ -162,6 +185,7 @@ struct SidebarView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+                .help(fav.displayName)
                 .tag(SidebarItem.cloudFolder(accountId: accountId, path: path))
             }
         }
@@ -220,16 +244,32 @@ struct SidebarView: View {
                     appState.moveFavorites(in: panelSide, fromOffsets: indices, toOffset: destination)
                 }
             } header: {
-                Text("Favorites")
-                    // Dropping on the header inserts at the very top.
-                    .overlay {
-                        FavoritesDropTarget(
-                            panelSide: panelSide,
-                            appState: appState,
-                            position: .header,
-                            setHoverInsertIndex: { favoritesInsertIndex = $0 }
-                        )
-                    }
+                if !collapsed {
+                    Text("Favorites")
+                        // Dropping on the header inserts at the very top.
+                        .overlay {
+                            FavoritesDropTarget(
+                                panelSide: panelSide,
+                                appState: appState,
+                                position: .header,
+                                setHoverInsertIndex: { favoritesInsertIndex = $0 }
+                            )
+                        }
+                } else {
+                    // Empty header still anchors the drop target in
+                    // collapsed mode so dragging onto the section's
+                    // top edge keeps working.
+                    Color.clear
+                        .frame(height: 1)
+                        .overlay {
+                            FavoritesDropTarget(
+                                panelSide: panelSide,
+                                appState: appState,
+                                position: .header,
+                                setHoverInsertIndex: { favoritesInsertIndex = $0 }
+                            )
+                        }
+                }
             }
 
             if !appState.driveMonitor.drives.isEmpty {
@@ -237,12 +277,13 @@ struct SidebarView: View {
                     ForEach(appState.driveMonitor.drives) { drive in
                         DriveRow(drive: drive, panelSide: panelSide)
                             .tag(SidebarItem.drive(driveId: drive.id))
+                            .help(drive.displayName)
                             .contextMenu {
                                 driveContextMenu(for: drive)
                             }
                     }
                 } header: {
-                    Text("Drives")
+                    if !collapsed { Text("Drives") }
                 }
             }
 
@@ -311,9 +352,10 @@ struct SidebarView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .help("Add Cloud Account…")
                     }
                 } header: {
-                    Text("Cloud Accounts")
+                    if !collapsed { Text("Cloud Accounts") }
                 }
                 .task(id: appState.syncManager.accounts.map(\.id)) {
                     // Populate quota tooltips for every account once the
@@ -365,6 +407,10 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // Drops every row's text title and re-emits just the icon when
+        // the sidebar is collapsed (narrow). `.help(...)` on each row
+        // surfaces the full name as a hover tooltip in that mode.
+        .labelStyle(CollapsibleSidebarLabelStyle(collapsed: collapsed))
         .onChange(of: appState.sidebarSelection(for: panelSide)) { _, newValue in
             switch newValue {
             case .location(let url):

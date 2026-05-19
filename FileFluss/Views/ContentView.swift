@@ -24,6 +24,26 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var supportLog = SupportLogService.shared
 
+    /// Persistent per-side sidebar width. Defaults to ~200pt, the same
+    /// `idealWidth` used by the previous fixed-frame layout.
+    @AppStorage("sidebarWidth.left") private var leftSidebarWidth: Double = 200
+    @AppStorage("sidebarWidth.right") private var rightSidebarWidth: Double = 200
+
+    /// Drag-bounds for the resize handle. The lower bound is just wide
+    /// enough to show icons + the small selection indicator without
+    /// truncation; the upper bound matches the previous `maxWidth` cap
+    /// of the fixed layout.
+    private static let sidebarMinWidth: Double = 50
+    private static let sidebarMaxWidth: Double = 320
+    /// Width restored when the user double-clicks the resize handle.
+    /// Matches the `@AppStorage` default so first-launch and
+    /// double-click land on the same column width.
+    private static let sidebarDefaultWidth: Double = 200
+    /// Below this threshold the sidebar drops its row text and tooltips
+    /// take over the labelling role. Picked so the user can drag wider
+    /// to ~100pt and still see truncated text before the switch flips.
+    private static let sidebarCollapseThreshold: Double = 100
+
     var body: some View {
         HStack(spacing: 0) {
             // Left panel: sidebar + file list
@@ -86,24 +106,34 @@ struct ContentView: View {
     @ViewBuilder
     private func panelView(side: PanelSide) -> some View {
         let isActive = appState.activePanel == side
+        let width = side == .left ? leftSidebarWidth : rightSidebarWidth
+        let collapsed = width < Self.sidebarCollapseThreshold
 
         HStack(spacing: 0) {
             if side == .left {
-                sidebarForPanel(side: side)
-                Divider()
+                SidebarView(panelSide: side, collapsed: collapsed)
+                    .frame(width: width)
+                SidebarResizeHandle(
+                    width: side == .left ? $leftSidebarWidth : $rightSidebarWidth,
+                    side: side,
+                    minWidth: Self.sidebarMinWidth,
+                    maxWidth: Self.sidebarMaxWidth,
+                    defaultWidth: Self.sidebarDefaultWidth
+                )
                 filePanelContent(side: side, isActive: isActive)
             } else {
                 filePanelContent(side: side, isActive: isActive)
-                Divider()
-                sidebarForPanel(side: side)
+                SidebarResizeHandle(
+                    width: side == .left ? $leftSidebarWidth : $rightSidebarWidth,
+                    side: side,
+                    minWidth: Self.sidebarMinWidth,
+                    maxWidth: Self.sidebarMaxWidth,
+                    defaultWidth: Self.sidebarDefaultWidth
+                )
+                SidebarView(panelSide: side, collapsed: collapsed)
+                    .frame(width: width)
             }
         }
-    }
-
-    @ViewBuilder
-    private func sidebarForPanel(side: PanelSide) -> some View {
-        SidebarView(panelSide: side)
-            .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
     }
 
     @ViewBuilder
