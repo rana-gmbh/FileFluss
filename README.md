@@ -46,6 +46,10 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 
 Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPTX on download, modification dates preserved.
 
+- **Used / free storage** at a glance — most accounts surface their quota in the status bar and as a sidebar tooltip.
+- **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
+- **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
+
 ### Offline Mode & offline search
 
 ![Offline Mode](Screenshots/FileFluss%20Offline%20Mode.webp)
@@ -137,7 +141,10 @@ Search the active local folder and every connected cloud account at once.
 ### Other niceties
 
 - Folder size calculation in the background, never blocking the UI.
-- Favourites pin frequently-used local and cloud folders to the sidebar.
+- Favourites pin frequently-used local and cloud folders to the sidebar — drag any folder onto Favorites with a row-reorder-style insertion indicator.
+- **Independently resizable sidebars**, each collapsible to an icon-only mode.
+- **Finder-style row size toggle** (View → row size, or `⌘+` / `⌘-`).
+- **Auto-Resize Name column** toggle per panel (right-click the Name column header).
 - Hidden-files toggle per panel.
 - Customisable toolbar (right-click → Customize Toolbar…).
 - Light/Dark app icon variants — the dock icon swaps live when macOS toggles appearance.
