@@ -42,6 +42,14 @@ struct CloudFileListView: View {
         appState.cloudFileManager(for: accountId, side: panelSide)
     }
 
+    /// Live-resolved name for the account this panel is showing. Reading
+    /// from `syncManager.accounts` each time ensures renames in Settings →
+    /// Cloud Accounts are reflected immediately in confirmation dialogs.
+    private var accountDisplayName: String {
+        appState.syncManager.accounts.first(where: { $0.id == accountId })?.displayName
+            ?? "this account"
+    }
+
     private var incomingDirection: ConflictDirection {
         panelSide == .right ? .leftToRight : .rightToLeft
     }
@@ -132,9 +140,9 @@ struct CloudFileListView: View {
         } message: {
             let items = vm.selectedItems
             if items.count == 1 {
-                Text("Are you sure you want to delete \"\(items[0].name)\" from the cloud?")
+                Text("Are you sure you want to delete \"\(items[0].name)\" from \(accountDisplayName)?")
             } else {
-                Text("Are you sure you want to delete \(items.count) items from pCloud?")
+                Text("Are you sure you want to delete \(items.count) items from \(accountDisplayName)?")
             }
         }
         .sheet(isPresented: $showConflict) {
