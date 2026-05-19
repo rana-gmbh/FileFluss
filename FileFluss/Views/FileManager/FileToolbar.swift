@@ -91,7 +91,19 @@ struct FileToolbar: CustomizableToolbarContent {
                     }
                 }
             )) {
-                Label("Hidden Files", systemImage: "eye")
+                Label {
+                    Text("Hidden Files")
+                } icon: {
+                    // Custom asset images in a toolbar Label don't pick
+                    // up SF Symbol auto-sizing, so the SVG would render
+                    // at its intrinsic 800pt — fix to 16pt to match the
+                    // surrounding system symbols.
+                    Image("HiddenFilesIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                }
             }
             .help("Show hidden files")
         }
