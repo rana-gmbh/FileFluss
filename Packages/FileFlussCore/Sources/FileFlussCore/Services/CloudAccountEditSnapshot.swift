@@ -37,6 +37,9 @@ public struct CloudAccountEditSnapshot: Sendable {
     // Self-signed cert toggles
     public var allowSelfSignedCertificate: Bool = false
 
+    // FTP
+    public var ftpUseTLS: Bool = false
+
     public init() {}
 }
 
@@ -85,6 +88,16 @@ public enum CloudAccountEditLoader {
             snap.username = c.username
             snap.remotePath = c.remotePath
             snap.sftpAuth = c.authMethod == .privateKey ? .privateKey : .password
+            return snap
+
+        case .ftp:
+            guard let c = KeychainService.load(key: "ftp.\(suffix)", as: FTPCredentials.self) else { return nil }
+            snap.host = c.host
+            snap.port = c.port
+            snap.username = c.username
+            snap.remotePath = c.remotePath
+            snap.ftpUseTLS = c.useTLS
+            snap.allowSelfSignedCertificate = c.allowInvalidCertificate
             return snap
 
         case .webDAV:

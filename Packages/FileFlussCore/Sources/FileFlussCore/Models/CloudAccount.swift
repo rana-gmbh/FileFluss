@@ -12,6 +12,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case mega
     case webDAV
     case sftp
+    case ftp
     case wordpress
     case gmxCloud
     case s3
@@ -39,6 +40,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .mega: return "Mega"
         case .webDAV: return "WebDAV"
         case .sftp: return "SFTP"
+        case .ftp: return "FTP"
         case .wordpress: return "WordPress"
         case .gmxCloud: return "GMX Cloud"
         case .s3: return "AWS S3"
@@ -66,6 +68,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .mega: return "cloud.bolt.fill"
         case .webDAV: return "externaldrive.badge.wifi"
         case .sftp: return "terminal"
+        case .ftp: return "arrow.up.arrow.down.circle"
         case .wordpress: return "w.square"
         case .gmxCloud: return "envelope.badge.shield.half.filled"
         case .s3: return "server.rack"
@@ -94,6 +97,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .mega: return "MegaLogo"
         case .webDAV: return "WebDAVLogo"
         case .sftp: return "SFTPLogo"
+        case .ftp: return nil
         case .wordpress: return "WordPressLogo"
         case .gmxCloud: return "GMXCloudLogo"
         case .s3: return "AmazonS3Logo"

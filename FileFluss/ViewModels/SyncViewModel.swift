@@ -383,6 +383,45 @@ final class SyncViewModel {
         }
     }
 
+    func addFTPAccount(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        remotePath: String = "/",
+        useTLS: Bool = false,
+        allowInvalidCertificate: Bool = false
+    ) async {
+        let resolvedRemotePath = remotePath.isEmpty ? "/" : remotePath
+        var account = CloudAccount(providerType: .ftp)
+        account.rootPath = resolvedRemotePath
+        let provider = FTPProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                remotePath: resolvedRemotePath,
+                useTLS: useTLS,
+                allowInvalidCertificate: allowInvalidCertificate
+            )
+            var connectedAccount = account
+            let userName = try? await provider.userDisplayName()
+            if let userName, !userName.isEmpty {
+                connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addWordPressAccount(siteURL: String, username: String, appPassword: String) async {
         let account = CloudAccount(providerType: .wordpress)
         let provider = WordPressProvider(accountId: account.id)
@@ -909,6 +948,11 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
+            case .ftp:
+                let provider = FTPProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             case .wordpress:
                 let provider = WordPressProvider(accountId: account.id)
                 if await provider.isAuthenticated {
@@ -1358,6 +1402,40 @@ final class SyncViewModel {
                     remotePath: resolvedRemote
                 )
             }
+            await syncEngine.registerProvider(for: accountId, provider: provider)
+            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
+                accounts[idx].isConnected = true
+                accounts[idx].rootPath = resolvedRemote
+                saveAccounts()
+            }
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateFTPAccount(
+        accountId: UUID,
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        remotePath: String,
+        useTLS: Bool,
+        allowInvalidCertificate: Bool
+    ) async {
+        authError = nil
+        do {
+            let resolvedRemote = remotePath.isEmpty ? "/" : remotePath
+            let provider = FTPProvider(accountId: accountId)
+            try await provider.authenticate(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                remotePath: resolvedRemote,
+                useTLS: useTLS,
+                allowInvalidCertificate: allowInvalidCertificate
+            )
             await syncEngine.registerProvider(for: accountId, provider: provider)
             if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
                 accounts[idx].isConnected = true

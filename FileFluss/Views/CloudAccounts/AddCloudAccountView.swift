@@ -71,6 +71,10 @@ struct AddCloudAccountView: View {
 
     @State private var filenTwoFactor = ""
     @State private var internxtTwoFactor = ""
+    @State private var ftpPort = "21"
+    @State private var ftpRemotePath = "/"
+    @State private var ftpUseTLS = false
+    @State private var ftpAllowSelfSigned = false
 
     @State private var megaOTP = ""
     /// MEGA's login hits an anti-abuse proof-of-work (hashcash) that can
@@ -142,7 +146,7 @@ struct AddCloudAccountView: View {
     /// Providers that show up under "Other Protocols" — generic transport
     /// or open-standard endpoints rather than a specific branded service.
     private let otherProtocolProviders: [CloudProviderType] = [
-        .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
+        .ftp, .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
     ]
 
     var body: some View {
@@ -279,6 +283,8 @@ struct AddCloudAccountView: View {
                 internxtFields
             case .terabox:
                 teraboxFields
+            case .ftp:
+                ftpFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -884,6 +890,42 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var ftpFields: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                TextField("Server (e.g. ftp.example.com)", text: $serverURL)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                TextField("Port", text: $ftpPort)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .disabled(isAuthenticating)
+            }
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+            TextField("Initial path (optional)", text: $ftpRemotePath)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            Toggle("Use FTPS (TLS)", isOn: $ftpUseTLS)
+                .disabled(isAuthenticating)
+            if ftpUseTLS {
+                Toggle("Allow self-signed certificate", isOn: $ftpAllowSelfSigned)
+                    .disabled(isAuthenticating)
+            }
+            Text("Plain FTP sends credentials and data unencrypted. Enable FTPS when the server supports it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
     private var megaFields: some View {
         VStack(spacing: 12) {
             Text("Sign in with your Mega email and password.")
@@ -1137,6 +1179,7 @@ struct AddCloudAccountView: View {
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         case .filen: return email.isEmpty || password.isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
+        case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -1248,6 +1291,17 @@ struct AddCloudAccountView: View {
                         remotePath: resolvedRemote
                     )
                 }
+            case .ftp:
+                let trimmedRemote = ftpRemotePath.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addFTPAccount(
+                    host: serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                    port: Int(ftpPort) ?? 21,
+                    username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    remotePath: trimmedRemote.isEmpty ? "/" : trimmedRemote,
+                    useTLS: ftpUseTLS,
+                    allowInvalidCertificate: ftpAllowSelfSigned
+                )
             case .wordpress:
                 await appState.syncManager.addWordPressAccount(siteURL: serverURL, username: username, appPassword: password)
             case .s3:

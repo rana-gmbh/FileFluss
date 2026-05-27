@@ -49,6 +49,8 @@ struct EditCloudAccountView: View {
     @State private var s3DisplayName = ""
 
     @State private var synologyOTP = ""
+    @State private var ftpUseTLS = false
+    @State private var ftpAllowSelfSigned = false
     @State private var synologyAllowSelfSigned = true
     @State private var seafileOTP = ""
     @State private var seafileAllowSelfSigned = false
@@ -122,6 +124,8 @@ struct EditCloudAccountView: View {
             internxtFields
         case .terabox:
             teraboxHint
+        case .ftp:
+            ftpFields
         case .seafile:
             seafileFields
         case .webDAV:
@@ -584,6 +588,38 @@ struct EditCloudAccountView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    private var ftpFields: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                TextField("Server", text: $serverURL)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                TextField("Port", text: $port)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .disabled(isAuthenticating)
+            }
+            TextField("Username", text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { save() }
+            TextField("Initial path", text: $remotePath)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            Toggle("Use FTPS (TLS)", isOn: $ftpUseTLS)
+                .disabled(isAuthenticating)
+            if ftpUseTLS {
+                Toggle("Allow self-signed certificate", isOn: $ftpAllowSelfSigned)
+                    .disabled(isAuthenticating)
+            }
+        }
+    }
+
     // MARK: - Buttons
 
     private var actionButtons: some View {
@@ -685,6 +721,14 @@ struct EditCloudAccountView: View {
             return serverURL != initial.serverURL
                 || username != initial.username
                 || !password.isEmpty
+        case .ftp:
+            return serverURL != initial.host
+                || username != initial.username
+                || !password.isEmpty
+                || port != "\(initial.port)"
+                || remotePath != (initial.remotePath.isEmpty ? "/" : initial.remotePath)
+                || ftpUseTLS != initial.ftpUseTLS
+                || ftpAllowSelfSigned != initial.allowSelfSignedCertificate
         case .sftp:
             return serverURL != initial.host
                 || port != "\(initial.port)"
@@ -739,6 +783,8 @@ struct EditCloudAccountView: View {
             return !serverURL.isEmpty && !email.isEmpty && !password.isEmpty
         case .webDAV:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
+        case .ftp:
+            return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
         case .sftp:
             if serverURL.isEmpty || username.isEmpty { return false }
             switch sftpAuthMethod {
@@ -790,6 +836,8 @@ struct EditCloudAccountView: View {
         s3Path = account.rootPath == "/" ? "" : String(account.rootPath.dropFirst())
         seafileAllowSelfSigned = snap.allowSelfSignedCertificate
         synologyAllowSelfSigned = snap.allowSelfSignedCertificate
+        ftpUseTLS = snap.ftpUseTLS
+        ftpAllowSelfSigned = snap.allowSelfSignedCertificate
         // For SFTP, prefill from rootPath as well in case the snapshot
         // didn't carry it.
         if account.providerType == .sftp, !account.rootPath.isEmpty, account.rootPath != "/" {
@@ -914,6 +962,18 @@ struct EditCloudAccountView: View {
                 }
             case .kDrive:
                 await appState.syncManager.updateKDriveAccount(accountId: id, apiToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines))
+            case .ftp:
+                let trimmedRemote = remotePath.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.updateFTPAccount(
+                    accountId: id,
+                    host: serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                    port: Int(port) ?? 21,
+                    username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    remotePath: trimmedRemote.isEmpty ? "/" : trimmedRemote,
+                    useTLS: ftpUseTLS,
+                    allowInvalidCertificate: ftpAllowSelfSigned
+                )
             case .iCloud, .terabox:
                 break
             }

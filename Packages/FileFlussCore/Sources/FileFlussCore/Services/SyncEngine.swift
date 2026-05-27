@@ -81,8 +81,9 @@ public actor SyncEngine {
         // which iOS doesn't expose. Both providers are macOS-only.
         case .iCloud: return ICloudProvider()
         case .sftp: return SFTPProvider()
+        case .ftp: return FTPProvider()
         #else
-        case .iCloud, .sftp:
+        case .iCloud, .sftp, .ftp:
             fatalError("Provider \(type) is macOS-only and shouldn't reach createProvider on iOS")
         #endif
         case .gmxCloud: return GMXCloudProvider()
