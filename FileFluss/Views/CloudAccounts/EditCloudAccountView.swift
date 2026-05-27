@@ -120,6 +120,8 @@ struct EditCloudAccountView: View {
             filenFields
         case .internxt:
             internxtFields
+        case .terabox:
+            teraboxHint
         case .seafile:
             seafileFields
         case .webDAV:
@@ -574,6 +576,14 @@ struct EditCloudAccountView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    private var teraboxHint: some View {
+        Text("TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     // MARK: - Buttons
 
     private var actionButtons: some View {
@@ -594,7 +604,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud:
+        case .iCloud, .terabox:
             EmptyView()
         case .dropbox, .googleDrive, .oneDrive, .box:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
@@ -640,7 +650,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -754,7 +764,7 @@ struct EditCloudAccountView: View {
             return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox:
             return true
         }
     }
@@ -904,7 +914,7 @@ struct EditCloudAccountView: View {
                 }
             case .kDrive:
                 await appState.syncManager.updateKDriveAccount(accountId: id, apiToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines))
-            case .iCloud:
+            case .iCloud, .terabox:
                 break
             }
 

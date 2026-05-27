@@ -136,7 +136,7 @@ struct AddCloudAccountView: View {
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
         .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .internxt, .kDrive,
-        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2,
+        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
     ]
 
     /// Providers that show up under "Other Protocols" — generic transport
@@ -277,6 +277,8 @@ struct AddCloudAccountView: View {
                 filenFields
             case .internxt:
                 internxtFields
+            case .terabox:
+                teraboxFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -861,6 +863,27 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var teraboxFields: some View {
+        VStack(spacing: 12) {
+            if let qrData = appState.syncManager.teraboxQRImageData, let image = NSImage(data: qrData) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: 200, height: 200)
+                Text("Open the TeraBox app and scan this QR code to authorize.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                ProgressView()
+            } else {
+                Text("TeraBox uses device-code sign-in: tap Connect to get a QR code, then scan it with the TeraBox app to authorize. Access is limited to this app's folder on your TeraBox drive.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
     private var megaFields: some View {
         VStack(spacing: 12) {
             Text("Sign in with your Mega email and password.")
@@ -1113,6 +1136,7 @@ struct AddCloudAccountView: View {
         case .box: return false
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         case .filen: return email.isEmpty || password.isEmpty
+        case .terabox: return false  // device-code flow; the Connect button starts it
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -1287,6 +1311,8 @@ struct AddCloudAccountView: View {
                     password: password,
                     twoFactorCode: code
                 )
+            case .terabox:
+                await appState.syncManager.connectTeraBox()
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

@@ -22,6 +22,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case seafile
     case filen
     case internxt
+    case terabox
 
     public var id: String { rawValue }
 
@@ -48,6 +49,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .seafile: return "Seafile"
         case .filen: return "Filen"
         case .internxt: return "Internxt"
+        case .terabox: return "TeraBox"
         }
     }
 
@@ -74,6 +76,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .seafile: return "leaf.fill"
         case .filen: return "lock.shield"
         case .internxt: return "lock.icloud.fill"
+        case .terabox: return "shippingbox.and.arrow.backward.fill"
         }
     }
 
@@ -100,7 +103,8 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .box: return "BoxLogo"
         case .seafile: return "SeafileLogo"
         case .filen: return "FilenLogo"
-        case .internxt: return nil
+        case .internxt: return "InternxtLogo"
+        case .terabox: return "TeraBoxLogo"
         }
     }
 }

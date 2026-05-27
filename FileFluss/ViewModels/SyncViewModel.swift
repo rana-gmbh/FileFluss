@@ -9,6 +9,11 @@ final class SyncViewModel {
     var isAddingRule: Bool = false
     var authError: String?
 
+    // TeraBox device-code (QR) login state. The view shows `teraboxQRImageData`
+    // while the user scans, then we poll for the token.
+    var teraboxQRImageData: Data?
+    var isAuthenticatingTeraBox: Bool = false
+
     // OneDrive OAuth state
     var isAuthenticatingOneDrive: Bool = false
 
@@ -498,6 +503,31 @@ final class SyncViewModel {
         }
     }
 
+    /// TeraBox device-code login: fetch a QR, surface it for the user to scan
+    /// in the TeraBox app, then poll for the token and register the account.
+    func connectTeraBox() async {
+        authError = nil
+        teraboxQRImageData = nil
+        isAuthenticatingTeraBox = true
+        defer { isAuthenticatingTeraBox = false; teraboxQRImageData = nil }
+
+        let account = CloudAccount(providerType: .terabox)
+        let provider = TeraBoxProvider(accountId: account.id)
+        do {
+            let device = try await provider.beginDeviceLogin()
+            teraboxQRImageData = device.qrImageData
+            let credentials = try await provider.completeDeviceLogin(device)
+            var connectedAccount = account
+            connectedAccount.displayName = "TeraBox (\(credentials.userID))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addICloudAccount() async {
         authError = nil
         // Disallow more than one iCloud account — they all back the same
@@ -931,6 +961,11 @@ final class SyncViewModel {
                 }
             case .internxt:
                 let provider = InternxtProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .terabox:
+                let provider = TeraBoxProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

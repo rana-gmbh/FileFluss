@@ -94,6 +94,7 @@ public actor SyncEngine {
         case .seafile: return SeafileProvider()
         case .filen: return FilenProvider()
         case .internxt: return InternxtProvider()
+        case .terabox: return TeraBoxProvider()
         }
     }
 }
