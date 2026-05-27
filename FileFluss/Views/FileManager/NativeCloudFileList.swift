@@ -503,8 +503,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let clickedRow = tableView.clickedRow
 
+        // The synthetic "Shared drives" container only ever lists shared-drive
+        // roots. When that's what we're viewing, the current directory isn't a
+        // real folder, so Paste / New Folder don't apply.
+        let inVirtualContainer = !items.isEmpty && items.allSatisfy { $0.role == .driveRoot }
+
         // Right-click on empty area — offer Paste + New Folder.
         if clickedRow < 0 || clickedRow >= items.count {
+            if inVirtualContainer { return }
             let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteItem.keyEquivalentModifierMask = [.command]
             pasteItem.target = self
@@ -531,44 +537,62 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let otherPanelName = panelSide == .left ? "Right" : "Left"
 
-        let cutCtx = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
-        cutCtx.keyEquivalentModifierMask = [.command]
-        cutCtx.target = self
-        menu.addItem(cutCtx)
+        // Synthetic shared-drive nodes can't be renamed, deleted, moved, or
+        // cut; the bare container can't even be copied. Suppress those rather
+        // than offer actions that would just fail.
+        let containsVirtualContainer = contextItems.contains { $0.role == .virtualContainer }
+        let containsImmovable = contextItems.contains { $0.role != .normal }
 
-        let copyCtx = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
-        copyCtx.keyEquivalentModifierMask = [.command]
-        copyCtx.target = self
-        menu.addItem(copyCtx)
+        if !containsImmovable {
+            let cutCtx = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
+            cutCtx.keyEquivalentModifierMask = [.command]
+            cutCtx.target = self
+            menu.addItem(cutCtx)
+        }
 
-        let pasteCtx = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
-        pasteCtx.keyEquivalentModifierMask = [.command]
-        pasteCtx.target = self
-        menu.addItem(pasteCtx)
+        if !containsVirtualContainer {
+            let copyCtx = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
+            copyCtx.keyEquivalentModifierMask = [.command]
+            copyCtx.target = self
+            menu.addItem(copyCtx)
+        }
+
+        // Paste targets the current directory, not the clicked item — only
+        // offer it when that directory is a real folder.
+        if !inVirtualContainer {
+            let pasteCtx = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+            pasteCtx.keyEquivalentModifierMask = [.command]
+            pasteCtx.target = self
+            menu.addItem(pasteCtx)
+        }
 
         menu.addItem(.separator())
 
-        let copyItem = NSMenuItem(title: "Copy to \(otherPanelName) Panel", action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
-        copyItem.target = self
-        copyItem.representedObject = contextItems
-        menu.addItem(copyItem)
+        if !containsVirtualContainer {
+            let copyItem = NSMenuItem(title: "Copy to \(otherPanelName) Panel", action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
+            copyItem.target = self
+            copyItem.representedObject = contextItems
+            menu.addItem(copyItem)
+        }
 
-        let moveItem = NSMenuItem(title: "Move to \(otherPanelName) Panel", action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
-        moveItem.target = self
-        moveItem.representedObject = contextItems
-        menu.addItem(moveItem)
+        if !containsImmovable {
+            let moveItem = NSMenuItem(title: "Move to \(otherPanelName) Panel", action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
+            moveItem.target = self
+            moveItem.representedObject = contextItems
+            menu.addItem(moveItem)
+        }
 
         menu.addItem(.separator())
 
-        // Rename — only for single selection
-        if contextItems.count == 1 {
+        // Rename — only for single, renamable selection
+        if contextItems.count == 1, contextItems[0].role == .normal {
             let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "")
             renameItem.target = self
             renameItem.representedObject = contextItems[0]
             menu.addItem(renameItem)
         }
 
-        if canCreateFolder {
+        if canCreateFolder, !inVirtualContainer {
             let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
             newFolderItem.target = self
             menu.addItem(newFolderItem)
@@ -582,18 +606,42 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             favItem.representedObject = folder
             menu.addItem(favItem)
 
-            let calcItem = NSMenuItem(title: "Calculate Folder Size", action: #selector(handleCalculateFolderSize(_:)), keyEquivalent: "")
-            calcItem.target = self
-            calcItem.representedObject = folder
-            menu.addItem(calcItem)
+            // The bare container has no single size worth computing.
+            if folder.role != .virtualContainer {
+                let calcItem = NSMenuItem(title: "Calculate Folder Size", action: #selector(handleCalculateFolderSize(_:)), keyEquivalent: "")
+                calcItem.target = self
+                calcItem.representedObject = folder
+                menu.addItem(calcItem)
+            }
         }
 
-        menu.addItem(.separator())
+        if !containsImmovable {
+            menu.addItem(.separator())
+            let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
+            deleteItem.target = self
+            deleteItem.representedObject = contextItems
+            menu.addItem(deleteItem)
+        }
 
-        let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
-        deleteItem.target = self
-        deleteItem.representedObject = contextItems
-        menu.addItem(deleteItem)
+        Self.removeRedundantSeparators(menu)
+    }
+
+    /// Strips leading/trailing separators and collapses consecutive ones, so
+    /// conditionally-omitted menu items don't leave dangling dividers.
+    private static func removeRedundantSeparators(_ menu: NSMenu) {
+        while let first = menu.items.first, first.isSeparatorItem {
+            menu.removeItem(first)
+        }
+        while let last = menu.items.last, last.isSeparatorItem {
+            menu.removeItem(last)
+        }
+        var index = menu.items.count - 1
+        while index > 0 {
+            if menu.items[index].isSeparatorItem, menu.items[index - 1].isSeparatorItem {
+                menu.removeItem(at: index)
+            }
+            index -= 1
+        }
     }
 
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
@@ -823,13 +871,20 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         cell.textField?.textColor = .labelColor
         cell.textField?.font = FileListRowSizePrefs.current.systemFont
 
-        if item.isDirectory {
+        if let symbol = item.symbolIconOverride,
+           let symbolImage = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
+            // Synthetic entries (e.g. Google Drive "Shared drives") render as a
+            // drive glyph rather than the standard folder icon.
+            cell.imageView?.image = symbolImage
+            cell.imageView?.contentTintColor = .secondaryLabelColor
+        } else if item.isDirectory {
             cell.imageView?.image = FileTypeIcon.folderIcon()
+            cell.imageView?.contentTintColor = nil
         } else {
             cell.imageView?.image = FreeFileIcon.icon(forFilename: item.name)
                 ?? FileTypeIcon.icon(forFilename: item.name)
+            cell.imageView?.contentTintColor = nil
         }
-        cell.imageView?.contentTintColor = nil
 
         if let badge = cell.viewWithTag(Self.cloudBadgeTag) as? NSImageView {
             switch item.downloadStatus {

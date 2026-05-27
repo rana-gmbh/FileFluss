@@ -10,6 +10,21 @@ public enum CloudDownloadStatus: Hashable, Sendable {
     case downloading
 }
 
+/// What kind of navigational node an item is. Most items are `.normal`
+/// files/folders; the others are synthetic entries (today: Google Drive's
+/// "Shared drives" tree) that the UI must treat differently — e.g. you can
+/// open a shared drive but not rename, delete, or move it.
+public enum CloudItemRole: String, Hashable, Sendable, Codable {
+    case normal
+    /// A synthetic grouping node such as "Shared drives". Navigable, but not
+    /// a real folder: no copy/move/rename/delete, and nothing can be created
+    /// inside it directly.
+    case virtualContainer
+    /// A shared drive's root — a real folder you can browse and copy out of,
+    /// but the drive itself can't be renamed, deleted, or moved.
+    case driveRoot
+}
+
 public struct CloudFileItem: Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
@@ -19,6 +34,13 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
     public let modificationDate: Date
     public let checksum: String?
     public let downloadStatus: CloudDownloadStatus
+    /// Optional SF Symbol name that overrides the default folder/file icon.
+    /// Used for synthetic entries — e.g. Google Drive's "Shared drives"
+    /// container and each shared drive — which should read as drives rather
+    /// than ordinary folders.
+    public let symbolIconOverride: String?
+    /// Navigational role — drives which context-menu actions are valid.
+    public let role: CloudItemRole
 
     public init(
         id: String,
@@ -28,7 +50,9 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
         size: Int64,
         modificationDate: Date,
         checksum: String?,
-        downloadStatus: CloudDownloadStatus = .local
+        downloadStatus: CloudDownloadStatus = .local,
+        symbolIconOverride: String? = nil,
+        role: CloudItemRole = .normal
     ) {
         self.id = id
         self.name = name
@@ -38,9 +62,12 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
         self.modificationDate = modificationDate
         self.checksum = checksum
         self.downloadStatus = downloadStatus
+        self.symbolIconOverride = symbolIconOverride
+        self.role = role
     }
 
     public var icon: String {
+        if let symbolIconOverride { return symbolIconOverride }
         if isDirectory { return "folder.fill" }
         let ext = (name as NSString).pathExtension.lowercased()
         switch ext {

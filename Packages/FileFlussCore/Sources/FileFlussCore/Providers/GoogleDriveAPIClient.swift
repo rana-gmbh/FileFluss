@@ -52,7 +52,32 @@ public actor GoogleDriveAPIClient {
     struct CachedFile {
         let id: String
         let mimeType: String
+        /// The shared-drive ID this entry lives in, or nil for My Drive.
+        /// Threaded through path resolution so listing/search queries scope
+        /// to the correct corpus (Drive defaults to My Drive only).
+        var driveId: String? = nil
     }
+
+    // MARK: - Shared Drives
+
+    /// Synthetic top-level folder that groups the user's Shared Drives,
+    /// mirroring the "Shared drives" entry in Google Drive's own web UI.
+    /// My Drive contents stay at the root so existing `/Foo` paths (favorites,
+    /// sync rules) keep resolving; Shared Drives live under this reserved name.
+    static let sharedDrivesFolderName = "Shared drives"
+    /// Sentinel file ID for the synthetic container above. Never sent to the
+    /// API — destructive ops on virtual nodes are rejected before any request.
+    static let sharedDrivesSentinelId = "filefluss-shared-drives-root"
+
+    struct SharedDrive: Sendable {
+        let id: String
+        let name: String
+    }
+
+    /// In-memory cache of the user's Shared Drives. Drives rarely change, so
+    /// the cheap root-folder marker reuses this; the explicit "Shared drives"
+    /// listing force-refreshes to stay current.
+    private var sharedDrivesCache: [SharedDrive]?
 
     private static let googleWorkspaceMimeTypes: Set<String> = [
         "application/vnd.google-apps.document",
@@ -317,10 +342,65 @@ public actor GoogleDriveAPIClient {
         return CloudStorageQuota(usedBytes: used, totalBytes: total)
     }
 
+    // MARK: - Shared Drives
+
+    /// Lists the Shared Drives the authenticated user is a member of. Cached
+    /// in memory; pass `forceRefresh: true` to bypass the cache.
+    func listSharedDrives(forceRefresh: Bool = false) async throws -> [SharedDrive] {
+        if !forceRefresh, let cached = sharedDrivesCache {
+            return cached
+        }
+
+        struct DriveListResponse: Decodable {
+            struct Drive: Decodable { let id: String; let name: String }
+            let drives: [Drive]?
+            let nextPageToken: String?
+        }
+
+        var result: [SharedDrive] = []
+        var pageToken: String?
+        repeat {
+            var queryItems = [URLQueryItem(name: "pageSize", value: "100")]
+            if let pageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            let response: DriveListResponse = try await apiRequest(.get, path: "/drives", queryItems: queryItems)
+            result.append(contentsOf: (response.drives ?? []).map { SharedDrive(id: $0.id, name: $0.name) })
+            pageToken = response.nextPageToken
+        } while pageToken != nil
+
+        sharedDrivesCache = result
+        return result
+    }
+
+    /// Files-API query parameters that scope a request to the right corpus.
+    /// `supportsAllDrives` declares the client understands shared drives (so
+    /// shared-drive items aren't rejected). When `driveId` is set we also ask
+    /// the API to include and scope to that drive's corpus; for My Drive
+    /// (`nil`) we leave the corpus at its default so shared-drive items don't
+    /// leak into the My Drive listing.
+    private static func driveQueryItems(driveId: String?) -> [URLQueryItem] {
+        var items = [URLQueryItem(name: "supportsAllDrives", value: "true")]
+        if let driveId {
+            items.append(URLQueryItem(name: "includeItemsFromAllDrives", value: "true"))
+            items.append(URLQueryItem(name: "corpora", value: "drive"))
+            items.append(URLQueryItem(name: "driveId", value: driveId))
+        }
+        return items
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
-        let folderId = (try await resolvePathToCachedFile(path)).id
+        // Virtual "Shared drives" container: list the user's shared drives as
+        // top-level folders rather than querying the files API.
+        if path == "/\(Self.sharedDrivesFolderName)" {
+            return try await listSharedDrivesAsFolders()
+        }
+
+        let cached = try await resolvePathToCachedFile(path)
+        let folderId = cached.id
+        let driveId = cached.driveId
 
         var allItems: [GoogleDriveFile] = []
         var pageToken: String?
@@ -332,6 +412,7 @@ public actor GoogleDriveAPIClient {
                 URLQueryItem(name: "pageSize", value: "1000"),
                 URLQueryItem(name: "orderBy", value: "folder,name"),
             ]
+            queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
             if let pageToken {
                 queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
             }
@@ -341,13 +422,73 @@ public actor GoogleDriveAPIClient {
             pageToken = response.nextPageToken
         } while pageToken != nil
 
-        // Cache IDs and mimeTypes for resolved items
+        // Cache IDs and mimeTypes for resolved items, inheriting the drive scope.
         for file in allItems {
             let itemPath = path == "/" ? "/\(file.name)" : "\(path)/\(file.name)"
-            pathIdCache[itemPath] = CachedFile(id: file.id, mimeType: file.mimeType)
+            pathIdCache[itemPath] = CachedFile(id: file.id, mimeType: file.mimeType, driveId: driveId)
         }
 
-        return allItems.map { $0.toCloudFileItem(parentPath: path) }
+        var result = allItems.map { $0.toCloudFileItem(parentPath: path) }
+
+        // Surface the synthetic "Shared drives" folder at the My Drive root,
+        // but only when the user actually belongs to one or more shared drives.
+        if path == "/" {
+            let drives = (try? await listSharedDrives()) ?? []
+            if !drives.isEmpty {
+                result.append(Self.sharedDrivesContainerItem())
+            }
+        }
+
+        return result
+    }
+
+    /// The shared drives the user belongs to, presented as folder items under
+    /// "/Shared drives". Also primes the path cache so descending is one hop.
+    private func listSharedDrivesAsFolders() async throws -> [CloudFileItem] {
+        let drives = try await listSharedDrives(forceRefresh: true)
+        var items: [CloudFileItem] = []
+        for drive in drives {
+            let drivePath = "/\(Self.sharedDrivesFolderName)/\(drive.name)"
+            pathIdCache[drivePath] = CachedFile(id: drive.id, mimeType: "application/vnd.google-apps.folder", driveId: drive.id)
+            items.append(CloudFileItem(
+                id: "d\(drive.id)",
+                name: drive.name,
+                path: drivePath,
+                isDirectory: true,
+                size: 0,
+                modificationDate: .distantPast,
+                checksum: nil,
+                symbolIconOverride: "externaldrive.fill",
+                role: .driveRoot
+            ))
+        }
+        return items
+    }
+
+    /// The synthetic top-level "Shared drives" folder item.
+    private static func sharedDrivesContainerItem() -> CloudFileItem {
+        CloudFileItem(
+            id: "d\(sharedDrivesSentinelId)",
+            name: sharedDrivesFolderName,
+            path: "/\(sharedDrivesFolderName)",
+            isDirectory: true,
+            size: 0,
+            modificationDate: .distantPast,
+            checksum: nil,
+            symbolIconOverride: "externaldrive.fill",
+            role: .virtualContainer
+        )
+    }
+
+    /// True for the synthetic "Shared drives" container and for a shared drive's
+    /// own root. Neither can be created, renamed, or deleted through the file
+    /// API — guarding here turns those into a clear error instead of an attempt
+    /// to operate on (or destroy) an entire shared drive.
+    private func isVirtualSharedDriveNode(_ path: String) -> Bool {
+        let trimmed = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+        let components = trimmed.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard components.first == Self.sharedDrivesFolderName else { return false }
+        return components.count <= 2
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -363,7 +504,7 @@ public actor GoogleDriveAPIClient {
         if let exportMime = Self.exportMimeTypes[cached.mimeType] {
             // Google Workspace file — use export endpoint
             let encodedMime = exportMime.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exportMime
-            url = URL(string: "\(apiURL)/files/\(cached.id)/export?mimeType=\(encodedMime)")!
+            url = URL(string: "\(apiURL)/files/\(cached.id)/export?mimeType=\(encodedMime)&supportsAllDrives=true")!
             // Append correct file extension for the exported format
             if let ext = Self.exportExtensions[cached.mimeType] {
                 actualLocalURL = localURL.appendingPathExtension(ext)
@@ -371,7 +512,7 @@ public actor GoogleDriveAPIClient {
             googleLog.debug("[Google] Exporting workspace file as \(exportMime) → .\(Self.exportExtensions[cached.mimeType] ?? "?")")
         } else {
             // Regular file — use alt=media
-            url = URL(string: "\(apiURL)/files/\(cached.id)?alt=media")!
+            url = URL(string: "\(apiURL)/files/\(cached.id)?alt=media&supportsAllDrives=true")!
         }
 
         var request = URLRequest(url: url)
@@ -415,7 +556,11 @@ public actor GoogleDriveAPIClient {
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
-        let parentId = (try await resolvePathToCachedFile(parentPath)).id
+        // Can't drop files straight into the synthetic "Shared drives" node;
+        // they belong inside a specific drive.
+        guard parentPath != "/\(Self.sharedDrivesFolderName)" else { throw CloudProviderError.notImplemented }
+        let parentCached = try await resolvePathToCachedFile(parentPath)
+        let parentId = parentCached.id
 
         // Prefer a cached ID (populated by listFolder). A Drive query for a
         // just-uploaded file can miss due to index lag, which would cause us
@@ -425,7 +570,7 @@ public actor GoogleDriveAPIClient {
         if let cached = pathIdCache[remotePath] {
             existingId = cached.id
         } else {
-            existingId = try? await findFileId(parentId: parentId, name: fileName)
+            existingId = try? await findFileId(parentId: parentId, name: fileName, driveId: parentCached.driveId)
         }
 
         let fileData = try Data(contentsOf: localURL)
@@ -441,8 +586,9 @@ public actor GoogleDriveAPIClient {
         }
 
         // Cache the uploaded file's ID so subsequent replace/delete don't need
-        // to re-query Drive (avoiding index-lag races).
-        pathIdCache[remotePath] = CachedFile(id: uploaded.id, mimeType: uploaded.mimeType)
+        // to re-query Drive (avoiding index-lag races). Inherit the parent's
+        // drive scope so a shared-drive file stays corpus-scoped.
+        pathIdCache[remotePath] = CachedFile(id: uploaded.id, mimeType: uploaded.mimeType, driveId: parentCached.driveId)
 
         // When replacing an existing file, Drive's upload endpoint rejects
         // PATCH bodies that include modifiedTime/createdTime (HTTP 403). Apply
@@ -462,7 +608,7 @@ public actor GoogleDriveAPIClient {
 
     private func patchFileTimestamps(fileId: String, modDate: Date?, createdDate: Date?) async throws {
         let creds = try await refreshTokenIfNeeded()
-        guard let url = URL(string: "\(apiURL)/files/\(fileId)") else { return }
+        guard let url = URL(string: "\(apiURL)/files/\(fileId)?supportsAllDrives=true") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
@@ -486,14 +632,16 @@ public actor GoogleDriveAPIClient {
 
     /// Look up a file's ID by name within a parent folder, without populating
     /// the full-folder cache. Returns nil when the file doesn't exist.
-    private func findFileId(parentId: String, name: String) async throws -> String? {
+    private func findFileId(parentId: String, name: String, driveId: String? = nil) async throws -> String? {
         let escaped = name.replacingOccurrences(of: "'", with: "\\'")
         let query = "'\(parentId)' in parents and name = '\(escaped)' and trashed = false"
-        let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: [
+        var queryItems = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "fields", value: "files(id)"),
             URLQueryItem(name: "pageSize", value: "1"),
-        ])
+        ]
+        queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
+        let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
         return response.files.first?.id
     }
 
@@ -507,14 +655,14 @@ public actor GoogleDriveAPIClient {
         let method: String
         let metadata: String
         if let existingId {
-            urlString = "\(uploadURL)/files/\(existingId)?uploadType=multipart&fields=id,name,mimeType"
+            urlString = "\(uploadURL)/files/\(existingId)?uploadType=multipart&fields=id,name,mimeType&supportsAllDrives=true"
             method = "PATCH"
             // Drive rejects modifiedTime/createdTime on upload-endpoint PATCH
             // with HTTP 403. Apply timestamps via a separate metadata PATCH
             // after the upload completes (see patchFileTimestamps).
             metadata = Self.buildMetadata(name: nil, parentId: nil, modDate: nil, createdDate: nil)
         } else {
-            urlString = "\(uploadURL)/files?uploadType=multipart&fields=id,name,mimeType"
+            urlString = "\(uploadURL)/files?uploadType=multipart&fields=id,name,mimeType&supportsAllDrives=true"
             method = "POST"
             metadata = Self.buildMetadata(name: fileName, parentId: parentId, modDate: modDate, createdDate: createdDate)
         }
@@ -568,12 +716,12 @@ public actor GoogleDriveAPIClient {
         let initMethod: String
         let metadata: String
         if let existingId {
-            initURLString = "\(uploadURL)/files/\(existingId)?uploadType=resumable&fields=id,name,mimeType"
+            initURLString = "\(uploadURL)/files/\(existingId)?uploadType=resumable&fields=id,name,mimeType&supportsAllDrives=true"
             initMethod = "PATCH"
             // See simpleUpload: timestamps applied via separate PATCH after upload.
             metadata = Self.buildMetadata(name: nil, parentId: nil, modDate: nil, createdDate: nil)
         } else {
-            initURLString = "\(uploadURL)/files?uploadType=resumable&fields=id,name,mimeType"
+            initURLString = "\(uploadURL)/files?uploadType=resumable&fields=id,name,mimeType&supportsAllDrives=true"
             initMethod = "POST"
             metadata = Self.buildMetadata(name: fileName, parentId: parentId, modDate: modDate, createdDate: createdDate)
         }
@@ -637,12 +785,18 @@ public actor GoogleDriveAPIClient {
     }
 
     public func deleteItem(at path: String) async throws {
+        guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
         let cached = try await resolvePathToCachedFile(path)
         try await apiRequestVoid(.delete, path: "/files/\(cached.id)")
         pathIdCache.removeValue(forKey: path)
     }
 
     public func createFolder(at path: String) async throws {
+        // The synthetic "Shared drives" tree isn't a real folder — creating a
+        // new shared drive is out of scope for a folder-create.
+        guard !isVirtualSharedDriveNode(path),
+              (path as NSString).deletingLastPathComponent != "/\(Self.sharedDrivesFolderName)"
+        else { throw CloudProviderError.notImplemented }
         // Idempotent: Google Drive allows duplicate folder names under the same
         // parent, so a naive create multiplies folders on each retry. Short-
         // circuit when the folder already exists at this path.
@@ -688,6 +842,7 @@ public actor GoogleDriveAPIClient {
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
+        guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
         let cached = try await resolvePathToCachedFile(path)
         let fileId = cached.id
 
@@ -710,6 +865,7 @@ public actor GoogleDriveAPIClient {
         var components = URLComponents(string: "\(apiURL)/files/\(fileId)")!
         components.queryItems = [
             URLQueryItem(name: "fields", value: "id,name,mimeType,size,modifiedTime,md5Checksum"),
+            URLQueryItem(name: "supportsAllDrives", value: "true"),
         ]
 
         guard let url = components.url else {
@@ -752,12 +908,17 @@ public actor GoogleDriveAPIClient {
 
     /// Google Drive uses file IDs, not paths. This resolves a POSIX-style path to a cached file entry
     /// by walking each path component and querying for it by name within the parent.
+    ///
+    /// Two virtual nodes sit above the real tree: `/Shared drives` (a synthetic
+    /// container) and `/Shared drives/<DriveName>` (whose ID is the shared
+    /// drive's ID, which doubles as its root folder). Anything below the latter
+    /// carries that `driveId` so queries scope to the drive's corpus.
     private func resolvePathToCachedFile(_ path: String) async throws -> CachedFile {
         if let cached = pathIdCache[path] {
             return cached
         }
 
-        let components = path.split(separator: "/", omittingEmptySubsequences: true)
+        let components = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         guard let rootCached = pathIdCache["/"] else {
             throw CloudProviderError.notAuthenticated
         }
@@ -765,11 +926,52 @@ public actor GoogleDriveAPIClient {
             return rootCached
         }
 
-        var currentCached = rootCached
-        var currentPath = ""
+        if components[0] == Self.sharedDrivesFolderName {
+            return try await resolveSharedDrivePath(components: components)
+        }
 
-        for component in components {
-            let name = String(component)
+        return try await walkPath(components: components[...], from: rootCached, basePath: "")
+    }
+
+    /// Resolves a path that begins with the synthetic "Shared drives" segment.
+    private func resolveSharedDrivePath(components: [String]) async throws -> CachedFile {
+        // "/Shared drives" — the synthetic container itself.
+        if components.count == 1 {
+            return CachedFile(id: Self.sharedDrivesSentinelId, mimeType: "application/vnd.google-apps.folder")
+        }
+
+        // "/Shared drives/<DriveName>" — resolve the drive name to its ID.
+        let driveName = components[1]
+        let drivePath = "/\(Self.sharedDrivesFolderName)/\(driveName)"
+        let driveCached: CachedFile
+        if let cached = pathIdCache[drivePath] {
+            driveCached = cached
+        } else {
+            var drive = (try await listSharedDrives()).first { $0.name == driveName }
+            if drive == nil {
+                // Cache may be stale (drive added since last fetch).
+                drive = (try await listSharedDrives(forceRefresh: true)).first { $0.name == driveName }
+            }
+            guard let drive else { throw CloudProviderError.notFound(drivePath) }
+            // A shared drive's ID is also its root-folder ID for `in parents`.
+            driveCached = CachedFile(id: drive.id, mimeType: "application/vnd.google-apps.folder", driveId: drive.id)
+            pathIdCache[drivePath] = driveCached
+        }
+        if components.count == 2 {
+            return driveCached
+        }
+
+        // Deeper: walk the remaining components inside the shared drive.
+        return try await walkPath(components: components[2...], from: driveCached, basePath: drivePath)
+    }
+
+    /// Walks `components` from `parent`, querying each name within its parent and
+    /// caching results. Inherits `parent.driveId` so children stay corpus-scoped.
+    private func walkPath(components: ArraySlice<String>, from parent: CachedFile, basePath: String) async throws -> CachedFile {
+        var currentCached = parent
+        var currentPath = basePath
+
+        for name in components {
             currentPath += "/\(name)"
 
             if let cached = pathIdCache[currentPath] {
@@ -780,17 +982,20 @@ public actor GoogleDriveAPIClient {
             let escapedName = name.replacingOccurrences(of: "'", with: "\\'")
             let query = "'\(currentCached.id)' in parents and name = '\(escapedName)' and trashed = false"
 
-            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: [
+            var queryItems = [
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "fields", value: "files(id,name,mimeType)"),
                 URLQueryItem(name: "pageSize", value: "1"),
-            ])
+            ]
+            queryItems.append(contentsOf: Self.driveQueryItems(driveId: currentCached.driveId))
+
+            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
 
             guard let file = response.files.first else {
                 throw CloudProviderError.notFound(currentPath)
             }
 
-            let cached = CachedFile(id: file.id, mimeType: file.mimeType)
+            let cached = CachedFile(id: file.id, mimeType: file.mimeType, driveId: currentCached.driveId)
             pathIdCache[currentPath] = cached
             currentCached = cached
         }
@@ -803,10 +1008,14 @@ public actor GoogleDriveAPIClient {
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
         let escapedQuery = query.replacingOccurrences(of: "'", with: "\\'")
         var q = "name contains '\(escapedQuery)' and trashed = false"
+        var driveId: String? = nil
 
         // Scope to a specific folder if path is provided
         if let path, path != "/" {
+            // The synthetic container has nothing searchable of its own.
+            if path == "/\(Self.sharedDrivesFolderName)" { return [] }
             let cached = try await resolvePathToCachedFile(path)
+            driveId = cached.driveId
             q = "'\(cached.id)' in parents and name contains '\(escapedQuery)' and trashed = false"
         }
 
@@ -819,6 +1028,7 @@ public actor GoogleDriveAPIClient {
                 URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,parents)"),
                 URLQueryItem(name: "pageSize", value: "100"),
             ]
+            queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
             if let pageToken {
                 queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
             }
@@ -841,6 +1051,14 @@ public actor GoogleDriveAPIClient {
 
     private func apiRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil) async throws -> T {
         var components = URLComponents(string: "\(apiURL)\(path)")!
+        var queryItems = queryItems
+        // Every /files call must declare shared-drive support, or the API
+        // rejects requests that touch a shared-drive item. Callers that list
+        // within a shared drive already pass the corpus params via
+        // driveQueryItems; only add the flag here when it isn't present.
+        if path.hasPrefix("/files"), !queryItems.contains(where: { $0.name == "supportsAllDrives" }) {
+            queryItems.append(URLQueryItem(name: "supportsAllDrives", value: "true"))
+        }
         if !queryItems.isEmpty {
             components.queryItems = (components.queryItems ?? []) + queryItems
         }
@@ -884,7 +1102,12 @@ public actor GoogleDriveAPIClient {
     }
 
     private func apiRequestVoid(_ method: HTTPMethod, path: String) async throws {
-        guard let url = URL(string: "\(apiURL)\(path)") else {
+        var urlString = "\(apiURL)\(path)"
+        // Shared-drive items can't be deleted/modified without this flag.
+        if path.hasPrefix("/files") {
+            urlString += (path.contains("?") ? "&" : "?") + "supportsAllDrives=true"
+        }
+        guard let url = URL(string: urlString) else {
             throw CloudProviderError.invalidResponse
         }
 
