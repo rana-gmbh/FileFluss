@@ -93,6 +93,7 @@ public actor SyncEngine {
         case .box: return BoxProvider()
         case .seafile: return SeafileProvider()
         case .filen: return FilenProvider()
+        case .internxt: return InternxtProvider()
         }
     }
 }

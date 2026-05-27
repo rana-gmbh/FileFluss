@@ -477,6 +477,27 @@ final class SyncViewModel {
         }
     }
 
+    func addInternxtAccount(email: String, password: String, twoFactorCode: String) async {
+        let account = CloudAccount(providerType: .internxt)
+        let provider = InternxtProvider(accountId: account.id)
+        authError = nil
+        do {
+            let credentials = try await provider.authenticate(
+                email: email,
+                password: password,
+                twoFactorCode: twoFactorCode
+            )
+            var connectedAccount = account
+            connectedAccount.displayName = "Internxt (\(credentials.email))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addICloudAccount() async {
         authError = nil
         // Disallow more than one iCloud account — they all back the same
@@ -908,6 +929,11 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
+            case .internxt:
+                let provider = InternxtProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             }
         }
     }
@@ -1086,6 +1112,17 @@ final class SyncViewModel {
         authError = nil
         do {
             let provider = FilenProvider(accountId: accountId)
+            _ = try await provider.authenticate(email: email, password: password, twoFactorCode: twoFactorCode)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateInternxtAccount(accountId: UUID, email: String, password: String, twoFactorCode: String) async {
+        authError = nil
+        do {
+            let provider = InternxtProvider(accountId: accountId)
             _ = try await provider.authenticate(email: email, password: password, twoFactorCode: twoFactorCode)
             await finalizeUpdate(accountId: accountId, provider: provider)
         } catch {

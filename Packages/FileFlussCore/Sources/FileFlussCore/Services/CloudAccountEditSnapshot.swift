@@ -141,6 +141,11 @@ public enum CloudAccountEditLoader {
             snap.email = c.email
             return snap
 
+        case .internxt:
+            guard let c = KeychainService.load(key: "internxt.\(suffix)", as: InternxtCredentials.self) else { return nil }
+            snap.email = c.email
+            return snap
+
         case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .kDrive, .iCloud:
             return nil
         }

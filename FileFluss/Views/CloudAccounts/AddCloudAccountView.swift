@@ -70,6 +70,7 @@ struct AddCloudAccountView: View {
     @State private var seafileAllowSelfSigned = false
 
     @State private var filenTwoFactor = ""
+    @State private var internxtTwoFactor = ""
 
     @State private var megaOTP = ""
     /// MEGA's login hits an anti-abuse proof-of-work (hashcash) that can
@@ -134,7 +135,7 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .kDrive,
+        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .internxt, .kDrive,
         .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2,
     ]
 
@@ -274,6 +275,8 @@ struct AddCloudAccountView: View {
                 seafileFields
             case .filen:
                 filenFields
+            case .internxt:
+                internxtFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -308,6 +311,7 @@ struct AddCloudAccountView: View {
                     seafileOTP = ""
                     seafileAllowSelfSigned = false
                     filenTwoFactor = ""
+                    internxtTwoFactor = ""
                     megaOTP = ""
                     kDriveDiscovery = nil
                     kDriveSelectedDriveId = nil
@@ -836,6 +840,27 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var internxtFields: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+            TextField("Two-factor code (only if enabled)", text: $internxtTwoFactor)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            Text("Internxt is end-to-end encrypted — there's no browser OAuth. Your password is used locally to unlock your account mnemonic and derive per-file keys, then discarded.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
     private var megaFields: some View {
         VStack(spacing: 12) {
             Text("Sign in with your Mega email and password.")
@@ -1251,6 +1276,13 @@ struct AddCloudAccountView: View {
             case .filen:
                 let code = filenTwoFactor.trimmingCharacters(in: .whitespacesAndNewlines)
                 await appState.syncManager.addFilenAccount(
+                    email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    password: password,
+                    twoFactorCode: code
+                )
+            case .internxt:
+                let code = internxtTwoFactor.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.addInternxtAccount(
                     email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password,
                     twoFactorCode: code

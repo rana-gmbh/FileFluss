@@ -53,6 +53,7 @@ struct EditCloudAccountView: View {
     @State private var seafileOTP = ""
     @State private var seafileAllowSelfSigned = false
     @State private var filenTwoFactor = ""
+    @State private var internxtTwoFactor = ""
     @State private var megaOTP = ""
 
     @State private var nextCloudMode: AddCloudAccountView.NextCloudAuthMode = .browser
@@ -117,6 +118,8 @@ struct EditCloudAccountView: View {
             megaFields
         case .filen:
             filenFields
+        case .internxt:
+            internxtFields
         case .seafile:
             seafileFields
         case .webDAV:
@@ -211,6 +214,23 @@ struct EditCloudAccountView: View {
                 .textContentType(.password)
                 .disabled(isAuthenticating)
             TextField("Two-factor code (only if enabled)", text: $filenTwoFactor)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { save() }
+        }
+    }
+
+    private var internxtFields: some View {
+        VStack(spacing: 12) {
+            TextField("Email", text: $email)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.emailAddress)
+                .disabled(isAuthenticating)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+            TextField("Two-factor code (only if enabled)", text: $internxtTwoFactor)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -641,6 +661,10 @@ struct EditCloudAccountView: View {
             return email != initial.email
                 || !password.isEmpty
                 || (account.providerType == .mega ? !megaOTP.isEmpty : !filenTwoFactor.isEmpty)
+        case .internxt:
+            return email != initial.email
+                || !password.isEmpty
+                || !internxtTwoFactor.isEmpty
         case .seafile:
             return serverURL != initial.serverURL
                 || email != initial.email
@@ -698,6 +722,8 @@ struct EditCloudAccountView: View {
         case .koofr, .gmxCloud, .mega:
             return !email.isEmpty && !password.isEmpty
         case .filen:
+            return !email.isEmpty && !password.isEmpty
+        case .internxt:
             return !email.isEmpty && !password.isEmpty
         case .seafile:
             return !serverURL.isEmpty && !email.isEmpty && !password.isEmpty
@@ -791,6 +817,9 @@ struct EditCloudAccountView: View {
             case .filen:
                 let code = filenTwoFactor.trimmingCharacters(in: .whitespacesAndNewlines)
                 await appState.syncManager.updateFilenAccount(accountId: id, email: email, password: password, twoFactorCode: code)
+            case .internxt:
+                let code = internxtTwoFactor.trimmingCharacters(in: .whitespacesAndNewlines)
+                await appState.syncManager.updateInternxtAccount(accountId: id, email: email, password: password, twoFactorCode: code)
             case .seafile:
                 let otp = seafileOTP.trimmingCharacters(in: .whitespacesAndNewlines)
                 await appState.syncManager.updateSeafileAccount(
