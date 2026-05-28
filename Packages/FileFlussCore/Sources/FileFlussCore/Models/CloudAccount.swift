@@ -97,7 +97,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .mega: return "MegaLogo"
         case .webDAV: return "WebDAVLogo"
         case .sftp: return "SFTPLogo"
-        case .ftp: return nil
+        case .ftp: return "FTPLogo"
         case .wordpress: return "WordPressLogo"
         case .gmxCloud: return "GMXCloudLogo"
         case .s3: return "AmazonS3Logo"
