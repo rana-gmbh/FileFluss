@@ -10,6 +10,11 @@ struct FileFlussApp: App {
         WindowGroup {
             RootView()
                 .environment(appState)
+                .task {
+                    // Give the AppDelegate a handle to AppState so it can
+                    // unmount Finder volumes during applicationShouldTerminate.
+                    appDelegate.appState = appState
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))

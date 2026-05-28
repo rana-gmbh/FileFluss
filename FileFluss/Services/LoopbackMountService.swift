@@ -109,6 +109,67 @@ public final class LoopbackMountService {
         }
     }
 
+    /// Scan `/Volumes` for WebDAV mounts whose source URL points at our
+    /// `*.localhost` loopback pattern, and try to unmount each. Called on
+    /// app launch — if a previous run crashed or was killed before its
+    /// `unmountAll()` ran, Finder is sitting on dead mounts whose backing
+    /// server is gone. They look hung; this clears them.
+    public static func cleanupOrphanMounts() async {
+        let orphans = orphanMountPoints()
+        guard !orphans.isEmpty else { return }
+        mountLog.info("[mount] cleanup found \(orphans.count, privacy: .public) orphan mount(s) from a previous run")
+        for path in orphans {
+            await Task.detached(priority: .utility) {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/sbin/umount")
+                // -f forces the unmount even though the source server is
+                // gone — without it umount blocks waiting for a graceful
+                // close that will never come.
+                process.arguments = ["-f", path]
+                process.standardOutput = Pipe()
+                process.standardError = Pipe()
+                try? process.run()
+                process.waitUntilExit()
+            }.value
+            mountLog.info("[mount] cleaned up orphan mount at \(path, privacy: .public)")
+        }
+    }
+
+    /// Walk `getmntinfo` and return the mount points of every WebDAV mount
+    /// whose source URL looks like one of ours (`*.localhost`). Anything
+    /// else — a real WebDAV server the user mounted manually — is left
+    /// alone.
+    private static func orphanMountPoints() -> [String] {
+        var statsPtr: UnsafeMutablePointer<statfs>?
+        let count = getmntinfo(&statsPtr, MNT_NOWAIT)
+        guard count > 0, let buffer = statsPtr else { return [] }
+        var result: [String] = []
+        for i in 0..<Int(count) {
+            var entry = buffer[i]
+            let fstype = withUnsafePointer(to: &entry.f_fstypename) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MFSTYPENAMELEN)) {
+                    String(cString: $0)
+                }
+            }
+            guard fstype == "webdav" else { continue }
+            let source = withUnsafePointer(to: &entry.f_mntfromname) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                    String(cString: $0)
+                }
+            }
+            // Sources look like `http://<name>.localhost:<port>` for our
+            // mounts. Tolerate trailing-path variants too.
+            guard source.contains(".localhost") else { continue }
+            let mountPoint = withUnsafePointer(to: &entry.f_mntonname) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                    String(cString: $0)
+                }
+            }
+            result.append(mountPoint)
+        }
+        return result
+    }
+
     // MARK: - Process plumbing
 
     private func runMountWebDAV(port: UInt16, requestedMountPoint: URL) async throws -> URL {

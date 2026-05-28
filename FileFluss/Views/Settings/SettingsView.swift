@@ -156,19 +156,33 @@ private struct MountToggleButton: View {
     @State private var showError = false
 
     var body: some View {
-        let mountedNow = appState.mountService.isMounted(accountId: account.id)
-        Button {
-            Task { await toggle(currentlyMounted: mountedNow) }
-        } label: {
-            HStack(spacing: 4) {
-                if isWorking {
-                    ProgressView().controlSize(.small)
+        let activeMount = appState.mountService.mount(for: account.id)
+        let mountedNow = activeMount != nil
+        HStack(spacing: 6) {
+            // When mounted, a "Reveal" button next to the toggle opens the
+            // mount point in Finder so the user doesn't have to hunt for it.
+            if let mount = activeMount {
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([mount.mountPoint])
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
                 }
-                Text(mountedNow ? "Unmount" : "Mount in Finder")
+                .buttonStyle(.borderless)
+                .help("Reveal “\(mount.displayName)” in Finder")
             }
+            Button {
+                Task { await toggle(currentlyMounted: mountedNow) }
+            } label: {
+                HStack(spacing: 4) {
+                    if isWorking {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(mountedNow ? "Unmount" : "Mount in Finder")
+                }
+            }
+            .disabled(isWorking)
+            .help(mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder")
         }
-        .disabled(isWorking)
-        .help(mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder")
         .alert("Could not mount in Finder", isPresented: $showError, presenting: mountError) { _ in
             Button("OK", role: .cancel) {}
         } message: { error in

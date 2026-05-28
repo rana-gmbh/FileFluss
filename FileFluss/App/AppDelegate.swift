@@ -19,6 +19,11 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     private var themeChangeObserver: NSObjectProtocol?
     private let updateNotifier = UpdateNotifier()
 
+    /// Set by `FileFlussApp` once `AppState` is constructed so we can drain
+    /// `LoopbackMountService` at quit time. The delegate is created before
+    /// the `@State` AppState in the App, so this can't be a constructor arg.
+    var appState: AppState?
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Earliest possible chance to stamp the right icon — runs before
         // the first SwiftUI scene materialises. Belt-and-suspenders for
@@ -78,6 +83,13 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
 
         let notifier = updateNotifier
         Task { await notifier.start() }
+
+        // Sweep up Finder mounts a previous run left behind (crash, force
+        // quit, mid-mount hang…). Their backing server is gone; without
+        // this they sit in /Volumes forever looking unresponsive.
+        Task.detached(priority: .utility) {
+            await LoopbackMountService.cleanupOrphanMounts()
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -136,12 +148,23 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     /// flow after granting Full Disk Access — end them explicitly so the
     /// app always quits cleanly. Auxiliary windows (Settings, Search,
     /// Compare) also get closed defensively.
+    ///
+    /// If there are active Finder mounts, defer the actual termination so
+    /// we can drain them — otherwise Finder is left holding `/Volumes/`
+    /// entries pointing at a server that vanishes mid-quit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         for window in NSApp.windows {
             if let sheet = window.attachedSheet {
                 window.endSheet(sheet, returnCode: .cancel)
             }
         }
-        return .terminateNow
+        guard let mountService = appState?.mountService, !mountService.mounts.isEmpty else {
+            return .terminateNow
+        }
+        Task { @MainActor in
+            await mountService.unmountAll()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }
