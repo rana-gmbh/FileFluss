@@ -36,6 +36,10 @@ final class DriveMonitor {
     private init() {
         loadFromDefaults()
         refreshMountedVolumes()
+        // On a fresh launch, drop any persisted entry that was never
+        // indexed AND isn't currently mounted. Avoids carrying yesterday's
+        // one-off DMG into today's sidebar.
+        pruneUnindexedOfflineDrives()
 
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(
@@ -172,7 +176,21 @@ final class DriveMonitor {
             }
         }
         liveMountURLs = nextLive
+        // Every transition can leave behind a never-indexed entry whose
+        // volume just unmounted. Prune those so the sidebar stays tight.
+        pruneUnindexedOfflineDrives()
         saveToDefaults()
+    }
+
+    /// Drop every drive that (a) isn't currently mounted and (b) has
+    /// never been indexed by the user. Indexed-but-offline drives stay,
+    /// because their cached index is still searchable.
+    private func pruneUnindexedOfflineDrives() {
+        let before = drives.count
+        drives.removeAll { drive in
+            drive.lastIndexed == nil && liveMountURLs[drive.id] == nil
+        }
+        if drives.count != before { saveToDefaults() }
     }
 
     /// Inspects a mounted volume URL and returns a `Drive` if it's one we
