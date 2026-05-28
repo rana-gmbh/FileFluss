@@ -39,7 +39,7 @@ public final class LoopbackMountService {
         displayName: String
     ) async throws -> ActiveMount {
         let safeName = sanitiseVolumeName(displayName)
-        let mountPoint = URL(fileURLWithPath: "/Volumes/\(safeName)")
+        let requestedMountPoint = URL(fileURLWithPath: "/Volumes/\(safeName)")
 
         let sidecarRoot = sidecarBaseURL.appendingPathComponent(accountId.uuidString)
         let sidecar = WebDAVSidecarStore(root: sidecarRoot)
@@ -47,8 +47,11 @@ public final class LoopbackMountService {
         let server = WebDAVServer(provider: provider, mountRoot: providerRoot, sidecar: sidecar)
         let port = try await server.start()
 
+        // NetFS returns the path it actually mounted at — store that, not
+        // what we proposed, so unmount targets the right thing.
+        let actualMountPoint: URL
         do {
-            try await runMountWebDAV(port: port, mountPoint: mountPoint)
+            actualMountPoint = try await runMountWebDAV(port: port, requestedMountPoint: requestedMountPoint)
         } catch {
             await server.stop()
             throw error
@@ -57,13 +60,13 @@ public final class LoopbackMountService {
         let mount = ActiveMount(
             accountId: accountId,
             providerRoot: providerRoot,
-            displayName: safeName,
-            mountPoint: mountPoint,
+            displayName: actualMountPoint.lastPathComponent,
+            mountPoint: actualMountPoint,
             port: port
         )
         servers[mount.id] = server
         mounts.append(mount)
-        mountLog.info("[mount] mounted \(safeName, privacy: .public) at \(mountPoint.path, privacy: .public) on port \(port)")
+        mountLog.info("[mount] mounted \(mount.displayName, privacy: .public) at \(actualMountPoint.path, privacy: .public) on port \(port)")
         return mount
     }
 
@@ -98,10 +101,14 @@ public final class LoopbackMountService {
 
     // MARK: - Process plumbing
 
-    private func runMountWebDAV(port: UInt16, mountPoint: URL) async throws {
-        // Pre-create the mount point — NetFS expects it to exist when we
-        // ask it to mount at a specific location.
-        try? FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+    private func runMountWebDAV(port: UInt16, requestedMountPoint: URL) async throws -> URL {
+        // If a directory from a previously failed attempt is still sitting
+        // at the requested path it can poison NetFS's mount step with
+        // errno 2. Clear it (best-effort; leaves real mounts untouched
+        // because rmdir won't succeed on a populated/mounted dir) and
+        // then recreate fresh.
+        try? FileManager.default.removeItem(at: requestedMountPoint)
+        try? FileManager.default.createDirectory(at: requestedMountPoint, withIntermediateDirectories: true)
 
         // Self-probe: confirm our own server responds before handing the URL
         // to NetFS. If this fails the bug is on our side and the diagnostic
@@ -112,26 +119,30 @@ public final class LoopbackMountService {
         // a regular app process can't call it directly — the mount(2) call
         // inside fails with EPERM. NetFS does the same job via a launchd-
         // launched privileged helper, which is the supported path.
-        try await mountViaNetFS(port: port, mountPoint: mountPoint)
+        return try await mountViaNetFS(port: port, mountPoint: requestedMountPoint)
     }
 
-    private func mountViaNetFS(port: UInt16, mountPoint: URL) async throws {
-        // Use `localhost` rather than `127.0.0.1`. NetFS treats raw IPs as
-        // "unknown server" which goes through a stricter validation path
-        // that mid-handshakes around the OpenSession/Mount call. The
-        // hostname route lands on the same address (loopback) but uses the
-        // friendly-name code path.
-        let urlString = "http://localhost:\(port)/"
+    private func mountViaNetFS(port: UInt16, mountPoint: URL) async throws -> URL {
+        // Use a `<name>.localhost` hostname instead of bare `localhost`.
+        // RFC 6761 mandates that any `*.localhost` resolves to loopback, so
+        // the resolver still sends NetFS to 127.0.0.1 — but the *hostname*
+        // it remembers (and uses to label the mount point as
+        // `/Volumes/<name>.localhost`) becomes the account name.
+        // `kNetFSMountAtMountDirKey` is broken on Tahoe for WebDAV, so this
+        // URL-host trick is the only way to influence the mount's name.
+        let host = mountPoint.lastPathComponent
+        let urlString = "http://\(host).localhost:\(port)/"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "FileFluss.Mount", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: "Couldn't build the loopback URL."])
         }
         // `kNetFSUseGuestKey=true` short-circuits the auth prompt.
         // `AllowLoopback=true` separately suppresses the unsecured-HTTP
-        // warning. We deliberately do NOT set `kNetFSMountAtMountDirKey`
-        // here — letting NetFS pick its own mount point under /Volumes
-        // sidesteps "errno 2 (mount point bad)" failures we were hitting
-        // with a parenthesised user-friendly name.
+        // warning. We deliberately do NOT set `kNetFSMountAtMountDirKey` —
+        // it's broken on Tahoe for WebDAV (errno 2 on any mount path we
+        // propose). Letting NetFS pick a mount point under /Volumes from
+        // the URL host is the only path that works; the URL host above is
+        // already the account name + .localhost so the name flows through.
         let openOptions: NSMutableDictionary = [
             kNetFSNoUserPreferencesKey as String: true,
             kNetFSUseGuestKey as String: true,
@@ -142,9 +153,11 @@ public final class LoopbackMountService {
 
         // NetFSMountURLSync blocks the calling thread; run it off the main
         // actor so the UI's `isWorking` spinner stays responsive.
-        let status: Int32 = await Task.detached {
+        let mountedURL: URL
+        let status: Int32
+        (status, mountedURL) = await Task.detached { () -> (Int32, URL) in
             var mountedPaths: Unmanaged<CFArray>?
-            return NetFSMountURLSync(
+            let s = NetFSMountURLSync(
                 url as CFURL,
                 nil,                    // mountpath — let NetFS pick
                 nil,                    // username — guest mode supplies it
@@ -153,6 +166,13 @@ public final class LoopbackMountService {
                 mountOptions,
                 &mountedPaths
             )
+            // NetFS mounts at /Volumes/<host>; with our `.localhost`
+            // hostname trick that means /Volumes/<sanitised-name>.localhost.
+            var resolved = URL(fileURLWithPath: "/Volumes/\(host).localhost")
+            if let paths = mountedPaths?.takeRetainedValue() as? [String], let first = paths.first {
+                resolved = URL(fileURLWithPath: first)
+            }
+            return (s, resolved)
         }.value
 
         if status != 0 {
@@ -164,7 +184,10 @@ public final class LoopbackMountService {
                 userInfo: [NSLocalizedDescriptionKey: "Could not mount in Finder: \(message)"]
             )
         }
+
+        return mountedURL
     }
+
 
     private static func netfsErrorMessage(status: Int32) -> String {
         // Most NetFS errors come back as POSIX errno values. Translate via
@@ -213,17 +236,17 @@ public final class LoopbackMountService {
 
     // MARK: - Helpers
 
-    /// `/Volumes/<name>` is fussy about characters; whitelist a generous
-    /// but predictable set so the mount point and the volume label both
-    /// behave. Anything outside the whitelist becomes `-`.
+    /// Sanitises a cloud-account display name into something macOS's NetFS
+    /// will accept as a mount point. On Tahoe NetFS rejects mount paths
+    /// containing parens *or* spaces with errno 2, so we map both — plus
+    /// anything else not in a tight whitelist — to `-` and collapse runs.
+    /// The resulting name is hyphenated but unambiguous.
     private func sanitiseVolumeName(_ raw: String) -> String {
-        let allowed = CharacterSet.alphanumerics
-            .union(CharacterSet(charactersIn: " ._-()"))
-        let mapped = String(raw.unicodeScalars.map { scalar -> Character in
-            allowed.contains(scalar) ? Character(scalar) : "-"
-        })
-        let trimmed = mapped.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "FileFluss" : trimmed
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._@"))
+        var mapped = String(raw.unicodeScalars.map { Character(allowed.contains($0) ? $0 : Unicode.Scalar("-")) })
+        while mapped.contains("--") { mapped = mapped.replacingOccurrences(of: "--", with: "-") }
+        mapped = mapped.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return mapped.isEmpty ? "FileFluss" : mapped
     }
 
     private var sidecarBaseURL: URL {

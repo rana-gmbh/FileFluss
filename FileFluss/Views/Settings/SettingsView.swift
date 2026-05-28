@@ -191,7 +191,7 @@ private struct MountToggleButton: View {
             _ = try await appState.mountService.mount(
                 provider: provider,
                 accountId: account.id,
-                displayName: "\(account.displayName) (FileFluss)"
+                displayName: account.displayName
             )
         } catch {
             mountError = error.localizedDescription
