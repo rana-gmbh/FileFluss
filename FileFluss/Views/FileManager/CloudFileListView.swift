@@ -136,9 +136,14 @@ struct CloudFileListView: View {
     private var bodyWithDialogs: some View {
         bodyWithDropDialogs
         .confirmationDialog("Delete from Cloud", isPresented: $showDeleteConfirmation) {
+            // See FileListView's matching dialog for the rationale: without
+            // `.defaultAction` here, Return falls through to the global
+            // rename shortcut and triggers the rename window as soon as
+            // the user dismisses this dialog by other means.
             Button("Delete", role: .destructive) {
                 Task { await vm.deleteSelectedItems() }
             }
+            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) {}
         } message: {
             let items = vm.selectedItems

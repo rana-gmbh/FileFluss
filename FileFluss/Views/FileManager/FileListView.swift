@@ -77,12 +77,21 @@ struct FileListView: View {
             "Move to Trash",
             isPresented: $showDeleteConfirmation
         ) {
+            // `.defaultAction` matters here for two reasons. First, it
+            // matches Finder's own Move-to-Trash dialog where Return
+            // confirms. Second — and more importantly — without it the
+            // Return keypress isn't consumed by the dialog, so it
+            // propagates to the global menu-shortcut dispatcher and fires
+            // `KeyboardCommand.rename` (also bound to Return), which
+            // queues a rename and pops the rename window up the moment
+            // the user dismisses the delete dialog with a mouse click.
             Button("Move to Trash", role: .destructive) {
                 Task {
                     await fm.trashSelectedItems()
                     await appState.refreshAllPanels()
                 }
             }
+            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) {}
         } message: {
             let items = fm.selectedItems
