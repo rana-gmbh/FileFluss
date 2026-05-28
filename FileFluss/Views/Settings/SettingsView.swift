@@ -151,6 +151,7 @@ private struct MountToggleButton: View {
     @Environment(AppState.self) private var appState
     @State private var isWorking = false
     @State private var mountError: String?
+    @State private var showError = false
 
     var body: some View {
         let mountedNow = appState.mountService.isMounted(accountId: account.id)
@@ -165,7 +166,12 @@ private struct MountToggleButton: View {
             }
         }
         .disabled(isWorking)
-        .help(mountError ?? (mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder"))
+        .help(mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder")
+        .alert("Could not mount in Finder", isPresented: $showError, presenting: mountError) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { error in
+            Text(error)
+        }
     }
 
     private func toggle(currentlyMounted: Bool) async {
@@ -179,6 +185,7 @@ private struct MountToggleButton: View {
             }
             guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
                 mountError = "The account isn't connected — sign in first."
+                showError = true
                 return
             }
             _ = try await appState.mountService.mount(
@@ -188,6 +195,7 @@ private struct MountToggleButton: View {
             )
         } catch {
             mountError = error.localizedDescription
+            showError = true
         }
     }
 }

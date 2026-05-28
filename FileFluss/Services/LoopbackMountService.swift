@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import FileFlussCore
+import NetFS
 import os
 
 private let mountLog = Logger(subsystem: "com.rana.FileFluss", category: "mount")
@@ -98,31 +99,99 @@ public final class LoopbackMountService {
     // MARK: - Process plumbing
 
     private func runMountWebDAV(port: UInt16, mountPoint: URL) async throws {
-        // Embed dummy credentials in the URL so mount_webdav doesn't fall
-        // back to a Keychain lookup (or worse, a Finder prompt) — our server
-        // ignores the Authorization header either way.
-        let url = "http://filefluss:filefluss@127.0.0.1:\(port)/"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/sbin/mount_webdav")
-        process.arguments = ["-S", "-o", "nobrowse", url, mountPoint.path]
-        let stderr = Pipe()
-        process.standardError = stderr
-        process.standardOutput = Pipe()
+        // Pre-create the mount point — NetFS expects it to exist when we
+        // ask it to mount at a specific location.
+        try? FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
 
-        try process.run()
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            process.terminationHandler = { _ in continuation.resume() }
+        // Self-probe: confirm our own server responds before handing the URL
+        // to NetFS. If this fails the bug is on our side and the diagnostic
+        // is much clearer than NetFS's status code would be.
+        try await probeServer(port: port)
+
+        // Modern macOS shipped /sbin/mount_webdav without its setuid bit, so
+        // a regular app process can't call it directly — the mount(2) call
+        // inside fails with EPERM. NetFS does the same job via a launchd-
+        // launched privileged helper, which is the supported path.
+        try await mountViaNetFS(port: port, mountPoint: mountPoint)
+    }
+
+    private func mountViaNetFS(port: UInt16, mountPoint: URL) async throws {
+        // Use `localhost` rather than `127.0.0.1`. NetFS treats raw IPs as
+        // "unknown server" which goes through a stricter validation path
+        // that mid-handshakes around the OpenSession/Mount call. The
+        // hostname route lands on the same address (loopback) but uses the
+        // friendly-name code path.
+        let urlString = "http://localhost:\(port)/"
+        guard let url = URL(string: urlString) else {
+            throw NSError(domain: "FileFluss.Mount", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Couldn't build the loopback URL."])
         }
+        // `kNetFSUseGuestKey=true` short-circuits the auth prompt.
+        // `AllowLoopback=true` separately suppresses the unsecured-HTTP
+        // warning. We deliberately do NOT set `kNetFSMountAtMountDirKey`
+        // here — letting NetFS pick its own mount point under /Volumes
+        // sidesteps "errno 2 (mount point bad)" failures we were hitting
+        // with a parenthesised user-friendly name.
+        let openOptions: NSMutableDictionary = [
+            kNetFSNoUserPreferencesKey as String: true,
+            kNetFSUseGuestKey as String: true,
+            "AllowLoopback": true,
+            "NoUI": true,
+        ]
+        let mountOptions: NSMutableDictionary = [:]
 
-        if process.terminationStatus != 0 {
-            let raw = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let message = raw.isEmpty ? "mount_webdav exited \(process.terminationStatus)" : raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            mountLog.error("[mount] mount_webdav failed: \(message, privacy: .public)")
+        // NetFSMountURLSync blocks the calling thread; run it off the main
+        // actor so the UI's `isWorking` spinner stays responsive.
+        let status: Int32 = await Task.detached {
+            var mountedPaths: Unmanaged<CFArray>?
+            return NetFSMountURLSync(
+                url as CFURL,
+                nil,                    // mountpath — let NetFS pick
+                nil,                    // username — guest mode supplies it
+                nil,                    // password — guest mode supplies it
+                openOptions,
+                mountOptions,
+                &mountedPaths
+            )
+        }.value
+
+        if status != 0 {
+            let message = Self.netfsErrorMessage(status: status)
+            mountLog.error("[mount] NetFS failed: status=\(status, privacy: .public) message=\(message, privacy: .public)")
+            try? FileManager.default.removeItem(at: mountPoint)
             throw NSError(
-                domain: "FileFluss.Mount",
-                code: Int(process.terminationStatus),
+                domain: "FileFluss.Mount", code: Int(status),
                 userInfo: [NSLocalizedDescriptionKey: "Could not mount in Finder: \(message)"]
             )
+        }
+    }
+
+    private static func netfsErrorMessage(status: Int32) -> String {
+        // Most NetFS errors come back as POSIX errno values. Translate via
+        // strerror so the user gets something readable instead of a code.
+        if status > 0, let str = String(validatingUTF8: strerror(status)) {
+            return "\(str) (errno \(status))"
+        }
+        return "NetFS status \(status)"
+    }
+
+    /// HTTP probe against the just-started WebDAV server. Throws on failure
+    /// with a message the user can act on — almost always "the listener
+    /// didn't actually bind", which mount_webdav would have reported as an
+    /// opaque exit code.
+    private func probeServer(port: UInt16) async throws {
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/")!)
+        request.httpMethod = "OPTIONS"
+        request.timeoutInterval = 3
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw NSError(domain: "FileFluss.Mount", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "The internal WebDAV server didn't respond with 200 OK to OPTIONS."])
+            }
+        } catch {
+            throw NSError(domain: "FileFluss.Mount", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Could not reach the internal WebDAV server on 127.0.0.1:\(port): \(error.localizedDescription)"])
         }
     }
 
@@ -144,14 +213,17 @@ public final class LoopbackMountService {
 
     // MARK: - Helpers
 
-    /// `/Volumes/<name>` is fussy about characters; strip anything that
-    /// would break the path or confuse Finder.
+    /// `/Volumes/<name>` is fussy about characters; whitelist a generous
+    /// but predictable set so the mount point and the volume label both
+    /// behave. Anything outside the whitelist becomes `-`.
     private func sanitiseVolumeName(_ raw: String) -> String {
-        let stripped = raw.replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
-            .replacingOccurrences(of: "\u{0}", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return stripped.isEmpty ? "FileFluss" : stripped
+        let allowed = CharacterSet.alphanumerics
+            .union(CharacterSet(charactersIn: " ._-()"))
+        let mapped = String(raw.unicodeScalars.map { scalar -> Character in
+            allowed.contains(scalar) ? Character(scalar) : "-"
+        })
+        let trimmed = mapped.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "FileFluss" : trimmed
     }
 
     private var sidecarBaseURL: URL {

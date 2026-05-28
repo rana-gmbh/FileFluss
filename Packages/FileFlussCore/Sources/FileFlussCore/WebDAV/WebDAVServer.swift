@@ -40,48 +40,92 @@ public actor WebDAVServer {
 
     // MARK: - Lifecycle
 
-    /// Starts the listener on a loopback port. Pass 0 (the default) to let
-    /// the OS pick a free port; the bound port is returned.
+    /// Starts the listener. Pass 0 (the default) to let the OS pick a free
+    /// port; the bound port is returned.
+    ///
+    /// Binds explicitly to IPv4 `127.0.0.1`. `NWListener(using:on:)` defaults
+    /// to the IPv6 wildcard `::`, and macOS sockets ship with
+    /// `IPV6_V6ONLY=1` enabled, so IPv4 connections (which is what
+    /// `webdavfs_agent` makes to localhost) get refused — observed in the
+    /// NetAuthSysAgent log as "Mount failed 2". Forcing IPv4 via
+    /// `requiredLocalEndpoint` sidesteps the dual-stack problem entirely.
     @discardableResult
     public func start(preferredPort: UInt16 = 0) async throws -> UInt16 {
         guard listener == nil else { return port }
-        let nwPort = preferredPort == 0 ? NWEndpoint.Port.any : NWEndpoint.Port(rawValue: preferredPort)!
+        let nwPort: NWEndpoint.Port = preferredPort == 0 ? .any : NWEndpoint.Port(rawValue: preferredPort)!
         let params = NWParameters.tcp
-        params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: nwPort)
+        params.allowLocalEndpointReuse = true
+        params.requiredLocalEndpoint = NWEndpoint.hostPort(
+            host: .ipv4(IPv4Address("127.0.0.1")!),
+            port: nwPort
+        )
         let listener = try NWListener(using: params)
         self.listener = listener
 
-        // Drop connections that aren't from loopback. NWListener already
-        // restricts to the bound host, but be explicit.
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { connection.cancel(); return }
+            // Defence in depth: reject anything that didn't come in over
+            // loopback even though no remote process should reach us.
+            guard Self.isLoopback(connection.endpoint) else {
+                connection.cancel()
+                return
+            }
             Task { await self.accept(connection) }
         }
 
-        let ready = AsyncThrowingStream<UInt16, Error> { continuation in
+        // Single-shot continuation: resume on .ready (with the bound port)
+        // or on .failed (with the error). Guarded against double-resume in
+        // case state transitions ping-pong.
+        let resumed = ContinuationGuard()
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt16, Error>) in
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    if let p = listener.port?.rawValue {
-                        continuation.yield(p)
-                        continuation.finish()
+                    if let p = listener.port?.rawValue, resumed.claim() {
+                        webdavLog.info("[WebDAV] listening on 127.0.0.1:\(p, privacy: .public)")
+                        continuation.resume(returning: p)
                     }
                 case .failed(let error):
-                    continuation.finish(throwing: error)
-                case .cancelled:
-                    continuation.finish()
+                    if resumed.claim() {
+                        webdavLog.error("[WebDAV] listener failed: \(error.localizedDescription, privacy: .public)")
+                        continuation.resume(throwing: error)
+                    }
                 default:
                     break
                 }
             }
+            listener.start(queue: .global(qos: .userInitiated))
         }
-        listener.start(queue: .global(qos: .userInitiated))
-        for try await p in ready {
-            self.port = p
-            webdavLog.info("[WebDAV] listening on 127.0.0.1:\(p, privacy: .public)")
-            return p
+    }
+
+    /// True when an inbound `NWEndpoint` is on the loopback interface.
+    /// `NWEndpoint.Host.ipv4(...)`'s `rawValue` is the 4-byte address in
+    /// network order, so the first byte being `127` covers the entire
+    /// 127.0.0.0/8 loopback block.
+    private static func isLoopback(_ endpoint: NWEndpoint) -> Bool {
+        guard case .hostPort(let host, _) = endpoint else { return false }
+        switch host {
+        case .ipv4(let addr):
+            return addr.rawValue.first == 127
+        case .ipv6(let addr):
+            return addr == .loopback
+        case .name(let name, _):
+            return name == "localhost"
+        @unknown default:
+            return false
         }
-        throw CloudProviderError.networkError(URLError(.cannotConnectToHost))
+    }
+
+    /// Single-fire continuation latch used by `start()`.
+    private final class ContinuationGuard: @unchecked Sendable {
+        private let lock = NSLock()
+        private var claimed = false
+        func claim() -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            if claimed { return false }
+            claimed = true
+            return true
+        }
     }
 
     public func stop() {
@@ -97,6 +141,7 @@ public actor WebDAVServer {
         do {
             let request = try await Self.readRequest(from: connection)
             let response = await dispatch(request)
+            webdavLog.info("[WebDAV] → \(response.status, privacy: .public) \(request.method, privacy: .public) \(request.path, privacy: .public)")
             try await Self.write(response, to: connection)
         } catch {
             // Best-effort close on any failure — Finder retries.
@@ -109,15 +154,17 @@ public actor WebDAVServer {
     // MARK: - Method dispatch
 
     private func dispatch(_ request: WebDAVRequest) async -> WebDAVResponse {
-        webdavLog.debug("[WebDAV] \(request.method, privacy: .public) \(request.path, privacy: .public)")
+        webdavLog.info("[WebDAV] \(request.method, privacy: .public) \(request.path, privacy: .public) →")
         switch request.method.uppercased() {
         case "OPTIONS": return handleOPTIONS()
         case "PROPFIND": return await handlePROPFIND(request)
+        case "PROPPATCH": return handlePROPPATCH(request)
         case "GET", "HEAD": return await handleGET(request, includeBody: request.method == "GET")
         case "PUT": return await handlePUT(request)
         case "MKCOL": return await handleMKCOL(request)
         case "DELETE": return await handleDELETE(request)
         case "MOVE": return await handleMOVE(request)
+        case "COPY": return await handleCOPY(request)
         case "LOCK": return handleLOCK(request)
         case "UNLOCK": return WebDAVResponse(status: 204, statusText: "No Content")
         default:
@@ -125,19 +172,70 @@ public actor WebDAVServer {
         }
     }
 
+    // PROPPATCH stub: Finder uses this to write extended attributes (custom
+    // icons, comments, Finder flags). We don't persist them, but returning
+    // 501 makes Finder treat the whole drag-and-drop as a failure with
+    // error -43. Returning a 207 multistatus that pretends every property
+    // succeeded keeps Finder moving.
+    private func handlePROPPATCH(_ request: WebDAVRequest) -> WebDAVResponse {
+        let href = encodeHref(request.path)
+        let xml = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <D:multistatus xmlns:D="DAV:">
+          <D:response>
+            <D:href>\(href)</D:href>
+            <D:propstat>
+              <D:prop/>
+              <D:status>HTTP/1.1 200 OK</D:status>
+            </D:propstat>
+          </D:response>
+        </D:multistatus>
+        """
+        return WebDAVResponse(status: 207, statusText: "Multi-Status",
+                              headers: ["Content-Type": "application/xml; charset=utf-8"],
+                              body: .data(Data(xml.utf8)))
+    }
+
+    // COPY: Finder uses COPY (not MOVE) when moving between two distinct
+    // volumes, or sometimes as a "safer move" probe. Implemented as a
+    // best-effort wrapper around the provider's `copyItem`; the default
+    // CloudProvider conformance throws `notImplemented`, which we surface
+    // as 502 so Finder falls back to a per-file copy via PUT.
+    private func handleCOPY(_ request: WebDAVRequest) async -> WebDAVResponse {
+        guard let destinationRaw = request.headers["destination"] else {
+            return WebDAVResponse(status: 400, statusText: "Bad Request")
+        }
+        let from = providerPath(for: request.path)
+        let to = providerPath(for: decodeDestination(destinationRaw))
+        do {
+            try await provider.copyItem(at: from, toPath: to)
+            return WebDAVResponse(status: 201, statusText: "Created")
+        } catch CloudProviderError.notImplemented {
+            return WebDAVResponse(status: 502, statusText: "Bad Gateway")
+        } catch {
+            return Self.mapError(error)
+        }
+    }
+
     // MARK: - Handlers
 
     private func handleOPTIONS() -> WebDAVResponse {
-        // `DAV: 1` is the minimum the Finder client requires to treat the
-        // mount as a real WebDAV volume. `2` would advertise LOCK; we stub
-        // it but don't claim full lock semantics.
+        // Apple's webdavfs_agent inspects the OPTIONS response to decide
+        // whether the server is a WebDAV server worth mounting. With a bare
+        // DAV header it concludes "not usable" and refuses without bothering
+        // with PROPFIND — fix is to advertise the same set of headers
+        // Apache mod_dav returns: a Server identifier, byte-range support,
+        // and the full DAV class list webdavfs probes for.
         WebDAVResponse(
             status: 200,
             statusText: "OK",
             headers: [
-                "DAV": "1, 2",
+                "DAV": "1, 2, 3",
                 "MS-Author-Via": "DAV",
-                "Allow": "OPTIONS, PROPFIND, GET, HEAD, PUT, MKCOL, DELETE, MOVE, LOCK, UNLOCK",
+                "Allow": "OPTIONS, GET, HEAD, POST, DELETE, TRACE, PROPFIND, PROPPATCH, COPY, MOVE, LOCK, UNLOCK, PUT, MKCOL",
+                "Accept-Ranges": "bytes",
+                "Server": "FileFluss-WebDAV/1.0",
+                "Cache-Control": "no-cache",
             ]
         )
     }
@@ -145,13 +243,35 @@ public actor WebDAVServer {
     private func handlePROPFIND(_ request: WebDAVRequest) async -> WebDAVResponse {
         let depth = (request.headers["depth"] ?? "1").trimmingCharacters(in: .whitespaces)
         let providerPath = self.providerPath(for: request.path)
+        let name = (providerPath as NSString).lastPathComponent
 
         var entries: [PropEntry] = []
 
+        // Fast-path: AppleDouble / `.DS_Store` / Finder-only sidecar paths
+        // are served entirely from the local sidecar store (or 404 if
+        // absent). Without this every drag fires hundreds of PROPFINDs
+        // that hit the cloud provider's API and stall Finder long enough
+        // to give up with error -43.
+        if shouldIgnoreSidecar(name) {
+            if let sidecar, let meta = await sidecar.metadata(at: providerPath) {
+                entries.append(PropEntry(href: encodeHref(request.path),
+                                         isCollection: false, size: meta.size,
+                                         mtime: meta.mtime, name: name))
+                let xml = renderMultiStatus(entries: entries)
+                return WebDAVResponse(status: 207, statusText: "Multi-Status",
+                                      headers: ["Content-Type": "application/xml; charset=utf-8"],
+                                      body: .data(Data(xml.utf8)))
+            }
+            return WebDAVResponse(status: 404, statusText: "Not Found")
+        }
+
         // The resource itself.
         if request.path == "/" || providerPath == mountRoot {
+            // Use a sensible displayname for the root — webdavfs_agent (the
+            // helper NetFS forks for HTTP URLs) rejects responses where the
+            // root's displayname is "/" with "share does not exist".
             entries.append(PropEntry(href: encodeHref(request.path.hasSuffix("/") ? request.path : request.path + "/"),
-                                     isCollection: true, size: 0, mtime: Date(), name: "/"))
+                                     isCollection: true, size: 0, mtime: Date(), name: "FileFluss"))
         } else {
             do {
                 let meta = try await provider.getFileMetadata(at: providerPath)
@@ -312,9 +432,34 @@ public actor WebDAVServer {
             }
             return WebDAVResponse(status: 201, statusText: "Created")
         } catch CloudProviderError.notImplemented {
-            // Provider doesn't support server-side move/rename; signal that
-            // to the client so Finder can fall back to copy+delete.
-            return WebDAVResponse(status: 502, statusText: "Bad Gateway")
+            // Provider can't move server-side. Returning 502 here makes
+            // Finder give up with error -43 instead of doing its own
+            // copy+delete (it apparently expects the server to do it).
+            // Emulate copy+delete ourselves so Finder's MOVE just works.
+            return await moveByCopyDelete(from: from, to: to, toName: toName)
+        } catch {
+            return Self.mapError(error)
+        }
+    }
+
+    /// Fallback for cross-directory MOVE on providers that don't implement
+    /// server-side move: download the source to a temp file, upload it at
+    /// the destination, then delete the source. Files only — recursive
+    /// folder copy is out of scope for the first pass.
+    private func moveByCopyDelete(from: String, to: String, toName: String) async -> WebDAVResponse {
+        do {
+            let meta = try await provider.getFileMetadata(at: from)
+            if meta.isDirectory {
+                // Without a recursive copy step we can't honour a folder
+                // move. Surface it as a real error.
+                return WebDAVResponse(status: 501, statusText: "Not Implemented")
+            }
+            let tempURL = Self.makeTempFile(suffix: (toName as NSString).pathExtension)
+            defer { try? FileManager.default.removeItem(at: tempURL) }
+            try await provider.downloadFile(remotePath: from, to: tempURL)
+            try await provider.uploadFile(from: tempURL, to: to)
+            try await provider.deleteItem(at: from)
+            return WebDAVResponse(status: 201, statusText: "Created")
         } catch {
             return Self.mapError(error)
         }
@@ -440,6 +585,10 @@ public actor WebDAVServer {
         var head = "HTTP/1.1 \(response.status) \(response.statusText)\r\n"
         head += "Connection: close\r\n"
         head += "Date: \(httpDate(Date()))\r\n"
+        // Identify ourselves on every response — some WebDAV clients
+        // (Apple's webdavfs_agent included) fingerprint the Server header
+        // and behave differently if it looks like a real WebDAV server.
+        head += "Server: FileFluss-WebDAV/1.0\r\n"
         // Compute Content-Length for the framed body up front so clients
         // never have to guess.
         let bodyLength: Int64
@@ -537,12 +686,17 @@ public actor WebDAVServer {
     private func renderMultiStatus(entries: [PropEntry]) -> String {
         var xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<D:multistatus xmlns:D=\"DAV:\">\n"
         for entry in entries {
+            // Synthesise a stable etag per (path, mtime, size) — webdavfs
+            // uses this to detect remote changes between visits.
+            let etag = "\"\(String(format: "%x-%llx-%llx", entry.href.hashValue & 0xFFFFFFFF, Int64(entry.mtime.timeIntervalSince1970), entry.size))\""
             xml += "  <D:response>\n"
             xml += "    <D:href>\(entry.href)</D:href>\n"
             xml += "    <D:propstat>\n"
             xml += "      <D:prop>\n"
             xml += "        <D:displayname>\(xmlEscape(entry.name))</D:displayname>\n"
+            xml += "        <D:creationdate>\(Self.isoDate(entry.mtime))</D:creationdate>\n"
             xml += "        <D:getlastmodified>\(Self.httpDate(entry.mtime))</D:getlastmodified>\n"
+            xml += "        <D:getetag>\(etag)</D:getetag>\n"
             if entry.isCollection {
                 xml += "        <D:resourcetype><D:collection/></D:resourcetype>\n"
             } else {
@@ -550,6 +704,13 @@ public actor WebDAVServer {
                 xml += "        <D:getcontentlength>\(entry.size)</D:getcontentlength>\n"
                 xml += "        <D:getcontenttype>\(contentType(forName: entry.name))</D:getcontenttype>\n"
             }
+            // Advertising lock support keeps webdavfs_agent happy — without
+            // these blocks it concludes the share is read-only/unsupported.
+            xml += "        <D:supportedlock>\n"
+            xml += "          <D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry>\n"
+            xml += "          <D:lockentry><D:lockscope><D:shared/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry>\n"
+            xml += "        </D:supportedlock>\n"
+            xml += "        <D:lockdiscovery/>\n"
             xml += "      </D:prop>\n"
             xml += "      <D:status>HTTP/1.1 200 OK</D:status>\n"
             xml += "    </D:propstat>\n"
@@ -557,6 +718,15 @@ public actor WebDAVServer {
         }
         xml += "</D:multistatus>\n"
         return xml
+    }
+
+    /// RFC 3339 / ISO 8601 timestamp in UTC, the format
+    /// `<D:creationdate>` expects.
+    private static func isoDate(_ date: Date) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f.string(from: date)
     }
 
     private func xmlEscape(_ s: String) -> String {
