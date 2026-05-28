@@ -72,8 +72,14 @@ struct CloudSettingsView: View {
     @State private var editingAccount: CloudAccount?
 
     var body: some View {
-        Form {
+        Group {
             if appState.syncManager.accounts.isEmpty {
+                // Pulled out of the surrounding Form on purpose:
+                // ContentUnavailableView inside a Form row inherits the
+                // row's leading alignment, leaving the cloud icon, title,
+                // and Add Account button visually anchored to the left
+                // edge of the panel. Rendering it standalone with a
+                // full-bleed frame lets its built-in centring take over.
                 ContentUnavailableView {
                     Label("No Cloud Accounts", systemImage: "cloud")
                 } description: {
@@ -83,10 +89,12 @@ struct CloudSettingsView: View {
                         showAddAccount = true
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Section {
-                    ForEach(appState.syncManager.accounts) { account in
-                        HStack {
+                Form {
+                    Section {
+                        ForEach(appState.syncManager.accounts) { account in
+                            HStack {
                             CloudProviderIcon(providerType: account.providerType, size: 16)
                             Text(account.displayName)
                             Spacer()
@@ -107,16 +115,17 @@ struct CloudSettingsView: View {
                     }
                 }
 
-                Section {
-                    Button {
-                        showAddAccount = true
-                    } label: {
-                        Label("Add Account…", systemImage: "plus.circle")
+                    Section {
+                        Button {
+                            showAddAccount = true
+                        } label: {
+                            Label("Add Account…", systemImage: "plus.circle")
+                        }
                     }
                 }
+                .formStyle(.grouped)
             }
         }
-        .formStyle(.grouped)
         .sheet(isPresented: $showAddAccount) {
             AddCloudAccountView()
         }
