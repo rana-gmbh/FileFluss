@@ -8,6 +8,10 @@ struct CloudFileListView: View {
     @Environment(\.openSettings) private var openSettings
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
+    /// Mirrors the Settings → "Confirm before deleting" toggle. When off,
+    /// the menu/keyboard Delete action skips the dialog and deletes from
+    /// the cloud straight away. Kept in sync with `SettingsView`'s key.
+    @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDeleteConfirmation = false
     @State private var showConflict = false
     @State private var showDropConfirmation = false
@@ -80,8 +84,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
-                guard !vm.selectedItems.isEmpty else { return }
-                showDeleteConfirmation = true
+                triggerDelete()
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
@@ -339,6 +342,19 @@ struct CloudFileListView: View {
     /// Build a synthetic `CloudFileItem` for a breadcrumb component. The
     /// existing pending* flows expect a `CloudFileItem?` target; the path
     /// bar only knows (path, name) so we fabricate one with isDirectory=true.
+    /// Routes a Delete request through the Settings "Confirm before
+    /// deleting" preference: either presents the confirmation dialog or
+    /// kicks off the cloud delete straight away. Shared by the menu
+    /// (`menuDelete` notification), keyboard, and context-menu paths.
+    private func triggerDelete() {
+        guard !vm.selectedItems.isEmpty else { return }
+        if confirmDelete {
+            showDeleteConfirmation = true
+        } else {
+            Task { await vm.deleteSelectedItems() }
+        }
+    }
+
     private func cloudFolder(forPath path: String, name: String) -> CloudFileItem {
         CloudFileItem(
             id: "pathcomp:\(path)",
@@ -516,8 +532,7 @@ struct CloudFileListView: View {
                     vm.toggleQuickLook()
                 },
                 onDelete: {
-                    guard !vm.selectedItems.isEmpty else { return }
-                    showDeleteConfirmation = true
+                    triggerDelete()
                 },
                 onCopyToOtherPanel: { items in
                     let otherSide: PanelSide = panelSide == .left ? .right : .left

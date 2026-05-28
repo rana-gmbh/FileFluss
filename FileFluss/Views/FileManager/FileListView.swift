@@ -6,6 +6,10 @@ struct FileListView: View {
     @Environment(AppState.self) private var appState
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
+    /// Mirrors the Settings → "Confirm before deleting" toggle. When off,
+    /// the menu/keyboard Delete action skips the dialog and moves to Trash
+    /// straight away. Kept in sync with `SettingsView`'s @AppStorage key.
+    @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var showConflict: Bool = false
@@ -159,8 +163,7 @@ struct FileListView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
-            guard !fm.selectedItems.isEmpty else { return }
-            showDeleteConfirmation = true
+            triggerDelete()
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
@@ -242,6 +245,23 @@ struct FileListView: View {
     /// "Move or Copy?" confirmation flow. Resolves URLs against the current
     /// items first (covers same-panel drags) and falls back to building
     /// `FileItem`s from disk for Finder/cross-panel sources.
+    /// Either presents the Move-to-Trash dialog or fires the trash action
+    /// straight away, depending on the Settings "Confirm before deleting"
+    /// preference. Used by both the menu (`menuDelete` notification) and
+    /// the keyboard / context-menu Delete callback so the preference takes
+    /// effect everywhere a delete can be initiated from this view.
+    private func triggerDelete() {
+        guard !fm.selectedItems.isEmpty else { return }
+        if confirmDelete {
+            showDeleteConfirmation = true
+        } else {
+            Task {
+                await fm.trashSelectedItems()
+                await appState.refreshAllPanels()
+            }
+        }
+    }
+
     private func handlePathDropURLs(_ urls: [URL], target: URL) -> Bool {
         let urlPaths = Set(urls.map { $0.standardizedFileURL.path() })
         let matched = fm.items.filter { urlPaths.contains($0.url.standardizedFileURL.path()) }
@@ -376,8 +396,7 @@ struct FileListView: View {
                         fm.toggleQuickLook()
                     },
                     onDelete: {
-                        guard !fm.selectedItems.isEmpty else { return }
-                        showDeleteConfirmation = true
+                        triggerDelete()
                     },
                     onCopyToOtherPanel: { items in
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
