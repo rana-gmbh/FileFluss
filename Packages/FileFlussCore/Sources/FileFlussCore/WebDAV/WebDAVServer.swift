@@ -765,9 +765,12 @@ public actor WebDAVServer {
             case .quotaExceeded: return WebDAVResponse(status: 507, statusText: "Insufficient Storage")
             case .rateLimited: return WebDAVResponse(status: 429, statusText: "Too Many Requests")
             case .notImplemented: return WebDAVResponse(status: 501, statusText: "Not Implemented")
-            default: return WebDAVResponse(status: 502, statusText: "Bad Gateway")
+            default:
+                webdavLog.error("[WebDAV] provider error → 502: \(String(describing: providerError), privacy: .public)")
+                return WebDAVResponse(status: 502, statusText: "Bad Gateway")
             }
         }
+        webdavLog.error("[WebDAV] unexpected error → 500: \(String(describing: type(of: error)), privacy: .public): \(error.localizedDescription, privacy: .public)")
         return WebDAVResponse(status: 500, statusText: "Internal Server Error")
     }
 }
