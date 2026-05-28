@@ -15,6 +15,13 @@ struct SidebarResizeHandle: View {
     /// the `@AppStorage` default so a fresh launch and a double-click
     /// land on the same value.
     let defaultWidth: Double
+    /// The two magnetic detents the drag locks to: an icon-only width and
+    /// the narrowest comfortable expanded width. Anything dragged into the
+    /// gap between them snaps to the nearer of the two, so the bar never
+    /// rests inside the "useless" middle range — the visible jump at the
+    /// midpoint is what gives the resize its satisfying magnetic feel.
+    let collapsedSnapWidth: Double
+    let expandedSnapMinWidth: Double
 
     @State private var dragStartWidth: Double?
 
@@ -51,7 +58,14 @@ struct SidebarResizeHandle: View {
                     }
                 }
                 .gesture(
-                    DragGesture(minimumDistance: 1)
+                    // `.global` coordinate space matters: the handle moves
+                    // as the sidebar resizes, so a default `.local` drag
+                    // would compute its translation against a moving
+                    // frame and feed the width back to itself each tick —
+                    // visible as a left/right shake. Pinning to the
+                    // window's global frame eliminates that feedback loop
+                    // and gives the same feel as a native window resize.
+                    DragGesture(minimumDistance: 1, coordinateSpace: .global)
                         .onChanged { value in
                             if dragStartWidth == nil { dragStartWidth = width }
                             guard let start = dragStartWidth else { return }
@@ -59,7 +73,16 @@ struct SidebarResizeHandle: View {
                             // Left-side sidebar: dragging right widens.
                             // Right-side sidebar: dragging left widens.
                             let signed = side == .left ? delta : -delta
-                            width = max(minWidth, min(maxWidth, start + signed))
+                            let raw = max(minWidth, min(maxWidth, start + signed))
+                            // Disable implicit animations on the binding
+                            // write so the panel tracks the cursor 1:1 —
+                            // any animation here would lag the drag by a
+                            // frame or two and show up as stutter.
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                width = magneticSnap(raw)
+                            }
                         }
                         .onEnded { _ in
                             dragStartWidth = nil
@@ -67,5 +90,15 @@ struct SidebarResizeHandle: View {
                 )
         }
         .frame(width: 6)
+    }
+
+    /// Locks the dragged width to one of two detents below
+    /// `expandedSnapMinWidth`, leaving widths above that point continuous.
+    /// The "snap" happens at the midpoint between the two detents — that's
+    /// where the bar visibly jumps, which is what the user feels as magnetic.
+    private func magneticSnap(_ raw: Double) -> Double {
+        guard raw < expandedSnapMinWidth else { return raw }
+        let midpoint = (collapsedSnapWidth + expandedSnapMinWidth) / 2
+        return raw < midpoint ? collapsedSnapWidth : expandedSnapMinWidth
     }
 }

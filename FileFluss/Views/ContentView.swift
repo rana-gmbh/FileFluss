@@ -33,16 +33,23 @@ struct ContentView: View {
     /// enough to show icons + the small selection indicator without
     /// truncation; the upper bound matches the previous `maxWidth` cap
     /// of the fixed layout.
-    private static let sidebarMinWidth: Double = 50
+    /// Detent the sidebar magnetically locks to in icon-only mode. Sized
+    /// so a 16pt icon sits centred with comfortable padding on each side.
+    private static let sidebarCollapsedWidth: Double = 48
+    /// Smallest *expanded* width. Set to twice the collapsed detent so the
+    /// panel resizes freely all the way down to a narrow text column
+    /// before the magnetic snap kicks in — anything below this snaps to
+    /// either the icon-only detent or back to this width.
+    private static let sidebarExpandedMinWidth: Double = 96
+    private static let sidebarMinWidth: Double = 48
     private static let sidebarMaxWidth: Double = 320
     /// Width restored when the user double-clicks the resize handle.
     /// Matches the `@AppStorage` default so first-launch and
     /// double-click land on the same column width.
     private static let sidebarDefaultWidth: Double = 200
-    /// Below this threshold the sidebar drops its row text and tooltips
-    /// take over the labelling role. Picked so the user can drag wider
-    /// to ~100pt and still see truncated text before the switch flips.
-    private static let sidebarCollapseThreshold: Double = 100
+    /// Anything below this width renders the sidebar in icon-only mode.
+    /// Sits at the midpoint between the two snap detents.
+    private static let sidebarCollapseThreshold: Double = 72
 
     var body: some View {
         HStack(spacing: 0) {
@@ -118,7 +125,9 @@ struct ContentView: View {
                     side: side,
                     minWidth: Self.sidebarMinWidth,
                     maxWidth: Self.sidebarMaxWidth,
-                    defaultWidth: Self.sidebarDefaultWidth
+                    defaultWidth: Self.sidebarDefaultWidth,
+                    collapsedSnapWidth: Self.sidebarCollapsedWidth,
+                    expandedSnapMinWidth: Self.sidebarExpandedMinWidth
                 )
                 filePanelContent(side: side, isActive: isActive)
             } else {
@@ -128,7 +137,9 @@ struct ContentView: View {
                     side: side,
                     minWidth: Self.sidebarMinWidth,
                     maxWidth: Self.sidebarMaxWidth,
-                    defaultWidth: Self.sidebarDefaultWidth
+                    defaultWidth: Self.sidebarDefaultWidth,
+                    collapsedSnapWidth: Self.sidebarCollapsedWidth,
+                    expandedSnapMinWidth: Self.sidebarExpandedMinWidth
                 )
                 SidebarView(panelSide: side, collapsed: collapsed)
                     .frame(width: width)

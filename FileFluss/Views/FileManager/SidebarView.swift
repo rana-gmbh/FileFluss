@@ -28,7 +28,18 @@ private struct CollapsibleSidebarLabelStyle: LabelStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         if collapsed {
-            configuration.icon
+            // Force every icon to sit at the same horizontal centre by
+            // expanding the row to its full width and centring within it.
+            // Without this, the various title contents in cloud-account
+            // rows (`Label` wrapped in HStacks) end up at slightly
+            // different leading insets, which looks ragged at icon-only
+            // sizes.
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                configuration.icon
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
         } else {
             Label(configuration)
         }
@@ -94,6 +105,11 @@ struct SidebarView: View {
     @State private var renamingAccountId: UUID?
     @State private var renameAccountText: String = ""
     @State private var pendingRemoveAccount: CloudAccount?
+    /// When the sidebar is in icon-only mode the Transfers and Folder Sizes
+    /// sections collapse to a single info-icon row. Tapping that row pops up
+    /// the full list — these flags drive the two popovers.
+    @State private var showTransfersPopover = false
+    @State private var showFolderSizesPopover = false
     /// Drives the blue insertion line that follows the cursor when a
     /// folder is being dragged onto Favorites. nil = no drag in flight
     /// over the section; otherwise the position in the favorites
@@ -369,38 +385,76 @@ struct SidebarView: View {
                 }
 
             if !appState.transfers(for: panelSide).isEmpty {
-                Section("Transfers") {
-                    ForEach(appState.transfers(for: panelSide)) { transfer in
-                        TransferRow(transfer: transfer, panelSide: panelSide)
+                if collapsed {
+                    Section {
+                        collapsedInfoRow(
+                            systemImage: "arrow.up.arrow.down.circle.fill",
+                            count: appState.transfers(for: panelSide).count,
+                            help: transfersTooltip,
+                            isPresented: $showTransfersPopover
+                        ) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Transfers")
+                                    .font(.headline)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 4)
+                                ScrollView {
+                                    VStack(spacing: 4) {
+                                        ForEach(appState.transfers(for: panelSide)) { transfer in
+                                            TransferRow(transfer: transfer, panelSide: panelSide)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 10)
+                                }
+                            }
+                            .frame(width: 340)
+                            .frame(maxHeight: 420)
+                        }
+                    }
+                } else {
+                    Section("Transfers") {
+                        ForEach(appState.transfers(for: panelSide)) { transfer in
+                            TransferRow(transfer: transfer, panelSide: panelSide)
+                        }
                     }
                 }
             }
 
             if !appState.folderSizes(for: panelSide).isEmpty {
-                Section("Folder Sizes") {
-                    ForEach(appState.folderSizes(for: panelSide)) { entry in
-                        HStack {
-                            Image(systemName: "folder.fill")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.name)
-                                    .lineLimit(1)
-                                if entry.isCalculating {
-                                    CalculatingLabel()
-                                } else {
-                                    Text(entry.formattedSize)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                if collapsed {
+                    Section {
+                        collapsedInfoRow(
+                            systemImage: "folder.badge.questionmark",
+                            count: appState.folderSizes(for: panelSide).count,
+                            help: folderSizesTooltip,
+                            isPresented: $showFolderSizesPopover
+                        ) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Folder Sizes")
+                                    .font(.headline)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 4)
+                                ScrollView {
+                                    VStack(spacing: 6) {
+                                        ForEach(appState.folderSizes(for: panelSide)) { entry in
+                                            folderSizeRow(entry)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 10)
                                 }
                             }
-                            Spacer()
-                            Button {
-                                appState.removeFolderSize(id: entry.id, panel: panelSide)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .buttonStyle(.plain)
+                            .frame(width: 300)
+                            .frame(maxHeight: 360)
+                        }
+                    }
+                } else {
+                    Section("Folder Sizes") {
+                        ForEach(appState.folderSizes(for: panelSide)) { entry in
+                            folderSizeRow(entry)
                         }
                     }
                 }
@@ -493,6 +547,94 @@ struct SidebarView: View {
             }
         } message: { account in
             Text("This disconnects \(account.displayName) from FileFluss. Files in the cloud aren't deleted.")
+        }
+    }
+
+    // MARK: - Collapsed-mode helpers
+
+    /// One-row stand-in for a section the user couldn't see otherwise: an
+    /// info-style icon (with a small numeric badge), a hover tooltip
+    /// summarising the contents, and a tap-triggered popover that hosts
+    /// the full list. Used for Transfers and Folder Sizes when the sidebar
+    /// is in icon-only mode.
+    @ViewBuilder
+    private func collapsedInfoRow<Content: View>(
+        systemImage: String,
+        count: Int,
+        help: String,
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        Button {
+            isPresented.wrappedValue.toggle()
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: systemImage)
+                    .imageScale(.large)
+                    .foregroundStyle(.tint)
+                if count > 1 {
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.accentColor))
+                        .offset(x: 8, y: -6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .popover(isPresented: isPresented, arrowEdge: panelSide == .left ? .leading : .trailing) {
+            content()
+        }
+    }
+
+    /// One row of the Folder Sizes section. Shared between the expanded
+    /// list and the collapsed popover so both render identically.
+    @ViewBuilder
+    private func folderSizeRow(_ entry: FolderSizeEntry) -> some View {
+        HStack {
+            Image(systemName: "folder.fill")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .lineLimit(1)
+                if entry.isCalculating {
+                    CalculatingLabel()
+                } else {
+                    Text(entry.formattedSize)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button {
+                appState.removeFolderSize(id: entry.id, panel: panelSide)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var transfersTooltip: String {
+        let count = appState.transfers(for: panelSide).count
+        switch count {
+        case 0: return "No transfers"
+        case 1: return "1 transfer — click for details"
+        default: return "\(count) transfers — click for details"
+        }
+    }
+
+    private var folderSizesTooltip: String {
+        let count = appState.folderSizes(for: panelSide).count
+        switch count {
+        case 0: return "No folder sizes"
+        case 1: return "1 folder size — click for details"
+        default: return "\(count) folder sizes — click for details"
         }
     }
 
