@@ -309,3 +309,75 @@ private actor StubProvider: CloudProvider {
 
     func storageQuota() async throws -> CloudStorageQuota? { nil }
 }
+
+// MARK: - WebDAVReadCache
+
+final class WebDAVReadCacheTests: XCTestCase {
+    func testStoreAndLookupRoundTrip() async throws {
+        let cache = makeCache(maxMB: 10)
+        let temp = makeTempFile(bytes: 16 * 1024)
+        let stored = await cache.store(providerPath: "/a.bin", version: "v1", tempURL: temp)
+        XCTAssertNotEqual(stored.path, temp.path, "store should move into the cache dir")
+        let hit = await cache.lookup(providerPath: "/a.bin", version: "v1")
+        XCTAssertEqual(hit?.path, stored.path)
+        let versionMiss = await cache.lookup(providerPath: "/a.bin", version: "v2")
+        XCTAssertNil(versionMiss, "version mismatch is a miss")
+        let pathMiss = await cache.lookup(providerPath: "/other", version: "v1")
+        XCTAssertNil(pathMiss)
+    }
+
+    func testInvalidateRemovesEveryVersion() async throws {
+        let cache = makeCache(maxMB: 10)
+        _ = await cache.store(providerPath: "/a", version: "v1", tempURL: makeTempFile(bytes: 1024))
+        _ = await cache.store(providerPath: "/a", version: "v2", tempURL: makeTempFile(bytes: 1024))
+        _ = await cache.store(providerPath: "/b", version: "v1", tempURL: makeTempFile(bytes: 1024))
+        await cache.invalidate(providerPath: "/a")
+        let aV1 = await cache.lookup(providerPath: "/a", version: "v1")
+        let aV2 = await cache.lookup(providerPath: "/a", version: "v2")
+        let bV1 = await cache.lookup(providerPath: "/b", version: "v1")
+        XCTAssertNil(aV1)
+        XCTAssertNil(aV2)
+        XCTAssertNotNil(bV1, "other paths must survive")
+    }
+
+    func testLRUEvictsOldestUnderBudget() async throws {
+        // 3-entry budget at ~1 MB each.
+        let cache = makeCache(maxMB: 3)
+        _ = await cache.store(providerPath: "/oldest", version: "v", tempURL: makeTempFile(bytes: 1024 * 1024))
+        _ = await cache.store(providerPath: "/middle", version: "v", tempURL: makeTempFile(bytes: 1024 * 1024))
+        _ = await cache.store(providerPath: "/newest", version: "v", tempURL: makeTempFile(bytes: 1024 * 1024))
+        // Touch /oldest so it becomes most-recently-used.
+        _ = await cache.lookup(providerPath: "/oldest", version: "v")
+        // Adding a 4th entry forces eviction of the now least-recently-used (/middle).
+        _ = await cache.store(providerPath: "/extra", version: "v", tempURL: makeTempFile(bytes: 1024 * 1024))
+        let middle = await cache.lookup(providerPath: "/middle", version: "v")
+        let oldest = await cache.lookup(providerPath: "/oldest", version: "v")
+        let newest = await cache.lookup(providerPath: "/newest", version: "v")
+        let extra = await cache.lookup(providerPath: "/extra", version: "v")
+        XCTAssertNil(middle, "least-recently-used should evict")
+        XCTAssertNotNil(oldest)
+        XCTAssertNotNil(newest)
+        XCTAssertNotNil(extra)
+    }
+
+    func testClearWipesCache() async throws {
+        let cache = makeCache(maxMB: 10)
+        _ = await cache.store(providerPath: "/x", version: "v", tempURL: makeTempFile(bytes: 1024))
+        await cache.clear()
+        let miss = await cache.lookup(providerPath: "/x", version: "v")
+        XCTAssertNil(miss)
+    }
+
+    // MARK: helpers
+
+    private func makeCache(maxMB: Int64) -> WebDAVReadCache {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("filefluss-cache-test-\(UUID().uuidString)")
+        return WebDAVReadCache(root: root, maxBytes: maxMB * 1024 * 1024)
+    }
+
+    private func makeTempFile(bytes: Int) -> URL {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("filefluss-cache-input-\(UUID().uuidString).bin")
+        FileManager.default.createFile(atPath: url.path, contents: Data(repeating: 0xA5, count: bytes))
+        return url
+    }
+}

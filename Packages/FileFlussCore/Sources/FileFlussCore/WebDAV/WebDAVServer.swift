@@ -25,12 +25,22 @@ public actor WebDAVServer {
     /// (`.DS_Store`, `._*`, custom icons) and serves them back. When nil
     /// those paths are silently no-op'd, like a `/dev/null`.
     private let sidecar: WebDAVSidecarStore?
+    /// Optional LRU cache of downloaded file bytes. When wired, a GET on a
+    /// file we've already fetched (and whose mtime + size haven't changed)
+    /// streams from disk instead of the cloud.
+    private let readCache: WebDAVReadCache?
     private var listener: NWListener?
     public private(set) var port: UInt16 = 0
 
-    public init(provider: any CloudProvider, mountRoot: String = "/", sidecar: WebDAVSidecarStore? = nil) {
+    public init(
+        provider: any CloudProvider,
+        mountRoot: String = "/",
+        sidecar: WebDAVSidecarStore? = nil,
+        readCache: WebDAVReadCache? = nil
+    ) {
         self.provider = provider
         self.sidecar = sidecar
+        self.readCache = readCache
         // Normalise: always start with "/", never end with "/" (except root).
         var r = mountRoot
         if !r.hasPrefix("/") { r = "/" + r }
@@ -347,11 +357,26 @@ public actor WebDAVServer {
                 // HEAD: report metadata only.
                 return WebDAVResponse(status: 200, statusText: "OK", headers: headers)
             }
+
+            // Cache key is (path, mtime+size). If the file changes on the
+            // cloud the version changes too and the old entry is bypassed.
+            let version = "\(Int(meta.modificationDate.timeIntervalSince1970))-\(meta.size)"
+            if let cache = readCache, let cachedURL = await cache.lookup(providerPath: providerPath, version: version) {
+                if let actualSize = (try? FileManager.default.attributesOfItem(atPath: cachedURL.path))?[.size] as? Int64 {
+                    headers["Content-Length"] = "\(actualSize)"
+                }
+                return WebDAVResponse(status: 200, statusText: "OK", headers: headers, body: .cachedFile(cachedURL))
+            }
+
             let tempURL = Self.makeTempFile(suffix: (meta.name as NSString).pathExtension)
             try await provider.downloadFile(remotePath: providerPath, to: tempURL)
             // Re-stat in case the provider's reported size was off.
             if let actualSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 {
                 headers["Content-Length"] = "\(actualSize)"
+            }
+            if let cache = readCache {
+                let cachedURL = await cache.store(providerPath: providerPath, version: version, tempURL: tempURL)
+                return WebDAVResponse(status: 200, statusText: "OK", headers: headers, body: .cachedFile(cachedURL))
             }
             return WebDAVResponse(status: 200, statusText: "OK", headers: headers, body: .file(tempURL))
         } catch {
@@ -379,6 +404,7 @@ public actor WebDAVServer {
         }
         do {
             try await provider.uploadFile(from: bodyURL, to: providerPath)
+            await readCache?.invalidate(providerPath: providerPath)
             return WebDAVResponse(status: 201, statusText: "Created")
         } catch {
             return Self.mapError(error)
@@ -404,6 +430,7 @@ public actor WebDAVServer {
         }
         do {
             try await provider.deleteItem(at: providerPath)
+            await readCache?.invalidate(providerPath: providerPath)
             return WebDAVResponse(status: 204, statusText: "No Content")
         } catch {
             return Self.mapError(error)
@@ -430,6 +457,8 @@ public actor WebDAVServer {
                 // Cross-directory move (also handles rename + move atomically).
                 try await provider.moveItem(at: from, toPath: to)
             }
+            await readCache?.invalidate(providerPath: from)
+            await readCache?.invalidate(providerPath: to)
             return WebDAVResponse(status: 201, statusText: "Created")
         } catch CloudProviderError.notImplemented {
             // Provider can't move server-side. Returning 502 here makes
@@ -459,6 +488,8 @@ public actor WebDAVServer {
             try await provider.downloadFile(remotePath: from, to: tempURL)
             try await provider.uploadFile(from: tempURL, to: to)
             try await provider.deleteItem(at: from)
+            await readCache?.invalidate(providerPath: from)
+            await readCache?.invalidate(providerPath: to)
             return WebDAVResponse(status: 201, statusText: "Created")
         } catch {
             return Self.mapError(error)
@@ -595,7 +626,8 @@ public actor WebDAVServer {
         switch response.body {
         case .empty: bodyLength = 0
         case .data(let d): bodyLength = Int64(d.count)
-        case .file(let url): bodyLength = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        case .file(let url), .cachedFile(let url):
+            bodyLength = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
         }
         var headers = response.headers
         if headers["Content-Length"] == nil { headers["Content-Length"] = "\(bodyLength)" }
@@ -606,11 +638,13 @@ public actor WebDAVServer {
         switch response.body {
         case .empty: break
         case .data(let d): try await send(connection, d)
-        case .file(let url):
+        case .file(let url), .cachedFile(let url):
             let handle = try FileHandle(forReadingFrom: url)
+            let deleteAfter: Bool
+            if case .file = response.body { deleteAfter = true } else { deleteAfter = false }
             defer {
                 try? handle.close()
-                try? FileManager.default.removeItem(at: url)
+                if deleteAfter { try? FileManager.default.removeItem(at: url) }
             }
             while true {
                 let chunk = try handle.read(upToCount: 256 * 1024) ?? Data()
@@ -795,6 +829,9 @@ private struct WebDAVResponse {
         /// File on disk that should be streamed back to the client and
         /// deleted afterwards.
         case file(URL)
+        /// File that lives in a long-lived cache — stream the bytes back
+        /// but leave the file on disk so the next GET hits the cache.
+        case cachedFile(URL)
     }
 }
 

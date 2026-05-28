@@ -250,6 +250,13 @@ struct FileCommands: Commands {
             }
         }
 
+        // Replace the default Settings… menu item so Cmd+, opens our own
+        // resizable Settings window scene (the SwiftUI `Settings` scene
+        // produces a non-resizable window on macOS Tahoe).
+        CommandGroup(replacing: .appSettings) {
+            SettingsMenuButton()
+        }
+
         CommandGroup(replacing: .help) {
             HelpMenuButton()
             Divider()
@@ -261,23 +268,27 @@ struct FileCommands: Commands {
             }
         }
 
-        CommandGroup(before: .help) {
-            Button("Support the FileFluss Project") {
-                NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
+        // Grouped together so the surrounding `commands { … }` builder stays
+        // under @CommandsBuilder's 10-direct-child limit.
+        Group {
+            CommandGroup(before: .help) {
+                Button("Support the FileFluss Project") {
+                    NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
+                }
             }
-        }
 
-        CommandGroup(after: .help) {
-            Button(SupportLogService.shared.isRecording ? "Support Log (Recording…)" : "Support Log") {
-                SupportLogService.shared.start()
-            }
-            .disabled(SupportLogService.shared.isRecording)
+            CommandGroup(after: .help) {
+                Button(SupportLogService.shared.isRecording ? "Support Log (Recording…)" : "Support Log") {
+                    SupportLogService.shared.start()
+                }
+                .disabled(SupportLogService.shared.isRecording)
 
-            #if DEBUG
-            Button("Run Version Test…") {
-                Task { await VersionTestRunner.run(appState: appState) }
+                #if DEBUG
+                Button("Run Version Test…") {
+                    Task { await VersionTestRunner.run(appState: appState) }
+                }
+                #endif
             }
-            #endif
         }
     }
 }
@@ -292,5 +303,18 @@ private struct HelpMenuButton: View {
             openWindow(id: "help")
         }
         .keyboardShortcut("?", modifiers: .command)
+    }
+}
+
+/// The "Settings…" entry under the FileFluss menu. Opens the resizable
+/// Settings window scene (we don't use SwiftUI's built-in `Settings` scene
+/// because its NSWindow refuses to resize on macOS Tahoe).
+private struct SettingsMenuButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Settings…") {
+            openWindow(id: "settings")
+        }
+        .keyboardShortcut(",", modifiers: .command)
     }
 }

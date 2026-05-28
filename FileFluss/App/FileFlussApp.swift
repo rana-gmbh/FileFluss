@@ -19,10 +19,19 @@ struct FileFlussApp: App {
             CommandGroup(replacing: .undoRedo) {}
         }
 
-        Settings {
+        // We deliberately do NOT use SwiftUI's `Settings` scene here. On
+        // macOS Tahoe the Settings scene's NSWindow re-applies its own
+        // (non-resizable) style mask after we change it, so the user can't
+        // drag the edges. A regular `Window` honours `.windowResizability`,
+        // shows real close/minimize/zoom controls, and macOS persists the
+        // last frame for us. The Cmd+, shortcut is wired up below.
+        Window("FileFluss Settings", id: "settings") {
             SettingsView()
                 .environment(appState)
+                .frame(minWidth: 480, minHeight: 400)
         }
+        .defaultSize(width: 760, height: 820)
+        .windowResizability(.contentMinSize)
 
         // Search and Compare run as separate, movable, modeless windows so
         // the user can keep both panels visible behind them while dragging

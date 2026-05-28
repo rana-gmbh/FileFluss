@@ -44,7 +44,17 @@ public final class LoopbackMountService {
         let sidecarRoot = sidecarBaseURL.appendingPathComponent(accountId.uuidString)
         let sidecar = WebDAVSidecarStore(root: sidecarRoot)
 
-        let server = WebDAVServer(provider: provider, mountRoot: providerRoot, sidecar: sidecar)
+        // LRU read cache lives under ~/Library/Caches, separate from the
+        // sidecar (which is precious — it carries Finder view state).
+        let cacheRoot = Self.readCacheBaseURL.appendingPathComponent(accountId.uuidString)
+        let cacheBudgetMB = max(0, UserDefaults.standard.integer(forKey: Self.cacheBudgetMBKey))
+        let cacheBudget = Int64(cacheBudgetMB == 0 ? Self.defaultCacheBudgetMB : cacheBudgetMB) * 1024 * 1024
+        let readCache = WebDAVReadCache(root: cacheRoot, maxBytes: cacheBudget)
+
+        let server = WebDAVServer(
+            provider: provider, mountRoot: providerRoot,
+            sidecar: sidecar, readCache: readCache
+        )
         let port = try await server.start()
 
         // NetFS returns the path it actually mounted at — store that, not
@@ -257,4 +267,22 @@ public final class LoopbackMountService {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
+
+    /// Read-cache root. Lives in ~/Library/Caches so it doesn't get
+    /// backed up to iCloud Documents and so macOS can evict it under disk
+    /// pressure when the app isn't running. Exposed for the Settings UI
+    /// so it can show the on-disk size of the whole cache tree.
+    static var readCacheBaseURL: URL {
+        let base = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)
+            .first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let dir = base.appendingPathComponent("FileFluss/WebDAV-Cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// User-configurable cap on the per-mount read cache, in megabytes.
+    /// Mirrored to / from the Settings → Storage slider.
+    static let cacheBudgetMBKey = "webdavReadCacheMaxMB"
+    static let defaultCacheBudgetMB = 500
 }

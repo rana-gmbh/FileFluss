@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import FileFlussCore
 
 struct SettingsView: View {
@@ -31,7 +32,8 @@ struct SettingsView: View {
                     Label("Keyboard Map", systemImage: "keyboard")
                 }
         }
-        .frame(width: 620, height: 520)
+        // The hosting `Window` scene (see FileFlussApp) handles min size,
+        // default size, and resizability. No NSWindow workaround needed.
     }
 }
 
@@ -275,6 +277,8 @@ struct StorageSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            FinderMountReadCacheSection()
         }
         .formStyle(.grouped)
         .confirmationDialog(
@@ -584,4 +588,92 @@ struct IndexStatusSettingsView: View {
     }
 }
 
+
+
+/// Settings section for the per-mount Finder-mount LRU read cache.
+/// Slider stores its value in `LoopbackMountService.cacheBudgetMBKey`
+/// (mirrored to `@AppStorage`) and takes effect on the next mount.
+private struct FinderMountReadCacheSection: View {
+    @AppStorage(LoopbackMountService.cacheBudgetMBKey) private var maxMB: Int = LoopbackMountService.defaultCacheBudgetMB
+    @State private var sliderValue: Double = Double(LoopbackMountService.defaultCacheBudgetMB)
+    @State private var usedBytes: Int64?
+
+    var body: some View {
+        Section {
+            LabeledContent("Currently used") {
+                HStack(spacing: 8) {
+                    if usedBytes == nil {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(usedDisplay)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Slider(
+                    value: $sliderValue,
+                    in: 50...5000,
+                    onEditingChanged: { editing in
+                        if !editing {
+                            // Snap to the nearest 50 MB so the stored value
+                            // stays tidy without macOS drawing tick marks.
+                            let snapped = (Int(sliderValue) / 50) * 50
+                            sliderValue = Double(snapped)
+                            maxMB = snapped
+                        }
+                    }
+                )
+                Text("\(Int(sliderValue)) MB")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 80, alignment: .trailing)
+            }
+        } header: {
+            Text("Finder-Mount Read Cache")
+        } footer: {
+            Text("Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            sliderValue = Double(maxMB)
+            refreshUsed()
+        }
+    }
+
+    private var usedDisplay: String {
+        guard let bytes = usedBytes else { return "—" }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    private func refreshUsed() {
+        let root = LoopbackMountService.readCacheBaseURL
+        Task.detached(priority: .utility) {
+            let total = Self.directorySize(at: root)
+            await MainActor.run { self.usedBytes = total }
+        }
+    }
+
+    /// Sum of every regular file under `url`. Returns 0 when the directory
+    /// doesn't exist yet (no mounts have written a cache).
+    nonisolated private static func directorySize(at url: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            if values?.isRegularFile == true, let size = values?.fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+}
 
