@@ -67,15 +67,6 @@ public actor SFTPAPIClient {
     /// Path to the private-key file written for `-i`. nil for password auth.
     private let privateKeyPath: String?
 
-    /// Tri-state cache for whether `ls -L` is accepted by the server.
-    /// nil = haven't probed yet, true = supported (preferred — dereferences
-    /// symlinks so a symlink-to-directory shows as `d`), false = the server
-    /// rejected `-L` with "Invalid flag" and we should always send plain
-    /// `ls -la`. Some lightweight or restricted SFTP servers (rsync.net,
-    /// certain firmware embedded ones, mft proxies) ship a stripped-down
-    /// `ls` command that doesn't recognise `-L`.
-    private var lsSupportsDereference: Bool? = nil
-
     public init(credentials: SFTPCredentials) {
         self.credentials = credentials
         let id = UUID().uuidString.prefix(8)
@@ -153,52 +144,19 @@ public actor SFTPAPIClient {
         return parseListing(output: output, basePath: path)
     }
 
-    /// Runs `ls -laL <path>` (preferred — dereferences symlinks so a
-    /// symlink-to-directory shows up as `d` and double-click works) and
-    /// transparently falls back to `ls -la <path>` when the server's
-    /// `ls` doesn't accept `-L`. The fallback decision is cached on the
-    /// actor so the second listing on the same connection skips the
-    /// failed attempt entirely.
+    /// Runs `ls -la <path>` and returns the raw output.
+    ///
+    /// We deliberately do **not** pass `-L`. The command here is sftp's
+    /// *built-in* `ls` (run inside the SFTP subsystem), not the remote
+    /// shell's `ls`, and its flag set is fixed at `[-1afhlnrSt]` across
+    /// every OpenSSH version — there is no `-L`. Passing it makes the
+    /// built-in print `ls: Invalid flag -L` to stderr, emit **no listing
+    /// rows**, and still exit 0. That silent failure made every folder
+    /// look empty on every server (issue #31): the empty stdout parsed to
+    /// zero items, no error was thrown, and nothing reached the support
+    /// log. Sending plain `-la` is what Forklift/FileZilla effectively do.
     private func runListing(path: String) async throws -> String {
-        let escaped = shellEscape(path)
-        if lsSupportsDereference == false {
-            return try await runBatch(commands: ["ls -la \(escaped)"])
-        }
-        do {
-            let output = try await runBatch(commands: ["ls -laL \(escaped)"])
-            if lsSupportsDereference == nil { lsSupportsDereference = true }
-            return output
-        } catch let error as CloudProviderError {
-            if Self.isInvalidLFlagError(error) {
-                sftpLog.info("[SFTP] Server rejects `ls -L`; switching to `ls -la` for this connection.")
-                lsSupportsDereference = false
-                return try await runBatch(commands: ["ls -la \(escaped)"])
-            }
-            throw error
-        }
-    }
-
-    /// Detects the various ways an SFTP server can reject the `-L` flag.
-    /// Each implementation phrases its complaint slightly differently —
-    /// match all the common ones case-insensitively.
-    private static func isInvalidLFlagError(_ error: CloudProviderError) -> Bool {
-        let message: String
-        switch error {
-        case .commandFailed(let m): message = m
-        case .serverError, .notFound, .networkError, .invalidResponse,
-             .invalidCredentials, .notAuthenticated, .unauthorized,
-             .quotaExceeded, .rateLimited, .notImplemented, .fileTooLarge,
-             .twoFactorRequired:
-            return false
-        }
-        let lower = message.lowercased()
-        return lower.contains("invalid flag -l")
-            || lower.contains("invalid flag --l")
-            || lower.contains("invalid option -- l")
-            || lower.contains("unknown option -l")
-            || lower.contains("illegal option -- l")
-            || lower.contains("unrecognized option -l")
-            || lower.contains("unrecognized option `-l")
+        try await runBatch(commands: ["ls -la \(shellEscape(path))"])
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
