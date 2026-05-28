@@ -258,6 +258,9 @@ struct FileCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("FileFluss Homepage") {
+                NSWorkspace.shared.open(URL(string: "https://www.filefluss.de")!)
+            }
             HelpMenuButton()
             Divider()
             Button("Check for Updates…") {

@@ -44,6 +44,12 @@ struct AboutView: View {
             VStack(spacing: 4) {
                 Text("Made by Rana GmbH")
                     .font(.callout)
+                Button("www.filefluss.de") {
+                    NSWorkspace.shared.open(URL(string: "https://www.filefluss.de")!)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .font(.callout)
                 Button("github.com/rana-gmbh/filefluss") {
                     NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)
                 }
