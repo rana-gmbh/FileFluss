@@ -28,5 +28,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "FileFlussCore"),
+        .testTarget(name: "FileFlussCoreTests", dependencies: ["FileFlussCore"]),
     ]
 )
