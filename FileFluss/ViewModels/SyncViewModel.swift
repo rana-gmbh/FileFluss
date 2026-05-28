@@ -1062,6 +1062,14 @@ final class SyncViewModel {
         accounts.first { $0.id == id }
     }
 
+    /// Returns the live `CloudProvider` instance registered with the
+    /// SyncEngine for an account, or nil if the account isn't currently
+    /// connected. Used by the Finder-mount UI to hand the right provider to
+    /// `LoopbackMountService`.
+    func providerFor(accountId: UUID) async -> (any CloudProvider)? {
+        await syncEngine.provider(for: accountId)
+    }
+
     // MARK: - Account editing (re-authenticate existing accountId)
     //
     // Each method below mirrors the corresponding addXxxAccount, but

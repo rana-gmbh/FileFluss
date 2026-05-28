@@ -101,6 +101,12 @@ struct CloudSettingsView: View {
                             Circle()
                                 .fill(account.isConnected ? .green : .gray)
                                 .frame(width: 8, height: 8)
+                            // Mount this account as a Finder drive via a
+                            // local WebDAV server. iCloud already lives in
+                            // Finder, so skip it there.
+                            if account.providerType != .iCloud && account.isConnected {
+                                MountToggleButton(account: account)
+                            }
                             // iCloud uses the OS-level sign-in — nothing
                             // editable from inside FileFluss.
                             if account.providerType != .iCloud {
@@ -132,6 +138,56 @@ struct CloudSettingsView: View {
         .sheet(item: $editingAccount) { account in
             EditCloudAccountView(account: account)
                 .environment(appState)
+        }
+    }
+}
+
+/// Per-account "Mount in Finder" toggle. Wraps the lifecycle of one entry in
+/// `LoopbackMountService` — starts the WebDAV server + `mount_webdav` on
+/// click, and tears them down on click again. Surfaces success and failure
+/// inline so the user doesn't have to look at the log.
+private struct MountToggleButton: View {
+    let account: CloudAccount
+    @Environment(AppState.self) private var appState
+    @State private var isWorking = false
+    @State private var mountError: String?
+
+    var body: some View {
+        let mountedNow = appState.mountService.isMounted(accountId: account.id)
+        Button {
+            Task { await toggle(currentlyMounted: mountedNow) }
+        } label: {
+            HStack(spacing: 4) {
+                if isWorking {
+                    ProgressView().controlSize(.small)
+                }
+                Text(mountedNow ? "Unmount" : "Mount in Finder")
+            }
+        }
+        .disabled(isWorking)
+        .help(mountError ?? (mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder"))
+    }
+
+    private func toggle(currentlyMounted: Bool) async {
+        isWorking = true
+        defer { isWorking = false }
+        mountError = nil
+        do {
+            if currentlyMounted, let mount = appState.mountService.mount(for: account.id) {
+                _ = await appState.mountService.unmount(mount)
+                return
+            }
+            guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
+                mountError = "The account isn't connected — sign in first."
+                return
+            }
+            _ = try await appState.mountService.mount(
+                provider: provider,
+                accountId: account.id,
+                displayName: "\(account.displayName) (FileFluss)"
+            )
+        } catch {
+            mountError = error.localizedDescription
         }
     }
 }

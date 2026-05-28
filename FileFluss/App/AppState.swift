@@ -43,6 +43,9 @@ final class AppState {
     // here so SwiftUI views can observe them via the AppState environment.
     let driveMonitor = DriveMonitor.shared
     let indexingService = IndexingService.shared
+    /// Loopback WebDAV mounts of cloud accounts as Finder drives. Lives for
+    /// the lifetime of the app; quitting tears down every active mount.
+    let mountService = LoopbackMountService()
 
     /// In-app file clipboard for Cmd+C / Cmd+X / Cmd+V. Tracks both the
     /// item URLs and whether it was a copy or cut so paste can move

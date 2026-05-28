@@ -21,11 +21,16 @@ public actor WebDAVServer {
     /// Path inside the provider that maps to the WebDAV root `/`. So a
     /// request for `/foo/bar.txt` resolves to `<mountRoot>/foo/bar.txt`.
     private let mountRoot: String
+    /// Optional store that absorbs writes to Finder sidecar files
+    /// (`.DS_Store`, `._*`, custom icons) and serves them back. When nil
+    /// those paths are silently no-op'd, like a `/dev/null`.
+    private let sidecar: WebDAVSidecarStore?
     private var listener: NWListener?
     public private(set) var port: UInt16 = 0
 
-    public init(provider: any CloudProvider, mountRoot: String = "/") {
+    public init(provider: any CloudProvider, mountRoot: String = "/", sidecar: WebDAVSidecarStore? = nil) {
         self.provider = provider
+        self.sidecar = sidecar
         // Normalise: always start with "/", never end with "/" (except root).
         var r = mountRoot
         if !r.hasPrefix("/") { r = "/" + r }
@@ -185,6 +190,28 @@ public actor WebDAVServer {
 
     private func handleGET(_ request: WebDAVRequest, includeBody: Bool) async -> WebDAVResponse {
         let providerPath = self.providerPath(for: request.path)
+        let name = (providerPath as NSString).lastPathComponent
+
+        // Sidecar route — serve Finder-only files (.DS_Store etc.) from the
+        // local store so view state and AppleDouble forks survive folder
+        // revisits without us ever asking the cloud about them.
+        if shouldIgnoreSidecar(name), let sidecar {
+            guard let data = await sidecar.get(path: providerPath) else {
+                return WebDAVResponse(status: 404, statusText: "Not Found")
+            }
+            let meta = await sidecar.metadata(at: providerPath)
+            var headers = [
+                "Content-Length": "\(data.count)",
+                "Content-Type": contentType(forName: name),
+                "Last-Modified": Self.httpDate(meta?.mtime ?? Date()),
+            ]
+            if !includeBody {
+                return WebDAVResponse(status: 200, statusText: "OK", headers: headers)
+            }
+            _ = headers // keep mutable for symmetry with the provider branch
+            return WebDAVResponse(status: 200, statusText: "OK", headers: headers, body: .data(data))
+        }
+
         do {
             let meta = try await provider.getFileMetadata(at: providerPath)
             if meta.isDirectory {
@@ -217,8 +244,13 @@ public actor WebDAVServer {
         let name = (providerPath as NSString).lastPathComponent
 
         if shouldIgnoreSidecar(name) {
-            // Pretend we stored it so Finder is happy; we don't push hidden
-            // sidecar files (.DS_Store, ._*, .Spotlight-V100, …) to the cloud.
+            // Route Finder sidecar writes to the local store (if configured)
+            // so they survive a folder revisit. With no store configured the
+            // write is silently discarded so the cloud stays clean either way.
+            if let sidecar, let bodyURL = request.bodyURL,
+               let data = try? Data(contentsOf: bodyURL) {
+                try? await sidecar.put(path: providerPath, contents: data)
+            }
             return WebDAVResponse(status: 201, statusText: "Created")
         }
 
@@ -245,6 +277,11 @@ public actor WebDAVServer {
 
     private func handleDELETE(_ request: WebDAVRequest) async -> WebDAVResponse {
         let providerPath = self.providerPath(for: request.path)
+        let name = (providerPath as NSString).lastPathComponent
+        if shouldIgnoreSidecar(name) {
+            if let sidecar { await sidecar.delete(path: providerPath) }
+            return WebDAVResponse(status: 204, statusText: "No Content")
+        }
         do {
             try await provider.deleteItem(at: providerPath)
             return WebDAVResponse(status: 204, statusText: "No Content")
