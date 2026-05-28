@@ -38,7 +38,15 @@ public final class LoopbackMountService {
         providerRoot: String = "/",
         displayName: String
     ) async throws -> ActiveMount {
-        let safeName = sanitiseVolumeName(displayName)
+        // Guard against double-mount: if the UI fires a Mount click twice
+        // in quick succession (or two views both think they should mount),
+        // return the existing mount rather than spinning up a second
+        // server on a second port.
+        if let existing = mount(for: accountId, providerRoot: providerRoot) {
+            mountLog.info("[mount] reusing existing mount for \(displayName, privacy: .public)")
+            return existing
+        }
+        let safeName = uniqueVolumeName(displayName: displayName, accountId: accountId)
         let requestedMountPoint = URL(fileURLWithPath: "/Volumes/\(safeName)")
 
         let sidecarRoot = sidecarBaseURL.appendingPathComponent(accountId.uuidString)
@@ -318,6 +326,21 @@ public final class LoopbackMountService {
         while mapped.contains("--") { mapped = mapped.replacingOccurrences(of: "--", with: "-") }
         mapped = mapped.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         return mapped.isEmpty ? "FileFluss" : mapped
+    }
+
+    /// Build a sanitised volume name that doesn't collide with anything
+    /// already in `/Volumes`. If "Google-Drive" is busy (a real Google
+    /// Drive app mount, a leftover orphan we missed, or two FileFluss
+    /// accounts with the same display name), fall back to
+    /// "Google-Drive-<short-id>" so the mount still succeeds. The short
+    /// id is the first 6 chars of the account UUID — stable across
+    /// reconnects so the user keeps seeing the same volume name.
+    private func uniqueVolumeName(displayName: String, accountId: UUID) -> String {
+        let base = sanitiseVolumeName(displayName)
+        let withSuffix = "\(base)-\(accountId.uuidString.prefix(6))"
+        let baseExists = FileManager.default.fileExists(atPath: "/Volumes/\(base)")
+                      || FileManager.default.fileExists(atPath: "/Volumes/\(base).localhost")
+        return baseExists ? withSuffix : base
     }
 
     private var sidecarBaseURL: URL {

@@ -120,6 +120,14 @@ struct SidebarView: View {
     /// each sidebar row spawning its own task. Refreshed in a single
     /// .task block on the cloud-accounts Section below.
     @State private var quotas: [UUID: CloudStorageQuota] = [:]
+    /// Set while a per-account Mount/Unmount call is in flight so the
+    /// context menu can show "Mounting…" / "Unmounting…" instead of the
+    /// usual labels.
+    @State private var mountingAccountIds: Set<UUID> = []
+    /// Surfaces mount failures triggered from the sidebar context menu —
+    /// the menu disappears the moment we tap it, so we need an alert.
+    @State private var mountErrorMessage: String?
+    @State private var showMountError = false
 
     private func cloudAccountTooltip(for account: CloudAccount) -> String {
         guard let quota = quotas[account.id] else { return account.displayName }
@@ -344,6 +352,8 @@ struct SidebarView: View {
                                 renameAccountText = account.displayName
                             }
                             Divider()
+                            mountMenu(for: account)
+                            Divider()
                             offlineModeMenu(for: account)
                             Divider()
                             cloudIndexMenu(for: account)
@@ -548,6 +558,11 @@ struct SidebarView: View {
         } message: { account in
             Text("This disconnects \(account.displayName) from FileFluss. Files in the cloud aren't deleted.")
         }
+        .alert("Could not mount in Finder", isPresented: $showMountError, presenting: mountErrorMessage) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
     }
 
     // MARK: - Collapsed-mode helpers
@@ -698,6 +713,59 @@ struct SidebarView: View {
                 appState.driveMonitor.forget(driveId: drive.id)
             }
         }
+    }
+
+    /// Right-click → Mount in Finder / Unmount + Reveal. Mirrors the
+    /// Settings → Cloud Accounts row but reachable directly from the
+    /// sidebar. The actual mount call lives on `LoopbackMountService`
+    /// and runs in the background; failures pop a sidebar-level alert
+    /// since the context menu has already closed by then.
+    @ViewBuilder
+    private func mountMenu(for account: CloudAccount) -> some View {
+        let activeMount = appState.mountService.mount(for: account.id)
+        let isBusy = mountingAccountIds.contains(account.id)
+        if let mount = activeMount {
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([mount.mountPoint])
+            }
+            Button(isBusy ? "Unmounting…" : "Unmount from Finder") {
+                let target = mount
+                Task { await performUnmount(target, accountId: account.id) }
+            }
+            .disabled(isBusy)
+        } else {
+            Button(isBusy ? "Mounting…" : "Mount in Finder") {
+                Task { await performMount(account: account) }
+            }
+            .disabled(isBusy)
+            .help("Open this account as a drive in Finder")
+        }
+    }
+
+    private func performMount(account: CloudAccount) async {
+        mountingAccountIds.insert(account.id)
+        defer { mountingAccountIds.remove(account.id) }
+        guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
+            mountErrorMessage = "“\(account.displayName)” isn't connected — sign in first."
+            showMountError = true
+            return
+        }
+        do {
+            _ = try await appState.mountService.mount(
+                provider: provider,
+                accountId: account.id,
+                displayName: account.displayName
+            )
+        } catch {
+            mountErrorMessage = "Could not mount “\(account.displayName)”: \(error.localizedDescription)"
+            showMountError = true
+        }
+    }
+
+    private func performUnmount(_ mount: LoopbackMountService.ActiveMount, accountId: UUID) async {
+        mountingAccountIds.insert(accountId)
+        defer { mountingAccountIds.remove(accountId) }
+        _ = await appState.mountService.unmount(mount)
     }
 
     /// Right-click → Go Offline / Go Online toggle. Going offline routes
