@@ -214,10 +214,11 @@ enum VersionTestRunner {
             diagnostics: { await listingDiagnostic(provider: provider, parent: testRoot, expectedName: testFolderName) }
         ) {
             try await provider.createDirectory(at: testFolderPath)
-            let rootContents = try await provider.listDirectory(at: testRoot)
-            guard rootContents.contains(where: { $0.name == testFolderName && $0.isDirectory }) else {
-                throw VersionTestError.verificationFailed("folder not present after create")
-            }
+            // Poll with backoff like verifyPresent/verifyAbsent — pCloud and
+            // Internxt serve listfolder from an eventually-consistent view, so
+            // a just-created folder occasionally isn't in the immediate next
+            // listing even though the create succeeded.
+            try await verifyPresent(destPath: testFolderPath, on: provider, expectedDirectory: true)
         }
 
         if !createStep.ok {

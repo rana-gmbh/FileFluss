@@ -274,14 +274,19 @@ public actor InternxtAPIClient {
         }
 
         // 2. Reserve an upload slot (CTR ciphertext is the same length as plaintext).
+        // These transfer steps are idempotent (re-reserving a slot / re-PUTting
+        // the same bytes / finishing the same shard hash is safe), so retry
+        // through Internxt's occasional transient gateway errors (HTTP 502/503).
         struct StartResp: Decodable { let uploads: [Upload]; struct Upload: Decodable { let url: String?; let uuid: String } }
         let startBody = try JSONSerialization.data(withJSONObject: ["uploads": [["index": 0, "size": plaintext.count]]])
-        let startData = try await networkRequest("/v2/buckets/\(bucket)/files/start?multiparts=1", method: "POST", body: startBody)
+        let startData = try await retryingTransient {
+            try await self.networkRequest("/v2/buckets/\(bucket)/files/start?multiparts=1", method: "POST", body: startBody)
+        }
         let start = try JSONDecoder().decode(StartResp.self, from: startData)
         guard let upload = start.uploads.first, let url = upload.url else { throw CloudProviderError.invalidResponse }
 
         // 3. PUT the ciphertext to the presigned URL; the shard hash is hash160 of it.
-        try await put(ciphertext, to: url, onBytes: onBytes)
+        try await retryingTransient { try await self.put(ciphertext, to: url, onBytes: onBytes) }
         let hash = InternxtCrypto.shardHashHex(ciphertext)
 
         // 4. Finish → network file id.
@@ -290,10 +295,23 @@ public actor InternxtAPIClient {
             "index": InternxtCrypto.hexEncode(index),
             "shards": [["hash": hash, "uuid": upload.uuid]],
         ])
-        let finishData = try await networkRequest("/v2/buckets/\(bucket)/files/finish", method: "POST", body: finishBody)
+        let finishData = try await retryingTransient {
+            try await self.networkRequest("/v2/buckets/\(bucket)/files/finish", method: "POST", body: finishBody)
+        }
         let finish = try JSONDecoder().decode(FinishResp.self, from: finishData)
 
-        // 5. Register the file in Drive.
+        // 5. Drop the previous version *before* registering the new one.
+        // Internxt's Drive API rejects creating a file whose plainName+type
+        // already exists in the folder with HTTP 409, so a replace must
+        // remove the old entry first. The new ciphertext is already safely
+        // uploaded (steps 2-4), so the old data isn't the only copy when we
+        // delete its Drive entry here.
+        if let existing, !existing.isFolder {
+            _ = try? await driveSend("/files/\(existing.uuid)", method: "DELETE", body: nil)
+            nodeCache.removeValue(forKey: remotePath)
+        }
+
+        // 6. Register the file in Drive.
         let base = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
         var entry: [String: Any] = [
@@ -307,15 +325,50 @@ public actor InternxtAPIClient {
             if let c = attrs[.creationDate] as? Date { entry["creationTime"] = f.string(from: c) }
         }
         let entryBody = try JSONSerialization.data(withJSONObject: entry)
-        let createData = try await driveSend("/files", method: "POST", body: entryBody)
+        let createData: Data
+        do {
+            createData = try await driveSend("/files", method: "POST", body: entryBody)
+        } catch CloudProviderError.serverError(409) {
+            // The name still collides: either the step-5 delete hasn't
+            // propagated yet, or `existing` was a stale cache entry pointing at
+            // an already-gone uuid. Re-list the parent to get the *live* entry,
+            // delete it, and retry the create once.
+            _ = try? await listFolder(path: parentPath.isEmpty ? "/" : parentPath)
+            if let conflict = nodeCache[remotePath], !conflict.isFolder {
+                _ = try? await driveSend("/files/\(conflict.uuid)", method: "DELETE", body: nil)
+                nodeCache.removeValue(forKey: remotePath)
+            }
+            createData = try await driveSend("/files", method: "POST", body: entryBody)
+        }
         struct Created: Decodable { let uuid: String }
         if let created = try? JSONDecoder().decode(Created.self, from: createData) {
             nodeCache[remotePath] = Node(uuid: created.uuid, isFolder: false, fileId: finish.id, bucket: bucket, size: Int64(plaintext.count), type: ext)
         }
+    }
 
-        // 6. Drop the previous version (Internxt allows same-named duplicates).
-        if let existing, !existing.isFolder {
-            _ = try? await driveSend("/files/\(existing.uuid)", method: "DELETE", body: nil)
+    /// Retries `op` through Internxt's occasional transient gateway failures
+    /// (HTTP 500/502/503/504 and rate-limits) with a short backoff. Only wrap
+    /// idempotent operations — re-running must be safe.
+    private func retryingTransient<T>(_ attempts: Int = 3, _ op: () async throws -> T) async throws -> T {
+        var lastError: Error = CloudProviderError.invalidResponse
+        for attempt in 0..<attempts {
+            do {
+                return try await op()
+            } catch let error as CloudProviderError where Self.isTransient(error) {
+                lastError = error
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 600_000_000) // 0.6s, 1.2s
+                }
+            }
+        }
+        throw lastError
+    }
+
+    private static func isTransient(_ error: CloudProviderError) -> Bool {
+        switch error {
+        case .serverError(let code): return code == 500 || code == 502 || code == 503 || code == 504
+        case .rateLimited: return true
+        default: return false
         }
     }
 
