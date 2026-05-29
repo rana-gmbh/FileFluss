@@ -33,6 +33,7 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - Mega (with 2FA)
 - Koofr
 - Filen (filen.io)
+- Internxt (internxt.com — end-to-end encrypted)
 - NextCloud
 - Seafile
 - Synology Drive
@@ -49,6 +50,16 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Used / free storage** at a glance — most accounts surface their quota in the status bar and as a sidebar tooltip.
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
+
+### Mount cloud accounts in Finder
+
+![Mount in Finder](Screenshots/FileFluss%20Mount%20in%20Finder.webp)
+
+Mount any connected cloud account as a drive in **Finder** and use it from every app on your Mac — not just inside FileFluss.
+
+- Open a cloud document straight into Word, Preview, or Photos; attach files from any Save/Open dialog; drag into Mail.
+- Mount and unmount from the sidebar, with a one-click **Reveal in Finder**.
+- A local read cache makes reopening files instant, and mounts are cleaned up on quit.
 
 ### Offline Mode & offline search
 

@@ -1,26 +1,39 @@
-# FileFluss 1.2
+# FileFluss 1.3
 
-A polish release — many small quality-of-life upgrades and more customization across the panels, sidebar, and cloud-account flows.
+This release takes your cloud accounts beyond FileFluss itself — mount them straight into Finder — plus a roomier icon-only view, smarter storage-quota safeguards, and a new end-to-end encrypted provider.
 
 ## Highlights
 
-- **Cloud storage usage at a glance.** Most connected cloud accounts now show their used / free storage in the status bar, and the same numbers appear in the sidebar tooltip for each account.
-- **Independently resizable sidebars.** The left and right sidebars resize separately, and either one collapses to an icon-only mode when you want more room for the file list.
-- **Finder-style row size toggle.** View menu → row size, or `⌘+` / `⌘-`, to step the rows between compact and roomy without leaving the keyboard.
-- **Auto-Resize column toggle.** Right-click the Name column header to flip Auto-Resize on or off per panel — local and cloud panels remember their setting independently.
-- **Drag folders into Favorites.** Drop any folder onto the Favorites section of the sidebar; a row-reorder-style insertion indicator shows exactly where the favorite will land.
-- **Edit cloud-account credentials in place.** Settings → Cloud Accounts lets you update credentials on an existing account — no need to remove and re-add it.
-- **Remove a cloud account from the sidebar.** Opt-in context menu entry on each cloud account row for a one-click removal, without diving into Settings.
-- **Resizable Add Cloud Account sheet** that fits the screen instead of clipping, and now recovers cleanly when the OAuth browser flow is cancelled instead of getting stuck.
-- **S3: pin a bucket / sub-folder at connection time.** Optional path you set once when adding the account, so the panel opens directly inside the folder you actually care about.
-- **SFTP folders no longer appear empty** when the server returns ISO-date timestamps or SELinux longname listings.
-- **Cloud delete dialog** now names the actual account instead of a hardcoded provider name.
-- **Refreshed cloud-provider logos** — fourteen icons redrawn for a more consistent look across the picker and sidebar.
-- **Dark app-icon variant** ships in the asset catalog; the dock icon swaps live when macOS toggles appearance.
-- **Sidebar transfer list** inserts the newest transfer at the top so the latest activity is always visible without scrolling.
-- **Backend optimization** for faster loading, lower memory usage, and a cleaner foundation for future updates.
+### Mount your cloud accounts in Finder
 
-## Upgrading from 1.1.1
+![Mount in Finder](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Mount%20in%20Finder.webp)
+
+Mount any connected cloud account as a drive in **Finder** and use it from every app on your Mac — not just inside FileFluss. Open a cloud document straight into Word or Preview, attach files from a Save/Open dialog, drag into Mail — your cloud storage behaves like a local folder for file workflows everywhere in macOS. Mount and unmount from the sidebar, with a one-click **Reveal in Finder**.
+
+### Enhanced icon-mode view
+
+![Icon mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Icon%20mode.webp)
+
+The sidebars now collapse to a refined, extra-small icon-only mode — each panel keeps its favourites, locations, and cloud accounts a click away while giving the file lists the maximum room. Left and right collapse independently and remember their width.
+
+### Storage-quota awareness for file operations and sync
+
+![Sync with storage left](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Sync%20Calculation%20with%20storage%20left.webp)
+
+- **Optional warning before copy & move.** Turn it on in **Settings → General** and FileFluss checks whether a transfer would exceed the destination's storage quota (or local free space) before it starts, with a Cancel / continue-anyway choice. Off by default so everyday file operations stay instant.
+- **Storage in the sync plan.** The sync pre-flight now shows the destination's available space and how much will be left after the sync, and warns when a sync would overflow the target — before a single byte moves.
+
+### New provider: Internxt
+
+FileFluss now connects to **Internxt** (internxt.com), the end-to-end encrypted cloud storage, alongside the 20+ services already supported. Browse, upload, download, sync, and compare just like any other account.
+
+## Other improvements
+
+- **Dropbox** now reliably shows its storage quota and account name, and recovers a stuck "Unknown" name on its own.
+- **SFTP folders no longer appear empty** on standard servers — fixes a listing bug that affected many SSH/SFTP hosts.
+- Reliability fixes for Internxt file replacement and transient server hiccups.
+
+## Upgrading from 1.2
 
 Your cloud accounts carry over — no need to re-add them after upgrading.
 
@@ -34,7 +47,7 @@ brew upgrade --cask filefluss
 
 ### Manual
 
-Download `FileFluss-v1.2.dmg` below and drag FileFluss.app into your Applications folder.
+Download the DMG below and drag FileFluss.app into your Applications folder.
 
 ## Requirements
 
