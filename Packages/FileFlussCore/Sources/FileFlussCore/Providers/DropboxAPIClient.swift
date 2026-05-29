@@ -33,6 +33,14 @@ public actor DropboxAPIClient {
     private static let rpcURL = "https://api.dropboxapi.com/2"
     private static let contentURL = "https://content.dropboxapi.com/2"
 
+    /// Space-separated OAuth scopes requested at authorize time. These
+    /// must all be enabled in the Dropbox app console (Permissions tab) —
+    /// requesting a scope the app isn't allowed to grant fails the whole
+    /// authorization. `account_info.read` is required for the storage
+    /// quota (/users/get_space_usage) and account name lookup; the
+    /// `files.*` scopes cover listing, up/download, and mutations.
+    static let oauthScopes = "account_info.read files.metadata.read files.metadata.write files.content.read files.content.write"
+
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.default
@@ -59,6 +67,12 @@ public actor DropboxAPIClient {
                 URLQueryItem(name: "code_challenge", value: codeChallenge),
                 URLQueryItem(name: "code_challenge_method", value: "S256"),
                 URLQueryItem(name: "token_access_type", value: "offline"),
+                // Request scopes explicitly so the grant is deterministic
+                // rather than depending on the app-console default set.
+                // `account_info.read` is what powers /users/get_space_usage
+                // and /users/get_current_account — without it the storage
+                // quota silently fails (the call 401s and we return nil).
+                URLQueryItem(name: "scope", value: Self.oauthScopes),
                 URLQueryItem(name: "state", value: expectedState),
             ]
             return components.url!
@@ -134,7 +148,12 @@ public actor DropboxAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        // Dropbox RPC endpoints require a null body or empty JSON
+        // Dropbox RPC endpoints require a null body or empty JSON. The
+        // Content-Type header is mandatory — without it URLSession sends
+        // application/x-www-form-urlencoded, which Dropbox rejects with a
+        // 400 "Bad HTTP Content-Type header", leaving the account name
+        // stuck at "Unknown".
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = "null".data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -182,11 +201,24 @@ public actor DropboxAPIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-        // get_space_usage requires a null body, not an empty {}.
+        // get_space_usage requires a null body, not an empty {}. The
+        // Content-Type header is mandatory — without it URLSession sends
+        // application/x-www-form-urlencoded and Dropbox 400s, which is why
+        // the storage quota never appeared (issue: quota not showing).
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = "null".data(using: .utf8)
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            // Surface *why* the quota is missing instead of silently
+            // returning nil. The usual culprit is a token granted without
+            // the `account_info.read` scope (HTTP 401, body tag
+            // `missing_scope`); the user must re-link the account once the
+            // scope is requested. Logged at error level so it lands in the
+            // support log.
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let body = String(data: data, encoding: .utf8)?.prefix(300) ?? ""
+            dropboxLog.error("[Dropbox] get_space_usage failed (HTTP \(status)): \(body, privacy: .public)")
             return nil
         }
         let usage = try JSONDecoder().decode(SpaceUsage.self, from: data)
