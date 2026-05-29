@@ -71,7 +71,14 @@ struct ContentView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .overlay {
+            if appState.isCheckingSpace {
+                spaceCheckHUD
+                    .transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: supportLog.isRecording)
+        .animation(.easeInOut(duration: 0.2), value: appState.isCheckingSpace)
         .sheet(isPresented: Bindable(appState).showSyncSheet) {
             SyncPlannerView()
                 .environment(appState)
@@ -84,12 +91,46 @@ struct ContentView: View {
             GoToFolderSheet()
                 .environment(appState)
         }
+        .confirmationDialog(
+            "Not enough space",
+            isPresented: Binding(
+                get: { appState.pendingSpaceWarning != nil },
+                set: { if !$0 { appState.pendingSpaceWarning = nil } }
+            ),
+            presenting: appState.pendingSpaceWarning
+        ) { warning in
+            Button("\(warning.verb) Anyway", role: .destructive) {
+                appState.pendingSpaceWarning = nil
+                warning.proceed()
+            }
+            Button("Cancel", role: .cancel) { appState.pendingSpaceWarning = nil }
+        } message: { warning in
+            Text(SpaceImpactFormatter.warning(warning.impact, verb: warning.verb))
+        }
         .onReceive(NotificationCenter.default.publisher(for: .requestShowCompareWindow)) { _ in
             openWindow(id: "compare")
         }
         .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.openSearch.notification)) { _ in
             openWindow(id: "search")
         }
+    }
+
+    private var spaceCheckHUD: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Checking available space…")
+                .font(.callout)
+            Text("Calculating the size of the items and the destination.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(24)
+        .frame(width: 280)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.secondary.opacity(0.2)))
+        .shadow(radius: 12, y: 4)
     }
 
     private var supportLogBanner: some View {

@@ -204,6 +204,9 @@ actor SyncPlanner {
         var folderAdds = 0
         var folderDeletes = 0
         var bytesMoved: Int64 = 0
+        // Net bytes the destination gains (adds + replaced growth − replaced
+        // old size − mirror deletes). Drives the planner's space projection.
+        var netDelta: Int64 = 0
 
         // Sort source entries so directories are created before their children.
         let sourceSorted = sourceEntries.sorted { $0.relativePath < $1.relativePath }
@@ -221,22 +224,26 @@ actor SyncPlanner {
                     ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                     replaces += 1
                     bytesMoved += entry.size
+                    netDelta += entry.size - existing.size
                 case .newer:
                     if entry.modificationDate.timeIntervalSince(existing.modificationDate) > Self.modDateTolerance {
                         ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                         replaces += 1
                         bytesMoved += entry.size
+                        netDelta += entry.size - existing.size
                     }
                 case .additive:
                     let unique = uniqueName(for: entry.relativePath, existing: destMap)
                     ops.append(.addRenamed(sourceRelativePath: entry.relativePath, destRelativePath: unique, bytes: entry.size))
                     adds += 1
                     bytesMoved += entry.size
+                    netDelta += entry.size
                 }
             } else {
                 ops.append(.add(relativePath: entry.relativePath, isDirectory: entry.isDirectory, bytes: entry.size))
                 if entry.isDirectory { folderAdds += 1 } else { adds += 1 }
                 bytesMoved += entry.size
+                netDelta += entry.size
             }
         }
 
@@ -246,6 +253,7 @@ actor SyncPlanner {
             for entry in destSorted where sourceMap[entry.relativePath] == nil {
                 ops.append(.delete(relativePath: entry.relativePath, isDirectory: entry.isDirectory, bytes: entry.size))
                 if entry.isDirectory { folderDeletes += 1 } else { deletes += 1 }
+                netDelta -= entry.size
             }
         }
 
@@ -263,7 +271,8 @@ actor SyncPlanner {
             foldersToDelete: folderDeletes,
             downloadBytes: download,
             uploadBytes: upload,
-            totalBytes: bytesMoved
+            totalBytes: bytesMoved,
+            netDestinationDelta: netDelta
         )
     }
 

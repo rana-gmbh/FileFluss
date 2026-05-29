@@ -10,6 +10,9 @@ struct SyncPlannerView: View {
     @State private var plan: SyncPlan?
     @State private var isCalculating: Bool = false
     @State private var errorMessage: String?
+    /// Free space at the destination at Calculate time (cloud quota or local
+    /// volume). nil = unlimited / unknown — no projection shown.
+    @State private var destAvailable: Int64?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -32,8 +35,8 @@ struct SyncPlannerView: View {
         }
         .padding(20)
         .frame(width: 520)
-        .onChange(of: direction) { _, _ in plan = nil }
-        .onChange(of: mode) { _, _ in plan = nil; confirmDestructive = false }
+        .onChange(of: direction) { _, _ in plan = nil; destAvailable = nil }
+        .onChange(of: mode) { _, _ in plan = nil; confirmDestructive = false; destAvailable = nil }
     }
 
     // MARK: - Sections
@@ -183,8 +186,29 @@ struct SyncPlannerView: View {
                             Text(ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file))
                         }
                     }
+                    if let available = destAvailable {
+                        Divider().gridCellColumns(2)
+                        GridRow {
+                            Text("Available:").foregroundStyle(.secondary)
+                            Text(ByteCountFormatter.string(fromByteCount: available, countStyle: .file))
+                        }
+                        let after = available - plan.netDestinationDelta
+                        GridRow {
+                            Text("After sync:").foregroundStyle(.secondary)
+                            Text(ByteCountFormatter.string(fromByteCount: max(0, after), countStyle: .file))
+                                .foregroundStyle(after < 0 ? .red : .primary)
+                        }
+                    }
                 }
                 .font(.callout)
+
+                if let available = destAvailable, available - plan.netDestinationDelta < 0 {
+                    Label("This sync would exceed the available space at the destination.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.top, 2)
+                }
             } else {
                 Text("Press Calculate to compute how many files will be added, replaced, or deleted.")
                     .font(.caption)
@@ -246,9 +270,26 @@ struct SyncPlannerView: View {
                 sourceIsCloud: src.isCloud,
                 destIsCloud: dst.isCloud
             )
+            destAvailable = await availableSpace(for: dst)
         } catch {
             errorMessage = "Could not compute plan: \(error.localizedDescription)"
             plan = nil
+            destAvailable = nil
+        }
+    }
+
+    /// Free space at the destination: a cloud account's `total − used` quota,
+    /// or a local volume's free bytes. nil = unlimited / unknown.
+    private func availableSpace(for endpoint: SyncEndpoint) async -> Int64? {
+        switch endpoint {
+        case .cloud(let accountId, _):
+            guard let quota = await appState.syncManager.storageQuota(for: accountId),
+                  let total = quota.totalBytes, total > 0 else { return nil }
+            return max(0, total - quota.usedBytes)
+        case .local(let url):
+            return SpaceCheck.localVolumeFreeBytes(at: url)
+        case .offlineIndexed:
+            return nil
         }
     }
 

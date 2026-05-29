@@ -76,4 +76,10 @@ struct SyncPlan: Sendable {
     let uploadBytes: Int64
     /// Total bytes moved regardless of direction (for local-to-local transfers).
     let totalBytes: Int64
+    /// Net change in the destination's used space if this plan runs: bytes
+    /// added (new files + the *growth* of replaced files) minus bytes freed
+    /// (the old size of replaced files, and deletes in mirror mode). Used to
+    /// project remaining quota / free space in the planner. Can be negative
+    /// when a mirror sync removes more than it adds.
+    let netDestinationDelta: Int64
 }

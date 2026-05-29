@@ -344,16 +344,23 @@ struct FileListView: View {
     private func runLocalDrop(_ drop: FileManagerViewModel.PendingDrop, isMove: Bool) {
         let items = drop.items
         let dest = drop.destinationFolder
-        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: items.count)
-        appState.addTransfer(transfer, panel: panelSide)
-        fm.conflictDirection = incomingDirection
-        transfer.task = Task {
-            if isMove {
-                await fm.performMove(items: items, to: dest, progress: transfer)
-            } else {
-                await fm.performCopy(items: items, to: dest, progress: transfer)
+        Task {
+            await appState.gateTransfer(
+                destAccountId: nil, destLocalDir: dest,
+                localSources: items.map(\.url), isMove: isMove, verb: isMove ? "Move" : "Copy"
+            ) {
+                let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: items.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                fm.conflictDirection = incomingDirection
+                transfer.task = Task {
+                    if isMove {
+                        await fm.performMove(items: items, to: dest, progress: transfer)
+                    } else {
+                        await fm.performCopy(items: items, to: dest, progress: transfer)
+                    }
+                    await appState.refreshAllPanels()
+                }
             }
-            await appState.refreshAllPanels()
         }
     }
 
@@ -365,16 +372,23 @@ struct FileListView: View {
         // local panel). Fall back to the recorded drag side just in case.
         let sourceSide = appState.cloudDragSourceSide
             ?? (panelSide == .left ? .right : .left)
-        let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
-        appState.addTransfer(transfer, panel: panelSide)
-        transfer.task = Task {
-            let cloudVM = appState.cloudFileManager(for: sourceAccountId, side: sourceSide)
-            cloudVM.conflictDirection = incomingDirection
-            await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
-            if isMove {
-                await cloudVM.deleteItems(sourceItems)
+        Task {
+            await appState.gateTransfer(
+                destAccountId: nil, destLocalDir: targetDir,
+                cloudSources: sourceItems.map { (sourceAccountId, $0) }, isMove: isMove, verb: isMove ? "Move" : "Copy"
+            ) {
+                let transfer = TransferProgress(operation: isMove ? "Moving" : "Copying", totalItems: sourceItems.count)
+                appState.addTransfer(transfer, panel: panelSide)
+                transfer.task = Task {
+                    let cloudVM = appState.cloudFileManager(for: sourceAccountId, side: sourceSide)
+                    cloudVM.conflictDirection = incomingDirection
+                    await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
+                    if isMove {
+                        await cloudVM.deleteItems(sourceItems)
+                    }
+                    await fm.refresh()
+                }
             }
-            await fm.refresh()
         }
     }
 
@@ -409,41 +423,59 @@ struct FileListView: View {
                     },
                     onCopyToOtherPanel: { items in
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
-                        let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
-                        appState.addTransfer(transfer, panel: otherSide)
-                        fm.conflictDirection = outgoingDirection
-                        if let cloudId = appState.cloudAccountId(for: otherSide) {
-                            let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
-                            cloudVM.conflictDirection = outgoingDirection
-                            transfer.task = Task {
-                                await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                            }
-                        } else {
-                            let otherFM = appState.fileManager(for: otherSide)
-                            transfer.task = Task {
-                                await fm.performCopy(items: items, to: otherFM.currentDirectory, progress: transfer)
-                                await appState.refreshAllPanels()
+                        let cloudId = appState.cloudAccountId(for: otherSide)
+                        let destDir = cloudId == nil ? appState.fileManager(for: otherSide).currentDirectory : nil
+                        Task {
+                            await appState.gateTransfer(
+                                destAccountId: cloudId, destLocalDir: destDir,
+                                localSources: items.map(\.url), isMove: false, verb: "Copy"
+                            ) {
+                                let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
+                                appState.addTransfer(transfer, panel: otherSide)
+                                fm.conflictDirection = outgoingDirection
+                                if let cloudId {
+                                    let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                                    cloudVM.conflictDirection = outgoingDirection
+                                    transfer.task = Task {
+                                        await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
+                                    }
+                                } else {
+                                    let otherFM = appState.fileManager(for: otherSide)
+                                    transfer.task = Task {
+                                        await fm.performCopy(items: items, to: otherFM.currentDirectory, progress: transfer)
+                                        await appState.refreshAllPanels()
+                                    }
+                                }
                             }
                         }
                     },
                     onMoveToOtherPanel: { items in
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
-                        let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
-                        appState.addTransfer(transfer, panel: otherSide)
-                        fm.conflictDirection = outgoingDirection
-                        if let cloudId = appState.cloudAccountId(for: otherSide) {
-                            let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
-                            cloudVM.conflictDirection = outgoingDirection
-                            transfer.task = Task {
-                                await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                                await fm.deleteItems(items)
-                                await fm.refresh()
-                            }
-                        } else {
-                            let otherFM = appState.fileManager(for: otherSide)
-                            transfer.task = Task {
-                                await fm.performMove(items: items, to: otherFM.currentDirectory, progress: transfer)
-                                await appState.refreshAllPanels()
+                        let cloudId = appState.cloudAccountId(for: otherSide)
+                        let destDir = cloudId == nil ? appState.fileManager(for: otherSide).currentDirectory : nil
+                        Task {
+                            await appState.gateTransfer(
+                                destAccountId: cloudId, destLocalDir: destDir,
+                                localSources: items.map(\.url), isMove: true, verb: "Move"
+                            ) {
+                                let transfer = TransferProgress(operation: "Moving", totalItems: items.count)
+                                appState.addTransfer(transfer, panel: otherSide)
+                                fm.conflictDirection = outgoingDirection
+                                if let cloudId {
+                                    let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                                    cloudVM.conflictDirection = outgoingDirection
+                                    transfer.task = Task {
+                                        await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
+                                        await fm.deleteItems(items)
+                                        await fm.refresh()
+                                    }
+                                } else {
+                                    let otherFM = appState.fileManager(for: otherSide)
+                                    transfer.task = Task {
+                                        await fm.performMove(items: items, to: otherFM.currentDirectory, progress: transfer)
+                                        await appState.refreshAllPanels()
+                                    }
+                                }
                             }
                         }
                     },

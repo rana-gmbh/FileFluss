@@ -39,6 +39,16 @@ final class AppState {
     var searchVM = SearchViewModel()
     var showSyncSheet = false
 
+    /// Pending copy/move that would exceed the destination's available space.
+    /// Set by `confirmSpace(...)`; a root-level confirmation dialog presents it
+    /// with Cancel / "<verb> Anyway", and "anyway" runs `proceed`.
+    var pendingSpaceWarning: SpaceWarning?
+
+    /// True while the space pre-flight is summing sizes. Drives a "Checking
+    /// available space…" HUD so a slow check (large folders) doesn't look
+    /// like nothing happened — otherwise users retry the copy repeatedly.
+    var isCheckingSpace = false
+
     // Drive detection + background indexing. Both are singletons but exposed
     // here so SwiftUI views can observe them via the AppState environment.
     let driveMonitor = DriveMonitor.shared
@@ -901,21 +911,26 @@ final class AppState {
             let leftFM = leftFileManager
             let rightFM = rightFileManager
             if !localURLs.isEmpty {
-                let transfer = TransferProgress(operation: isCut ? "Moving" : "Uploading", totalItems: localURLs.count)
-                addTransfer(transfer, panel: activePanel)
-                transfer.task = Task { [destVM] in
-                    await destVM.uploadFiles(from: localURLs, progress: transfer)
-                    if isCut && !transfer.hasErrors {
-                        // Only remove originals after a clean upload, so
-                        // a partial failure never silently destroys data.
-                        for url in localURLs {
-                            try? await FileSystemService.shared.deleteItem(at: url)
+                await gateTransfer(
+                    destAccountId: destAccountId, destLocalDir: nil,
+                    localSources: localURLs, isMove: isCut, verb: isCut ? "Move" : "Upload"
+                ) {
+                    let transfer = TransferProgress(operation: isCut ? "Moving" : "Uploading", totalItems: localURLs.count)
+                    self.addTransfer(transfer, panel: self.activePanel)
+                    transfer.task = Task { [destVM] in
+                        await destVM.uploadFiles(from: localURLs, progress: transfer)
+                        if isCut && !transfer.hasErrors {
+                            // Only remove originals after a clean upload, so
+                            // a partial failure never silently destroys data.
+                            for url in localURLs {
+                                try? await FileSystemService.shared.deleteItem(at: url)
+                            }
+                            // Refresh whichever local panel(s) held the source.
+                            await leftFM.refresh()
+                            await rightFM.refresh()
                         }
-                        // Refresh whichever local panel(s) held the source.
-                        await leftFM.refresh()
-                        await rightFM.refresh()
+                        await destVM.refresh()
                     }
-                    await destVM.refresh()
                 }
             }
             // Cloud-to-cloud paste — uses raw provider methods so the
@@ -953,16 +968,21 @@ final class AppState {
             // Pasting into local panel.
             let destFM = activeFileManager
             if !localURLs.isEmpty {
-                let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying", totalItems: localURLs.count)
-                addTransfer(transfer, panel: activePanel)
                 let destDir = destFM.currentDirectory
-                transfer.task = Task { [destFM] in
-                    if isCut {
-                        await destFM.performMove(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
-                    } else {
-                        await destFM.performCopy(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
+                await gateTransfer(
+                    destAccountId: nil, destLocalDir: destDir,
+                    localSources: localURLs, isMove: isCut, verb: isCut ? "Move" : "Copy"
+                ) {
+                    let transfer = TransferProgress(operation: isCut ? "Moving" : "Copying", totalItems: localURLs.count)
+                    self.addTransfer(transfer, panel: self.activePanel)
+                    transfer.task = Task { [destFM] in
+                        if isCut {
+                            await destFM.performMove(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
+                        } else {
+                            await destFM.performCopy(items: localURLs.map { FileItem(url: $0) }, to: destDir, progress: transfer)
+                        }
+                        await destFM.refresh()
                     }
-                    await destFM.refresh()
                 }
             }
             // Cloud-to-local paste: group by account so each account uses

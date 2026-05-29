@@ -42,6 +42,7 @@ struct GeneralSettingsView: View {
     @AppStorage("confirmDelete") private var confirmDelete = true
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
+    @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
 
     var body: some View {
@@ -50,6 +51,13 @@ struct GeneralSettingsView: View {
             Toggle("Confirm before deleting", isOn: $confirmDelete)
             Toggle("Show \"Add Cloud Account\" in sidebars", isOn: $showSidebarAddAccount)
             Toggle("Allow removing cloud accounts from sidebar context menu", isOn: $allowSidebarRemoveAccount)
+
+            Section {
+                Toggle("Check available space before copy or move", isOn: $checkSpaceBeforeTransfer)
+                Text("Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Section {
                 Button("Show Welcome Screen Again") {
