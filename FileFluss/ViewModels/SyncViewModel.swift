@@ -932,6 +932,13 @@ final class SyncViewModel {
                 let provider = DropboxProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
+                    // Self-heal a stuck "Dropbox (Unknown)" name from accounts
+                    // linked before the get_current_account Content-Type fix.
+                    if let freshName = await provider.refreshDisplayName(),
+                       let idx = accounts.firstIndex(where: { $0.id == account.id }) {
+                        accounts[idx].displayName = "\(account.providerType.displayName) (\(freshName))"
+                        saveAccounts()
+                    }
                 }
             case .mega:
                 let provider = MegaProvider(accountId: account.id)

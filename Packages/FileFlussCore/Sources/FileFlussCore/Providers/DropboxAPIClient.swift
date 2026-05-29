@@ -143,7 +143,22 @@ public actor DropboxAPIClient {
         )
     }
 
+    /// Soft variant used during initial sign-in: never throws on an API
+    /// error, falling back to a placeholder so the account is still added
+    /// even if the name lookup hiccups.
     private static func fetchCurrentAccount(accessToken: String) async throws -> (accountId: String, displayName: String) {
+        do {
+            return try await fetchCurrentAccountStrict(accessToken: accessToken)
+        } catch {
+            return (accountId: "unknown", displayName: "Unknown")
+        }
+    }
+
+    /// Throwing variant used by the launch-time name refresh, where we
+    /// must distinguish "lookup failed" (keep the old name) from a real
+    /// fresh value — so a transient error never overwrites a good name
+    /// with "Unknown".
+    private static func fetchCurrentAccountStrict(accessToken: String) async throws -> (accountId: String, displayName: String) {
         let url = URL(string: "\(rpcURL)/users/get_current_account")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -158,11 +173,35 @@ public actor DropboxAPIClient {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            return (accountId: "unknown", displayName: "Unknown")
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw CloudProviderError.serverError(status)
         }
 
         let account = try JSONDecoder().decode(DropboxAccountInfo.self, from: data)
         return (accountId: account.account_id, displayName: account.name.display_name)
+    }
+
+    /// Re-fetches the live account display name and updates the cached
+    /// credentials. Returns the updated credentials so the caller can
+    /// persist them, or `nil` when nothing changed / the lookup failed.
+    /// Lets accounts linked before the Content-Type fix self-heal their
+    /// "Unknown" name on the next launch without a manual re-link.
+    public func refreshDisplayName() async throws -> DropboxCredentials? {
+        let creds = try await refreshTokenIfNeeded()
+        let (accountId, displayName) = try await Self.fetchCurrentAccountStrict(accessToken: creds.accessToken)
+        let trimmed = displayName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != "Unknown", trimmed != credentials.displayName else {
+            return nil
+        }
+        let updated = DropboxCredentials(
+            accessToken: creds.accessToken,
+            refreshToken: creds.refreshToken,
+            expiresAt: creds.expiresAt,
+            accountId: accountId.isEmpty ? creds.accountId : accountId,
+            displayName: trimmed
+        )
+        credentials = updated
+        return updated
     }
 
     // MARK: - Token Refresh

@@ -47,6 +47,18 @@ public final class DropboxProvider: CloudProvider, @unchecked Sendable {
         return try await client.userDisplayName()
     }
 
+    /// Re-fetches the live Dropbox account name, persists the updated
+    /// credentials, and returns the fresh name — or nil if nothing changed
+    /// or the lookup failed. Called at launch so accounts linked before the
+    /// Content-Type fix recover from a stuck "Unknown" name without a
+    /// manual re-link.
+    public func refreshDisplayName() async -> String? {
+        guard let client = apiClient else { return nil }
+        guard let updated = try? await client.refreshDisplayName() else { return nil }
+        try? KeychainService.save(key: keychainKey, value: updated)
+        return updated.displayName
+    }
+
     // MARK: - File Operations
 
     public func listDirectory(at path: String) async throws -> [CloudFileItem] {
