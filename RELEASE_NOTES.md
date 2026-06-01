@@ -1,54 +1,23 @@
-# FileFluss 1.3
+# FileFluss 1.3.1 — SFTP diagnostic build
 
-This release takes your cloud accounts beyond FileFluss itself — mount them straight into Finder — plus a roomier icon-only view, smarter storage-quota safeguards, and a new end-to-end encrypted provider.
+**This is a special diagnostic pre-release for the "SFTP folder appears empty" issue ([#31](https://github.com/rana-gmbh/FileFluss/issues/31)).** It is identical to 1.3 except that it records detailed SFTP diagnostics into the Support Log so we can see exactly what your server returns. It does not change any behaviour and is safe to use day-to-day.
 
-## Highlights
+If your SFTP folders show up empty in FileFluss, please help us pin down the cause:
 
-### Mount your cloud accounts in Finder
+## How to capture the log (about 1 minute)
 
-![Mount in Finder](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Mount%20in%20Finder.webp)
+1. Install this build (drag FileFluss into Applications, replacing your current copy). Your accounts and settings carry over.
+2. In FileFluss, open the menu **Help → Support Log** and click **Support Log** to start a 60-second recording (a banner appears at the top).
+3. While it records, click your **SFTP account** in the sidebar and open the folder that shows up empty. Try clicking into a sub-folder too.
+4. When the 60 seconds are up, a **Save** dialog appears — save the `.log` file.
+5. Attach that file to a comment on issue **#31** (or email it). It contains the raw directory listing your server sends; it does **not** contain your password or SSH key.
 
-Mount any connected cloud account as a drive in **Finder** and use it from every app on your Mac — not just inside FileFluss. Open a cloud document straight into Word or Preview, attach files from a Save/Open dialog, drag into Mail — your cloud storage behaves like a local folder for file workflows everywhere in macOS. Mount and unmount from the sidebar, with a one-click **Reveal in Finder**.
-
-### Enhanced icon-mode view
-
-![Icon mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Icon%20mode.webp)
-
-The sidebars now collapse to a refined, extra-small icon-only mode — each panel keeps its favourites, locations, and cloud accounts a click away while giving the file lists the maximum room. Left and right collapse independently and remember their width.
-
-### Storage-quota awareness for file operations and sync
-
-![Sync with storage left](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Sync%20Calculation%20with%20storage%20left.webp)
-
-- **Optional warning before copy & move.** Turn it on in **Settings → General** and FileFluss checks whether a transfer would exceed the destination's storage quota (or local free space) before it starts, with a Cancel / continue-anyway choice. Off by default so everyday file operations stay instant.
-- **Storage in the sync plan.** The sync pre-flight now shows the destination's available space and how much will be left after the sync, and warns when a sync would overflow the target — before a single byte moves.
-
-### New provider: Internxt
-
-FileFluss now connects to **Internxt** (internxt.com), the end-to-end encrypted cloud storage, alongside the 20+ services already supported. Browse, upload, download, sync, and compare just like any other account.
-
-## Other improvements
-
-- **Dropbox** now reliably shows its storage quota and account name, and recovers a stuck "Unknown" name on its own.
-- **SFTP folders no longer appear empty** on standard servers — fixes a listing bug that affected many SSH/SFTP hosts.
-- Reliability fixes for Internxt file replacement and transient server hiccups.
-
-## Upgrading from 1.2
-
-Your cloud accounts carry over — no need to re-add them after upgrading.
-
-## Installation
-
-### Homebrew
-
-```bash
-brew upgrade --cask filefluss
-```
-
-### Manual
-
-Download the DMG below and drag FileFluss.app into your Applications folder.
+That listing is the missing piece — it tells us the exact format your (newer) SFTP server uses so we can parse it correctly.
 
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
+
+---
+
+*Regular users: stay on **1.3** (the latest stable release). This build is only for diagnosing the SFTP issue.*

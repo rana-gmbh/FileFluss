@@ -325,20 +325,23 @@ public actor SFTPAPIClient {
                 let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
                 let stderr = String(data: stderrData, encoding: .utf8) ?? ""
 
-                #if DEBUG
-                // Debug-only file mirror — release builds must not write
-                // server hostnames / paths / stderr (which can contain
-                // credentials on auth failure) to a world-readable file.
-                let debugLine = "[SFTP] exit=\(proc.terminationStatus) stdout=\(stdout.prefix(500)) stderr=\(stderr.prefix(500))\n"
-                let logPath = "/tmp/filefluss-sftp.log"
-                if let fh = FileHandle(forWritingAtPath: logPath) {
-                    fh.seekToEndOfFile()
-                    fh.write(Data(debugLine.utf8))
-                    fh.closeFile()
-                } else {
-                    FileManager.default.createFile(atPath: logPath, contents: Data(debugLine.utf8))
-                }
-                #endif
+                // Diagnostic capture for the recurring "SFTP folder appears
+                // empty" reports (issue #31). Routed through SupportLogger so
+                // it lands in the user-exportable Support Log on notarized
+                // builds — the os.Logger output never reached that export,
+                // which is why earlier support logs came back empty. No secret
+                // is logged: the password / key passphrase travels via the
+                // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
+                // is the raw `ls` listing whose exact longname format is what
+                // we need to parse the affected (newer) servers correctly.
+                SupportLogger.shared.log(
+                    "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
+                        + "exit=\(proc.terminationStatus)\n"
+                        + "stdout (\(stdoutData.count) bytes):\n\(stdout.prefix(1800))\n"
+                        + "stderr:\n\(stderr.prefix(600))",
+                    category: "sftp",
+                    level: proc.terminationStatus == 0 ? .info : .error
+                )
 
                 if proc.terminationStatus != 0 {
                     let exit = Int(proc.terminationStatus)
@@ -453,15 +456,24 @@ public actor SFTPAPIClient {
             ))
         }
 
+        // Record the parse outcome in the Support Log so it correlates with
+        // the raw `ls` output already captured in runBatch — tells us at a
+        // glance whether the folder is genuinely empty, parsed fine, or hit
+        // an unrecognised longname format (issue #31).
+        let totalLines = output.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+        SupportLogger.shared.log(
+            "parsed \(items.count) item(s) from \(totalLines) line(s) for \(basePath) "
+                + "(looksLikeListing=\(Self.outputLooksLikeListing(output)))",
+            category: "sftp",
+            level: (items.isEmpty && Self.outputLooksLikeListing(output)) ? .error : .info
+        )
+
         if items.isEmpty, Self.outputLooksLikeListing(output) {
             // The server returned text that looks like a long listing (had
             // at least one permissions-prefixed line) but none of our
             // patterns matched. This is the symptom behind issue #31:
             // ProFTPD/mod_sftp and a few other SFTP daemons emit ISO-style
             // dates or other longname variants we don't yet recognise.
-            // Surfacing the raw sample turns the otherwise-silent
-            // empty-folder bug into something diagnosable from the
-            // support log.
             sftpLog.error(
                 "[SFTP] Folder \(basePath, privacy: .public) parsed 0 items from listing-shaped output; unrecognised longname format. Sample: \(output.prefix(500), privacy: .public)"
             )
