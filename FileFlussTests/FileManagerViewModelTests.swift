@@ -20,6 +20,36 @@ struct FileManagerViewModelTests {
         #expect(!vm.canGoForward)
     }
 
+    @Test("filteredItems memoization invalidates on every input change")
+    func filteredItemsCacheInvalidation() {
+        let vm = FileManagerViewModel()
+        vm.items = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/banana.txt")),
+            FileItem(url: URL(fileURLWithPath: "/tmp/apple.txt")),
+        ]
+
+        // Default: name ascending.
+        #expect(vm.filteredItems.map(\.name) == ["apple.txt", "banana.txt"])
+        // Repeat access returns the same (cached) ordering.
+        #expect(vm.filteredItems.map(\.name) == ["apple.txt", "banana.txt"])
+
+        // Flipping sort direction must invalidate the cache.
+        vm.sortAscending = false
+        #expect(vm.filteredItems.map(\.name) == ["banana.txt", "apple.txt"])
+
+        // Search text must invalidate the cache.
+        vm.searchText = "app"
+        #expect(vm.filteredItems.map(\.name) == ["apple.txt"])
+
+        // Clearing search restores the full (still descending) listing.
+        vm.searchText = ""
+        #expect(vm.filteredItems.map(\.name) == ["banana.txt", "apple.txt"])
+
+        // Replacing items must invalidate the cache.
+        vm.items = [FileItem(url: URL(fileURLWithPath: "/tmp/cherry.txt"))]
+        #expect(vm.filteredItems.map(\.name) == ["cherry.txt"])
+    }
+
     @Test("Load directory populates items")
     func loadDirectory() async {
         let vm = FileManagerViewModel()

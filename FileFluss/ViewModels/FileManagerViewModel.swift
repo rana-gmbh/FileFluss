@@ -5,16 +5,24 @@ import QuickLookUI
 @Observable @MainActor
 final class FileManagerViewModel {
     var currentDirectory: URL
-    var items: [FileItem] = []
+    var items: [FileItem] = [] { didSet { _filteredItemsCache = nil } }
     var selectedItemIDs: Set<String> = []
-    var sortOrder: SortOrder = .name
-    var sortAscending: Bool = true
+    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil } }
+    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil } }
     var showHiddenFiles: Bool = false
     var isLoading: Bool = false
     var error: String?
     var pathHistory: [URL] = []
     var pathHistoryIndex: Int = -1
-    var searchText: String = ""
+    var searchText: String = "" { didSet { _filteredItemsCache = nil } }
+
+    /// Memoised result of `filteredItems`. Recomputed lazily and invalidated
+    /// (via `didSet` above) only when an input that affects it changes —
+    /// items, search text, or sort. `selectedItemIDs` is deliberately *not*
+    /// an input, so selecting rows no longer re-sorts the whole listing.
+    /// `@ObservationIgnored` so writing the cache never itself triggers a
+    /// SwiftUI invalidation.
+    @ObservationIgnored private var _filteredItemsCache: [FileItem]?
     /// Toggled by the Edit → Quick Filter… command; when true, the panel
     /// shows an inline filter bar bound to `searchText`.
     var isFilterBarVisible: Bool = false
@@ -64,10 +72,20 @@ final class FileManagerViewModel {
     }
 
     var filteredItems: [FileItem] {
-        let filtered = searchText.isEmpty
+        // Read every input up front so SwiftUI observation keeps tracking
+        // them as dependencies even on a cache hit — otherwise the view
+        // would stop re-rendering when they change.
+        let items = self.items
+        let query = self.searchText
+        _ = self.sortOrder
+        _ = self.sortAscending
+        if let cached = _filteredItemsCache { return cached }
+        let filtered = query.isEmpty
             ? items
-            : items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        return sorted(filtered)
+            : items.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let result = sorted(filtered)
+        _filteredItemsCache = result
+        return result
     }
 
     func loadDirectory(at url: URL? = nil) async {

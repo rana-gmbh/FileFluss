@@ -10,7 +10,7 @@ final class CloudFileManagerViewModel {
     let accountId: UUID
     let providerType: CloudProviderType?
     var currentPath: String = "/"
-    var items: [CloudFileItem] = []
+    var items: [CloudFileItem] = [] { didSet { _filteredItemsCache = nil } }
     var selectedItemIDs: Set<String> = []
     var isLoading = false
     var error: String?
@@ -18,17 +18,25 @@ final class CloudFileManagerViewModel {
     /// longer valid (`CloudProviderError.notAuthenticated`/`.unauthorized`).
     /// The panel's error view uses this to surface a "Sign In Again" button.
     var needsReAuth: Bool = false
-    var searchText: String = ""
+    var searchText: String = "" { didSet { _filteredItemsCache = nil } }
     /// Toggled by the Edit → Quick Filter… command; when true, the panel
     /// shows an inline filter bar bound to `searchText`.
     var isFilterBarVisible: Bool = false
-    var sortOrder: SortOrder = .name
-    var sortAscending: Bool = true
+    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil } }
+    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil } }
     /// When false (default), dot-prefixed entries (`.gitignore`, `.ssh`,
     /// SFTP server-side `lost+found`-style dotfiles) are hidden from the
     /// listing. Mirrored to the local `FileManagerViewModel.showHiddenFiles`
     /// flag by the toolbar toggle.
-    var showHiddenFiles: Bool = false
+    var showHiddenFiles: Bool = false { didSet { _filteredItemsCache = nil } }
+
+    /// Memoised result of `filteredItems` — recomputed lazily and invalidated
+    /// (via the `didSet`s above) only when an input that affects it changes:
+    /// items, search text, sort, or hidden-files. `selectedItemIDs` is not an
+    /// input, so selecting rows no longer re-filters and re-sorts the listing.
+    /// `@ObservationIgnored` so writing the cache never triggers a SwiftUI
+    /// invalidation on its own.
+    @ObservationIgnored private var _filteredItemsCache: [CloudFileItem]?
     /// Cached storage quota snapshot for the panel's status bar. nil
     /// either because the provider doesn't support quota (S3, SFTP,
     /// WordPress) or because the first probe hasn't completed.
@@ -82,14 +90,25 @@ final class CloudFileManagerViewModel {
     }
 
     var filteredItems: [CloudFileItem] {
+        // Read every input up front so SwiftUI observation keeps tracking
+        // them as dependencies even on a cache hit — otherwise the view
+        // would stop re-rendering when they change.
+        let items = self.items
+        let query = self.searchText
+        let showHidden = self.showHiddenFiles
+        _ = self.sortOrder
+        _ = self.sortAscending
+        if let cached = _filteredItemsCache { return cached }
         var filtered = items
-        if !showHiddenFiles {
+        if !showHidden {
             filtered = filtered.filter { !$0.name.hasPrefix(".") }
         }
-        if !searchText.isEmpty {
-            filtered = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        if !query.isEmpty {
+            filtered = filtered.filter { $0.name.localizedCaseInsensitiveContains(query) }
         }
-        return sorted(filtered)
+        let result = sorted(filtered)
+        _filteredItemsCache = result
+        return result
     }
 
     var selectedItems: [CloudFileItem] {
