@@ -45,6 +45,7 @@ struct GeneralSettingsView: View {
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
     @AppStorage(AppLanguage.storageKey) private var appLanguage: String = AppLanguage.system.rawValue
+    @State private var showRelaunchPrompt = false
 
     var body: some View {
         Form {
@@ -62,7 +63,7 @@ struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
-                    LText("The menu bar and window titles switch fully after a relaunch.")
+                    LText("The menu bar and window titles change after relaunching FileFluss.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -71,8 +72,20 @@ struct GeneralSettingsView: View {
             }
             .onChange(of: appLanguage) { _, newValue in
                 // Mirror the choice into AppleLanguages so a relaunch also
-                // localises the menu bar, window titles, and system dialogs.
+                // localises the menu bar, window titles, and system dialogs —
+                // those are macOS-provided and only switch with the process
+                // language. In-window content already switched live.
                 AppLanguage.apply(.current(from: newValue))
+                showRelaunchPrompt = true
+            }
+            .confirmationDialog(
+                L10n.text("Relaunch to finish switching the language?"),
+                isPresented: $showRelaunchPrompt
+            ) {
+                Button(action: relaunch) { LText("Relaunch Now") }
+                Button(role: .cancel) { } label: { LText("Later") }
+            } message: {
+                LText("The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches.")
             }
 
             Toggle(isOn: $showHiddenFiles) { LText("Show hidden files by default") }

@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct HelpView: View {
     @Environment(\.dismiss) private var dismiss
@@ -7,15 +8,15 @@ struct HelpView: View {
     var body: some View {
         NavigationSplitView {
             List(HelpSection.allCases, id: \.self, selection: $selection) { section in
-                Label(section.title, systemImage: section.systemImage)
+                Label(L10n.text(section.title), systemImage: section.systemImage)
                     .tag(section)
             }
-            .navigationTitle("FileFluss Help")
+            .navigationTitle(L10n.text("FileFluss Help"))
             .frame(minWidth: 200)
         } detail: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(selection.title)
+                    Text(L10n.text(selection.title))
                         .font(.largeTitle).bold()
                         .padding(.bottom, 4)
                     selection.content
@@ -23,7 +24,7 @@ struct HelpView: View {
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationSubtitle(selection.title)
+            .navigationSubtitle(L10n.text(selection.title))
         }
         .frame(minWidth: 760, minHeight: 520)
     }
@@ -90,7 +91,9 @@ private struct HelpParagraph: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(LocalizedStringKey(text))
+        // Text(.init(...)) on the *translated* string parses the markdown
+        // (**bold**, *italic*) while L10n drives the live language switch.
+        Text(.init(L10n.text(text)))
             .font(.body)
             .lineSpacing(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -101,7 +104,7 @@ private struct HelpHeading: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text)
+        Text(L10n.text(text))
             .font(.title3.bold())
             .padding(.top, 8)
     }
@@ -113,7 +116,7 @@ private struct HelpBullet: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text("•").foregroundStyle(.secondary)
-            Text(LocalizedStringKey(text))
+            Text(.init(L10n.text(text)))
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -127,7 +130,7 @@ private struct HelpTip: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "lightbulb")
                 .foregroundStyle(.yellow)
-            Text(LocalizedStringKey(text))
+            Text(.init(L10n.text(text)))
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
         }

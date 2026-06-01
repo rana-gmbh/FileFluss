@@ -146,3 +146,10 @@
 "Name" = "名稱";
 "Size" = "大小";
 "Modified" = "修改時間";
+
+/* Language relaunch prompt */
+"The menu bar and window titles change after relaunching FileFluss." = "選單列與視窗標題會在重新啟動 FileFluss 後變更。";
+"Relaunch to finish switching the language?" = "重新啟動以完成語言切換？";
+"Relaunch Now" = "立即重新啟動";
+"Later" = "稍後";
+"The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches." = "應用程式視窗已立即更新。選單列與視窗標題會在 FileFluss 重新啟動後切換。";

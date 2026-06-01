@@ -146,3 +146,10 @@
 "Name" = "Name";
 "Size" = "Größe";
 "Modified" = "Geändert";
+
+/* Language relaunch prompt */
+"The menu bar and window titles change after relaunching FileFluss." = "Menüleiste und Fenstertitel ändern sich nach einem Neustart von FileFluss.";
+"Relaunch to finish switching the language?" = "Für den vollständigen Sprachwechsel neu starten?";
+"Relaunch Now" = "Jetzt neu starten";
+"Later" = "Später";
+"The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches." = "Das App-Fenster wurde sofort aktualisiert. Menüleiste und Fenstertitel wechseln nach einem Neustart von FileFluss.";
