@@ -59,6 +59,12 @@ targets:
           CODE_SIGN_ENTITLEMENTS: FileFluss/Resources/FileFluss.Debug.entitlements
         Release:
           CODE_SIGN_ENTITLEMENTS: FileFluss/Resources/FileFluss.entitlements
+          # Scope the Developer ID profile to the app target only. Passing it
+          # as a global xcodebuild setting also applied it to the SwiftPM
+          # resource-bundle target (FileFlussCore_FileFlussCore, created once
+          # the package gained .lproj resources), which can't take a profile
+          # and failed the archive. The CI installs this profile by UUID.
+          PROVISIONING_PROFILE_SPECIFIER: "FileFluss Developer ID"
     # Entitlements live as hand-maintained plists on disk (Debug + Release
     # variants under FileFluss/Resources/). Don't add an `entitlements:`
     # block here — XcodeGen would overwrite the on-disk files at every
