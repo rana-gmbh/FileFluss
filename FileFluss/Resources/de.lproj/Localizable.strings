@@ -309,3 +309,15 @@
 "Could not download file" = "Datei konnte nicht geladen werden";
 "Empty Folder" = "Leerer Ordner";
 "This cloud folder is empty" = "Dieser Cloud-Ordner ist leer";
+
+/* Context menu + table columns */
+"Date Modified" = "Änderungsdatum";
+"Date Created" = "Erstellungsdatum";
+"Kind" = "Art";
+"Copy to %@ Panel" = "In Bereich %@ kopieren";
+"Move to %@ Panel" = "In Bereich %@ bewegen";
+"Add to Favorites" = "Zu Favoriten hinzufügen";
+"Calculate Folder Size" = "Ordnergröße berechnen";
+"Auto Resize" = "Automatische Größe";
+"Left" = "Links";
+"Right" = "Rechts";

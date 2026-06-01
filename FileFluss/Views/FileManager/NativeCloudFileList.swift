@@ -49,27 +49,27 @@ struct NativeCloudFileList: NSViewRepresentable {
         tableView.gridStyleMask = []
 
         let nameCol = NSTableColumn(identifier: .cloudNameColumn)
-        nameCol.title = "Name"
+        nameCol.title = L10n.text("Name")
         nameCol.minWidth = FileListNameColumn.minWidth
         nameCol.sortDescriptorPrototype = NSSortDescriptor(key: "name", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
         tableView.addTableColumn(nameCol)
 
         let dateCol = NSTableColumn(identifier: .cloudDateColumn)
-        dateCol.title = "Date Modified"
+        dateCol.title = L10n.text("Date Modified")
         dateCol.width = 160
         dateCol.minWidth = 100
         dateCol.sortDescriptorPrototype = NSSortDescriptor(key: "date", ascending: true)
         tableView.addTableColumn(dateCol)
 
         let sizeCol = NSTableColumn(identifier: .cloudSizeColumn)
-        sizeCol.title = "Size"
+        sizeCol.title = L10n.text("Size")
         sizeCol.width = 80
         sizeCol.minWidth = 60
         sizeCol.sortDescriptorPrototype = NSSortDescriptor(key: "size", ascending: true)
         tableView.addTableColumn(sizeCol)
 
         let kindCol = NSTableColumn(identifier: .cloudKindColumn)
-        kindCol.title = "Kind"
+        kindCol.title = L10n.text("Kind")
         kindCol.width = 120
         kindCol.minWidth = 80
         kindCol.sortDescriptorPrototype = NSSortDescriptor(key: "kind", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
@@ -511,13 +511,13 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         // Right-click on empty area — offer Paste + New Folder.
         if clickedRow < 0 || clickedRow >= items.count {
             if inVirtualContainer { return }
-            let pasteItem = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+            let pasteItem = NSMenuItem(title: L10n.text("Paste"), action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteItem.keyEquivalentModifierMask = [.command]
             pasteItem.target = self
             menu.addItem(pasteItem)
             if canCreateFolder {
                 menu.addItem(.separator())
-                let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+                let newFolderItem = NSMenuItem(title: L10n.text("New Folder"), action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
                 newFolderItem.target = self
                 menu.addItem(newFolderItem)
             }
@@ -535,7 +535,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         }
         guard !contextItems.isEmpty else { return }
 
-        let otherPanelName = panelSide == .left ? "Right" : "Left"
+        let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
 
         // Synthetic shared-drive nodes can't be renamed, deleted, moved, or
         // cut; the bare container can't even be copied. Suppress those rather
@@ -544,14 +544,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         let containsImmovable = contextItems.contains { $0.role != .normal }
 
         if !containsImmovable {
-            let cutCtx = NSMenuItem(title: "Cut", action: #selector(handleCut(_:)), keyEquivalent: "x")
+            let cutCtx = NSMenuItem(title: L10n.text("Cut"), action: #selector(handleCut(_:)), keyEquivalent: "x")
             cutCtx.keyEquivalentModifierMask = [.command]
             cutCtx.target = self
             menu.addItem(cutCtx)
         }
 
         if !containsVirtualContainer {
-            let copyCtx = NSMenuItem(title: "Copy", action: #selector(handleCopy(_:)), keyEquivalent: "c")
+            let copyCtx = NSMenuItem(title: L10n.text("Copy"), action: #selector(handleCopy(_:)), keyEquivalent: "c")
             copyCtx.keyEquivalentModifierMask = [.command]
             copyCtx.target = self
             menu.addItem(copyCtx)
@@ -560,7 +560,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         // Paste targets the current directory, not the clicked item — only
         // offer it when that directory is a real folder.
         if !inVirtualContainer {
-            let pasteCtx = NSMenuItem(title: "Paste", action: #selector(handlePaste(_:)), keyEquivalent: "v")
+            let pasteCtx = NSMenuItem(title: L10n.text("Paste"), action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteCtx.keyEquivalentModifierMask = [.command]
             pasteCtx.target = self
             menu.addItem(pasteCtx)
@@ -569,14 +569,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         menu.addItem(.separator())
 
         if !containsVirtualContainer {
-            let copyItem = NSMenuItem(title: "Copy to \(otherPanelName) Panel", action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
+            let copyItem = NSMenuItem(title: L10n.format("Copy to %@ Panel", otherPanelName), action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
             copyItem.target = self
             copyItem.representedObject = contextItems
             menu.addItem(copyItem)
         }
 
         if !containsImmovable {
-            let moveItem = NSMenuItem(title: "Move to \(otherPanelName) Panel", action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
+            let moveItem = NSMenuItem(title: L10n.format("Move to %@ Panel", otherPanelName), action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
             moveItem.target = self
             moveItem.representedObject = contextItems
             menu.addItem(moveItem)
@@ -586,14 +586,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         // Rename — only for single, renamable selection
         if contextItems.count == 1, contextItems[0].role == .normal {
-            let renameItem = NSMenuItem(title: "Rename", action: #selector(handleRename(_:)), keyEquivalent: "")
+            let renameItem = NSMenuItem(title: L10n.text("Rename"), action: #selector(handleRename(_:)), keyEquivalent: "")
             renameItem.target = self
             renameItem.representedObject = contextItems[0]
             menu.addItem(renameItem)
         }
 
         if canCreateFolder, !inVirtualContainer {
-            let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
+            let newFolderItem = NSMenuItem(title: L10n.text("New Folder"), action: #selector(handleCreateFolder(_:)), keyEquivalent: "")
             newFolderItem.target = self
             menu.addItem(newFolderItem)
         }
@@ -601,14 +601,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         if contextItems.count == 1, let folder = contextItems.first, folder.isDirectory {
             menu.addItem(.separator())
 
-            let favItem = NSMenuItem(title: "Add to Favorites", action: #selector(handleAddToFavorites(_:)), keyEquivalent: "")
+            let favItem = NSMenuItem(title: L10n.text("Add to Favorites"), action: #selector(handleAddToFavorites(_:)), keyEquivalent: "")
             favItem.target = self
             favItem.representedObject = folder
             menu.addItem(favItem)
 
             // The bare container has no single size worth computing.
             if folder.role != .virtualContainer {
-                let calcItem = NSMenuItem(title: "Calculate Folder Size", action: #selector(handleCalculateFolderSize(_:)), keyEquivalent: "")
+                let calcItem = NSMenuItem(title: L10n.text("Calculate Folder Size"), action: #selector(handleCalculateFolderSize(_:)), keyEquivalent: "")
                 calcItem.target = self
                 calcItem.representedObject = folder
                 menu.addItem(calcItem)
@@ -617,7 +617,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         if !containsImmovable {
             menu.addItem(.separator())
-            let deleteItem = NSMenuItem(title: "Delete", action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
+            let deleteItem = NSMenuItem(title: L10n.text("Delete"), action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
             deleteItem.target = self
             deleteItem.representedObject = contextItems
             menu.addItem(deleteItem)
@@ -687,7 +687,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         }
         if clickedHeaderColumnIdentifier() == .cloudNameColumn {
             menu.addItem(.separator())
-            let autoItem = NSMenuItem(title: "Auto Resize", action: #selector(toggleNameAutoResize(_:)), keyEquivalent: "")
+            let autoItem = NSMenuItem(title: L10n.text("Auto Resize"), action: #selector(toggleNameAutoResize(_:)), keyEquivalent: "")
             autoItem.target = self
             autoItem.state = FileListColumnPrefs.nameAutoResize(forCloud: true) ? .on : .off
             menu.addItem(autoItem)

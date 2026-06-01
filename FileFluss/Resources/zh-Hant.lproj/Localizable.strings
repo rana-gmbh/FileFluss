@@ -309,3 +309,15 @@
 "Could not download file" = "無法下載檔案";
 "Empty Folder" = "空資料夾";
 "This cloud folder is empty" = "此雲端資料夾是空的";
+
+/* Context menu + table columns */
+"Date Modified" = "修改日期";
+"Date Created" = "建立日期";
+"Kind" = "種類";
+"Copy to %@ Panel" = "複製到%@面板";
+"Move to %@ Panel" = "移動到%@面板";
+"Add to Favorites" = "加入喜好項目";
+"Calculate Folder Size" = "計算資料夾大小";
+"Auto Resize" = "自動調整大小";
+"Left" = "左側";
+"Right" = "右側";

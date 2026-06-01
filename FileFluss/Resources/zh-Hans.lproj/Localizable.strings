@@ -309,3 +309,15 @@
 "Could not download file" = "无法下载文件";
 "Empty Folder" = "空文件夹";
 "This cloud folder is empty" = "此云端文件夹为空";
+
+/* Context menu + table columns */
+"Date Modified" = "修改日期";
+"Date Created" = "创建日期";
+"Kind" = "种类";
+"Copy to %@ Panel" = "复制到%@面板";
+"Move to %@ Panel" = "移动到%@面板";
+"Add to Favorites" = "添加到收藏";
+"Calculate Folder Size" = "计算文件夹大小";
+"Auto Resize" = "自动调整大小";
+"Left" = "左侧";
+"Right" = "右侧";

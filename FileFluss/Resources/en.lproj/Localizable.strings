@@ -309,3 +309,15 @@
 "Could not download file" = "Could not download file";
 "Empty Folder" = "Empty Folder";
 "This cloud folder is empty" = "This cloud folder is empty";
+
+/* Context menu + table columns */
+"Date Modified" = "Date Modified";
+"Date Created" = "Date Created";
+"Kind" = "Kind";
+"Copy to %@ Panel" = "Copy to %@ Panel";
+"Move to %@ Panel" = "Move to %@ Panel";
+"Add to Favorites" = "Add to Favorites";
+"Calculate Folder Size" = "Calculate Folder Size";
+"Auto Resize" = "Auto Resize";
+"Left" = "Left";
+"Right" = "Right";
