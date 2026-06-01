@@ -542,6 +542,23 @@ final class SyncViewModel {
         }
     }
 
+    func addJottacloudAccount(personalToken: String) async {
+        let account = CloudAccount(providerType: .jottacloud)
+        let provider = JottacloudProvider(accountId: account.id)
+        authError = nil
+        do {
+            let username = try await provider.authenticate(personalToken: personalToken)
+            var connectedAccount = account
+            connectedAccount.displayName = "Jottacloud (\(username))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     /// TeraBox device-code login: fetch a QR, surface it for the user to scan
     /// in the TeraBox app, then poll for the token and register the account.
     func connectTeraBox() async {
@@ -1017,6 +1034,11 @@ final class SyncViewModel {
                 }
             case .terabox:
                 let provider = TeraBoxProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .jottacloud:
+                let provider = JottacloudProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

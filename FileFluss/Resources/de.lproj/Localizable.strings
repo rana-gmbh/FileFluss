@@ -566,6 +566,11 @@
 "Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "Die meisten Synology-NAS-Geräte für Zuhause verwenden ein selbstsigniertes Zertifikat. Schalte dies nur aus, wenn du ein echtes CA-signiertes Zertifikat installiert hast (z. B. Let’s Encrypt).";
 "OTP Code (only if 2-factor auth is on)" = "OTP-Code (nur wenn 2-Faktor-Authentifizierung aktiv ist)";
 "Open Infomaniak token page" = "Infomaniak-Token-Seite öffnen";
+"Generate a Personal Login Token in your Jottacloud account, then paste it below." = "Erstellen Sie ein persönliches Login-Token in Ihrem Jottacloud-Konto und fügen Sie es unten ein.";
+"Open Jottacloud token page" = "Jottacloud-Token-Seite öffnen";
+"Personal Login Token" = "Persönliches Login-Token";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die in Ihrem Schlüsselbund gespeichert wird.";
+"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "Um Jottacloud mit einem neuen persönlichen Login-Token neu zu verbinden, entfernen Sie dieses Konto und fügen Sie es erneut hinzu.";
 "Open my.pcloud.com" = "my.pcloud.com öffnen";
 "Open the TeraBox app and scan this QR code to authorize." = "Öffne die TeraBox-App und scanne diesen QR-Code zur Autorisierung.";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "Oder gib deinen Benutzernamen und ein App-spezifisches Passwort manuell ein. Erstelle eines unter Einstellungen → Sicherheit → Geräte & Sitzungen.";

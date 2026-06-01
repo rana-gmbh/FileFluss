@@ -566,6 +566,11 @@
 "Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).";
 "OTP Code (only if 2-factor auth is on)" = "OTP Code (only if 2-factor auth is on)";
 "Open Infomaniak token page" = "Open Infomaniak token page";
+"Generate a Personal Login Token in your Jottacloud account, then paste it below." = "Generate a Personal Login Token in your Jottacloud account, then paste it below.";
+"Open Jottacloud token page" = "Open Jottacloud token page";
+"Personal Login Token" = "Personal Login Token";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.";
+"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again.";
 "Open my.pcloud.com" = "Open my.pcloud.com";
 "Open the TeraBox app and scan this QR code to authorize." = "Open the TeraBox app and scan this QR code to authorize.";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions.";

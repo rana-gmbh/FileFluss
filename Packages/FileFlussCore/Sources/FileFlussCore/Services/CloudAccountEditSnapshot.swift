@@ -159,7 +159,7 @@ public enum CloudAccountEditLoader {
             snap.email = c.email
             return snap
 
-        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .kDrive, .iCloud, .terabox:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .kDrive, .iCloud, .terabox, .jottacloud:
             return nil
         }
     }

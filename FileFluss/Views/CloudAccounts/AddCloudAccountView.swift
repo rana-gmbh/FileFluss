@@ -140,8 +140,8 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .internxt, .kDrive,
-        .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
+        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .internxt, .jottacloud,
+        .kDrive, .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
     ]
 
     /// Providers that show up under "Other Protocols" — generic transport
@@ -282,6 +282,8 @@ struct AddCloudAccountView: View {
                 filenFields
             case .internxt:
                 internxtFields
+            case .jottacloud:
+                jottacloudFields
             case .terabox:
                 teraboxFields
             case .ftp:
@@ -870,6 +872,35 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var jottacloudFields: some View {
+        VStack(spacing: 12) {
+            LText("Generate a Personal Login Token in your Jottacloud account, then paste it below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                if let url = URL(string: "https://www.jottacloud.com/web/secure") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label(L10n.text("Open Jottacloud token page"), systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
+            SecureField(L10n.text("Personal Login Token"), text: $apiToken)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            LText("Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
     private var teraboxFields: some View {
         VStack(spacing: 12) {
             if let qrData = appState.syncManager.teraboxQRImageData, let image = NSImage(data: qrData) {
@@ -1179,6 +1210,7 @@ struct AddCloudAccountView: View {
         case .box: return false
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         case .filen: return email.isEmpty || password.isEmpty
+        case .jottacloud: return apiToken.isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         default: return email.isEmpty || password.isEmpty
@@ -1368,6 +1400,10 @@ struct AddCloudAccountView: View {
                 )
             case .terabox:
                 await appState.syncManager.connectTeraBox()
+            case .jottacloud:
+                await appState.syncManager.addJottacloudAccount(
+                    personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

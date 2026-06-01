@@ -96,6 +96,7 @@ public actor SyncEngine {
         case .filen: return FilenProvider()
         case .internxt: return InternxtProvider()
         case .terabox: return TeraBoxProvider()
+        case .jottacloud: return JottacloudProvider()
         }
     }
 }

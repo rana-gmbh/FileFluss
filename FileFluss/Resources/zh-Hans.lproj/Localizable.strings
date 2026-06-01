@@ -566,6 +566,11 @@
 "Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "大多数家用 Synology NAS 使用自签名证书。仅当你安装了真正的 CA 签名证书（例如 Let’s Encrypt）时才关闭此项。";
 "OTP Code (only if 2-factor auth is on)" = "OTP 验证码（仅当启用双重认证时）";
 "Open Infomaniak token page" = "打开 Infomaniak 令牌页面";
+"Generate a Personal Login Token in your Jottacloud account, then paste it below." = "在您的 Jottacloud 帐户中生成个人登录令牌，然后将其粘贴到下方。";
+"Open Jottacloud token page" = "打开 Jottacloud 令牌页面";
+"Personal Login Token" = "个人登录令牌";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据并存储在您的钥匙串中。";
+"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "要使用新的个人登录令牌重新连接 Jottacloud，请移除此帐户并重新添加。";
 "Open my.pcloud.com" = "打开 my.pcloud.com";
 "Open the TeraBox app and scan this QR code to authorize." = "打开 TeraBox 应用并扫描此二维码以授权。";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "或手动输入你的用户名和应用专用密码。在 设置 → 安全 → 设备与会话 中创建一个。";
