@@ -1,4 +1,5 @@
 import Foundation
+import FileFlussCore
 
 /// The projected effect of a transfer on its destination's available space.
 /// Produced by `AppState.spaceImpact(...)` and consumed by the copy/move
@@ -74,9 +75,10 @@ enum SpaceImpactFormatter {
         let added = ByteCountFormatter.string(fromByteCount: impact.addedBytes, countStyle: .file)
         let freeStr = impact.available.map { ByteCountFormatter.string(fromByteCount: max(0, $0), countStyle: .file) }
         let location = impact.isCloud ? impact.destinationName : "\"\(impact.destinationName)\""
+        let verbL = L10n.text(verb)
         if let freeStr {
-            return "\(verb) \(added) into \(location) would exceed the available space (only \(freeStr) free). Continue anyway?"
+            return L10n.format("%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?", verbL, added, location, freeStr)
         }
-        return "\(verb) \(added) into \(location) may exceed the available space. Continue anyway?"
+        return L10n.format("%@ %@ into %@ may exceed the available space. Continue anyway?", verbL, added, location)
     }
 }

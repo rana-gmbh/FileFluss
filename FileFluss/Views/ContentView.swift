@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 /// Root wrapper that owns the first-launch welcome sheet. The sheet lives
 /// here rather than on `ContentView` because that view already presents two
@@ -92,18 +93,18 @@ struct ContentView: View {
                 .environment(appState)
         }
         .confirmationDialog(
-            "Not enough space",
+            L10n.text("Not enough space"),
             isPresented: Binding(
                 get: { appState.pendingSpaceWarning != nil },
                 set: { if !$0 { appState.pendingSpaceWarning = nil } }
             ),
             presenting: appState.pendingSpaceWarning
         ) { warning in
-            Button("\(warning.verb) Anyway", role: .destructive) {
+            Button(L10n.format("%@ Anyway", L10n.text(warning.verb)), role: .destructive) {
                 appState.pendingSpaceWarning = nil
                 warning.proceed()
             }
-            Button("Cancel", role: .cancel) { appState.pendingSpaceWarning = nil }
+            Button(L10n.text("Cancel"), role: .cancel) { appState.pendingSpaceWarning = nil }
         } message: { warning in
             Text(SpaceImpactFormatter.warning(warning.impact, verb: warning.verb))
         }
@@ -119,9 +120,9 @@ struct ContentView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.large)
-            Text("Checking available space…")
+            LText("Checking available space…")
                 .font(.callout)
-            Text("Calculating the size of the items and the destination.")
+            LText("Calculating the size of the items and the destination.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -138,7 +139,7 @@ struct ContentView: View {
             Image(systemName: "record.circle.fill")
                 .foregroundStyle(.red)
                 .symbolEffect(.pulse)
-            Text("Recording support log — reproduce the issue now")
+            LText("Recording support log — reproduce the issue now")
                 .font(.callout)
             Text("\(supportLog.secondsRemaining)s")
                 .font(.callout.monospacedDigit())
@@ -246,17 +247,17 @@ private struct GoToFolderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Go to Folder")
+            LText("Go to Folder")
                 .font(.headline)
-            TextField("/path/to/folder", text: $path)
+            TextField(L10n.text("/path/to/folder"), text: $path)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 360)
                 .onSubmit { go() }
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
+                Button(L10n.text("Cancel"), role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Go") { go() }
+                Button(L10n.text("Go")) { go() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(path.trimmingCharacters(in: .whitespaces).isEmpty)
             }

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import FileFlussCore
 
 /// Singleton controller for the "Update Available" pop-up. Opened by
 /// `UpdateNotifier` when a fresh release lands on GitHub.
@@ -75,9 +76,9 @@ private struct UpdateNotificationView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("FileFluss \(update.version) is available")
+                    Text(L10n.format("FileFluss %@ is available", update.version))
                         .font(.headline)
-                    Text("A newer version is available on GitHub. Open the latest release page to download it.")
+                    LText("A newer version is available on GitHub. Open the latest release page to download it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -88,9 +89,9 @@ private struct UpdateNotificationView: View {
 
             HStack {
                 Spacer()
-                Button("Later", action: onLater)
+                Button(L10n.text("Later"), action: onLater)
                     .keyboardShortcut(.cancelAction)
-                Button("Open Release Page", action: onOpenReleasePage)
+                Button(L10n.text("Open Release Page"), action: onOpenReleasePage)
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             }

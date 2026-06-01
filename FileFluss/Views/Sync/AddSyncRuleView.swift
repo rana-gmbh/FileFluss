@@ -14,7 +14,7 @@ struct AddSyncRuleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("New Sync Rule")
+            LText("New Sync Rule")
                 .font(.title2.bold())
                 .padding()
 
@@ -26,11 +26,11 @@ struct AddSyncRuleView: View {
                                 .lineLimit(1)
                                 .truncationMode(.head)
                         } else {
-                            Text("Select a folder...")
+                            LText("Select a folder...")
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Browse...") {
+                        Button(L10n.text("Browse...")) {
                             selectFolder()
                         }
                     }
@@ -38,13 +38,13 @@ struct AddSyncRuleView: View {
 
                 Section("Cloud Destination") {
                     Picker("Account", selection: $selectedAccountId) {
-                        Text("Select account...").tag(nil as UUID?)
+                        LText("Select account...").tag(nil as UUID?)
                         ForEach(appState.syncManager.accounts) { account in
                             Text(account.displayName).tag(account.id as UUID?)
                         }
                     }
 
-                    TextField("Remote Path", text: $remotePath)
+                    TextField(L10n.text("Remote Path"), text: $remotePath)
                 }
 
                 Section("Direction") {
@@ -63,10 +63,10 @@ struct AddSyncRuleView: View {
             .formStyle(.grouped)
 
             HStack {
-                Button("Cancel") { dismiss() }
+                Button(L10n.text("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Create Rule") {
+                Button(L10n.text("Create Rule")) {
                     guard let localPath, let selectedAccountId else { return }
                     appState.syncManager.addSyncRule(
                         localPath: localPath,

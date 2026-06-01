@@ -630,3 +630,30 @@
 "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.";
 "That doesn't look like a PEM private key." = "That doesn't look like a PEM private key.";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.";
+
+/* Sync rules, update notice, space HUD */
+"%@ %@ into %@ may exceed the available space. Continue anyway?" = "%@ %@ into %@ may exceed the available space. Continue anyway?";
+"%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?" = "%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?";
+"%@ Anyway" = "%@ Anyway";
+"/path/to/folder" = "/path/to/folder";
+"A newer version is available on GitHub. Open the latest release page to download it." = "A newer version is available on GitHub. Open the latest release page to download it.";
+"Add Rule" = "Add Rule";
+"Add Sync Rule" = "Add Sync Rule";
+"Browse..." = "Browse...";
+"Calculating the size of the items and the destination." = "Calculating the size of the items and the destination.";
+"Checking available space…" = "Checking available space…";
+"Create Rule" = "Create Rule";
+"Create a sync rule to keep your local folders in sync with the cloud." = "Create a sync rule to keep your local folders in sync with the cloud.";
+"FileFluss %@ is available" = "FileFluss %@ is available";
+"Go to Folder" = "Go to Folder";
+"Move" = "Move";
+"New Sync Rule" = "New Sync Rule";
+"No Sync Rules" = "No Sync Rules";
+"Not enough space" = "Not enough space";
+"Open Release Page" = "Open Release Page";
+"Recording support log — reproduce the issue now" = "Recording support log — reproduce the issue now";
+"Select a folder..." = "Select a folder...";
+"Select account..." = "Select account...";
+"Sync All" = "Sync All";
+"Sync Rules" = "Sync Rules";
+"Upload" = "Upload";

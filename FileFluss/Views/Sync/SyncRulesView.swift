@@ -11,11 +11,11 @@ struct SyncRulesView: View {
 
             if appState.syncManager.syncRules.isEmpty {
                 ContentUnavailableView {
-                    Label("No Sync Rules", systemImage: "arrow.triangle.2.circlepath")
+                    Label(L10n.text("No Sync Rules"), systemImage: "arrow.triangle.2.circlepath")
                 } description: {
-                    Text("Create a sync rule to keep your local folders in sync with the cloud.")
+                    LText("Create a sync rule to keep your local folders in sync with the cloud.")
                 } actions: {
-                    Button("Add Sync Rule") {
+                    Button(L10n.text("Add Sync Rule")) {
                         appState.syncManager.isAddingRule = true
                     }
                     .buttonStyle(.borderedProminent)
@@ -41,7 +41,7 @@ struct SyncRulesView: View {
 
     private var header: some View {
         HStack {
-            Text("Sync Rules")
+            LText("Sync Rules")
                 .font(.title2.bold())
 
             Spacer()
@@ -49,13 +49,13 @@ struct SyncRulesView: View {
             Button {
                 Task { await appState.syncManager.syncAll() }
             } label: {
-                Label("Sync All", systemImage: "arrow.triangle.2.circlepath")
+                Label(L10n.text("Sync All"), systemImage: "arrow.triangle.2.circlepath")
             }
 
             Button {
                 appState.syncManager.isAddingRule = true
             } label: {
-                Label("Add Rule", systemImage: "plus")
+                Label(L10n.text("Add Rule"), systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
         }

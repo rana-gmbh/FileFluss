@@ -630,3 +630,30 @@
 "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox 透過在 TeraBox 應用程式中掃描 QR 碼登入——此處無可編輯內容。若要重新連接，請移除此帳戶並重新加入。";
 "That doesn't look like a PEM private key." = "這看起來不像 PEM 私鑰。";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用你 Mac 的系統登入——此處無可編輯內容。請在 系統設定 → Apple 帳戶 → iCloud 中管理 iCloud 雲碟。";
+
+/* Sync rules, update notice, space HUD */
+"%@ %@ into %@ may exceed the available space. Continue anyway?" = "%1$@ %2$@ 到 %3$@ 可能會超出可用空間。仍要繼續嗎？";
+"%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?" = "%1$@ %2$@ 到 %3$@ 將超出可用空間（僅剩 %4$@）。仍要繼續嗎？";
+"%@ Anyway" = "仍然%@";
+"/path/to/folder" = "/路徑/到/資料夾";
+"A newer version is available on GitHub. Open the latest release page to download it." = "GitHub 上有更新的版本。打開最新的發佈頁面即可下載。";
+"Add Rule" = "加入規則";
+"Add Sync Rule" = "加入同步規則";
+"Browse..." = "瀏覽…";
+"Calculating the size of the items and the destination." = "正在計算項目和目標的大小。";
+"Checking available space…" = "正在檢查可用空間…";
+"Create Rule" = "建立規則";
+"Create a sync rule to keep your local folders in sync with the cloud." = "建立一個同步規則，讓你的本機資料夾與雲端保持同步。";
+"FileFluss %@ is available" = "FileFluss %@ 已發佈";
+"Go to Folder" = "前往資料夾";
+"Move" = "移動";
+"New Sync Rule" = "新增同步規則";
+"No Sync Rules" = "沒有同步規則";
+"Not enough space" = "空間不足";
+"Open Release Page" = "打開發佈頁面";
+"Recording support log — reproduce the issue now" = "正在錄製支援記錄——請立即重現問題";
+"Select a folder..." = "選擇資料夾…";
+"Select account..." = "選擇帳戶…";
+"Sync All" = "全部同步";
+"Sync Rules" = "同步規則";
+"Upload" = "上傳";

@@ -630,3 +630,30 @@
 "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox meldet sich mit einem in der TeraBox-App gescannten QR-Code an — hier gibt es nichts zu bearbeiten. Zum erneuten Verbinden entferne dieses Konto und füge es erneut hinzu.";
 "That doesn't look like a PEM private key." = "Das sieht nicht nach einem privaten PEM-Schlüssel aus.";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud verwendet die System-Anmeldung deines Macs — hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in den Systemeinstellungen → Apple-Account → iCloud.";
+
+/* Sync rules, update notice, space HUD */
+"%@ %@ into %@ may exceed the available space. Continue anyway?" = "%1$@ von %2$@ nach %3$@ überschreitet möglicherweise den verfügbaren Speicher. Trotzdem fortfahren?";
+"%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?" = "%1$@ von %2$@ nach %3$@ würde den verfügbaren Speicher überschreiten (nur %4$@ frei). Trotzdem fortfahren?";
+"%@ Anyway" = "Trotzdem %@";
+"/path/to/folder" = "/pfad/zum/ordner";
+"A newer version is available on GitHub. Open the latest release page to download it." = "Auf GitHub ist eine neuere Version verfügbar. Öffne die neueste Release-Seite, um sie herunterzuladen.";
+"Add Rule" = "Regel hinzufügen";
+"Add Sync Rule" = "Sync-Regel hinzufügen";
+"Browse..." = "Durchsuchen …";
+"Calculating the size of the items and the destination." = "Die Größe der Objekte und des Ziels wird berechnet.";
+"Checking available space…" = "Verfügbarer Speicher wird geprüft …";
+"Create Rule" = "Regel erstellen";
+"Create a sync rule to keep your local folders in sync with the cloud." = "Erstelle eine Sync-Regel, um deine lokalen Ordner mit der Cloud synchron zu halten.";
+"FileFluss %@ is available" = "FileFluss %@ ist verfügbar";
+"Go to Folder" = "Gehe zu Ordner";
+"Move" = "Bewegen";
+"New Sync Rule" = "Neue Sync-Regel";
+"No Sync Rules" = "Keine Sync-Regeln";
+"Not enough space" = "Nicht genügend Speicher";
+"Open Release Page" = "Release-Seite öffnen";
+"Recording support log — reproduce the issue now" = "Support-Log wird aufgezeichnet — reproduziere das Problem jetzt";
+"Select a folder..." = "Ordner auswählen …";
+"Select account..." = "Konto auswählen …";
+"Sync All" = "Alle synchronisieren";
+"Sync Rules" = "Sync-Regeln";
+"Upload" = "Hochladen";
