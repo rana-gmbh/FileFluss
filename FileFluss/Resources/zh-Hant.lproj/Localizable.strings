@@ -277,3 +277,20 @@
 "File icons" = "檔案圖示";
 "Local images and PDFs show a real preview thumbnail of the file content." = "本機影像和 PDF 會顯示檔案內容的真實預覽縮覽圖。";
 "Cloud files show a colourful generic icon based on the file extension." = "雲端檔案會根據副檔名顯示彩色的通用圖示。";
+
+/* File list panel (dialogs + status) */
+"Move or Copy?" = "移動還是複製？";
+"Copy Here" = "複製到此處";
+"Move Here" = "移動到此處";
+"Cancel" = "取消";
+"What would you like to do with \"%@\" in \"%@\"?" = "你想對「%2$@」中的「%1$@」執行什麼操作？";
+"What would you like to do with %d items in \"%@\"?" = "你想對「%2$@」中的 %1$d 個項目執行什麼操作？";
+"Are you sure you want to move \"%@\" to the Trash?" = "確定要將「%@」移到垃圾桶嗎？";
+"Are you sure you want to move %d items to the Trash?" = "確定要將 %d 個項目移到垃圾桶嗎？";
+"Folder name" = "資料夾名稱";
+"Create" = "建立";
+"%d files, %d folders — %@" = "%1$d 個檔案，%2$d 個資料夾 — %3$@";
+"Selected: %d items, calculating…" = "已選擇 %d 個項目，正在計算…";
+"Selected: %d items, %@" = "已選擇 %1$d 個項目，%2$@";
+"No Files" = "沒有檔案";
+"This folder is empty" = "此資料夾是空的";

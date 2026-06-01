@@ -277,3 +277,20 @@
 "File icons" = "Dateisymbole";
 "Local images and PDFs show a real preview thumbnail of the file content." = "Lokale Bilder und PDFs zeigen ein echtes Vorschau-Miniaturbild des Dateiinhalts.";
 "Cloud files show a colourful generic icon based on the file extension." = "Cloud-Dateien zeigen ein farbenfrohes generisches Symbol basierend auf der Dateiendung.";
+
+/* File list panel (dialogs + status) */
+"Move or Copy?" = "Bewegen oder kopieren?";
+"Copy Here" = "Hierher kopieren";
+"Move Here" = "Hierher bewegen";
+"Cancel" = "Abbrechen";
+"What would you like to do with \"%@\" in \"%@\"?" = "Was möchtest du mit „%1$@“ in „%2$@“ tun?";
+"What would you like to do with %d items in \"%@\"?" = "Was möchtest du mit %1$d Objekten in „%2$@“ tun?";
+"Are you sure you want to move \"%@\" to the Trash?" = "Möchtest du „%@“ wirklich in den Papierkorb legen?";
+"Are you sure you want to move %d items to the Trash?" = "Möchtest du %d Objekte wirklich in den Papierkorb legen?";
+"Folder name" = "Ordnername";
+"Create" = "Erstellen";
+"%d files, %d folders — %@" = "%1$d Dateien, %2$d Ordner – %3$@";
+"Selected: %d items, calculating…" = "Ausgewählt: %d Objekte, wird berechnet …";
+"Selected: %d items, %@" = "Ausgewählt: %1$d Objekte, %2$@";
+"No Files" = "Keine Dateien";
+"This folder is empty" = "Dieser Ordner ist leer";

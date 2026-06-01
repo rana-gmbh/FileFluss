@@ -277,3 +277,20 @@
 "File icons" = "文件图标";
 "Local images and PDFs show a real preview thumbnail of the file content." = "本地图像和 PDF 会显示文件内容的真实预览缩略图。";
 "Cloud files show a colourful generic icon based on the file extension." = "云文件会根据文件扩展名显示彩色的通用图标。";
+
+/* File list panel (dialogs + status) */
+"Move or Copy?" = "移动还是复制？";
+"Copy Here" = "复制到此处";
+"Move Here" = "移动到此处";
+"Cancel" = "取消";
+"What would you like to do with \"%@\" in \"%@\"?" = "你想对“%2$@”中的“%1$@”执行什么操作？";
+"What would you like to do with %d items in \"%@\"?" = "你想对“%2$@”中的 %1$d 个项目执行什么操作？";
+"Are you sure you want to move \"%@\" to the Trash?" = "确定要将“%@”移到废纸篓吗？";
+"Are you sure you want to move %d items to the Trash?" = "确定要将 %d 个项目移到废纸篓吗？";
+"Folder name" = "文件夹名称";
+"Create" = "创建";
+"%d files, %d folders — %@" = "%1$d 个文件，%2$d 个文件夹 — %3$@";
+"Selected: %d items, calculating…" = "已选择 %d 个项目，正在计算…";
+"Selected: %d items, %@" = "已选择 %1$d 个项目，%2$@";
+"No Files" = "没有文件";
+"This folder is empty" = "此文件夹为空";

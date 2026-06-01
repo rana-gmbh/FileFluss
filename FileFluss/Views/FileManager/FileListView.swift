@@ -57,24 +57,24 @@ struct FileListView: View {
             }
         }
         .confirmationDialog(
-            "Move or Copy?",
+            L10n.text("Move or Copy?"),
             isPresented: $showDropConfirmation,
             presenting: fm.pendingDrop
         ) { drop in
-            Button("Copy Here") { runLocalDrop(drop, isMove: false) }
-            Button("Move Here") { runLocalDrop(drop, isMove: true) }
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Copy Here")) { runLocalDrop(drop, isMove: false) }
+            Button(L10n.text("Move Here")) { runLocalDrop(drop, isMove: true) }
+            Button(L10n.text("Cancel"), role: .cancel) {
                 fm.pendingDrop = nil
             }
         } message: { drop in
             let count = drop.items.count
             let name = drop.destinationFolder.lastPathComponent
             Text(count == 1
-                 ? "What would you like to do with \"\(drop.items[0].name)\" in \"\(name)\"?"
-                 : "What would you like to do with \(count) items in \"\(name)\"?")
+                 ? L10n.format("What would you like to do with \"%@\" in \"%@\"?", drop.items[0].name, name)
+                 : L10n.format("What would you like to do with %d items in \"%@\"?", count, name))
         }
         .confirmationDialog(
-            "Move to Trash",
+            L10n.text("Move to Trash"),
             isPresented: $showDeleteConfirmation
         ) {
             // `.defaultAction` matters here for two reasons. First, it
@@ -85,20 +85,20 @@ struct FileListView: View {
             // `KeyboardCommand.rename` (also bound to Return), which
             // queues a rename and pops the rename window up the moment
             // the user dismisses the delete dialog with a mouse click.
-            Button("Move to Trash", role: .destructive) {
+            Button(L10n.text("Move to Trash"), role: .destructive) {
                 Task {
                     await fm.trashSelectedItems()
                     await appState.refreshAllPanels()
                 }
             }
             .keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
             let items = fm.selectedItems
             if items.count == 1 {
-                Text("Are you sure you want to move \"\(items[0].name)\" to the Trash?")
+                Text(L10n.format("Are you sure you want to move \"%@\" to the Trash?", items[0].name))
             } else {
-                Text("Are you sure you want to move \(items.count) items to the Trash?")
+                Text(L10n.format("Are you sure you want to move %d items to the Trash?", items.count))
             }
         }
         .sheet(isPresented: $showConflict) {
@@ -113,45 +113,45 @@ struct FileListView: View {
             showConflict = hasConflict
         }
         .confirmationDialog(
-            "Move or Copy?",
+            L10n.text("Move or Copy?"),
             isPresented: $showCloudDropConfirmation,
             presenting: pendingCloudDrop
         ) { drop in
-            Button("Copy Here") {
+            Button(L10n.text("Copy Here")) {
                 pendingCloudDrop = nil
                 runCloudToLocalDrop(drop, isMove: false)
             }
-            Button("Move Here") {
+            Button(L10n.text("Move Here")) {
                 pendingCloudDrop = nil
                 runCloudToLocalDrop(drop, isMove: true)
             }
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 pendingCloudDrop = nil
             }
         } message: { drop in
             let count = drop.sourceItems.count
             let name = drop.targetDirectory.lastPathComponent
             Text(count == 1
-                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
-                 : "What would you like to do with \(count) items in \"\(name)\"?")
+                 ? L10n.format("What would you like to do with \"%@\" in \"%@\"?", drop.sourceItems[0].name, name)
+                 : L10n.format("What would you like to do with %d items in \"%@\"?", count, name))
         }
-        .alert("New Folder", isPresented: $showNewFolderDialog) {
-            TextField("Folder name", text: $newFolderName)
-            Button("Create") {
+        .alert(L10n.text("New Folder"), isPresented: $showNewFolderDialog) {
+            TextField(L10n.text("Folder name"), text: $newFolderName)
+            Button(L10n.text("Create")) {
                 let name = newFolderName
                 Task { await fm.createNewFolder(named: name) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         }
-        .alert("Rename", isPresented: $showRenameDialog) {
-            TextField("Name", text: $renameText)
-            Button("Rename") {
+        .alert(L10n.text("Rename"), isPresented: $showRenameDialog) {
+            TextField(L10n.text("Name"), text: $renameText)
+            Button(L10n.text("Rename")) {
                 if let item = renameItem {
                     let newName = renameText
                     Task { await fm.renameItem(item, to: newName) }
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         }
         .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.quickFilter.notification)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
@@ -159,7 +159,7 @@ struct FileListView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
-            newFolderName = "New Folder"
+            newFolderName = L10n.text("New Folder")
             showNewFolderDialog = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
@@ -512,7 +512,7 @@ struct FileListView: View {
                         Task { await fm.refresh() }
                     },
                     onCreateFolder: {
-                        newFolderName = "New Folder"
+                        newFolderName = L10n.text("New Folder")
                         showNewFolderDialog = true
                     },
                     onRename: { item in
@@ -527,7 +527,7 @@ struct FileListView: View {
                 }
                 .overlay {
                     if fm.filteredItems.isEmpty {
-                        ContentUnavailableView("No Files", systemImage: "folder", description: Text("This folder is empty"))
+                        ContentUnavailableView(L10n.text("No Files"), systemImage: "folder", description: Text(L10n.text("This folder is empty")))
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .padding(.top, 40)
                             .allowsHitTesting(false)
@@ -545,13 +545,13 @@ struct FileListView: View {
         let selected = fm.selectedItems
 
         return HStack(spacing: 4) {
-            Text("\(fileCount) files, \(folderCount) folders — \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))")
+            Text(L10n.format("%d files, %d folders — %@", fileCount, folderCount, ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)))
             if !selected.isEmpty {
                 Text("·")
                 if fm.isCalculatingSelectionSize {
-                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), Calculating…")
+                    Text(L10n.format("Selected: %d items, calculating…", selected.count))
                 } else if let size = fm.selectionSize {
-                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
+                    Text(L10n.format("Selected: %d items, %@", selected.count, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
                 }
             }
             Spacer()

@@ -277,3 +277,20 @@
 "File icons" = "File icons";
 "Local images and PDFs show a real preview thumbnail of the file content." = "Local images and PDFs show a real preview thumbnail of the file content.";
 "Cloud files show a colourful generic icon based on the file extension." = "Cloud files show a colourful generic icon based on the file extension.";
+
+/* File list panel (dialogs + status) */
+"Move or Copy?" = "Move or Copy?";
+"Copy Here" = "Copy Here";
+"Move Here" = "Move Here";
+"Cancel" = "Cancel";
+"What would you like to do with \"%@\" in \"%@\"?" = "What would you like to do with \"%@\" in \"%@\"?";
+"What would you like to do with %d items in \"%@\"?" = "What would you like to do with %d items in \"%@\"?";
+"Are you sure you want to move \"%@\" to the Trash?" = "Are you sure you want to move \"%@\" to the Trash?";
+"Are you sure you want to move %d items to the Trash?" = "Are you sure you want to move %d items to the Trash?";
+"Folder name" = "Folder name";
+"Create" = "Create";
+"%d files, %d folders — %@" = "%d files, %d folders — %@";
+"Selected: %d items, calculating…" = "Selected: %d items, calculating…";
+"Selected: %d items, %@" = "Selected: %d items, %@";
+"No Files" = "No Files";
+"This folder is empty" = "This folder is empty";
