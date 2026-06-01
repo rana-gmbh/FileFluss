@@ -294,3 +294,18 @@
 "Selected: %d items, %@" = "已选择 %1$d 个项目，%2$@";
 "No Files" = "没有文件";
 "This folder is empty" = "此文件夹为空";
+
+/* Cloud file panel */
+"Delete from Cloud" = "从云端删除";
+"Delete" = "删除";
+"Are you sure you want to delete \"%@\" from %@?" = "确定要从 %2$@ 删除“%1$@”吗？";
+"Are you sure you want to delete %d items from %@?" = "确定要从 %2$@ 删除 %1$d 个项目吗？";
+"Loading..." = "正在加载…";
+"Sign-In Required" = "需要登录";
+"Error" = "错误";
+"Sign In Again" = "重新登录";
+"Open Settings…" = "打开设置…";
+"Open Settings to Re-Connect…" = "打开设置以重新连接…";
+"Could not download file" = "无法下载文件";
+"Empty Folder" = "空文件夹";
+"This cloud folder is empty" = "此云端文件夹为空";

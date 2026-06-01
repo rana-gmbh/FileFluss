@@ -294,3 +294,18 @@
 "Selected: %d items, %@" = "Selected: %d items, %@";
 "No Files" = "No Files";
 "This folder is empty" = "This folder is empty";
+
+/* Cloud file panel */
+"Delete from Cloud" = "Delete from Cloud";
+"Delete" = "Delete";
+"Are you sure you want to delete \"%@\" from %@?" = "Are you sure you want to delete \"%@\" from %@?";
+"Are you sure you want to delete %d items from %@?" = "Are you sure you want to delete %d items from %@?";
+"Loading..." = "Loading...";
+"Sign-In Required" = "Sign-In Required";
+"Error" = "Error";
+"Sign In Again" = "Sign In Again";
+"Open Settings…" = "Open Settings…";
+"Open Settings to Re-Connect…" = "Open Settings to Re-Connect…";
+"Could not download file" = "Could not download file";
+"Empty Folder" = "Empty Folder";
+"This cloud folder is empty" = "This cloud folder is empty";

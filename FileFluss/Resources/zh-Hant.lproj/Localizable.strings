@@ -294,3 +294,18 @@
 "Selected: %d items, %@" = "已選擇 %1$d 個項目，%2$@";
 "No Files" = "沒有檔案";
 "This folder is empty" = "此資料夾是空的";
+
+/* Cloud file panel */
+"Delete from Cloud" = "從雲端刪除";
+"Delete" = "刪除";
+"Are you sure you want to delete \"%@\" from %@?" = "確定要從 %2$@ 刪除「%1$@」嗎？";
+"Are you sure you want to delete %d items from %@?" = "確定要從 %2$@ 刪除 %1$d 個項目嗎？";
+"Loading..." = "正在載入…";
+"Sign-In Required" = "需要登入";
+"Error" = "錯誤";
+"Sign In Again" = "重新登入";
+"Open Settings…" = "打開設定…";
+"Open Settings to Re-Connect…" = "打開設定以重新連接…";
+"Could not download file" = "無法下載檔案";
+"Empty Folder" = "空資料夾";
+"This cloud folder is empty" = "此雲端資料夾是空的";

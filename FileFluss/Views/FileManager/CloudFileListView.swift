@@ -71,7 +71,7 @@ struct CloudFileListView: View {
             .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
                 guard appState.canCreateFolderInActivePanel else { return }
-                newFolderName = "New Folder"
+                newFolderName = L10n.text("New Folder")
                 showNewFolderDialog = true
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
@@ -135,22 +135,22 @@ struct CloudFileListView: View {
 
     private var bodyWithDialogs: some View {
         bodyWithDropDialogs
-        .confirmationDialog("Delete from Cloud", isPresented: $showDeleteConfirmation) {
+        .confirmationDialog(L10n.text("Delete from Cloud"), isPresented: $showDeleteConfirmation) {
             // See FileListView's matching dialog for the rationale: without
             // `.defaultAction` here, Return falls through to the global
             // rename shortcut and triggers the rename window as soon as
             // the user dismisses this dialog by other means.
-            Button("Delete", role: .destructive) {
+            Button(L10n.text("Delete"), role: .destructive) {
                 Task { await vm.deleteSelectedItems() }
             }
             .keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
             let items = vm.selectedItems
             if items.count == 1 {
-                Text("Are you sure you want to delete \"\(items[0].name)\" from \(accountDisplayName)?")
+                Text(L10n.format("Are you sure you want to delete \"%@\" from %@?", items[0].name, accountDisplayName))
             } else {
-                Text("Are you sure you want to delete \(items.count) items from \(accountDisplayName)?")
+                Text(L10n.format("Are you sure you want to delete %d items from %@?", items.count, accountDisplayName))
             }
         }
         .sheet(isPresented: $showConflict) {
@@ -164,23 +164,23 @@ struct CloudFileListView: View {
         .onChange(of: vm.pendingConflict != nil) { _, hasConflict in
             showConflict = hasConflict
         }
-        .alert("New Folder", isPresented: $showNewFolderDialog) {
-            TextField("Folder name", text: $newFolderName)
-            Button("Create") {
+        .alert(L10n.text("New Folder"), isPresented: $showNewFolderDialog) {
+            TextField(L10n.text("Folder name"), text: $newFolderName)
+            Button(L10n.text("Create")) {
                 let name = newFolderName
                 Task { await vm.createNewFolder(named: name) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         }
-        .alert("Rename", isPresented: $showRenameDialog) {
-            TextField("Name", text: $renameText)
-            Button("Rename") {
+        .alert(L10n.text("Rename"), isPresented: $showRenameDialog) {
+            TextField(L10n.text("Name"), text: $renameText)
+            Button(L10n.text("Rename")) {
                 if let item = renameCloudItem {
                     let newName = renameText
                     Task { await vm.renameItem(item, to: newName) }
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         }
     }
 
@@ -189,60 +189,60 @@ struct CloudFileListView: View {
         .task(id: accountId) {
             await vm.loadDirectory()
         }
-        .confirmationDialog("Move or Copy?", isPresented: $showDropConfirmation, presenting: pendingUpload) { upload in
-            Button("Copy Here") {
+        .confirmationDialog(L10n.text("Move or Copy?"), isPresented: $showDropConfirmation, presenting: pendingUpload) { upload in
+            Button(L10n.text("Copy Here")) {
                 pendingUpload = nil
                 runUploadDrop(upload, isMove: false)
             }
-            Button("Move Here") {
+            Button(L10n.text("Move Here")) {
                 pendingUpload = nil
                 runUploadDrop(upload, isMove: true)
             }
-            Button("Cancel", role: .cancel) { pendingUpload = nil }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingUpload = nil }
         } message: { upload in
             let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
             let name = upload.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             if upload.urls.count == 1 {
-                Text("What would you like to do with \"\(upload.urls[0].lastPathComponent)\" in \"\(name)\"?")
+                Text(L10n.format("What would you like to do with \"%@\" in \"%@\"?", upload.urls[0].lastPathComponent, name))
             } else {
-                Text("What would you like to do with \(upload.urls.count) items in \"\(name)\"?")
+                Text(L10n.format("What would you like to do with %d items in \"%@\"?", upload.urls.count, name))
             }
         }
-        .confirmationDialog("Move or Copy?", isPresented: $showCloudToCloudDropConfirmation, presenting: pendingCloudToCloudDrop) { drop in
-            Button("Copy Here") {
+        .confirmationDialog(L10n.text("Move or Copy?"), isPresented: $showCloudToCloudDropConfirmation, presenting: pendingCloudToCloudDrop) { drop in
+            Button(L10n.text("Copy Here")) {
                 pendingCloudToCloudDrop = nil
                 runCloudToCloudDrop(drop, isMove: false)
             }
-            Button("Move Here") {
+            Button(L10n.text("Move Here")) {
                 pendingCloudToCloudDrop = nil
                 runCloudToCloudDrop(drop, isMove: true)
             }
-            Button("Cancel", role: .cancel) { pendingCloudToCloudDrop = nil }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingCloudToCloudDrop = nil }
         } message: { drop in
             let count = drop.sourceItems.count
             let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
             let name = drop.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             Text(count == 1
-                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(name)\"?"
-                 : "What would you like to do with \(count) items in \"\(name)\"?")
+                 ? L10n.format("What would you like to do with \"%@\" in \"%@\"?", drop.sourceItems[0].name, name)
+                 : L10n.format("What would you like to do with %d items in \"%@\"?", count, name))
         }
-        .confirmationDialog("Move or Copy?", isPresented: $showInternalCloudDropConfirmation, presenting: pendingInternalCloudDrop) { drop in
-            Button("Copy Here") {
+        .confirmationDialog(L10n.text("Move or Copy?"), isPresented: $showInternalCloudDropConfirmation, presenting: pendingInternalCloudDrop) { drop in
+            Button(L10n.text("Copy Here")) {
                 pendingInternalCloudDrop = nil
                 runInternalCloudDrop(drop, isMove: false)
             }
-            Button("Move Here") {
+            Button(L10n.text("Move Here")) {
                 pendingInternalCloudDrop = nil
                 runInternalCloudDrop(drop, isMove: true)
             }
-            Button("Cancel", role: .cancel) { pendingInternalCloudDrop = nil }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingInternalCloudDrop = nil }
         } message: { drop in
             let count = drop.sourceItems.count
             Text(count == 1
-                 ? "What would you like to do with \"\(drop.sourceItems[0].name)\" in \"\(drop.targetFolder.name)\"?"
-                 : "What would you like to do with \(count) items in \"\(drop.targetFolder.name)\"?")
+                 ? L10n.format("What would you like to do with \"%@\" in \"%@\"?", drop.sourceItems[0].name, drop.targetFolder.name)
+                 : L10n.format("What would you like to do with %d items in \"%@\"?", count, drop.targetFolder.name))
         }
     }
 
@@ -270,13 +270,13 @@ struct CloudFileListView: View {
         let selected = vm.selectedItems
 
         return HStack(spacing: 4) {
-            Text("\(fileCount) files, \(folderCount) folders — \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))")
+            Text(L10n.format("%d files, %d folders — %@", fileCount, folderCount, ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)))
             if !selected.isEmpty {
                 Text("·")
                 if vm.isCalculatingSelectionSize {
-                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), Calculating…")
+                    Text(L10n.format("Selected: %d items, calculating…", selected.count))
                 } else if let size = vm.selectionSize {
-                    Text("Selected: \(selected.count) item\(selected.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))")
+                    Text(L10n.format("Selected: %d items, %@", selected.count, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
                 }
             }
             if let quota = vm.storageQuota {
@@ -507,7 +507,7 @@ struct CloudFileListView: View {
                 transfer.recordSuccess(item.name)
                 NSWorkspace.shared.open(url)
             } else {
-                transfer.recordFailure(item.name, error: "Could not download file")
+                transfer.recordFailure(item.name, error: L10n.text("Could not download file"))
             }
         }
     }
@@ -538,7 +538,7 @@ struct CloudFileListView: View {
     @ViewBuilder
     private var cloudFileArea: some View {
         if vm.isLoading && vm.items.isEmpty {
-            ProgressView("Loading...")
+            ProgressView(L10n.text("Loading..."))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = vm.error {
             cloudErrorBanner(message: error)
@@ -712,7 +712,7 @@ struct CloudFileListView: View {
                     ))
                 },
                 onCreateFolder: {
-                    newFolderName = "New Folder"
+                    newFolderName = L10n.text("New Folder")
                     showNewFolderDialog = true
                 },
                 onRename: { item in
@@ -728,7 +728,7 @@ struct CloudFileListView: View {
             }
             .overlay {
                 if vm.filteredItems.isEmpty && !vm.isLoading {
-                    ContentUnavailableView("Empty Folder", systemImage: "folder", description: Text("This cloud folder is empty"))
+                    ContentUnavailableView(L10n.text("Empty Folder"), systemImage: "folder", description: Text(L10n.text("This cloud folder is empty")))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .padding(.top, 40)
                         .allowsHitTesting(false)
@@ -905,7 +905,7 @@ struct CloudFileListView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
-            Text(vm.needsReAuth ? "Sign-In Required" : "Error")
+            Text(vm.needsReAuth ? L10n.text("Sign-In Required") : L10n.text("Error"))
                 .font(.headline)
             Text(message)
                 .font(.subheadline)
@@ -914,7 +914,7 @@ struct CloudFileListView: View {
             if vm.needsReAuth {
                 HStack(spacing: 8) {
                     if canReauthInline {
-                        Button("Sign In Again") {
+                        Button(L10n.text("Sign In Again")) {
                             Task {
                                 await appState.syncManager.reauthenticate(accountId: accountId)
                                 await vm.loadDirectory()
@@ -923,7 +923,7 @@ struct CloudFileListView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.regular)
                     }
-                    Button(canReauthInline ? "Open Settings…" : "Open Settings to Re-Connect…") {
+                    Button(canReauthInline ? L10n.text("Open Settings…") : L10n.text("Open Settings to Re-Connect…")) {
                         try? openSettings()
                     }
                     .controlSize(.regular)

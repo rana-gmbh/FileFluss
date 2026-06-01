@@ -294,3 +294,18 @@
 "Selected: %d items, %@" = "Ausgewählt: %1$d Objekte, %2$@";
 "No Files" = "Keine Dateien";
 "This folder is empty" = "Dieser Ordner ist leer";
+
+/* Cloud file panel */
+"Delete from Cloud" = "Aus der Cloud löschen";
+"Delete" = "Löschen";
+"Are you sure you want to delete \"%@\" from %@?" = "Möchtest du „%1$@“ wirklich aus %2$@ löschen?";
+"Are you sure you want to delete %d items from %@?" = "Möchtest du %1$d Objekte wirklich aus %2$@ löschen?";
+"Loading..." = "Wird geladen …";
+"Sign-In Required" = "Anmeldung erforderlich";
+"Error" = "Fehler";
+"Sign In Again" = "Erneut anmelden";
+"Open Settings…" = "Einstellungen öffnen …";
+"Open Settings to Re-Connect…" = "Einstellungen zum erneuten Verbinden öffnen …";
+"Could not download file" = "Datei konnte nicht geladen werden";
+"Empty Folder" = "Leerer Ordner";
+"This cloud folder is empty" = "Dieser Cloud-Ordner ist leer";
