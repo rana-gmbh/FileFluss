@@ -90,6 +90,42 @@ struct SFTPListingParserTests {
         #expect(parsed?.name == "link")
     }
 
+    @Test("Link count rendered as ? — regression for issue #31")
+    func unknownLinkCount() {
+        // Servers that omit st_nlink make OpenSSH's sftp client print "?"
+        // for the hard-link count (Raspberry Pi OS, OpenWRT, some hosts).
+        let file = SFTPAPIClient.parseListingLine("-rw-r--r--    ? root root 51 Dec  8 09:05 VERSION")
+        #expect(file?.name == "VERSION")
+        #expect(file?.isDirectory == false)
+        #expect(file?.size == 51)
+
+        let dir = SFTPAPIClient.parseListingLine("drwxr-xr-x    ? root root 4096 Sep 14  2025 app")
+        #expect(dir?.name == "app")
+        #expect(dir?.isDirectory == true)
+    }
+
+    @Test("Absolute-path name from `ls` of an absolute path — regression for issue #31")
+    func absolutePathName() {
+        // `ls -la /` and `ls -la /html` print full paths, not basenames.
+        let root = SFTPAPIClient.parseListingLine("-rw-r--r--    ? root root 51 Dec  8 09:05 /VERSION")
+        #expect(root?.name == "VERSION")
+
+        let nested = SFTPAPIClient.parseListingLine("-rw-r--r--    ? ud09_104 2368 922 Aug 12  2025 /html/.htaccess")
+        #expect(nested?.name == ".htaccess")
+        #expect(nested?.isDirectory == false)
+
+        let nestedDir = SFTPAPIClient.parseListingLine("drwxr-xr-x    ? ud09_104 2368 4096 Feb 27  2024 /html/cgi-bin")
+        #expect(nestedDir?.name == "cgi-bin")
+        #expect(nestedDir?.isDirectory == true)
+    }
+
+    @Test("Absolute-path . and .. entries are skipped — regression for issue #31")
+    func absolutePathDotEntries() {
+        #expect(SFTPAPIClient.parseListingLine("drwxr-xr-x    ? root root 4096 May  6 14:30 /.") == nil)
+        #expect(SFTPAPIClient.parseListingLine("drwxr-xr-x    ? root root 4096 May  6 14:30 /..") == nil)
+        #expect(SFTPAPIClient.parseListingLine("drwxr-x---    ? 0 2368 4096 Jun 21  2021 /html/..") == nil)
+    }
+
     @Test("German month abbreviation — regression for non-C-locale OpenSSH")
     func germanMonthAbbrev() {
         let line = "-rw-r--r-- 1 owner group 12345 Mär 12 08:30 deutsch.txt"

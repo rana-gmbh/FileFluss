@@ -519,11 +519,17 @@ public actor SFTPAPIClient {
     /// every directory listing, so compiling these on each call (the old
     /// behaviour) meant recompiling the regex thousands of times for a
     /// large folder. `NSRegularExpression` is immutable and safe to share.
+    // The second field is the hard-link count. Most servers send a number,
+    // but some don't include `st_nlink` in the SFTP attributes, in which case
+    // OpenSSH's `sftp` client prints a literal `?` (issue #31: Raspberry Pi
+    // OS, OpenWRT, and some hosting providers). Accept either so the whole
+    // line still matches — the field itself is unused.
+    private static let linkCount = "(\\d+|\\?)"
     private static let classicListingRegex = try? NSRegularExpression(
-        pattern: "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\S+)\\s+(\\d{1,2})\\s+([\\d:]+|\\d{4})\\s+(.+)$"
+        pattern: "^(\(permsClass))\\s+\(linkCount)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\S+)\\s+(\\d{1,2})\\s+([\\d:]+|\\d{4})\\s+(.+)$"
     )
     private static let isoListingRegex = try? NSRegularExpression(
-        pattern: "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
+        pattern: "^(\(permsClass))\\s+\(linkCount)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
     )
 
     /// Parses one line of an SFTP server's long-form directory listing.
@@ -608,10 +614,20 @@ public actor SFTPAPIClient {
     /// and strip the `" -> target"` suffix for symlinks.
     private static func cleanupListingName(rawName: String, perms: String) -> String? {
         var name = Self.unescapeOctal(rawName)
-        if name == "." || name == ".." { return nil }
+        // Symlinks print "name -> target"; keep only the link's own name.
+        // Strip the target first so a "/" inside it can't be mistaken for a
+        // path separator when we take the basename below.
         if perms.first == "l", let arrow = name.range(of: " -> ") {
             name = String(name[name.startIndex..<arrow.lowerBound])
         }
+        // Some servers/clients print full paths rather than basenames when the
+        // listing target is an absolute path (issue #31: `ls -la /` yields
+        // "/VERSION", "/html/.htaccess", "/.", …). A filename can't contain a
+        // "/", so the entry's real name is whatever follows the last one.
+        if let slash = name.lastIndex(of: "/") {
+            name = String(name[name.index(after: slash)...])
+        }
+        if name == "." || name == ".." { return nil }
         return name.isEmpty ? nil : name
     }
 
