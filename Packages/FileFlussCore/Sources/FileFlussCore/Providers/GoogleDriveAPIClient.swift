@@ -788,7 +788,21 @@ public actor GoogleDriveAPIClient {
         guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
         let cached = try await resolvePathToCachedFile(path)
         try await apiRequestVoid(.delete, path: "/files/\(cached.id)")
+        evictCacheSubtree(path)
+    }
+
+    /// Remove `path` and every cached descendant from the path→ID cache. A
+    /// folder delete (or move/rename) invalidates its whole subtree: the
+    /// children's Drive IDs are gone, but evicting only the exact key leaves
+    /// them cached. A later op at a recreated same-named path would then reuse
+    /// a dead ID and Drive answers `File not found: <id>`. Evicting the subtree
+    /// forces those paths to re-resolve against the live tree.
+    private func evictCacheSubtree(_ path: String) {
         pathIdCache.removeValue(forKey: path)
+        let prefix = path.hasSuffix("/") ? path : path + "/"
+        for key in pathIdCache.keys where key.hasPrefix(prefix) {
+            pathIdCache.removeValue(forKey: key)
+        }
     }
 
     public func createFolder(at path: String) async throws {
@@ -852,8 +866,11 @@ public actor GoogleDriveAPIClient {
 
         let _: GoogleDriveFile = try await apiRequest(.patch, path: "/files/\(fileId)", body: RenameBody(name: newName))
 
-        // Update cache
-        pathIdCache.removeValue(forKey: path)
+        // Update cache. Evict the whole old subtree — for a folder rename the
+        // descendants' paths all changed, so their old keys are now stale.
+        // The renamed item keeps its own ID, so re-key just that one entry;
+        // descendants re-resolve lazily under the new parent path.
+        evictCacheSubtree(path)
         let parentPath = (path as NSString).deletingLastPathComponent
         let newPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
         pathIdCache[newPath] = CachedFile(id: fileId, mimeType: cached.mimeType)
