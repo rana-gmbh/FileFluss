@@ -19,6 +19,9 @@ import PackageDescription
 /// so the package itself has no AppKit or UIKit dependency.
 let package = Package(
     name: "FileFlussCore",
+    // Enables localized resource handling and materializes `Bundle.module`,
+    // which `Localization.swift` searches for package-owned translations.
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
         .iOS(.v17),
@@ -27,7 +30,10 @@ let package = Package(
         .library(name: "FileFlussCore", targets: ["FileFlussCore"]),
     ],
     targets: [
-        .target(name: "FileFlussCore"),
+        .target(
+            name: "FileFlussCore",
+            resources: [.process("Resources")]
+        ),
         .testTarget(name: "FileFlussCoreTests", dependencies: ["FileFlussCore"]),
     ]
 )

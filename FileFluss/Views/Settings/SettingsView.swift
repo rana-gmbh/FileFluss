@@ -9,27 +9,27 @@ struct SettingsView: View {
         TabView {
             GeneralSettingsView()
                 .tabItem {
-                    Label("General", systemImage: "gear")
+                    Label { LText("General") } icon: { Image(systemName: "gear") }
                 }
 
             CloudSettingsView()
                 .tabItem {
-                    Label("Cloud Accounts", systemImage: "cloud")
+                    Label { LText("Cloud Accounts") } icon: { Image(systemName: "cloud") }
                 }
 
             StorageSettingsView()
                 .tabItem {
-                    Label("Storage", systemImage: "internaldrive")
+                    Label { LText("Storage") } icon: { Image(systemName: "internaldrive") }
                 }
 
             IndexStatusSettingsView()
                 .tabItem {
-                    Label("Index Status", systemImage: "magnifyingglass.circle")
+                    Label { LText("Index Status") } icon: { Image(systemName: "magnifyingglass.circle") }
                 }
 
             KeyboardMapSettingsView()
                 .tabItem {
-                    Label("Keyboard Map", systemImage: "keyboard")
+                    Label { LText("Keyboard Map") } icon: { Image(systemName: "keyboard") }
                 }
         }
         // The hosting `Window` scene (see FileFlussApp) handles min size,
@@ -44,29 +44,69 @@ struct GeneralSettingsView: View {
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
+    @AppStorage(AppLanguage.storageKey) private var appLanguage: String = AppLanguage.system.rawValue
 
     var body: some View {
         Form {
-            Toggle("Show hidden files by default", isOn: $showHiddenFiles)
-            Toggle("Confirm before deleting", isOn: $confirmDelete)
-            Toggle("Show \"Add Cloud Account\" in sidebars", isOn: $showSidebarAddAccount)
-            Toggle("Allow removing cloud accounts from sidebar context menu", isOn: $allowSidebarRemoveAccount)
+            Section {
+                Picker(selection: $appLanguage) {
+                    ForEach(AppLanguage.allCases) { language in
+                        // displayName translates "System Default" (a key) and
+                        // passes the native language names through unchanged.
+                        Text(L10n.text(language.displayName)).tag(language.rawValue)
+                    }
+                } label: {
+                    LText("Language")
+                }
+                LText("System Default follows the language selected in macOS.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    LText("The menu bar and window titles switch fully after a relaunch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action: relaunch) { LText("Relaunch") }
+                }
+            }
+            .onChange(of: appLanguage) { _, newValue in
+                // Mirror the choice into AppleLanguages so a relaunch also
+                // localises the menu bar, window titles, and system dialogs.
+                AppLanguage.apply(.current(from: newValue))
+            }
+
+            Toggle(isOn: $showHiddenFiles) { LText("Show hidden files by default") }
+            Toggle(isOn: $confirmDelete) { LText("Confirm before deleting") }
+            Toggle(isOn: $showSidebarAddAccount) { LText("Show \"Add Cloud Account\" in sidebars") }
+            Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
 
             Section {
-                Toggle("Check available space before copy or move", isOn: $checkSpaceBeforeTransfer)
-                Text("Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations.")
+                Toggle(isOn: $checkSpaceBeforeTransfer) { LText("Check available space before copy or move") }
+                LText("Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Button("Show Welcome Screen Again") {
+                Button(action: {
                     hasCompletedWelcome = false
                     NSApp.activate(ignoringOtherApps: true)
-                }
+                }) { LText("Show Welcome Screen Again") }
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Relaunches the app so the menu bar, window titles, and system dialogs
+    /// pick up the newly selected language (in-window content already switched
+    /// live via LocalizedRoot).
+    private func relaunch() {
+        let url = Bundle.main.bundleURL
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
+            Task { @MainActor in NSApp.terminate(nil) }
+        }
     }
 }
 

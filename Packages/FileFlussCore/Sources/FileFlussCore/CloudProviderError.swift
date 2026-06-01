@@ -25,25 +25,25 @@ public enum CloudProviderError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notAuthenticated: return "Not authenticated. Please sign in."
-        case .notImplemented: return "This feature is not yet implemented."
-        case .networkError(let error): return "Network error: \(error.localizedDescription)"
-        case .unauthorized: return "Authorization expired. Please sign in again."
-        case .twoFactorRequired: return "Two-factor authentication required. Enter your 6-digit code and try again."
-        case .notFound(let path): return "Item not found: \(path)"
-        case .quotaExceeded: return "Storage quota exceeded."
-        case .rateLimited: return "Rate limited. Please try again later."
-        case .serverError(let code): return "Server error (HTTP \(code))."
+        case .notAuthenticated: return L10n.text("Not authenticated. Please sign in.")
+        case .notImplemented: return L10n.text("This feature is not yet implemented.")
+        case .networkError(let error): return L10n.format("Network error: %@", error.localizedDescription)
+        case .unauthorized: return L10n.text("Authorization expired. Please sign in again.")
+        case .twoFactorRequired: return L10n.text("Two-factor authentication required. Enter your 6-digit code and try again.")
+        case .notFound(let path): return L10n.format("Item not found: %@", path)
+        case .quotaExceeded: return L10n.text("Storage quota exceeded.")
+        case .rateLimited: return L10n.text("Rate limited. Please try again later.")
+        case .serverError(let code): return L10n.format("Server error (HTTP %d).", code)
         case .commandFailed(let message): return message
-        case .invalidResponse: return "Invalid response from server."
-        case .invalidCredentials: return "Invalid email or password."
+        case .invalidResponse: return L10n.text("Invalid response from server.")
+        case .invalidCredentials: return L10n.text("Invalid email or password.")
         case .fileTooLarge(let fileBytes, let limit):
             let size = ByteCountFormatter.string(fromByteCount: fileBytes, countStyle: .file)
             if let limit {
                 let limitStr = ByteCountFormatter.string(fromByteCount: limit, countStyle: .file)
-                return "File is too large to upload (\(size)). This provider's limit is \(limitStr)."
+                return L10n.format("File is too large to upload (%@). This provider's limit is %@.", size, limitStr)
             }
-            return "File is too large to upload (\(size)). The provider rejected it. Try splitting the file or using a different cloud."
+            return L10n.format("File is too large to upload (%@). The provider rejected it. Try splitting the file or using a different cloud.", size)
         }
     }
 }

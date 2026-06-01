@@ -1,0 +1,49 @@
+/* FileFluss — app UI strings (Simplified Chinese). */
+
+/* Language picker (Settings → General) */
+"Language" = "语言";
+"System Default" = "跟随系统";
+"System Default follows the language selected in macOS." = "“跟随系统”将使用 macOS 中设置的语言。";
+"The menu bar and window titles switch fully after a relaunch." = "菜单栏和窗口标题将在重新启动后完全切换。";
+"Relaunch" = "重新启动";
+
+/* Window titles */
+"FileFluss Settings" = "FileFluss 设置";
+"Search" = "搜索";
+"Compare Folders" = "比较文件夹";
+"FileFluss Help" = "FileFluss 帮助";
+
+/* Settings tabs */
+"General" = "通用";
+"Cloud Accounts" = "云账户";
+"Storage" = "存储";
+"Index Status" = "索引状态";
+"Keyboard Map" = "键盘映射";
+
+/* Settings → General */
+"Show hidden files by default" = "默认显示隐藏文件";
+"Confirm before deleting" = "删除前确认";
+"Show \"Add Cloud Account\" in sidebars" = "在边栏中显示“添加云账户”";
+"Allow removing cloud accounts from sidebar context menu" = "允许通过边栏右键菜单移除云账户";
+"Check available space before copy or move" = "复制或移动前检查可用空间";
+"Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations." = "在传输可能超出目标存储配额或可用磁盘空间时发出警告。计算大小可能会带来明显的延迟，因此默认关闭以保持文件操作的流畅。";
+"Show Welcome Screen Again" = "再次显示欢迎界面";
+
+/* Toolbar */
+"Search all sources (⌘F)" = "搜索所有来源（⌘F）";
+"Refresh" = "刷新";
+"Refresh both panels" = "刷新两个面板";
+"Hidden Files" = "隐藏文件";
+"Show hidden files" = "显示隐藏文件";
+"Copy Mode" = "复制模式";
+"Force all drag & drop operations to copy (skips the Move/Copy prompt)" = "强制所有拖放操作执行复制（跳过移动/复制提示）";
+"Move Mode" = "移动模式";
+"Force all drag & drop operations to move (skips the Move/Copy prompt)" = "强制所有拖放操作执行移动（跳过移动/复制提示）";
+"Sync" = "同步";
+"It's not possible to sync with an offline folder." = "无法与离线文件夹同步。";
+"Sync left and right panels" = "同步左右面板";
+"Compare" = "比较";
+"Compare the two folders side by side" = "并排比较两个文件夹";
+"Filter visible items…" = "筛选可见项目…";
+"Clear filter" = "清除筛选";
+"Close filter (Esc)" = "关闭筛选（Esc）";

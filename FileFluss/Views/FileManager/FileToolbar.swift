@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct FileToolbar: CustomizableToolbarContent {
     @Environment(AppState.self) private var appState
@@ -50,9 +51,9 @@ struct FileToolbar: CustomizableToolbarContent {
         ToolbarItem(id: "search", placement: .primaryAction) {
             OpenWindowToolbarButton(
                 windowId: "search",
-                label: "Search",
+                label: L10n.text("Search"),
                 systemImage: "magnifyingglass",
-                help: "Search all sources (⌘F)"
+                help: L10n.text("Search all sources (⌘F)")
             )
             .keyboardShortcut("f", modifiers: .command)
         }
@@ -69,9 +70,9 @@ struct FileToolbar: CustomizableToolbarContent {
             Button {
                 Task { await appState.refreshAllPanels() }
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
             }
-            .help("Refresh both panels")
+            .help(L10n.text("Refresh both panels"))
         }
 
         ToolbarItem(id: "hiddenFiles", placement: .primaryAction) {
@@ -92,7 +93,7 @@ struct FileToolbar: CustomizableToolbarContent {
                 }
             )) {
                 Label {
-                    Text("Hidden Files")
+                    LText("Hidden Files")
                 } icon: {
                     // Custom asset images in a toolbar Label don't pick
                     // up SF Symbol auto-sizing, so the SVG would render
@@ -105,7 +106,7 @@ struct FileToolbar: CustomizableToolbarContent {
                         .frame(width: 16, height: 16)
                 }
             }
-            .help("Show hidden files")
+            .help(L10n.text("Show hidden files"))
         }
 
         ToolbarItem(id: "copyMode", placement: .primaryAction) {
@@ -113,9 +114,9 @@ struct FileToolbar: CustomizableToolbarContent {
                 get: { appState.dragDropMode == .copy },
                 set: { appState.dragDropMode = $0 ? .copy : .ask }
             )) {
-                Label("Copy Mode", systemImage: "plus.square.on.square")
+                Label(L10n.text("Copy Mode"), systemImage: "plus.square.on.square")
             }
-            .help("Force all drag & drop operations to copy (skips the Move/Copy prompt)")
+            .help(L10n.text("Force all drag & drop operations to copy (skips the Move/Copy prompt)"))
         }
 
         ToolbarItem(id: "moveMode", placement: .primaryAction) {
@@ -123,9 +124,9 @@ struct FileToolbar: CustomizableToolbarContent {
                 get: { appState.dragDropMode == .move },
                 set: { appState.dragDropMode = $0 ? .move : .ask }
             )) {
-                Label("Move Mode", systemImage: "arrow.right.square")
+                Label(L10n.text("Move Mode"), systemImage: "arrow.right.square")
             }
-            .help("Force all drag & drop operations to move (skips the Move/Copy prompt)")
+            .help(L10n.text("Force all drag & drop operations to move (skips the Move/Copy prompt)"))
         }
     }
 }
@@ -142,12 +143,12 @@ private struct SyncToolbarButton: View {
         Button {
             if !blocked { appState.showSyncSheet = true }
         } label: {
-            Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+            Label(L10n.text("Sync"), systemImage: "arrow.triangle.2.circlepath")
         }
         .disabled(blocked)
         .help(blocked
-              ? "It's not possible to sync with an offline folder."
-              : "Sync left and right panels")
+              ? L10n.text("It's not possible to sync with an offline folder.")
+              : L10n.text("Sync left and right panels"))
     }
 }
 
@@ -183,9 +184,9 @@ private struct CompareToolbarButton: View {
             appState.compareTrigger = UUID()
             openWindow(id: "compare")
         } label: {
-            Label("Compare", systemImage: "arrow.left.arrow.right.square")
+            Label(L10n.text("Compare"), systemImage: "arrow.left.arrow.right.square")
         }
-        .help("Compare the two folders side by side")
+        .help(L10n.text("Compare the two folders side by side"))
     }
 }
 
@@ -204,7 +205,7 @@ struct PanelFilterBar: View {
         HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .foregroundStyle(.secondary)
-            TextField("Filter visible items…", text: $text)
+            TextField(L10n.text("Filter visible items…"), text: $text)
                 .textFieldStyle(.plain)
                 .focused($focused)
                 .onExitCommand {
@@ -219,7 +220,7 @@ struct PanelFilterBar: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Clear filter")
+                .help(L10n.text("Clear filter"))
             }
             Button {
                 text = ""
@@ -229,7 +230,7 @@ struct PanelFilterBar: View {
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
-            .help("Close filter (Esc)")
+            .help(L10n.text("Close filter (Esc)"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

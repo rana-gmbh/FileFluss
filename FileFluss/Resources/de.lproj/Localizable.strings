@@ -1,0 +1,49 @@
+/* FileFluss — app UI strings (German). */
+
+/* Language picker (Settings → General) */
+"Language" = "Sprache";
+"System Default" = "Systemstandard";
+"System Default follows the language selected in macOS." = "„Systemstandard“ folgt der in macOS eingestellten Sprache.";
+"The menu bar and window titles switch fully after a relaunch." = "Menüleiste und Fenstertitel werden erst nach einem Neustart vollständig umgestellt.";
+"Relaunch" = "Neu starten";
+
+/* Window titles */
+"FileFluss Settings" = "FileFluss-Einstellungen";
+"Search" = "Suchen";
+"Compare Folders" = "Ordner vergleichen";
+"FileFluss Help" = "FileFluss-Hilfe";
+
+/* Settings tabs */
+"General" = "Allgemein";
+"Cloud Accounts" = "Cloud-Konten";
+"Storage" = "Speicher";
+"Index Status" = "Index-Status";
+"Keyboard Map" = "Tastaturbelegung";
+
+/* Settings → General */
+"Show hidden files by default" = "Versteckte Dateien standardmäßig anzeigen";
+"Confirm before deleting" = "Vor dem Löschen bestätigen";
+"Show \"Add Cloud Account\" in sidebars" = "„Cloud-Konto hinzufügen“ in Seitenleisten anzeigen";
+"Allow removing cloud accounts from sidebar context menu" = "Entfernen von Cloud-Konten über das Kontextmenü der Seitenleiste erlauben";
+"Check available space before copy or move" = "Verfügbaren Speicher vor dem Kopieren oder Verschieben prüfen";
+"Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations." = "Warnt vor einer Übertragung, die das Speicherkontingent des Ziels oder den freien Speicherplatz überschreiten würde. Die Größenberechnung kann spürbar Zeit kosten, daher ist dies standardmäßig deaktiviert, damit Dateivorgänge schneller bleiben.";
+"Show Welcome Screen Again" = "Willkommensbildschirm erneut anzeigen";
+
+/* Toolbar */
+"Search all sources (⌘F)" = "Alle Quellen durchsuchen (⌘F)";
+"Refresh" = "Aktualisieren";
+"Refresh both panels" = "Beide Bereiche aktualisieren";
+"Hidden Files" = "Versteckte Dateien";
+"Show hidden files" = "Versteckte Dateien anzeigen";
+"Copy Mode" = "Kopiermodus";
+"Force all drag & drop operations to copy (skips the Move/Copy prompt)" = "Erzwingt bei allen Drag-&-Drop-Vorgängen das Kopieren (überspringt die Verschieben/Kopieren-Abfrage)";
+"Move Mode" = "Verschiebemodus";
+"Force all drag & drop operations to move (skips the Move/Copy prompt)" = "Erzwingt bei allen Drag-&-Drop-Vorgängen das Verschieben (überspringt die Verschieben/Kopieren-Abfrage)";
+"Sync" = "Synchronisieren";
+"It's not possible to sync with an offline folder." = "Eine Synchronisierung mit einem Offline-Ordner ist nicht möglich.";
+"Sync left and right panels" = "Linken und rechten Bereich synchronisieren";
+"Compare" = "Vergleichen";
+"Compare the two folders side by side" = "Die beiden Ordner nebeneinander vergleichen";
+"Filter visible items…" = "Sichtbare Objekte filtern …";
+"Clear filter" = "Filter löschen";
+"Close filter (Esc)" = "Filter schließen (Esc)";

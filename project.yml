@@ -6,6 +6,16 @@ options:
   xcodeVersion: "26.0"
   generateEmptyDirectories: true
   groupSortPosition: top
+  developmentLanguage: en
+  # Localizations shipped in the app bundle. XcodeGen also picks regions up
+  # from the .lproj folders under FileFluss/Resources/, but pinning them
+  # keeps the project's knownRegions stable across regenerations.
+  knownRegions:
+    - en
+    - de
+    - zh-Hans
+    - zh-Hant
+    - Base
 
 settings:
   base:

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import FileFlussCore
 
 @main
 struct FileFlussApp: App {
@@ -8,13 +9,15 @@ struct FileFlussApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(appState)
-                .task {
-                    // Give the AppDelegate a handle to AppState so it can
-                    // unmount Finder volumes during applicationShouldTerminate.
-                    appDelegate.appState = appState
-                }
+            LocalizedRoot {
+                RootView()
+                    .environment(appState)
+                    .task {
+                        // Give the AppDelegate a handle to AppState so it can
+                        // unmount Finder volumes during applicationShouldTerminate.
+                        appDelegate.appState = appState
+                    }
+            }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
@@ -30,10 +33,12 @@ struct FileFlussApp: App {
         // drag the edges. A regular `Window` honours `.windowResizability`,
         // shows real close/minimize/zoom controls, and macOS persists the
         // last frame for us. The Cmd+, shortcut is wired up below.
-        Window("FileFluss Settings", id: "settings") {
-            SettingsView()
-                .environment(appState)
-                .frame(minWidth: 480, minHeight: 400)
+        Window(L10n.text("FileFluss Settings"), id: "settings") {
+            LocalizedRoot {
+                SettingsView()
+                    .environment(appState)
+                    .frame(minWidth: 480, minHeight: 400)
+            }
         }
         .defaultSize(width: 760, height: 820)
         .windowResizability(.contentMinSize)
@@ -42,24 +47,30 @@ struct FileFlussApp: App {
         // the user can keep both panels visible behind them while dragging
         // the utility window aside. They are resizable; macOS persists the
         // last frame per scene id automatically across launches.
-        Window("Search", id: "search") {
-            SearchPopupView()
-                .environment(appState)
-                .frame(minWidth: 480, minHeight: 360)
+        Window(L10n.text("Search"), id: "search") {
+            LocalizedRoot {
+                SearchPopupView()
+                    .environment(appState)
+                    .frame(minWidth: 480, minHeight: 360)
+            }
         }
         .defaultSize(width: 700, height: 500)
         .windowResizability(.contentMinSize)
 
-        Window("Compare Folders", id: "compare") {
-            CompareFoldersView()
-                .environment(appState)
-                .frame(minWidth: 540, minHeight: 420)
+        Window(L10n.text("Compare Folders"), id: "compare") {
+            LocalizedRoot {
+                CompareFoldersView()
+                    .environment(appState)
+                    .frame(minWidth: 540, minHeight: 420)
+            }
         }
         .defaultSize(width: 640, height: 560)
         .windowResizability(.contentMinSize)
 
-        Window("FileFluss Help", id: "help") {
-            HelpView()
+        Window(L10n.text("FileFluss Help"), id: "help") {
+            LocalizedRoot {
+                HelpView()
+            }
         }
         .defaultSize(width: 880, height: 600)
         .windowResizability(.contentMinSize)

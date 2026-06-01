@@ -1,0 +1,49 @@
+/* FileFluss — app UI strings. Keys are the English source text. */
+
+/* Language picker (Settings → General) */
+"Language" = "Language";
+"System Default" = "System Default";
+"System Default follows the language selected in macOS." = "System Default follows the language selected in macOS.";
+"The menu bar and window titles switch fully after a relaunch." = "The menu bar and window titles switch fully after a relaunch.";
+"Relaunch" = "Relaunch";
+
+/* Window titles */
+"FileFluss Settings" = "FileFluss Settings";
+"Search" = "Search";
+"Compare Folders" = "Compare Folders";
+"FileFluss Help" = "FileFluss Help";
+
+/* Settings tabs */
+"General" = "General";
+"Cloud Accounts" = "Cloud Accounts";
+"Storage" = "Storage";
+"Index Status" = "Index Status";
+"Keyboard Map" = "Keyboard Map";
+
+/* Settings → General */
+"Show hidden files by default" = "Show hidden files by default";
+"Confirm before deleting" = "Confirm before deleting";
+"Show \"Add Cloud Account\" in sidebars" = "Show \"Add Cloud Account\" in sidebars";
+"Allow removing cloud accounts from sidebar context menu" = "Allow removing cloud accounts from sidebar context menu";
+"Check available space before copy or move" = "Check available space before copy or move";
+"Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations." = "Warns before a transfer that would exceed the destination's storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations.";
+"Show Welcome Screen Again" = "Show Welcome Screen Again";
+
+/* Toolbar */
+"Search all sources (⌘F)" = "Search all sources (⌘F)";
+"Refresh" = "Refresh";
+"Refresh both panels" = "Refresh both panels";
+"Hidden Files" = "Hidden Files";
+"Show hidden files" = "Show hidden files";
+"Copy Mode" = "Copy Mode";
+"Force all drag & drop operations to copy (skips the Move/Copy prompt)" = "Force all drag & drop operations to copy (skips the Move/Copy prompt)";
+"Move Mode" = "Move Mode";
+"Force all drag & drop operations to move (skips the Move/Copy prompt)" = "Force all drag & drop operations to move (skips the Move/Copy prompt)";
+"Sync" = "Sync";
+"It's not possible to sync with an offline folder." = "It's not possible to sync with an offline folder.";
+"Sync left and right panels" = "Sync left and right panels";
+"Compare" = "Compare";
+"Compare the two folders side by side" = "Compare the two folders side by side";
+"Filter visible items…" = "Filter visible items…";
+"Clear filter" = "Clear filter";
+"Close filter (Esc)" = "Close filter (Esc)";
