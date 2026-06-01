@@ -69,6 +69,19 @@ struct JottacloudXMLParserTests {
         #expect(folder?.path == "/Documents")
     }
 
+    @Test("File modified date parses (regression: broken JFS date format)")
+    func parsesModifiedDate() {
+        let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
+        let file = items.first { $0.name == "report.pdf" }
+        // JFS sends "2024-01-15-T10:30:00Z" — must parse, not fall back to epoch.
+        let comps = Calendar(identifier: .gregorian).dateComponents(
+            in: TimeZone(identifier: "UTC")!, from: file?.modificationDate ?? .distantPast)
+        #expect(comps.year == 2024)
+        #expect(comps.month == 1)
+        #expect(comps.day == 15)
+        #expect((file?.modificationDate.timeIntervalSince1970 ?? 0) > 1_000_000_000)
+    }
+
     @Test("Nested base path is joined onto child names")
     func parsesNestedPaths() {
         let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/Pictures")

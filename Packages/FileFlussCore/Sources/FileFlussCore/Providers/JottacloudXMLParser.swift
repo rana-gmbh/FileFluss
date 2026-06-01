@@ -18,6 +18,20 @@ public enum JottacloudXMLParser {
         return delegate.items
     }
 
+    /// A folder's own modified date from a direct folder GET. The date lives in
+    /// the top-level `<modified>` element (or a `time` attribute on the root
+    /// `<folder>`); it is NOT present on the child `<folder>` entries of a
+    /// parent listing, which is why sub-folders otherwise have no date.
+    public static func parseFolderModified(data: Data) -> Date? {
+        let delegate = FolderModifiedDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        parser.parse()
+        if let modified = delegate.modified, !modified.isEmpty { return parseDate(modified) }
+        if let timeAttr = delegate.timeAttr, !timeAttr.isEmpty { return parseDate(timeAttr) }
+        return nil
+    }
+
     public struct AccountUsage: Sendable {
         public let capacity: Int64
         public let usage: Int64
@@ -32,16 +46,28 @@ public enum JottacloudXMLParser {
         return AccountUsage(capacity: delegate.capacity ?? -1, usage: usage)
     }
 
-    /// Jottacloud revision timestamps, e.g. "2024-01-15-T10:30:00Z".
+    /// Jottacloud revision timestamps use a non-standard dash before the time,
+    /// e.g. "2024-01-15-T10:30:00Z". Normalise that to a standard ISO-8601
+    /// separator and let the system parser handle it (with or without
+    /// fractional seconds / timezone offset).
     static func parseDate(_ string: String) -> Date {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return Date(timeIntervalSince1970: 0) }
+        let normalized = trimmed.replacingOccurrences(of: "-T", with: "T")
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: normalized) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: normalized) { return date }
+
+        // Last resort: explicit layouts (offset with a colon, or no zone).
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(identifier: "UTC")
-        for format in ["yyyy-MM-dd'-'T'HH:mm:ss'Z'", "yyyy-MM-dd'-'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss'Z'"] {
+        for format in ["yyyy-MM-dd'T'HH:mm:ssXXXXX", "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX", "yyyy-MM-dd'T'HH:mm:ss"] {
             f.dateFormat = format
-            if let date = f.date(from: trimmed) { return date }
+            if let date = f.date(from: normalized) { return date }
         }
         return Date(timeIntervalSince1970: 0)
     }
@@ -143,6 +169,41 @@ private final class ListingDelegate: NSObject, XMLParserDelegate {
             break
         }
         text = ""
+    }
+}
+
+// MARK: - Folder's own modified date
+
+private final class FolderModifiedDelegate: NSObject, XMLParserDelegate {
+    var modified: String?
+    var timeAttr: String?
+
+    private var depth = 0
+    private var text = ""
+    private var capturing = false
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes attributeDict: [String: String] = [:]) {
+        depth += 1
+        // The outermost <folder> is the listed folder itself.
+        if elementName == "folder" && depth == 1 {
+            timeAttr = attributeDict["time"]
+        }
+        // Its direct-child <modified> (depth 2) is the folder's own time; a
+        // file's <modified> sits far deeper (…>files>file>currentRevision).
+        capturing = (elementName == "modified" && depth == 2)
+        text = ""
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if capturing { text += string }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+        if elementName == "modified" && capturing && modified == nil {
+            modified = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        capturing = false
+        depth -= 1
     }
 }
 

@@ -178,9 +178,50 @@ public actor JottacloudAPIClient {
     // MARK: - File operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
+        let items = try await listFolderRaw(path: path)
+        // A JFS listing carries dates for files but not for sub-folders. Fetch
+        // each sub-folder's own modified time so the panel shows real dates
+        // (one request per folder, run concurrently to stay responsive).
+        return await enrichFolderDates(items)
+    }
+
+    /// Listing without the per-sub-folder date fetch — used by recursive paths
+    /// (folderSize, metadata lookups) so they don't fan out N extra requests.
+    private func listFolderRaw(path: String) async throws -> [CloudFileItem] {
         let url = jfsURL(forPath: path)
         let data = try await jfsRequest(url, method: "GET")
         return JottacloudXMLParser.parseListing(data: data, basePath: normalizedDir(path))
+    }
+
+    private func enrichFolderDates(_ items: [CloudFileItem]) async -> [CloudFileItem] {
+        let folderIndices = items.indices.filter { items[$0].isDirectory }
+        guard !folderIndices.isEmpty else { return items }
+        let dates = await withTaskGroup(of: (Int, Date?).self) { group -> [Int: Date] in
+            for idx in folderIndices {
+                let path = items[idx].path
+                group.addTask { (idx, await self.folderModifiedDate(at: path)) }
+            }
+            var result: [Int: Date] = [:]
+            for await (idx, date) in group { if let date { result[idx] = date } }
+            return result
+        }
+        guard !dates.isEmpty else { return items }
+        return items.enumerated().map { index, item in
+            guard let date = dates[index] else { return item }
+            return CloudFileItem(
+                id: item.id, name: item.name, path: item.path,
+                isDirectory: item.isDirectory, size: item.size,
+                modificationDate: date, checksum: item.checksum,
+                downloadStatus: item.downloadStatus,
+                symbolIconOverride: item.symbolIconOverride, role: item.role)
+        }
+    }
+
+    /// A single folder's own modified date (from a direct folder GET). Returns
+    /// nil on any failure so a folder simply keeps its placeholder date.
+    private func folderModifiedDate(at path: String) async -> Date? {
+        guard let data = try? await jfsRequest(jfsURL(forPath: path), method: "GET") else { return nil }
+        return JottacloudXMLParser.parseFolderModified(data: data)
     }
 
     public func createFolder(at path: String) async throws {
@@ -273,13 +314,13 @@ public actor JottacloudAPIClient {
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let parent = (path as NSString).deletingLastPathComponent
         let name = (path as NSString).lastPathComponent
-        let entries = try await listFolder(path: parent.isEmpty ? "/" : parent)
+        let entries = try await listFolderRaw(path: parent.isEmpty ? "/" : parent)
         if let match = entries.first(where: { $0.name == name }) { return match }
         throw CloudProviderError.notFound(path)
     }
 
     public func folderSize(at path: String) async throws -> Int64 {
-        let entries = try await listFolder(path: path)
+        let entries = try await listFolderRaw(path: path)
         var total: Int64 = 0
         for entry in entries {
             if entry.isDirectory {
