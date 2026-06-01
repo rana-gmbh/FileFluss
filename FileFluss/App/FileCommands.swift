@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import FileFlussCore
 
 /// Forwards an Edit-menu action to the first responder in the key
 /// window. Returns `true` if AppKit found a responder that handled it
@@ -42,48 +43,48 @@ struct FileCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            applyShortcut(.newFolder, to: Button("New Folder") {
+            applyShortcut(.newFolder, to: Button(L10n.text("New Folder")) {
                 NotificationCenter.default.post(name: KeyboardCommand.newFolder.notification, object: nil)
             })
             .disabled(!appState.canCreateFolderInActivePanel)
 
             Divider()
 
-            applyShortcut(.rename, to: Button("Rename") {
+            applyShortcut(.rename, to: Button(L10n.text("Rename")) {
                 NotificationCenter.default.post(name: KeyboardCommand.rename.notification, object: nil)
             })
             .disabled(!appState.hasSingleSelection)
 
-            applyShortcut(.duplicate, to: Button("Duplicate") {
+            applyShortcut(.duplicate, to: Button(L10n.text("Duplicate")) {
                 NotificationCenter.default.post(name: KeyboardCommand.duplicate.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
 
-            applyShortcut(.getInfo, to: Button("Get Info") {
+            applyShortcut(.getInfo, to: Button(L10n.text("Get Info")) {
                 NotificationCenter.default.post(name: KeyboardCommand.getInfo.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
 
             Divider()
 
-            applyShortcut(.copyToOtherPanel, to: Button("Copy to Other Panel") {
+            applyShortcut(.copyToOtherPanel, to: Button(L10n.text("Copy to Other Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.copyToOtherPanel.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
 
-            applyShortcut(.moveToOtherPanel, to: Button("Move to Other Panel") {
+            applyShortcut(.moveToOtherPanel, to: Button(L10n.text("Move to Other Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.moveToOtherPanel.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
 
-            applyShortcut(.copyPath, to: Button("Copy Path") {
+            applyShortcut(.copyPath, to: Button(L10n.text("Copy Path")) {
                 NotificationCenter.default.post(name: KeyboardCommand.copyPath.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
 
             Divider()
 
-            applyShortcut(.deleteToTrash, to: Button("Move to Trash") {
+            applyShortcut(.deleteToTrash, to: Button(L10n.text("Move to Trash")) {
                 NotificationCenter.default.post(name: KeyboardCommand.deleteToTrash.notification, object: nil)
             })
             .disabled(!appState.hasSelection)
@@ -103,30 +104,30 @@ struct FileCommands: Commands {
             // restores standard ⌘C/⌘X/⌘V inside sheets, popovers, and
             // any other text input without giving up file-clipboard
             // ownership when the file manager itself is focused.
-            applyShortcut(.cutFiles, to: Button("Cut") {
+            applyShortcut(.cutFiles, to: Button(L10n.text("Cut")) {
                 if forwardToFirstResponder(#selector(NSText.cut(_:))) { return }
                 NSLog("[FileFluss] menu: Cut clicked")
                 appState.captureFileClipboard(operation: .cut)
             })
-            applyShortcut(.copyFiles, to: Button("Copy") {
+            applyShortcut(.copyFiles, to: Button(L10n.text("Copy")) {
                 if forwardToFirstResponder(#selector(NSText.copy(_:))) { return }
                 NSLog("[FileFluss] menu: Copy clicked")
                 appState.captureFileClipboard(operation: .copy)
             })
-            applyShortcut(.pasteFiles, to: Button("Paste") {
+            applyShortcut(.pasteFiles, to: Button(L10n.text("Paste")) {
                 if forwardToFirstResponder(#selector(NSText.paste(_:))) { return }
                 NSLog("[FileFluss] menu: Paste clicked")
                 Task { await appState.pasteFileClipboard() }
             })
             Divider()
-            applyShortcut(.selectAll, to: Button("Select All") {
+            applyShortcut(.selectAll, to: Button(L10n.text("Select All")) {
                 if forwardToFirstResponder(#selector(NSResponder.selectAll(_:))) { return }
                 NotificationCenter.default.post(name: KeyboardCommand.selectAll.notification, object: nil)
             })
-            applyShortcut(.deselectAll, to: Button("Deselect All") {
+            applyShortcut(.deselectAll, to: Button(L10n.text("Deselect All")) {
                 NotificationCenter.default.post(name: KeyboardCommand.deselectAll.notification, object: nil)
             })
-            applyShortcut(.invertSelection, to: Button("Invert Selection") {
+            applyShortcut(.invertSelection, to: Button(L10n.text("Invert Selection")) {
                 NotificationCenter.default.post(name: KeyboardCommand.invertSelection.notification, object: nil)
             })
         }
@@ -135,73 +136,73 @@ struct FileCommands: Commands {
         // pasteboard group so they appear in the same menu.
         CommandGroup(after: .pasteboard) {
             Divider()
-            applyShortcut(.openSearch, to: Button("Search…") {
+            applyShortcut(.openSearch, to: Button(L10n.text("Search…")) {
                 NotificationCenter.default.post(name: KeyboardCommand.openSearch.notification, object: nil)
             })
-            applyShortcut(.quickFilter, to: Button("Quick Filter…") {
+            applyShortcut(.quickFilter, to: Button(L10n.text("Quick Filter…")) {
                 NotificationCenter.default.post(name: KeyboardCommand.quickFilter.notification, object: nil)
             })
         }
 
-        CommandMenu("Go") {
-            applyShortcut(.parentDirectory, to: Button("Parent Directory") {
+        CommandMenu(L10n.text("Go")) {
+            applyShortcut(.parentDirectory, to: Button(L10n.text("Parent Directory")) {
                 NotificationCenter.default.post(name: KeyboardCommand.parentDirectory.notification, object: nil)
             })
-            applyShortcut(.historyBack, to: Button("Back") {
+            applyShortcut(.historyBack, to: Button(L10n.text("Back")) {
                 NotificationCenter.default.post(name: KeyboardCommand.historyBack.notification, object: nil)
             })
-            applyShortcut(.historyForward, to: Button("Forward") {
+            applyShortcut(.historyForward, to: Button(L10n.text("Forward")) {
                 NotificationCenter.default.post(name: KeyboardCommand.historyForward.notification, object: nil)
             })
-            applyShortcut(.openInOtherPanel, to: Button("Open in Other Panel") {
+            applyShortcut(.openInOtherPanel, to: Button(L10n.text("Open in Other Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.openInOtherPanel.notification, object: nil)
             })
-            applyShortcut(.targetToSource, to: Button("Target → Source") {
+            applyShortcut(.targetToSource, to: Button(L10n.text("Target → Source")) {
                 NotificationCenter.default.post(name: KeyboardCommand.targetToSource.notification, object: nil)
             })
-            applyShortcut(.focusPathBar, to: Button("Go to Folder…") {
+            applyShortcut(.focusPathBar, to: Button(L10n.text("Go to Folder…")) {
                 NotificationCenter.default.post(name: KeyboardCommand.focusPathBar.notification, object: nil)
             })
-            applyShortcut(.jumpToRoot, to: Button("Jump to Root") {
+            applyShortcut(.jumpToRoot, to: Button(L10n.text("Jump to Root")) {
                 NotificationCenter.default.post(name: KeyboardCommand.jumpToRoot.notification, object: nil)
             })
             Divider()
-            applyShortcut(.toggleActivePanel, to: Button("Toggle Active Panel") {
+            applyShortcut(.toggleActivePanel, to: Button(L10n.text("Toggle Active Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.toggleActivePanel.notification, object: nil)
             })
         }
 
         CommandGroup(after: .toolbar) {
-            applyShortcut(.refreshAll, to: Button("Refresh Both Panels") {
+            applyShortcut(.refreshAll, to: Button(L10n.text("Refresh Both Panels")) {
                 Task { await appState.refreshAllPanels() }
             })
-            applyShortcut(.refreshActive, to: Button("Refresh Active Panel") {
+            applyShortcut(.refreshActive, to: Button(L10n.text("Refresh Active Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.refreshActive.notification, object: nil)
             })
 
             Divider()
 
-            applyShortcut(.sortByName, to: Button("Sort by Name") {
+            applyShortcut(.sortByName, to: Button(L10n.text("Sort by Name")) {
                 NotificationCenter.default.post(name: KeyboardCommand.sortByName.notification, object: nil)
             })
-            applyShortcut(.sortByDate, to: Button("Sort by Date") {
+            applyShortcut(.sortByDate, to: Button(L10n.text("Sort by Date")) {
                 NotificationCenter.default.post(name: KeyboardCommand.sortByDate.notification, object: nil)
             })
-            applyShortcut(.sortBySize, to: Button("Sort by Size") {
+            applyShortcut(.sortBySize, to: Button(L10n.text("Sort by Size")) {
                 NotificationCenter.default.post(name: KeyboardCommand.sortBySize.notification, object: nil)
             })
-            applyShortcut(.sortByKind, to: Button("Sort by Kind") {
+            applyShortcut(.sortByKind, to: Button(L10n.text("Sort by Kind")) {
                 NotificationCenter.default.post(name: KeyboardCommand.sortByKind.notification, object: nil)
             })
 
             Divider()
 
-            applyShortcut(.toggleHiddenFiles, to: Button("Toggle Hidden Files") {
+            applyShortcut(.toggleHiddenFiles, to: Button(L10n.text("Toggle Hidden Files")) {
                 NotificationCenter.default.post(name: KeyboardCommand.toggleHiddenFiles.notification, object: nil)
             })
-            Toggle("Show Status Bar", isOn: $showStatusBar)
+            Toggle(L10n.text("Show Status Bar"), isOn: $showStatusBar)
                 .keyboardShortcut("/", modifiers: [.command, .shift])
-            Toggle("Hide File Extensions", isOn: $hideFileExtensions)
+            Toggle(L10n.text("Hide File Extensions"), isOn: $hideFileExtensions)
 
             Divider()
 
@@ -210,42 +211,42 @@ struct FileCommands: Commands {
             // uses for zoom-in / zoom-out. Plus is declared with an
             // explicit .shift so SwiftUI accepts the shortcut across
             // keyboard layouts (on US the `+` key is shift-`=`).
-            Button("Increase Row Size") {
+            Button(L10n.text("Increase Row Size")) {
                 FileListRowSizePrefs.set(.large)
             }
             .keyboardShortcut("+", modifiers: .command)
             .disabled(rowSizeRaw == FileListRowSize.large.rawValue)
 
-            Button("Decrease Row Size") {
+            Button(L10n.text("Decrease Row Size")) {
                 FileListRowSizePrefs.set(.regular)
             }
             .keyboardShortcut("-", modifiers: .command)
             .disabled(rowSizeRaw == FileListRowSize.regular.rawValue)
         }
 
-        CommandMenu("Tools") {
-            applyShortcut(.syncPanels, to: Button("Sync Left and Right Panels…") {
+        CommandMenu(L10n.text("Tools")) {
+            applyShortcut(.syncPanels, to: Button(L10n.text("Sync Left and Right Panels…")) {
                 appState.showSyncSheet = true
             })
             .disabled(appState.hasOfflineSelection)
 
-            applyShortcut(.compareFolders, to: Button("Compare Folders") {
+            applyShortcut(.compareFolders, to: Button(L10n.text("Compare Folders")) {
                 NotificationCenter.default.post(name: KeyboardCommand.compareFolders.notification, object: nil)
             })
 
-            applyShortcut(.swapPanels, to: Button("Swap Panels") {
+            applyShortcut(.swapPanels, to: Button(L10n.text("Swap Panels")) {
                 NotificationCenter.default.post(name: KeyboardCommand.swapPanels.notification, object: nil)
             })
 
             Divider()
 
-            applyShortcut(.indexCurrentSource, to: Button("Index Current Source") {
+            applyShortcut(.indexCurrentSource, to: Button(L10n.text("Index Current Source")) {
                 NotificationCenter.default.post(name: KeyboardCommand.indexCurrentSource.notification, object: nil)
             })
         }
 
         CommandGroup(replacing: .appInfo) {
-            Button("About FileFluss") {
+            Button(L10n.text("About FileFluss")) {
                 AboutWindowController.shared.show()
             }
         }
@@ -258,15 +259,15 @@ struct FileCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
-            Button("FileFluss Homepage") {
+            Button(L10n.text("FileFluss Homepage")) {
                 NSWorkspace.shared.open(URL(string: "https://www.filefluss.de")!)
             }
             HelpMenuButton()
             Divider()
-            Button("Check for Updates…") {
+            Button(L10n.text("Check for Updates…")) {
                 AboutWindowController.shared.show()
             }
-            Button("GitHub Repository") {
+            Button(L10n.text("GitHub Repository")) {
                 NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)
             }
         }
@@ -275,7 +276,7 @@ struct FileCommands: Commands {
         // under @CommandsBuilder's 10-direct-child limit.
         Group {
             CommandGroup(before: .help) {
-                Button("Support the FileFluss Project") {
+                Button(L10n.text("Support the FileFluss Project")) {
                     NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
                 }
             }
@@ -287,7 +288,7 @@ struct FileCommands: Commands {
                 .disabled(SupportLogService.shared.isRecording)
 
                 #if DEBUG
-                Button("Run Version Test…") {
+                Button(L10n.text("Run Version Test…")) {
                     Task { await VersionTestRunner.run(appState: appState) }
                 }
                 #endif
@@ -302,7 +303,7 @@ struct FileCommands: Commands {
 private struct HelpMenuButton: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
-        Button("FileFluss Help") {
+        Button(L10n.text("FileFluss Help")) {
             openWindow(id: "help")
         }
         .keyboardShortcut("?", modifiers: .command)
@@ -315,7 +316,7 @@ private struct HelpMenuButton: View {
 private struct SettingsMenuButton: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
-        Button("Settings…") {
+        Button(L10n.text("Settings…")) {
             openWindow(id: "settings")
         }
         .keyboardShortcut(",", modifiers: .command)
