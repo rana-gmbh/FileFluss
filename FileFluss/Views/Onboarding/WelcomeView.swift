@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import FileFlussCore
 
 /// First-launch onboarding. Surfaces the Full Disk Access option because
 /// without it macOS prompts for each protected folder (Desktop, Documents,
@@ -29,22 +30,22 @@ struct WelcomeView: View {
             Divider()
 
             HStack {
-                Button("Continue without granting Full Disk Access") {
+                Button(action: {
                     finish()
-                }
+                }) { LText("Continue without granting Full Disk Access") }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
                 if didOpenSettings {
-                    Button("Done, Don't Relaunch") {
+                    Button(action: {
                         finish()
-                    }
+                    }) { LText("Done, Don't Relaunch") }
 
                     Button {
                         quitAndRelaunch()
                     } label: {
-                        Label("Quit & Relaunch", systemImage: "arrow.clockwise")
+                        Label(L10n.text("Quit & Relaunch"), systemImage: "arrow.clockwise")
                     }
                     .keyboardShortcut(.defaultAction)
                 } else {
@@ -52,7 +53,7 @@ struct WelcomeView: View {
                         openFullDiskAccessSettings()
                         didOpenSettings = true
                     } label: {
-                        Label("Open System Settings…", systemImage: "arrow.up.right.square")
+                        Label(L10n.text("Open System Settings…"), systemImage: "arrow.up.right.square")
                     }
                     .keyboardShortcut(.defaultAction)
                 }
@@ -71,9 +72,9 @@ struct WelcomeView: View {
                 .foregroundStyle(.tint)
 
             VStack(spacing: 6) {
-                Text("Welcome to FileFluss")
+                LText("Welcome to FileFluss")
                     .font(.largeTitle.weight(.semibold))
-                Text("A few seconds of setup will make FileFluss feel instant.")
+                LText("A few seconds of setup will make FileFluss feel instant.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -82,13 +83,13 @@ struct WelcomeView: View {
             VStack(alignment: .leading, spacing: 14) {
                 bullet(
                     icon: "lock.open.fill",
-                    title: "Grant Full Disk Access (recommended)",
-                    text: "FileFluss can browse every folder instantly, with no per-folder permission prompts."
+                    title: L10n.text("Grant Full Disk Access (recommended)"),
+                    text: L10n.text("FileFluss can browse every folder instantly, with no per-folder permission prompts.")
                 )
                 bullet(
                     icon: "hand.raised.fill",
-                    title: "Or continue without it",
-                    text: "macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time."
+                    title: L10n.text("Or continue without it"),
+                    text: L10n.text("macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.")
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -99,10 +100,12 @@ struct WelcomeView: View {
 
     private var dragInstructionsContent: some View {
         VStack(spacing: 18) {
-            Text("Add FileFluss to Full Disk Access")
+            LText("Add FileFluss to Full Disk Access")
                 .font(.title.weight(.semibold))
 
-            Text("System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.")
+            // Text(.init(...)) renders the markdown bold in the *translated*
+            // string (LText/Text(String) would not parse markdown).
+            Text(.init(L10n.text("System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.")))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -110,7 +113,7 @@ struct WelcomeView: View {
             DraggableAppIcon()
                 .padding(.vertical, 8)
 
-            Text("Or click the **+** button in System Settings and pick FileFluss from your Applications folder.")
+            Text(.init(L10n.text("Or click the **+** button in System Settings and pick FileFluss from your Applications folder.")))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -194,9 +197,9 @@ private struct DraggableAppIcon: View {
                 .onDrag {
                     NSItemProvider(object: Bundle.main.bundleURL as NSURL)
                 }
-                .help("Drag into the Full Disk Access list")
+                .help(L10n.text("Drag into the Full Disk Access list"))
 
-            Label("Drag me into the list", systemImage: "hand.draw.fill")
+            Label(L10n.text("Drag me into the list"), systemImage: "hand.draw.fill")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

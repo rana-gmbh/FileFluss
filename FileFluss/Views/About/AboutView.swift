@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import FileFlussCore
 
 /// Custom About panel with version, links, credits, and a manual
 /// "Check for Updates" button driven by `UpdateChecker`.
@@ -26,11 +27,11 @@ struct AboutView: View {
                 Text("FileFluss")
                     .font(.title2.bold())
                 HStack(spacing: 6) {
-                    Text("Version \(version)")
+                    Text(L10n.format("Version %@", version))
                         .foregroundStyle(.secondary)
-                    Button("Release Notes ↗") {
+                    Button(action: {
                         NSWorkspace.shared.open(releaseNotesURL)
-                    }
+                    }) { LText("Release Notes ↗") }
                     .buttonStyle(.borderless)
                     .foregroundStyle(Color.accentColor)
                     .font(.caption)
@@ -42,7 +43,7 @@ struct AboutView: View {
             Divider()
 
             VStack(spacing: 4) {
-                Text("Made by Rana GmbH")
+                LText("Made by Rana GmbH")
                     .font(.callout)
                 Button("www.filefluss.de") {
                     NSWorkspace.shared.open(URL(string: "https://www.filefluss.de")!)
@@ -62,16 +63,16 @@ struct AboutView: View {
             Divider()
 
             VStack(spacing: 4) {
-                Text("If you want to support this project,")
+                LText("If you want to support this project,")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 0) {
-                    Text("please consider to ")
+                    LText("please consider to ")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Buy me a coffee ↗") {
+                    Button(action: {
                         NSWorkspace.shared.open(URL(string: "https://buymeacoffee.com/robertrudolph")!)
-                    }
+                    }) { LText("Buy me a coffee ↗") }
                     .buttonStyle(.borderless)
                     .foregroundStyle(Color.accentColor)
                     .font(.caption)
@@ -82,7 +83,7 @@ struct AboutView: View {
             Divider()
 
             VStack(spacing: 4) {
-                Text("Released under the")
+                LText("Released under the")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("GNU General Public License v3.0 ↗") {
@@ -114,27 +115,27 @@ struct AboutView: View {
     private var updateSection: some View {
         switch checker.state {
         case .idle:
-            Button("Check for Updates") {
+            Button(action: {
                 checker.check()
-            }
+            }) { LText("Check for Updates") }
             .buttonStyle(.borderedProminent)
 
         case .checking:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Checking for updates…")
+                LText("Checking for updates…")
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
 
         case .upToDate:
             VStack(spacing: 8) {
-                Label("You're up to date", systemImage: "checkmark.circle.fill")
+                Label(L10n.text("You're up to date"), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
-                Button("Check Again") {
+                Button(action: {
                     checker.check()
-                }
+                }) { LText("Check Again") }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .font(.caption)
@@ -142,7 +143,7 @@ struct AboutView: View {
 
         case .available(let update):
             VStack(alignment: .leading, spacing: 10) {
-                Label("FileFluss \(update.version) is available!", systemImage: "arrow.down.circle.fill")
+                Label(L10n.format("FileFluss %@ is available!", update.version), systemImage: "arrow.down.circle.fill")
                     .foregroundStyle(Color.accentColor)
                     .font(.callout.bold())
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -169,18 +170,18 @@ struct AboutView: View {
                 }
 
                 HStack {
-                    Button("Release Page ↗") {
+                    Button(action: {
                         NSWorkspace.shared.open(update.releasePageURL)
-                    }
+                    }) { LText("Release Page ↗") }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                     .font(.caption)
 
                     Spacer()
 
-                    Button("Download") {
+                    Button(action: {
                         NSWorkspace.shared.open(update.downloadURL ?? update.releasePageURL)
-                    }
+                    }) { LText("Download") }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                 }
@@ -188,16 +189,16 @@ struct AboutView: View {
 
         case .failed(let message):
             VStack(spacing: 8) {
-                Label("Could not check for updates", systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.text("Could not check for updates"), systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.callout)
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                Button("Try Again") {
+                Button(action: {
                     checker.check()
-                }
+                }) { LText("Try Again") }
                 .buttonStyle(.borderless)
                 .font(.caption)
             }

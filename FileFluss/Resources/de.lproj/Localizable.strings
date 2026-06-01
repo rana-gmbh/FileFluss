@@ -47,3 +47,38 @@
 "Filter visible items…" = "Sichtbare Objekte filtern …";
 "Clear filter" = "Filter löschen";
 "Close filter (Esc)" = "Filter schließen (Esc)";
+
+/* About */
+"Version %@" = "Version %@";
+"Release Notes ↗" = "Versionshinweise ↗";
+"Made by Rana GmbH" = "Erstellt von Rana GmbH";
+"If you want to support this project," = "Wenn du dieses Projekt unterstützen möchtest,";
+"please consider to " = "erwäge bitte, ";
+"Buy me a coffee ↗" = "spendier mir einen Kaffee ↗";
+"Released under the" = "Veröffentlicht unter der";
+"Check for Updates" = "Nach Updates suchen";
+"Checking for updates…" = "Suche nach Updates …";
+"You're up to date" = "Du bist auf dem neuesten Stand";
+"Check Again" = "Erneut suchen";
+"FileFluss %@ is available!" = "FileFluss %@ ist verfügbar!";
+"Release Page ↗" = "Release-Seite ↗";
+"Download" = "Laden";
+"Could not check for updates" = "Suche nach Updates fehlgeschlagen";
+"Try Again" = "Erneut versuchen";
+
+/* Welcome / onboarding */
+"Continue without granting Full Disk Access" = "Ohne vollständigen Festplattenzugriff fortfahren";
+"Done, Don't Relaunch" = "Fertig, nicht neu starten";
+"Quit & Relaunch" = "Beenden & neu starten";
+"Open System Settings…" = "Systemeinstellungen öffnen …";
+"Welcome to FileFluss" = "Willkommen bei FileFluss";
+"A few seconds of setup will make FileFluss feel instant." = "Ein paar Sekunden Einrichtung lassen FileFluss blitzschnell wirken.";
+"Grant Full Disk Access (recommended)" = "Vollständigen Festplattenzugriff gewähren (empfohlen)";
+"FileFluss can browse every folder instantly, with no per-folder permission prompts." = "FileFluss kann jeden Ordner sofort durchsuchen – ohne Berechtigungsabfragen für einzelne Ordner.";
+"Or continue without it" = "Oder ohne ihn fortfahren";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "macOS fragt einmal pro geschütztem Ordner (Schreibtisch, Dokumente, Downloads, …). Das erste Öffnen kann jeweils einige Sekunden dauern – aber nur beim ersten Mal.";
+"Add FileFluss to Full Disk Access" = "FileFluss zum vollständigen Festplattenzugriff hinzufügen";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "Die Systemeinstellungen sind nun geöffnet. Ziehe das FileFluss-Symbol unten in die Liste **Vollständiger Festplattenzugriff** – klicke dann auf **Beenden & neu starten**, damit die neue Berechtigung wirksam wird.";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "Oder klicke in den Systemeinstellungen auf die Schaltfläche **+** und wähle FileFluss aus deinem Programme-Ordner.";
+"Drag into the Full Disk Access list" = "In die Liste „Vollständiger Festplattenzugriff“ ziehen";
+"Drag me into the list" = "Zieh mich in die Liste";

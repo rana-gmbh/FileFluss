@@ -47,3 +47,38 @@
 "Filter visible items…" = "筛选可见项目…";
 "Clear filter" = "清除筛选";
 "Close filter (Esc)" = "关闭筛选（Esc）";
+
+/* About */
+"Version %@" = "版本 %@";
+"Release Notes ↗" = "发行说明 ↗";
+"Made by Rana GmbH" = "由 Rana GmbH 出品";
+"If you want to support this project," = "如果你想支持本项目，";
+"please consider to " = "欢迎";
+"Buy me a coffee ↗" = "请我喝杯咖啡 ↗";
+"Released under the" = "依据以下许可发布：";
+"Check for Updates" = "检查更新";
+"Checking for updates…" = "正在检查更新…";
+"You're up to date" = "已是最新版本";
+"Check Again" = "再次检查";
+"FileFluss %@ is available!" = "FileFluss %@ 已发布！";
+"Release Page ↗" = "发行页面 ↗";
+"Download" = "下载";
+"Could not check for updates" = "无法检查更新";
+"Try Again" = "重试";
+
+/* Welcome / onboarding */
+"Continue without granting Full Disk Access" = "不授予完全磁盘访问权限并继续";
+"Done, Don't Relaunch" = "完成，不重新启动";
+"Quit & Relaunch" = "退出并重新启动";
+"Open System Settings…" = "打开系统设置…";
+"Welcome to FileFluss" = "欢迎使用 FileFluss";
+"A few seconds of setup will make FileFluss feel instant." = "只需几秒钟设置，就能让 FileFluss 用起来快如闪电。";
+"Grant Full Disk Access (recommended)" = "授予完全磁盘访问权限（推荐）";
+"FileFluss can browse every folder instantly, with no per-folder permission prompts." = "FileFluss 可以即时浏览每个文件夹，无需逐个文件夹授权。";
+"Or continue without it" = "或不授予并继续";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "macOS 会对每个受保护的文件夹（桌面、文稿、下载……）询问一次。每个文件夹首次打开可能需要几秒钟——但仅限首次。";
+"Add FileFluss to Full Disk Access" = "将 FileFluss 添加到完全磁盘访问";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "系统设置已打开。将下方的 FileFluss 图标拖入**完全磁盘访问**列表，然后点按**退出并重新启动**以使新权限生效。";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "或在系统设置中点按 **+** 按钮，并从“应用程序”文件夹中选择 FileFluss。";
+"Drag into the Full Disk Access list" = "拖入完全磁盘访问列表";
+"Drag me into the list" = "把我拖入列表";

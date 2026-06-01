@@ -47,3 +47,38 @@
 "Filter visible items…" = "Filter visible items…";
 "Clear filter" = "Clear filter";
 "Close filter (Esc)" = "Close filter (Esc)";
+
+/* About */
+"Version %@" = "Version %@";
+"Release Notes ↗" = "Release Notes ↗";
+"Made by Rana GmbH" = "Made by Rana GmbH";
+"If you want to support this project," = "If you want to support this project,";
+"please consider to " = "please consider to ";
+"Buy me a coffee ↗" = "Buy me a coffee ↗";
+"Released under the" = "Released under the";
+"Check for Updates" = "Check for Updates";
+"Checking for updates…" = "Checking for updates…";
+"You're up to date" = "You're up to date";
+"Check Again" = "Check Again";
+"FileFluss %@ is available!" = "FileFluss %@ is available!";
+"Release Page ↗" = "Release Page ↗";
+"Download" = "Download";
+"Could not check for updates" = "Could not check for updates";
+"Try Again" = "Try Again";
+
+/* Welcome / onboarding */
+"Continue without granting Full Disk Access" = "Continue without granting Full Disk Access";
+"Done, Don't Relaunch" = "Done, Don't Relaunch";
+"Quit & Relaunch" = "Quit & Relaunch";
+"Open System Settings…" = "Open System Settings…";
+"Welcome to FileFluss" = "Welcome to FileFluss";
+"A few seconds of setup will make FileFluss feel instant." = "A few seconds of setup will make FileFluss feel instant.";
+"Grant Full Disk Access (recommended)" = "Grant Full Disk Access (recommended)";
+"FileFluss can browse every folder instantly, with no per-folder permission prompts." = "FileFluss can browse every folder instantly, with no per-folder permission prompts.";
+"Or continue without it" = "Or continue without it";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.";
+"Add FileFluss to Full Disk Access" = "Add FileFluss to Full Disk Access";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "Or click the **+** button in System Settings and pick FileFluss from your Applications folder.";
+"Drag into the Full Disk Access list" = "Drag into the Full Disk Access list";
+"Drag me into the list" = "Drag me into the list";
