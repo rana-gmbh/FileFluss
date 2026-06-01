@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 import AppKit
 import FileFlussCore
 
@@ -98,7 +99,7 @@ struct EditCloudAccountView: View {
     private var header: some View {
         HStack(spacing: 8) {
             CloudProviderIcon(providerType: account.providerType, size: 24)
-            Text("Edit \(account.displayName)")
+            Text(L10n.format("Edit %@", account.displayName))
                 .font(.title2.bold())
         }
     }
@@ -113,9 +114,9 @@ struct EditCloudAccountView: View {
         case .nextCloud:
             nextCloudFields
         case .gmxCloud:
-            emailPasswordFields(emailLabel: "GMX Email")
+            emailPasswordFields(emailLabel: L10n.text("GMX Email"))
         case .koofr:
-            emailPasswordFields(emailLabel: "Email", passwordLabel: "App Password")
+            emailPasswordFields(emailLabel: L10n.text("Email"), passwordLabel: L10n.text("App Password"))
         case .mega:
             megaFields
         case .filen:
@@ -161,12 +162,12 @@ struct EditCloudAccountView: View {
             if isPendingBrowserAuth {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
-                    Text("Waiting for sign-in in browser…")
+                    LText("Waiting for sign-in in browser…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Text("Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow.")
+                LText("Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -174,7 +175,7 @@ struct EditCloudAccountView: View {
         }
     }
 
-    private func emailPasswordFields(emailLabel: String, passwordLabel: String = "Password") -> some View {
+    private func emailPasswordFields(emailLabel: String, passwordLabel: String = L10n.text("Password")) -> some View {
         VStack(spacing: 12) {
             TextField(emailLabel, text: $email)
                 .textFieldStyle(.roundedBorder)
@@ -185,7 +186,7 @@ struct EditCloudAccountView: View {
                 .textContentType(.password)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
-            Text("Password is not stored locally and is re-entered each time you edit.")
+            LText("Password is not stored locally and is re-entered each time you edit.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -193,15 +194,15 @@ struct EditCloudAccountView: View {
 
     private var megaFields: some View {
         VStack(spacing: 12) {
-            TextField("Email", text: $email)
+            TextField(L10n.text("Email"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField("Two-factor code (only if enabled)", text: $megaOTP)
+            TextField(L10n.text("Two-factor code (only if enabled)"), text: $megaOTP)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.oneTimeCode)
                 .disabled(isAuthenticating)
@@ -211,15 +212,15 @@ struct EditCloudAccountView: View {
 
     private var filenFields: some View {
         VStack(spacing: 12) {
-            TextField("Email", text: $email)
+            TextField(L10n.text("Email"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField("Two-factor code (only if enabled)", text: $filenTwoFactor)
+            TextField(L10n.text("Two-factor code (only if enabled)"), text: $filenTwoFactor)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -228,15 +229,15 @@ struct EditCloudAccountView: View {
 
     private var internxtFields: some View {
         VStack(spacing: 12) {
-            TextField("Email", text: $email)
+            TextField(L10n.text("Email"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField("Two-factor code (only if enabled)", text: $internxtTwoFactor)
+            TextField(L10n.text("Two-factor code (only if enabled)"), text: $internxtTwoFactor)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -245,38 +246,38 @@ struct EditCloudAccountView: View {
 
     private var seafileFields: some View {
         VStack(spacing: 12) {
-            TextField("Server URL", text: $serverURL)
+            TextField(L10n.text("Server URL"), text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
                 .disabled(isAuthenticating)
-            TextField("Email", text: $email)
+            TextField(L10n.text("Email"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField("Two-factor code (only if enabled)", text: $seafileOTP)
+            TextField(L10n.text("Two-factor code (only if enabled)"), text: $seafileOTP)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
-            Toggle("Allow self-signed certificate", isOn: $seafileAllowSelfSigned)
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $seafileAllowSelfSigned)
                 .disabled(isAuthenticating)
         }
     }
 
     private var webDAVFields: some View {
         VStack(spacing: 12) {
-            TextField("Server URL", text: $serverURL)
+            TextField(L10n.text("Server URL"), text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
                 .disabled(isAuthenticating)
-            TextField("Username", text: $username)
+            TextField(L10n.text("Username"), text: $username)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
@@ -287,24 +288,24 @@ struct EditCloudAccountView: View {
     private var sftpFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                TextField("Hostname", text: $serverURL)
+                TextField(L10n.text("Hostname"), text: $serverURL)
                     .textFieldStyle(.roundedBorder)
                     .disabled(isAuthenticating)
-                TextField("Port", text: $port)
+                TextField(L10n.text("Port"), text: $port)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                     .disabled(isAuthenticating)
             }
-            TextField("Username", text: $username)
+            TextField(L10n.text("Username"), text: $username)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            TextField("Remote Path", text: $remotePath)
+            TextField(L10n.text("Remote Path"), text: $remotePath)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            Picker("Authentication", selection: $sftpAuthMethod) {
+            Picker(L10n.text("Authentication"), selection: $sftpAuthMethod) {
                 ForEach(AddCloudAccountView.SFTPAuthMethod.allCases) { method in
-                    Text(method.rawValue).tag(method)
+                    Text(L10n.text(method.rawValue)).tag(method)
                 }
             }
             .pickerStyle(.segmented)
@@ -313,14 +314,14 @@ struct EditCloudAccountView: View {
             if sftpAuthMethod == .privateKey {
                 sftpKeyFields
             } else {
-                SecureField("Password", text: $password)
+                SecureField(L10n.text("Password"), text: $password)
                     .textFieldStyle(.roundedBorder)
                     .textContentType(.password)
                     .disabled(isAuthenticating)
                     .onSubmit { save() }
             }
 
-            Text("Credentials (password or key) are not prefilled and must be re-entered.")
+            LText("Credentials (password or key) are not prefilled and must be re-entered.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -333,7 +334,7 @@ struct EditCloudAccountView: View {
                     sftpKeyImportError = nil
                     sftpKeyImporterPresented = true
                 } label: {
-                    Label(sftpPrivateKeyFilename.isEmpty ? "Choose Private Key…" : "Replace Private Key…",
+                    Label(sftpPrivateKeyFilename.isEmpty ? L10n.text("Choose Private Key…") : L10n.text("Replace Private Key…"),
                           systemImage: "key.horizontal")
                 }
                 .disabled(isAuthenticating)
@@ -348,7 +349,7 @@ struct EditCloudAccountView: View {
             if let err = sftpKeyImportError {
                 Text(err).font(.caption).foregroundStyle(.red)
             }
-            SecureField("Passphrase (leave empty if key has none)", text: $sftpPassphrase)
+            SecureField(L10n.text("Passphrase (leave empty if key has none)"), text: $sftpPassphrase)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -366,19 +367,19 @@ struct EditCloudAccountView: View {
                 do {
                     let data = try Data(contentsOf: url)
                     guard let text = String(data: data, encoding: .utf8) else {
-                        sftpKeyImportError = "Key file is not a UTF-8 text PEM."
+                        sftpKeyImportError = L10n.text("Key file is not a UTF-8 text PEM.")
                         return
                     }
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard trimmed.hasPrefix("-----BEGIN") else {
-                        sftpKeyImportError = "That doesn't look like a PEM private key."
+                        sftpKeyImportError = L10n.text("That doesn't look like a PEM private key.")
                         return
                     }
                     sftpPrivateKeyContents = text
                     sftpPrivateKeyFilename = url.lastPathComponent
                     sftpKeyImportError = nil
                 } catch {
-                    sftpKeyImportError = "Could not read key file: \(error.localizedDescription)"
+                    sftpKeyImportError = L10n.format("Could not read key file: %@", error.localizedDescription)
                 }
             case .failure(let error):
                 sftpKeyImportError = error.localizedDescription
@@ -388,38 +389,38 @@ struct EditCloudAccountView: View {
 
     private var synologyDriveFields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Server URL", text: $serverURL)
+            TextField(L10n.text("Server URL"), text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
                 .disabled(isAuthenticating)
-            TextField("Username", text: $username)
+            TextField(L10n.text("Username"), text: $username)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField("OTP Code (only if 2-factor auth is on)", text: $synologyOTP)
+            TextField(L10n.text("OTP Code (only if 2-factor auth is on)"), text: $synologyOTP)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
-            Toggle("Allow self-signed certificate", isOn: $synologyAllowSelfSigned)
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $synologyAllowSelfSigned)
                 .disabled(isAuthenticating)
         }
     }
 
     private var wordPressFields: some View {
         VStack(spacing: 12) {
-            TextField("Site URL", text: $serverURL)
+            TextField(L10n.text("Site URL"), text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
                 .disabled(isAuthenticating)
-            TextField("Username", text: $username)
+            TextField(L10n.text("Username"), text: $username)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            SecureField("Application Password", text: $password)
+            SecureField(L10n.text("Application Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -428,15 +429,15 @@ struct EditCloudAccountView: View {
 
     private var s3Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Access Key ID", text: $s3AccessKeyId)
+            TextField(L10n.text("Access Key ID"), text: $s3AccessKeyId)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            SecureField("Secret Access Key", text: $s3SecretAccessKey)
+            SecureField(L10n.text("Secret Access Key"), text: $s3SecretAccessKey)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
             HStack {
-                Text("Region").frame(width: 80, alignment: .leading)
-                Picker("", selection: $s3Region) {
+                LText("Region").frame(width: 80, alignment: .leading)
+                Picker(L10n.text(""), selection: $s3Region) {
                     ForEach(S3RegionList.allRegions, id: \.code) { region in
                         Text("\(region.displayName) (\(region.code))").tag(region.code)
                     }
@@ -444,10 +445,10 @@ struct EditCloudAccountView: View {
                 .labelsHidden()
                 .disabled(isAuthenticating)
             }
-            TextField("Or type a custom region code", text: $s3Region)
+            TextField(L10n.text("Or type a custom region code"), text: $s3Region)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Path (optional)", text: $s3Path)
+            TextField(L10n.text("Path (optional)"), text: $s3Path)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -456,22 +457,22 @@ struct EditCloudAccountView: View {
 
     private var s3CompatibleFields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Access Key ID", text: $s3AccessKeyId)
+            TextField(L10n.text("Access Key ID"), text: $s3AccessKeyId)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            SecureField("Secret Access Key", text: $s3SecretAccessKey)
+            SecureField(L10n.text("Secret Access Key"), text: $s3SecretAccessKey)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Endpoint URL", text: $s3Endpoint)
+            TextField(L10n.text("Endpoint URL"), text: $s3Endpoint)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Region", text: $s3Region)
+            TextField(L10n.text("Region"), text: $s3Region)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Display name (optional)", text: $s3DisplayName)
+            TextField(L10n.text("Display name (optional)"), text: $s3DisplayName)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Path (optional)", text: $s3Path)
+            TextField(L10n.text("Path (optional)"), text: $s3Path)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -480,13 +481,13 @@ struct EditCloudAccountView: View {
 
     private var synologyC2Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Access Key ID", text: $s3AccessKeyId)
+            TextField(L10n.text("Access Key ID"), text: $s3AccessKeyId)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            SecureField("Secret Access Key", text: $s3SecretAccessKey)
+            SecureField(L10n.text("Secret Access Key"), text: $s3SecretAccessKey)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            TextField("Endpoint URL", text: $s3Region)
+            TextField(L10n.text("Endpoint URL"), text: $s3Region)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -495,16 +496,16 @@ struct EditCloudAccountView: View {
 
     private var nextCloudFields: some View {
         VStack(spacing: 12) {
-            Picker("Sign-in method", selection: $nextCloudMode) {
+            Picker(L10n.text("Sign-in method"), selection: $nextCloudMode) {
                 ForEach(AddCloudAccountView.NextCloudAuthMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+                    Text(L10n.text(mode.rawValue)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
             .disabled(isAuthenticating || appState.syncManager.isAuthenticatingNextCloud)
             .labelsHidden()
 
-            TextField("Server URL", text: $serverURL)
+            TextField(L10n.text("Server URL"), text: $serverURL)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.URL)
                 .disabled(isAuthenticating || appState.syncManager.isAuthenticatingNextCloud)
@@ -514,23 +515,23 @@ struct EditCloudAccountView: View {
                 if appState.syncManager.isAuthenticatingNextCloud {
                     HStack(spacing: 8) {
                         ProgressView().scaleEffect(0.7)
-                        Text("Waiting for sign-in in browser…")
+                        LText("Waiting for sign-in in browser…")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one.")
+                    LText("Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             case .appPassword:
-                TextField("Username", text: $username)
+                TextField(L10n.text("Username"), text: $username)
                     .textFieldStyle(.roundedBorder)
                     .textContentType(.username)
                     .disabled(isAuthenticating)
-                SecureField("App Password", text: $password)
+                SecureField(L10n.text("App Password"), text: $password)
                     .textFieldStyle(.roundedBorder)
                     .disabled(isAuthenticating)
                     .onSubmit { save() }
@@ -540,19 +541,19 @@ struct EditCloudAccountView: View {
 
     private var pCloudFields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SecureField("Access Token (pcauth cookie value)", text: $apiToken)
+            SecureField(L10n.text("Access Token (pcauth cookie value)"), text: $apiToken)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
             Divider().padding(.vertical, 4)
-            Text("Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens).")
+            LText("Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            TextField("Email", text: $email)
+            TextField(L10n.text("Email"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -561,11 +562,11 @@ struct EditCloudAccountView: View {
 
     private var kDriveFields: some View {
         VStack(spacing: 12) {
-            SecureField("API Token", text: $apiToken)
+            SecureField(L10n.text("API Token"), text: $apiToken)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
-            Text("Paste a new Infomaniak API token. The existing workspace selection is preserved.")
+            LText("Paste a new Infomaniak API token. The existing workspace selection is preserved.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -573,7 +574,7 @@ struct EditCloudAccountView: View {
     }
 
     private var iCloudHint: some View {
-        Text("iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.")
+        LText("iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -581,7 +582,7 @@ struct EditCloudAccountView: View {
     }
 
     private var teraboxHint: some View {
-        Text("TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.")
+        LText("TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -591,30 +592,30 @@ struct EditCloudAccountView: View {
     private var ftpFields: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
-                TextField("Server", text: $serverURL)
+                TextField(L10n.text("Server"), text: $serverURL)
                     .textFieldStyle(.roundedBorder)
                     .disabled(isAuthenticating)
-                TextField("Port", text: $port)
+                TextField(L10n.text("Port"), text: $port)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 70)
                     .disabled(isAuthenticating)
             }
-            TextField("Username", text: $username)
+            TextField(L10n.text("Username"), text: $username)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.username)
                 .disabled(isAuthenticating)
-            SecureField("Password", text: $password)
+            SecureField(L10n.text("Password"), text: $password)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
-            TextField("Initial path", text: $remotePath)
+            TextField(L10n.text("Initial path"), text: $remotePath)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
-            Toggle("Use FTPS (TLS)", isOn: $ftpUseTLS)
+            Toggle(L10n.text("Use FTPS (TLS)"), isOn: $ftpUseTLS)
                 .disabled(isAuthenticating)
             if ftpUseTLS {
-                Toggle("Allow self-signed certificate", isOn: $ftpAllowSelfSigned)
+                Toggle(L10n.text("Allow self-signed certificate"), isOn: $ftpAllowSelfSigned)
                     .disabled(isAuthenticating)
             }
         }
@@ -624,7 +625,7 @@ struct EditCloudAccountView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            Button("Cancel") { dismiss() }
+            Button(L10n.text("Cancel")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
                 .disabled(isAuthenticating)
 
@@ -648,32 +649,32 @@ struct EditCloudAccountView: View {
                 || appState.syncManager.isAuthenticatingOneDrive
                 || appState.syncManager.isAuthenticatingBox
             if isPendingBrowserAuth {
-                Button("Cancel Sign-In", role: .destructive) {
+                Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                     saveTask?.cancel()
                     saveTask = nil
                     appState.syncManager.cancelPendingBrowserAuth()
                     isAuthenticating = false
                 }
             } else {
-                Button("Re-authorize") { save() }
+                Button(L10n.text("Re-authorize")) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(isAuthenticating)
             }
         case .nextCloud where nextCloudMode == .browser:
             if appState.syncManager.isAuthenticatingNextCloud {
-                Button("Cancel Sign-In", role: .destructive) {
+                Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                     saveTask?.cancel()
                     saveTask = nil
                     appState.syncManager.cancelPendingBrowserAuth()
                     isAuthenticating = false
                 }
             } else {
-                Button("Re-authorize") { save() }
+                Button(L10n.text("Re-authorize")) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(serverURL.isEmpty || isAuthenticating)
             }
         default:
-            Button("Save") { save() }
+            Button(L10n.text("Save")) { save() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!hasChanges || !isFormValid || isAuthenticating)
         }

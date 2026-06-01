@@ -605,3 +605,28 @@
 "Username" = "Benutzername";
 "Waiting for sign-in in browser…" = "Warte auf Anmeldung im Browser …";
 "pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token." = "pCloud stellt für Drittanbieter-Apps keine Auth-Tokens mehr über die Passwortanmeldung aus. Du kannst unten weiterhin E-Mail + Passwort versuchen, aber die meisten Konten müssen ein Access-Token einfügen.";
+
+/* Edit Cloud Account */
+"Choose Private Key…" = "Privaten Schlüssel wählen …";
+"Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one." = "Klicke auf „Neu autorisieren“, um die Anmeldeseite deines Servers im Browser zu öffnen. Es wird ein neues App-Passwort ausgestellt, das das gespeicherte ersetzt.";
+"Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow." = "Klicke auf „Neu autorisieren“, um dich erneut anzumelden. Dein Browser öffnet sich, und das bestehende Token wird ersetzt, sobald du den Vorgang abgeschlossen hast.";
+"Credentials (password or key) are not prefilled and must be re-entered." = "Zugangsdaten (Passwort oder Schlüssel) werden nicht vorausgefüllt und müssen erneut eingegeben werden.";
+"Display name (optional)" = "Anzeigename (optional)";
+"Edit %@" = "%@ bearbeiten";
+"Endpoint URL" = "Endpunkt-URL";
+"Hostname" = "Hostname";
+"Initial path" = "Anfangspfad";
+"Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens)." = "Oder melde dich mit E-Mail und Passwort an (pCloud verweigert Drittanbieter-Apps möglicherweise ein neues Token — füge oben ein pcauth-Cookie ein, falls das passiert).";
+"Password is not stored locally and is re-entered each time you edit." = "Das Passwort wird nicht lokal gespeichert und bei jeder Bearbeitung erneut eingegeben.";
+"Paste a new Infomaniak API token. The existing workspace selection is preserved." = "Füge ein neues Infomaniak-API-Token ein. Die bestehende Workspace-Auswahl bleibt erhalten.";
+"Path (optional)" = "Pfad (optional)";
+"Re-authorize" = "Neu autorisieren";
+"Remote Path" = "Remote-Pfad";
+"Replace Private Key…" = "Privaten Schlüssel ersetzen …";
+"Save" = "Sichern";
+"Server" = "Server";
+"Server URL" = "Server-URL";
+"Site URL" = "Site-URL";
+"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox meldet sich mit einem in der TeraBox-App gescannten QR-Code an — hier gibt es nichts zu bearbeiten. Zum erneuten Verbinden entferne dieses Konto und füge es erneut hinzu.";
+"That doesn't look like a PEM private key." = "Das sieht nicht nach einem privaten PEM-Schlüssel aus.";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud verwendet die System-Anmeldung deines Macs — hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in den Systemeinstellungen → Apple-Account → iCloud.";

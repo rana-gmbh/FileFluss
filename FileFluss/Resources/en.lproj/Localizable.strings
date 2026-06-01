@@ -605,3 +605,28 @@
 "Username" = "Username";
 "Waiting for sign-in in browser…" = "Waiting for sign-in in browser…";
 "pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token." = "pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token.";
+
+/* Edit Cloud Account */
+"Choose Private Key…" = "Choose Private Key…";
+"Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one." = "Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one.";
+"Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow." = "Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow.";
+"Credentials (password or key) are not prefilled and must be re-entered." = "Credentials (password or key) are not prefilled and must be re-entered.";
+"Display name (optional)" = "Display name (optional)";
+"Edit %@" = "Edit %@";
+"Endpoint URL" = "Endpoint URL";
+"Hostname" = "Hostname";
+"Initial path" = "Initial path";
+"Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens)." = "Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens).";
+"Password is not stored locally and is re-entered each time you edit." = "Password is not stored locally and is re-entered each time you edit.";
+"Paste a new Infomaniak API token. The existing workspace selection is preserved." = "Paste a new Infomaniak API token. The existing workspace selection is preserved.";
+"Path (optional)" = "Path (optional)";
+"Re-authorize" = "Re-authorize";
+"Remote Path" = "Remote Path";
+"Replace Private Key…" = "Replace Private Key…";
+"Save" = "Save";
+"Server" = "Server";
+"Server URL" = "Server URL";
+"Site URL" = "Site URL";
+"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.";
+"That doesn't look like a PEM private key." = "That doesn't look like a PEM private key.";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.";

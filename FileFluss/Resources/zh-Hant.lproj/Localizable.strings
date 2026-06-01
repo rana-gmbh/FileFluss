@@ -605,3 +605,28 @@
 "Username" = "使用者名稱";
 "Waiting for sign-in in browser…" = "正在等待瀏覽器中的登入…";
 "pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token." = "pCloud 不再透過密碼登入為第三方應用程式簽發驗證權杖。你仍可在下方嘗試電子郵件 + 密碼，但大多數帳戶需要貼上存取權杖。";
+
+/* Edit Cloud Account */
+"Choose Private Key…" = "選擇私鑰…";
+"Click Re-authorize to open your server's login page in the browser. A new app password is issued and replaces the stored one." = "點按「重新授權」以在瀏覽器中打開你伺服器的登入頁面。系統會簽發一個新的應用程式專用密碼並取代已儲存的密碼。";
+"Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow." = "點按「重新授權」以重新登入。你的瀏覽器將打開，完成流程後現有權杖會被取代。";
+"Credentials (password or key) are not prefilled and must be re-entered." = "憑證（密碼或金鑰）不會預先填入，必須重新輸入。";
+"Display name (optional)" = "顯示名稱（可選）";
+"Edit %@" = "編輯 %@";
+"Endpoint URL" = "端點 URL";
+"Hostname" = "主機名稱";
+"Initial path" = "初始路徑";
+"Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens)." = "或使用電子郵件和密碼登入（pCloud 可能拒絕向第三方應用程式簽發新權杖——如果發生這種情況，請在上方貼上 pcauth Cookie）。";
+"Password is not stored locally and is re-entered each time you edit." = "密碼不會儲存在本機，每次編輯時都需重新輸入。";
+"Paste a new Infomaniak API token. The existing workspace selection is preserved." = "貼上一個新的 Infomaniak API 權杖。現有的工作區選擇將保留。";
+"Path (optional)" = "路徑（可選）";
+"Re-authorize" = "重新授權";
+"Remote Path" = "遠端路徑";
+"Replace Private Key…" = "取代私鑰…";
+"Save" = "儲存";
+"Server" = "伺服器";
+"Server URL" = "伺服器 URL";
+"Site URL" = "網站 URL";
+"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox 透過在 TeraBox 應用程式中掃描 QR 碼登入——此處無可編輯內容。若要重新連接，請移除此帳戶並重新加入。";
+"That doesn't look like a PEM private key." = "這看起來不像 PEM 私鑰。";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用你 Mac 的系統登入——此處無可編輯內容。請在 系統設定 → Apple 帳戶 → iCloud 中管理 iCloud 雲碟。";
