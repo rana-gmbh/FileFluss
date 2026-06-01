@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct CompareFoldersView: View {
     @Environment(AppState.self) private var appState
@@ -52,7 +53,7 @@ struct CompareFoldersView: View {
 
     private var header: some View {
         HStack {
-            Text("Compare Folders")
+            LText("Compare Folders")
                 .font(.title2).bold()
             Spacer()
             if let result, !isCalculating {
@@ -70,7 +71,7 @@ struct CompareFoldersView: View {
                     .background(.quaternary, in: Circle())
             }
             .buttonStyle(.plain)
-            .help("Close (Esc)")
+            .help(L10n.text("Close (Esc)"))
             .keyboardShortcut(.cancelAction)
         }
     }
@@ -78,20 +79,20 @@ struct CompareFoldersView: View {
     private var endpointsRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
-                endpointCard(title: "Left", endpoint: snapshotLeft)
+                endpointCard(title: L10n.text("Left"), endpoint: snapshotLeft)
                 Image(systemName: "arrow.left.and.right")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .padding(.top, 22)
-                endpointCard(title: "Right", endpoint: snapshotRight)
+                endpointCard(title: L10n.text("Right"), endpoint: snapshotRight)
             }
             HStack(spacing: 8) {
                 Toggle(isOn: $compareDates) {
-                    Text("Compare Date")
+                    LText("Compare Date")
                         .font(.callout)
                 }
                 .toggleStyle(.checkbox)
-                .help("Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates.")
+                .help(L10n.text("Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates."))
                 .onChange(of: compareDates) { _, _ in
                     recompute()
                 }
@@ -101,10 +102,10 @@ struct CompareFoldersView: View {
                     // and re-run the comparison. .task(id:) handles the rest.
                     appState.compareTrigger = UUID()
                 } label: {
-                    Label("Compare Again", systemImage: "arrow.clockwise")
+                    Label(L10n.text("Compare Again"), systemImage: "arrow.clockwise")
                         .font(.callout)
                 }
-                .help("Re-run the comparison against the panels' current folders")
+                .help(L10n.text("Re-run the comparison against the panels' current folders"))
                 .disabled(isCalculating)
             }
         }
@@ -134,7 +135,7 @@ struct CompareFoldersView: View {
                         .truncationMode(.middle)
                 }
             } else {
-                Text("No folder open")
+                LText("No folder open")
                     .foregroundStyle(.secondary)
                     .italic()
             }
@@ -149,7 +150,7 @@ struct CompareFoldersView: View {
     private var loadingView: some View {
         VStack(spacing: 10) {
             ProgressView()
-            Text("Reading folders…")
+            LText("Reading folders…")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -165,7 +166,7 @@ struct CompareFoldersView: View {
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-            Button("Try Again") { Task { await calculate() } }
+            Button(L10n.text("Try Again")) { Task { await calculate() } }
                 .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -174,9 +175,9 @@ struct CompareFoldersView: View {
 
     private var placeholderView: some View {
         ContentUnavailableView(
-            "Open a folder on each side to compare",
+            L10n.text("Open a folder on each side to compare"),
             systemImage: "rectangle.split.2x1",
-            description: Text("Both panels need a folder selected to run a comparison.")
+            description: Text(L10n.text("Both panels need a folder selected to run a comparison."))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -192,7 +193,7 @@ struct CompareFoldersView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if visibleTopLevel.isEmpty {
-                        Text("Nothing matches this filter.")
+                        LText("Nothing matches this filter.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 30)
@@ -374,7 +375,7 @@ struct CompareFoldersView: View {
                         filter = f
                     } label: {
                         HStack(spacing: 4) {
-                            Text(f.rawValue)
+                            Text(L10n.text(f.rawValue))
                             Text("(\(count))")
                                 .foregroundStyle(.secondary)
                         }
@@ -412,14 +413,14 @@ struct CompareFoldersView: View {
 
     private func modifiedDateDetail(_ entry: FolderCompareEntry) -> String? {
         guard entry.leftDate != nil || entry.rightDate != nil else { return nil }
-        return "Modified — Left: \(formatDate(entry.leftDate))  •  Right: \(formatDate(entry.rightDate))"
+        return L10n.format("Modified — Left: %@  •  Right: %@", formatDate(entry.leftDate), formatDate(entry.rightDate))
     }
 
     private func createdDateDetail(_ entry: FolderCompareEntry) -> String? {
         // Only render when at least one side has a creation date (cloud
         // listings don't carry one, so suppress the row in that case).
         guard entry.leftCreated != nil || entry.rightCreated != nil else { return nil }
-        return "Created  — Left: \(formatDate(entry.leftCreated))  •  Right: \(formatDate(entry.rightCreated))"
+        return L10n.format("Created  — Left: %@  •  Right: %@", formatDate(entry.leftCreated), formatDate(entry.rightCreated))
     }
 
     // MARK: - Helpers
@@ -431,18 +432,18 @@ struct CompareFoldersView: View {
             if let s = entry.leftSize { return ByteCountFormatter.string(fromByteCount: s, countStyle: .file) }
             return nil
         case .onlyLeft:
-            if let s = entry.leftSize { return "Left: \(ByteCountFormatter.string(fromByteCount: s, countStyle: .file))" }
+            if let s = entry.leftSize { return L10n.format("Left: %@", ByteCountFormatter.string(fromByteCount: s, countStyle: .file)) }
             return nil
         case .onlyRight:
-            if let s = entry.rightSize { return "Right: \(ByteCountFormatter.string(fromByteCount: s, countStyle: .file))" }
+            if let s = entry.rightSize { return L10n.format("Right: %@", ByteCountFormatter.string(fromByteCount: s, countStyle: .file)) }
             return nil
         case .differs:
             if entry.leftSize == entry.rightSize, let s = entry.leftSize {
-                return "Same size: \(ByteCountFormatter.string(fromByteCount: s, countStyle: .file))"
+                return L10n.format("Same size: %@", ByteCountFormatter.string(fromByteCount: s, countStyle: .file))
             }
             let l = entry.leftSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—"
             let r = entry.rightSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—"
-            return "Left: \(l) • Right: \(r) — different size"
+            return L10n.format("Left: %@ • Right: %@ — different size", l, r)
         }
     }
 
@@ -482,9 +483,9 @@ struct CompareFoldersView: View {
         let same = result.identicalCount
         let total = diff + onlyL + onlyR
         if total == 0 {
-            return "Folders are identical (\(same) items)"
+            return L10n.format("Folders are identical (%d items)", same)
         }
-        return "\(diff) different • \(onlyL) only-left • \(onlyR) only-right • \(same) same"
+        return L10n.format("%d different • %d only-left • %d only-right • %d same", diff, onlyL, onlyR, same)
     }
 
     // MARK: - Endpoints / calculation

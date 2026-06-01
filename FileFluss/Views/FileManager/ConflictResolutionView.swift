@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 import UniformTypeIdentifiers
 
 // MARK: - Shared Conflict Types
@@ -61,7 +62,7 @@ struct ConflictResolutionView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.title2)
                 .foregroundStyle(.yellow)
-            Text("An item named \"\(conflict.source.name)\" already exists in this location. What would you like to do?")
+            Text(L10n.format("An item named \"%@\" already exists in this location. What would you like to do?", conflict.source.name))
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -152,11 +153,11 @@ struct ConflictResolutionView: View {
 
     private func ageLabel(for date: Date, against other: Date) -> String {
         if date > other {
-            return "This file is newer."
+            return L10n.text("This file is newer.")
         } else if date < other {
-            return "This file is older."
+            return L10n.text("This file is older.")
         } else {
-            return "Same date."
+            return L10n.text("Same date.")
         }
     }
 
@@ -176,7 +177,7 @@ struct ConflictResolutionView: View {
     private var actionBar: some View {
         HStack(spacing: 12) {
             actionButton(
-                label: "Apply to all",
+                label: L10n.text("Apply to all"),
                 icon: applyToAll ? "checkmark.circle.fill" : "circle",
                 color: applyToAll ? .blue : .secondary,
                 isToggle: true
@@ -186,19 +187,19 @@ struct ConflictResolutionView: View {
 
             Spacer()
 
-            actionButton(label: "Stop", icon: "xmark.circle.fill", color: .red) {
+            actionButton(label: L10n.text("Stop"), icon: "xmark.circle.fill", color: .red) {
                 onResolve(ConflictResolution(choice: .stop, applyToAll: applyToAll))
             }
 
-            actionButton(label: "Skip", icon: "arrow.uturn.right.circle.fill", color: .secondary) {
+            actionButton(label: L10n.text("Skip"), icon: "arrow.uturn.right.circle.fill", color: .secondary) {
                 onResolve(ConflictResolution(choice: .skip, applyToAll: applyToAll))
             }
 
-            actionButton(label: "Keep Both", icon: "doc.on.doc.fill", color: .secondary) {
+            actionButton(label: L10n.text("Keep Both"), icon: "doc.on.doc.fill", color: .secondary) {
                 onResolve(ConflictResolution(choice: .keepBoth, applyToAll: applyToAll))
             }
 
-            actionButton(label: "Replace", icon: "arrowshape.right.circle.fill", color: .blue) {
+            actionButton(label: L10n.text("Replace"), icon: "arrowshape.right.circle.fill", color: .blue) {
                 onResolve(ConflictResolution(choice: .replace, applyToAll: applyToAll))
             }
         }

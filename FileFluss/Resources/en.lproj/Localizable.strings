@@ -370,3 +370,78 @@
 "yesterday" = "yesterday";
 "%d days ago" = "%d days ago";
 "%@ · %@ files" = "%@ · %@ files";
+
+/* Sync planner */
+"No folder open" = "No folder open";
+"Direction" = "Direction";
+"Left → Right" = "Left → Right";
+"Left ← Right" = "Left ← Right";
+"Mode" = "Mode";
+"I understand files on the destination will be deleted." = "I understand files on the destination will be deleted.";
+"Plan" = "Plan";
+"Calculate" = "Calculate";
+"Files to add:" = "Files to add:";
+"Files to replace:" = "Files to replace:";
+"Files to delete:" = "Files to delete:";
+"Folders to add:" = "Folders to add:";
+"Folders to delete:" = "Folders to delete:";
+"Download:" = "Download:";
+"Upload:" = "Upload:";
+"Transfer:" = "Transfer:";
+"Available:" = "Available:";
+"After sync:" = "After sync:";
+"This sync would exceed the available space at the destination." = "This sync would exceed the available space at the destination.";
+"Press Calculate to compute how many files will be added, replaced, or deleted." = "Press Calculate to compute how many files will be added, replaced, or deleted.";
+"Start Sync" = "Start Sync";
+"Mirror (replace all)" = "Mirror (replace all)";
+"Update newer files" = "Update newer files";
+"Add only (keep both on conflict)" = "Add only (keep both on conflict)";
+"Destination will match source exactly. Extra files on the destination will be deleted." = "Destination will match source exactly. Extra files on the destination will be deleted.";
+"Copies missing files and replaces files that are older than the source." = "Copies missing files and replaces files that are older than the source.";
+"Copies missing files. When a file exists on both sides, the source copy is added with a unique name." = "Copies missing files. When a file exists on both sides, the source copy is added with a unique name.";
+
+/* Conflict resolution */
+"An item named \"%@\" already exists in this location. What would you like to do?" = "An item named \"%@\" already exists in this location. What would you like to do?";
+"This file is newer." = "This file is newer.";
+"This file is older." = "This file is older.";
+"Same date." = "Same date.";
+"Apply to all" = "Apply to all";
+"Stop" = "Stop";
+"Skip" = "Skip";
+"Keep Both" = "Keep Both";
+"Replace" = "Replace";
+
+/* Search */
+"Search files across all sources..." = "Search files across all sources...";
+"Clear search" = "Clear search";
+"Close (Esc)" = "Close (Esc)";
+"%d results" = "%d results";
+"Show offline results" = "Show offline results";
+"Includes indexed drives & disconnected accounts" = "Includes indexed drives & disconnected accounts";
+"Search All Sources" = "Search All Sources";
+"Search across local files and all connected cloud accounts" = "Search across local files and all connected cloud accounts";
+"Open in Left Panel" = "Open in Left Panel";
+"Open in Right Panel" = "Open in Right Panel";
+
+/* Compare folders */
+"Compare Date" = "Compare Date";
+"Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates." = "Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates.";
+"Compare Again" = "Compare Again";
+"Re-run the comparison against the panels' current folders" = "Re-run the comparison against the panels' current folders";
+"Reading folders…" = "Reading folders…";
+"Open a folder on each side to compare" = "Open a folder on each side to compare";
+"Both panels need a folder selected to run a comparison." = "Both panels need a folder selected to run a comparison.";
+"Nothing matches this filter." = "Nothing matches this filter.";
+"All" = "All";
+"Differences" = "Differences";
+"Only Left" = "Only Left";
+"Only Right" = "Only Right";
+"Identical" = "Identical";
+"Folders are identical (%d items)" = "Folders are identical (%d items)";
+"%d different • %d only-left • %d only-right • %d same" = "%d different • %d only-left • %d only-right • %d same";
+"Modified — Left: %@  •  Right: %@" = "Modified — Left: %@  •  Right: %@";
+"Created  — Left: %@  •  Right: %@" = "Created  — Left: %@  •  Right: %@";
+"Left: %@" = "Left: %@";
+"Right: %@" = "Right: %@";
+"Same size: %@" = "Same size: %@";
+"Left: %@ • Right: %@ — different size" = "Left: %@ • Right: %@ — different size";

@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 
 struct SyncPlannerView: View {
     @Environment(AppState.self) private var appState
@@ -16,7 +17,7 @@ struct SyncPlannerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Sync")
+            LText("Sync")
                 .font(.title2).bold()
 
             endpointsSection
@@ -43,13 +44,13 @@ struct SyncPlannerView: View {
 
     private var endpointsSection: some View {
         HStack(alignment: .top, spacing: 12) {
-            endpointCard(title: "Left", endpoint: leftEndpoint)
+            endpointCard(title: L10n.text("Left"), endpoint: leftEndpoint)
             Image(systemName: direction == .leftToRight ? "arrow.right" : "arrow.left")
                 .font(.title2)
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
                 .padding(.top, 24)
-            endpointCard(title: "Right", endpoint: rightEndpoint)
+            endpointCard(title: L10n.text("Right"), endpoint: rightEndpoint)
         }
     }
 
@@ -77,7 +78,7 @@ struct SyncPlannerView: View {
                         .font(.callout)
                 }
             } else {
-                Text("No folder open")
+                LText("No folder open")
                     .foregroundStyle(.secondary)
                     .italic()
             }
@@ -89,11 +90,11 @@ struct SyncPlannerView: View {
 
     private var directionSection: some View {
         HStack {
-            Text("Direction").font(.headline)
+            LText("Direction").font(.headline)
             Spacer()
             Picker("", selection: $direction) {
-                Text("Left → Right").tag(PlanDirection.leftToRight)
-                Text("Left ← Right").tag(PlanDirection.rightToLeft)
+                LText("Left → Right").tag(PlanDirection.leftToRight)
+                LText("Left ← Right").tag(PlanDirection.rightToLeft)
             }
             .pickerStyle(.segmented)
             .frame(width: 240)
@@ -103,7 +104,7 @@ struct SyncPlannerView: View {
 
     private var modeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Mode").font(.headline)
+            LText("Mode").font(.headline)
             ForEach(SyncMode.allCases, id: \.self) { option in
                 Button {
                     mode = option
@@ -113,8 +114,8 @@ struct SyncPlannerView: View {
                             .foregroundStyle(mode == option ? Color.accentColor : .secondary)
                             .padding(.top, 2)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(option.title).font(.callout).bold()
-                            Text(option.subtitle).font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.text(option.title)).font(.callout).bold()
+                            Text(L10n.text(option.subtitle)).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,7 +125,7 @@ struct SyncPlannerView: View {
             }
             if mode.isDestructive {
                 Toggle(isOn: $confirmDestructive) {
-                    Text("I understand files on the destination will be deleted.")
+                    LText("I understand files on the destination will be deleted.")
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -138,7 +139,7 @@ struct SyncPlannerView: View {
     private var planSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Plan").font(.headline)
+                LText("Plan").font(.headline)
                 Spacer()
                 Button {
                     Task { await calculate() }
@@ -146,7 +147,7 @@ struct SyncPlannerView: View {
                     if isCalculating {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text("Calculate")
+                        LText("Calculate")
                     }
                 }
                 .disabled(isCalculating || leftEndpoint == nil || rightEndpoint == nil)
@@ -154,47 +155,47 @@ struct SyncPlannerView: View {
 
             if let plan {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                    GridRow { Text("Files to add:").foregroundStyle(.secondary); Text("\(plan.filesToAdd)") }
-                    GridRow { Text("Files to replace:").foregroundStyle(.secondary); Text("\(plan.filesToReplace)") }
+                    GridRow { LText("Files to add:").foregroundStyle(.secondary); Text("\(plan.filesToAdd)") }
+                    GridRow { LText("Files to replace:").foregroundStyle(.secondary); Text("\(plan.filesToReplace)") }
                     GridRow {
-                        Text("Files to delete:").foregroundStyle(.secondary)
+                        LText("Files to delete:").foregroundStyle(.secondary)
                         Text("\(plan.filesToDelete)")
                             .foregroundStyle(plan.filesToDelete > 0 ? .red : .primary)
                     }
-                    GridRow { Text("Folders to add:").foregroundStyle(.secondary); Text("\(plan.foldersToAdd)") }
+                    GridRow { LText("Folders to add:").foregroundStyle(.secondary); Text("\(plan.foldersToAdd)") }
                     GridRow {
-                        Text("Folders to delete:").foregroundStyle(.secondary)
+                        LText("Folders to delete:").foregroundStyle(.secondary)
                         Text("\(plan.foldersToDelete)")
                             .foregroundStyle(plan.foldersToDelete > 0 ? .red : .primary)
                     }
                     Divider().gridCellColumns(2)
                     if plan.downloadBytes > 0 {
                         GridRow {
-                            Text("Download:").foregroundStyle(.secondary)
+                            LText("Download:").foregroundStyle(.secondary)
                             Text(ByteCountFormatter.string(fromByteCount: plan.downloadBytes, countStyle: .file))
                         }
                     }
                     if plan.uploadBytes > 0 {
                         GridRow {
-                            Text("Upload:").foregroundStyle(.secondary)
+                            LText("Upload:").foregroundStyle(.secondary)
                             Text(ByteCountFormatter.string(fromByteCount: plan.uploadBytes, countStyle: .file))
                         }
                     }
                     if plan.downloadBytes == 0 && plan.uploadBytes == 0 && plan.totalBytes > 0 {
                         GridRow {
-                            Text("Transfer:").foregroundStyle(.secondary)
+                            LText("Transfer:").foregroundStyle(.secondary)
                             Text(ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file))
                         }
                     }
                     if let available = destAvailable {
                         Divider().gridCellColumns(2)
                         GridRow {
-                            Text("Available:").foregroundStyle(.secondary)
+                            LText("Available:").foregroundStyle(.secondary)
                             Text(ByteCountFormatter.string(fromByteCount: available, countStyle: .file))
                         }
                         let after = available - plan.netDestinationDelta
                         GridRow {
-                            Text("After sync:").foregroundStyle(.secondary)
+                            LText("After sync:").foregroundStyle(.secondary)
                             Text(ByteCountFormatter.string(fromByteCount: max(0, after), countStyle: .file))
                                 .foregroundStyle(after < 0 ? .red : .primary)
                         }
@@ -203,14 +204,14 @@ struct SyncPlannerView: View {
                 .font(.callout)
 
                 if let available = destAvailable, available - plan.netDestinationDelta < 0 {
-                    Label("This sync would exceed the available space at the destination.",
+                    Label(L10n.text("This sync would exceed the available space at the destination."),
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.top, 2)
                 }
             } else {
-                Text("Press Calculate to compute how many files will be added, replaced, or deleted.")
+                LText("Press Calculate to compute how many files will be added, replaced, or deleted.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -220,8 +221,8 @@ struct SyncPlannerView: View {
     private var footerButtons: some View {
         HStack {
             Spacer()
-            Button("Cancel", role: .cancel) { dismiss() }
-            Button("Start Sync") {
+            Button(L10n.text("Cancel"), role: .cancel) { dismiss() }
+            Button(L10n.text("Start Sync")) {
                 Task { await startSync() }
             }
             .keyboardShortcut(.defaultAction)

@@ -370,3 +370,78 @@
 "yesterday" = "昨天";
 "%d days ago" = "%d 天前";
 "%@ · %@ files" = "%1$@ · %2$@ 个文件";
+
+/* Sync planner */
+"No folder open" = "未打开文件夹";
+"Direction" = "方向";
+"Left → Right" = "左 → 右";
+"Left ← Right" = "左 ← 右";
+"Mode" = "模式";
+"I understand files on the destination will be deleted." = "我了解目标位置的文件将被删除。";
+"Plan" = "计划";
+"Calculate" = "计算";
+"Files to add:" = "要添加的文件：";
+"Files to replace:" = "要替换的文件：";
+"Files to delete:" = "要删除的文件：";
+"Folders to add:" = "要添加的文件夹：";
+"Folders to delete:" = "要删除的文件夹：";
+"Download:" = "下载：";
+"Upload:" = "上传：";
+"Transfer:" = "传输：";
+"Available:" = "可用：";
+"After sync:" = "同步后：";
+"This sync would exceed the available space at the destination." = "此次同步将超出目标位置的可用空间。";
+"Press Calculate to compute how many files will be added, replaced, or deleted." = "点按“计算”以统计将添加、替换或删除多少文件。";
+"Start Sync" = "开始同步";
+"Mirror (replace all)" = "镜像（全部替换）";
+"Update newer files" = "更新较新的文件";
+"Add only (keep both on conflict)" = "仅添加（冲突时保留两者）";
+"Destination will match source exactly. Extra files on the destination will be deleted." = "目标将与来源完全一致。目标中多余的文件将被删除。";
+"Copies missing files and replaces files that are older than the source." = "复制缺失的文件，并替换比来源更旧的文件。";
+"Copies missing files. When a file exists on both sides, the source copy is added with a unique name." = "复制缺失的文件。当某个文件两侧都存在时，会以唯一名称添加来源副本。";
+
+/* Conflict resolution */
+"An item named \"%@\" already exists in this location. What would you like to do?" = "此位置已存在名为“%@”的项目。你想怎么做？";
+"This file is newer." = "此文件较新。";
+"This file is older." = "此文件较旧。";
+"Same date." = "日期相同。";
+"Apply to all" = "应用于全部";
+"Stop" = "停止";
+"Skip" = "跳过";
+"Keep Both" = "两者都保留";
+"Replace" = "替换";
+
+/* Search */
+"Search files across all sources..." = "在所有来源中搜索文件…";
+"Clear search" = "清除搜索";
+"Close (Esc)" = "关闭（Esc）";
+"%d results" = "%d 个结果";
+"Show offline results" = "显示离线结果";
+"Includes indexed drives & disconnected accounts" = "包含已索引的驱动器和已断开的账户";
+"Search All Sources" = "搜索所有来源";
+"Search across local files and all connected cloud accounts" = "在本地文件和所有已连接的云账户中搜索";
+"Open in Left Panel" = "在左面板中打开";
+"Open in Right Panel" = "在右面板中打开";
+
+/* Compare folders */
+"Compare Date" = "比较日期";
+"Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates." = "将大小相同但修改日期不同的文件视为不同。显示哪一侧更新，并列出修改和创建日期。";
+"Compare Again" = "再次比较";
+"Re-run the comparison against the panels' current folders" = "针对面板当前的文件夹重新运行比较";
+"Reading folders…" = "正在读取文件夹…";
+"Open a folder on each side to compare" = "在两侧各打开一个文件夹以进行比较";
+"Both panels need a folder selected to run a comparison." = "两个面板都需要选择一个文件夹才能进行比较。";
+"Nothing matches this filter." = "没有符合此筛选条件的项目。";
+"All" = "全部";
+"Differences" = "差异";
+"Only Left" = "仅左侧";
+"Only Right" = "仅右侧";
+"Identical" = "相同";
+"Folders are identical (%d items)" = "文件夹完全相同（%d 个项目）";
+"%d different • %d only-left • %d only-right • %d same" = "%d 个不同 • %d 个仅左 • %d 个仅右 • %d 个相同";
+"Modified — Left: %@  •  Right: %@" = "修改 — 左：%@  •  右：%@";
+"Created  — Left: %@  •  Right: %@" = "创建 — 左：%@  •  右：%@";
+"Left: %@" = "左：%@";
+"Right: %@" = "右：%@";
+"Same size: %@" = "相同大小：%@";
+"Left: %@ • Right: %@ — different size" = "左：%@ • 右：%@ — 大小不同";

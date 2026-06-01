@@ -370,3 +370,78 @@
 "yesterday" = "gestern";
 "%d days ago" = "vor %d Tagen";
 "%@ · %@ files" = "%1$@ · %2$@ Dateien";
+
+/* Sync planner */
+"No folder open" = "Kein Ordner geöffnet";
+"Direction" = "Richtung";
+"Left → Right" = "Links → Rechts";
+"Left ← Right" = "Links ← Rechts";
+"Mode" = "Modus";
+"I understand files on the destination will be deleted." = "Mir ist klar, dass Dateien am Ziel gelöscht werden.";
+"Plan" = "Plan";
+"Calculate" = "Berechnen";
+"Files to add:" = "Hinzuzufügende Dateien:";
+"Files to replace:" = "Zu ersetzende Dateien:";
+"Files to delete:" = "Zu löschende Dateien:";
+"Folders to add:" = "Hinzuzufügende Ordner:";
+"Folders to delete:" = "Zu löschende Ordner:";
+"Download:" = "Download:";
+"Upload:" = "Upload:";
+"Transfer:" = "Übertragung:";
+"Available:" = "Verfügbar:";
+"After sync:" = "Nach Sync:";
+"This sync would exceed the available space at the destination." = "Diese Synchronisierung würde den verfügbaren Speicher am Ziel überschreiten.";
+"Press Calculate to compute how many files will be added, replaced, or deleted." = "Klicke auf „Berechnen“, um zu ermitteln, wie viele Dateien hinzugefügt, ersetzt oder gelöscht werden.";
+"Start Sync" = "Synchronisierung starten";
+"Mirror (replace all)" = "Spiegeln (alles ersetzen)";
+"Update newer files" = "Neuere Dateien aktualisieren";
+"Add only (keep both on conflict)" = "Nur hinzufügen (bei Konflikt beide behalten)";
+"Destination will match source exactly. Extra files on the destination will be deleted." = "Das Ziel entspricht exakt der Quelle. Zusätzliche Dateien am Ziel werden gelöscht.";
+"Copies missing files and replaces files that are older than the source." = "Kopiert fehlende Dateien und ersetzt Dateien, die älter als die Quelle sind.";
+"Copies missing files. When a file exists on both sides, the source copy is added with a unique name." = "Kopiert fehlende Dateien. Wenn eine Datei auf beiden Seiten existiert, wird die Quellkopie mit einem eindeutigen Namen hinzugefügt.";
+
+/* Conflict resolution */
+"An item named \"%@\" already exists in this location. What would you like to do?" = "Ein Objekt namens „%@“ existiert an diesem Ort bereits. Was möchtest du tun?";
+"This file is newer." = "Diese Datei ist neuer.";
+"This file is older." = "Diese Datei ist älter.";
+"Same date." = "Gleiches Datum.";
+"Apply to all" = "Auf alle anwenden";
+"Stop" = "Stopp";
+"Skip" = "Überspringen";
+"Keep Both" = "Beide behalten";
+"Replace" = "Ersetzen";
+
+/* Search */
+"Search files across all sources..." = "Dateien über alle Quellen durchsuchen …";
+"Clear search" = "Suche löschen";
+"Close (Esc)" = "Schließen (Esc)";
+"%d results" = "%d Ergebnisse";
+"Show offline results" = "Offline-Ergebnisse anzeigen";
+"Includes indexed drives & disconnected accounts" = "Schließt indizierte Laufwerke und getrennte Konten ein";
+"Search All Sources" = "Alle Quellen durchsuchen";
+"Search across local files and all connected cloud accounts" = "Durchsuche lokale Dateien und alle verbundenen Cloud-Konten";
+"Open in Left Panel" = "Im linken Bereich öffnen";
+"Open in Right Panel" = "Im rechten Bereich öffnen";
+
+/* Compare folders */
+"Compare Date" = "Datum vergleichen";
+"Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates." = "Behandelt Dateien mit gleicher Größe, aber unterschiedlichem Änderungsdatum als unterschiedlich. Zeigt, welche Seite neuer ist, samt Änderungs- und Erstellungsdatum.";
+"Compare Again" = "Erneut vergleichen";
+"Re-run the comparison against the panels' current folders" = "Vergleich mit den aktuellen Ordnern der Bereiche erneut ausführen";
+"Reading folders…" = "Ordner werden gelesen …";
+"Open a folder on each side to compare" = "Öffne auf jeder Seite einen Ordner zum Vergleichen";
+"Both panels need a folder selected to run a comparison." = "Für einen Vergleich muss in beiden Bereichen ein Ordner ausgewählt sein.";
+"Nothing matches this filter." = "Nichts entspricht diesem Filter.";
+"All" = "Alle";
+"Differences" = "Unterschiede";
+"Only Left" = "Nur links";
+"Only Right" = "Nur rechts";
+"Identical" = "Identisch";
+"Folders are identical (%d items)" = "Ordner sind identisch (%d Objekte)";
+"%d different • %d only-left • %d only-right • %d same" = "%d unterschiedlich • %d nur links • %d nur rechts • %d gleich";
+"Modified — Left: %@  •  Right: %@" = "Geändert — Links: %@  •  Rechts: %@";
+"Created  — Left: %@  •  Right: %@" = "Erstellt — Links: %@  •  Rechts: %@";
+"Left: %@" = "Links: %@";
+"Right: %@" = "Rechts: %@";
+"Same size: %@" = "Gleiche Größe: %@";
+"Left: %@ • Right: %@ — different size" = "Links: %@ • Rechts: %@ — unterschiedliche Größe";

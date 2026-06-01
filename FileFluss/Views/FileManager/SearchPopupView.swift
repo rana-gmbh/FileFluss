@@ -27,7 +27,7 @@ struct SearchPopupView: View {
                 .foregroundStyle(.secondary)
                 .font(.system(size: 14))
 
-            TextField("Search files across all sources...", text: Bindable(appState.searchVM).searchText)
+            TextField(L10n.text("Search files across all sources..."), text: Bindable(appState.searchVM).searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 .onSubmit { triggerSearch() }
@@ -42,7 +42,7 @@ struct SearchPopupView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Clear search")
+                .help(L10n.text("Clear search"))
             }
 
             Button {
@@ -55,7 +55,7 @@ struct SearchPopupView: View {
                     .background(.quaternary, in: Circle())
             }
             .buttonStyle(.plain)
-            .help("Close (Esc)")
+            .help(L10n.text("Close (Esc)"))
             .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 16)
@@ -79,7 +79,7 @@ struct SearchPopupView: View {
                 }
             }
         case .complete(let count):
-            Text("\(count) results")
+            Text(L10n.format("%d results", count))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
@@ -88,7 +88,7 @@ struct SearchPopupView: View {
     private var offlineToggleBar: some View {
         HStack(spacing: 8) {
             Toggle(isOn: Bindable(appState.searchVM).includeOffline) {
-                Label("Show offline results", systemImage: "wifi.slash")
+                Label(L10n.text("Show offline results"), systemImage: "wifi.slash")
                     .font(.system(size: 11))
             }
             .toggleStyle(.switch)
@@ -97,7 +97,7 @@ struct SearchPopupView: View {
                 triggerSearch()
             }
             Spacer()
-            Text("Includes indexed drives & disconnected accounts")
+            LText("Includes indexed drives & disconnected accounts")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
         }
@@ -141,9 +141,9 @@ struct SearchPopupView: View {
             let vm = appState.searchVM
             if vm.searchText.isEmpty {
                 ContentUnavailableView(
-                    "Search All Sources",
+                    L10n.text("Search All Sources"),
                     systemImage: "magnifyingglass",
-                    description: Text("Search across local files and all connected cloud accounts")
+                    description: Text(L10n.text("Search across local files and all connected cloud accounts"))
                 )
             } else if vm.filteredResults.isEmpty && vm.status != .idle {
                 if case .searching = vm.status {
@@ -189,13 +189,13 @@ struct SearchPopupView: View {
         Button {
             openInPanel(item, side: .left)
         } label: {
-            Label("Open in Left Panel", systemImage: "sidebar.left")
+            Label(L10n.text("Open in Left Panel"), systemImage: "sidebar.left")
         }
 
         Button {
             openInPanel(item, side: .right)
         } label: {
-            Label("Open in Right Panel", systemImage: "sidebar.right")
+            Label(L10n.text("Open in Right Panel"), systemImage: "sidebar.right")
         }
     }
 
@@ -378,7 +378,7 @@ private struct SearchResultRow: View {
                         .foregroundStyle(item.isOffline ? .secondary : .primary)
                         .lineLimit(1)
                     if item.isOffline {
-                        Text("Offline")
+                        LText("Offline")
                             .font(.system(size: 9, weight: .medium))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
