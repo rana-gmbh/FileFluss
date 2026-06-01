@@ -144,11 +144,11 @@ struct CloudSettingsView: View {
                 // edge of the panel. Rendering it standalone with a
                 // full-bleed frame lets its built-in centring take over.
                 ContentUnavailableView {
-                    Label("No Cloud Accounts", systemImage: "cloud")
+                    Label(L10n.text("No Cloud Accounts"), systemImage: "cloud")
                 } description: {
-                    Text("Add a cloud account to get started.")
+                    LText("Add a cloud account to get started.")
                 } actions: {
-                    Button("Add Account…") {
+                    Button(L10n.text("Add Account…")) {
                         showAddAccount = true
                     }
                 }
@@ -173,11 +173,11 @@ struct CloudSettingsView: View {
                             // iCloud uses the OS-level sign-in — nothing
                             // editable from inside FileFluss.
                             if account.providerType != .iCloud {
-                                Button("Edit…") {
+                                Button(L10n.text("Edit…")) {
                                     editingAccount = account
                                 }
                             }
-                            Button("Remove", role: .destructive) {
+                            Button(L10n.text("Remove"), role: .destructive) {
                                 Task { await appState.syncManager.removeAccount(account) }
                             }
                         }
@@ -188,7 +188,7 @@ struct CloudSettingsView: View {
                         Button {
                             showAddAccount = true
                         } label: {
-                            Label("Add Account…", systemImage: "plus.circle")
+                            Label(L10n.text("Add Account…"), systemImage: "plus.circle")
                         }
                     }
                 }
@@ -238,14 +238,14 @@ private struct MountToggleButton: View {
                     if isWorking {
                         ProgressView().controlSize(.small)
                     }
-                    Text(mountedNow ? "Unmount" : "Mount in Finder")
+                    Text(mountedNow ? L10n.text("Unmount") : L10n.text("Mount in Finder"))
                 }
             }
             .disabled(isWorking)
-            .help(mountedNow ? "Eject this drive from Finder" : "Open this account as a drive in Finder")
+            .help(mountedNow ? L10n.text("Eject this drive from Finder") : L10n.text("Open this account as a drive in Finder"))
         }
-        .alert("Could not mount in Finder", isPresented: $showError, presenting: mountError) { _ in
-            Button("OK", role: .cancel) {}
+        .alert(L10n.text("Could not mount in Finder"), isPresented: $showError, presenting: mountError) { _ in
+            Button(L10n.text("OK"), role: .cancel) {}
         } message: { error in
             Text(error)
         }
@@ -261,7 +261,7 @@ private struct MountToggleButton: View {
                 return
             }
             guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
-                mountError = "The account isn't connected — sign in first."
+                mountError = L10n.text("The account isn't connected — sign in first.")
                 showError = true
                 return
             }
@@ -291,8 +291,8 @@ struct StorageSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Cache Usage") {
-                LabeledContent("Current cache size") {
+            Section(L10n.text("Cache Usage")) {
+                LabeledContent(L10n.text("Current cache size")) {
                     HStack(spacing: 8) {
                         if cache.isCalculating {
                             ProgressView().controlSize(.small)
@@ -304,7 +304,7 @@ struct StorageSettingsView: View {
                 }
                 HStack {
                     Spacer()
-                    Button("Clear Cache…", role: .destructive) {
+                    Button(L10n.text("Clear Cache…"), role: .destructive) {
                         showClearConfirm = true
                     }
                     .disabled(cache.isClearing || (cache.currentSize ?? 0) == 0)
@@ -312,17 +312,17 @@ struct StorageSettingsView: View {
             }
 
             Section {
-                Toggle("Automatically manage cache", isOn: $autoManage)
-                Picker("Delete files older than", selection: $autoDeleteDays) {
+                Toggle(L10n.text("Automatically manage cache"), isOn: $autoManage)
+                Picker(L10n.text("Delete files older than"), selection: $autoDeleteDays) {
                     ForEach(dayChoices, id: \.self) { d in
-                        Text(d == 1 ? "1 day" : "\(d) days").tag(d)
+                        Text(d == 1 ? L10n.text("1 day") : L10n.format("%d days", d)).tag(d)
                     }
                 }
                 .disabled(!autoManage)
             } header: {
-                Text("Automatic Management")
+                LText("Automatic Management")
             } footer: {
-                Text("On launch, FileFluss removes cached previews older than the selected age and trims the cache to the size limit below.")
+                LText("On launch, FileFluss removes cached previews older than the selected age and trims the cache to the size limit below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -342,13 +342,13 @@ struct StorageSettingsView: View {
                         .fixedSize()
                         .multilineTextAlignment(.trailing)
                         .onSubmit { commitFieldValue() }
-                    Text("MB")
+                    LText("MB")
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Text("Cache Size Limit")
+                LText("Cache Size Limit")
             } footer: {
-                Text("When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes.")
+                LText("When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -361,12 +361,12 @@ struct StorageSettingsView: View {
             isPresented: $showClearConfirm,
             titleVisibility: .visible
         ) {
-            Button("Clear Cache", role: .destructive) {
+            Button(L10n.text("Clear Cache"), role: .destructive) {
                 Task { await cache.clearAll() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
-            Text("This removes all cached cloud previews and downloaded files. Files will be re-downloaded on next preview.")
+            LText("This removes all cached cloud previews and downloaded files. Files will be re-downloaded on next preview.")
         }
         .task {
             sliderValue = Double(maxSizeMB)
@@ -376,7 +376,7 @@ struct StorageSettingsView: View {
     }
 
     private var currentSizeText: String {
-        guard let size = cache.currentSize else { return "Calculating…" }
+        guard let size = cache.currentSize else { return L10n.text("Calculating…") }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
@@ -433,9 +433,9 @@ struct IndexStatusSettingsView: View {
         VStack(spacing: 0) {
             if rows.isEmpty && !isLoading {
                 ContentUnavailableView {
-                    Label("No Indexed Sources", systemImage: "magnifyingglass.circle")
+                    Label(L10n.text("No Indexed Sources"), systemImage: "magnifyingglass.circle")
                 } description: {
-                    Text("Index a drive or cloud account from its sidebar context menu to make its contents searchable while offline.")
+                    LText("Index a drive or cloud account from its sidebar context menu to make its contents searchable while offline.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -469,11 +469,11 @@ struct IndexStatusSettingsView: View {
                     .font(.callout.weight(.medium))
                 HStack(spacing: 6) {
                     Text(row.kindLabel)
-                    Text("·")
+                    LText("·")
                     if let d = row.lastIndexed {
-                        Text("Indexed \(Self.dateFormatter.string(from: d))")
+                        Text(L10n.format("Indexed %@", Self.dateFormatter.string(from: d)))
                     } else {
-                        Text("Never indexed").italic()
+                        LText("Never indexed").italic()
                     }
                 }
                 .font(.caption)
@@ -481,9 +481,9 @@ struct IndexStatusSettingsView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(formatted(row.totalFiles)) files")
+                Text(L10n.format("%@ files", formatted(row.totalFiles)))
                     .font(.callout.monospacedDigit())
-                Text("\(formatted(row.totalFolders)) folders")
+                Text(L10n.format("%@ folders", formatted(row.totalFolders)))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -496,7 +496,7 @@ struct IndexStatusSettingsView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("Re-index this source")
+                .help(L10n.text("Re-index this source"))
                 .disabled(!canRefresh(row))
             }
         }
@@ -508,7 +508,7 @@ struct IndexStatusSettingsView: View {
             Button {
                 refreshAll()
             } label: {
-                Label("Refresh All", systemImage: "arrow.clockwise")
+                Label(L10n.text("Refresh All"), systemImage: "arrow.clockwise")
             }
             .disabled(rows.allSatisfy { !canRefresh($0) })
 
@@ -517,7 +517,7 @@ struct IndexStatusSettingsView: View {
             Button(role: .destructive) {
                 showWipeConfirm = true
             } label: {
-                Label("Erase All Indexes", systemImage: "trash")
+                Label(L10n.text("Erase All Indexes"), systemImage: "trash")
             }
             .disabled(rows.isEmpty)
         }
@@ -527,7 +527,7 @@ struct IndexStatusSettingsView: View {
             isPresented: $showWipeConfirm,
             titleVisibility: .visible
         ) {
-            Button("Erase Everything", role: .destructive) {
+            Button(L10n.text("Erase Everything"), role: .destructive) {
                 Task {
                     await SearchIndex.shared.wipeAll()
                     await appState.refreshIndexInfo()
@@ -542,9 +542,9 @@ struct IndexStatusSettingsView: View {
                     await load()
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
-            Text("This removes the offline search index for every drive and cloud account. Indexing can be redone later.")
+            LText("This removes the offline search index for every drive and cloud account. Indexing can be redone later.")
         }
     }
 
@@ -619,7 +619,7 @@ struct IndexStatusSettingsView: View {
 
             if isCloud, let uuid = UUID(uuidString: src.sourceId) {
                 icon = "cloud.fill"
-                kindLabel = "Cloud Account"
+                kindLabel = L10n.text("Cloud Account")
                 origin = .cloud(accountId: uuid)
                 if let summary = await SearchIndex.shared.cloudAccountSummary(accountId: uuid) {
                     files = summary.totalFiles
@@ -633,7 +633,7 @@ struct IndexStatusSettingsView: View {
             } else {
                 let drive = appState.driveMonitor.drives.first(where: { $0.id == src.sourceId })
                 icon = drive?.kind.sfSymbol ?? "externaldrive.fill"
-                kindLabel = drive?.kind.displayName ?? "Drive"
+                kindLabel = drive?.kind.displayName ?? L10n.text("Drive")
                 origin = .drive(id: src.sourceId)
                 let counts = await SearchIndex.shared.sourceCounts(src.sourceId) ?? (0, 0)
                 files = counts.files
@@ -675,7 +675,7 @@ private struct FinderMountReadCacheSection: View {
 
     var body: some View {
         Section {
-            LabeledContent("Currently used") {
+            LabeledContent(L10n.text("Currently used")) {
                 HStack(spacing: 8) {
                     if usedBytes == nil {
                         ProgressView().controlSize(.small)
@@ -699,15 +699,15 @@ private struct FinderMountReadCacheSection: View {
                         }
                     }
                 )
-                Text("\(Int(sliderValue)) MB")
+                Text(L10n.format("%d MB", Int(sliderValue)))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 80, alignment: .trailing)
             }
         } header: {
-            Text("Finder-Mount Read Cache")
+            LText("Finder-Mount Read Cache")
         } footer: {
-            Text("Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.")
+            LText("Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

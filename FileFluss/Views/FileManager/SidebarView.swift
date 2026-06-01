@@ -1065,7 +1065,7 @@ private struct TransferDetailsView: View {
             Divider()
 
             LabeledContent("Operation") {
-                Text(transfer.operation)
+                Text(L10n.text(transfer.operation))
             }
             LabeledContent("Finished") {
                 Text(transfer.formattedEndTime)

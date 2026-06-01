@@ -1,4 +1,5 @@
 import SwiftUI
+import FileFlussCore
 import AppKit
 
 /// Settings tab that lists every bindable command grouped by section.
@@ -33,13 +34,13 @@ struct KeyboardMapSettingsView: View {
         VStack(spacing: 6) {
             Picker("", selection: Bindable(manager).preset) {
                 ForEach(KeyboardShortcutManager.Preset.allCases) { p in
-                    Text(p.displayName).tag(p)
+                    Text(L10n.text(p.displayName)).tag(p)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: 380)
-            Text("Pick a preset, then customise individual commands below.")
+            LText("Pick a preset, then customise individual commands below.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -80,7 +81,7 @@ struct KeyboardMapSettingsView: View {
     private func commandRow(_ command: KeyboardCommand) -> some View {
         HStack(spacing: 12) {
             Spacer(minLength: 0)
-            Text("\(command.displayName):")
+            Text(L10n.text(command.displayName) + ":")
                 .frame(width: labelWidth, alignment: .trailing)
                 .lineLimit(1)
             shortcutField(for: command)
@@ -117,7 +118,7 @@ struct KeyboardMapSettingsView: View {
             Button {
                 recordingCommand = command
             } label: {
-                Text("Record Shortcut")
+                LText("Record Shortcut")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
@@ -128,7 +129,7 @@ struct KeyboardMapSettingsView: View {
     private func recordingField() -> some View {
         HStack {
             Spacer(minLength: 0)
-            Text("Press a key combo…")
+            LText("Press a key combo…")
                 .font(.callout)
                 .foregroundStyle(Color.accentColor)
             Spacer(minLength: 0)
@@ -160,7 +161,7 @@ struct KeyboardMapSettingsView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Click to record a new shortcut")
+            .help(L10n.text("Click to record a new shortcut"))
 
             if showReset {
                 Button(action: onReset) {
@@ -169,7 +170,7 @@ struct KeyboardMapSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Reset to preset default")
+                .help(L10n.text("Reset to preset default"))
             }
             Button(action: onClear) {
                 Image(systemName: "xmark")
@@ -177,7 +178,7 @@ struct KeyboardMapSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Clear shortcut")
+            .help(L10n.text("Clear shortcut"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -193,11 +194,11 @@ struct KeyboardMapSettingsView: View {
 
     private var footer: some View {
         HStack {
-            Text("Click a shortcut to record. Esc cancels.")
+            LText("Click a shortcut to record. Esc cancels.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Reset All to Preset Defaults", role: .destructive) {
+            Button(L10n.text("Reset All to Preset Defaults"), role: .destructive) {
                 resetConfirm = true
             }
             .disabled(manager.customBindings.isEmpty)
@@ -209,12 +210,12 @@ struct KeyboardMapSettingsView: View {
             isPresented: $resetConfirm,
             titleVisibility: .visible
         ) {
-            Button("Reset", role: .destructive) {
+            Button(L10n.text("Reset"), role: .destructive) {
                 manager.resetAllToPresetDefaults()
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
-            Text("All shortcuts will revert to the \(manager.preset.displayName) preset.")
+            Text(L10n.format("All shortcuts will revert to the %@ preset.", manager.preset.displayName))
         }
     }
 }
