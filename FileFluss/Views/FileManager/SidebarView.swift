@@ -5,7 +5,7 @@ private struct CalculatingLabel: View {
     @State private var opacity: Double = 1.0
 
     var body: some View {
-        Text("Calculating…")
+        LText("Calculating…")
             .font(.caption)
             .foregroundStyle(.secondary)
             .opacity(opacity)
@@ -148,7 +148,7 @@ struct SidebarView: View {
                     appState.setFavoriteIcon(id: fav.id, to: .favoriteAssetIcon(asset), in: panelSide)
                 } label: {
                     Label {
-                        Text("\(providerType.displayName) Logo")
+                        Text(L10n.format("%@ Logo", providerType.displayName))
                     } icon: {
                         // AppKit menus ignore SwiftUI .frame() on Image,
                         // so we hand them an NSImage whose intrinsic size
@@ -166,7 +166,7 @@ struct SidebarView: View {
                 }
             }
         } label: {
-            Text("Change Icon")
+            LText("Change Icon")
         }
     }
 
@@ -222,13 +222,13 @@ struct SidebarView: View {
                 ForEach(Array(favs.enumerated()), id: \.element.id) { idx, fav in
                     favoriteRow(fav)
                         .contextMenu {
-                            Button("Rename") {
+                            Button(L10n.text("Rename")) {
                                 renameText = fav.displayName
                                 renamingFavorite = fav
                             }
                             changeIconMenu(for: fav)
                             Divider()
-                            Button("Remove from Favorites", role: .destructive) {
+                            Button(L10n.text("Remove from Favorites"), role: .destructive) {
                                 appState.removeFavorite(id: fav.id, from: panelSide)
                             }
                         }
@@ -269,7 +269,7 @@ struct SidebarView: View {
                 }
             } header: {
                 if !collapsed {
-                    Text("Favorites")
+                    LText("Favorites")
                         // Dropping on the header inserts at the very top.
                         .overlay {
                             FavoritesDropTarget(
@@ -307,7 +307,7 @@ struct SidebarView: View {
                             }
                     }
                 } header: {
-                    if !collapsed { Text("Drives") }
+                    if !collapsed { LText("Drives") }
                 }
             }
 
@@ -347,7 +347,7 @@ struct SidebarView: View {
                         .tag(SidebarItem.cloudAccount(account))
                         .help(cloudAccountTooltip(for: account))
                         .contextMenu {
-                            Button("Rename...") {
+                            Button(L10n.text("Rename...")) {
                                 renamingAccountId = account.id
                                 renameAccountText = account.displayName
                             }
@@ -359,7 +359,7 @@ struct SidebarView: View {
                             cloudIndexMenu(for: account)
                             if allowSidebarRemoveAccount {
                                 Divider()
-                                Button("Remove from FileFluss…", role: .destructive) {
+                                Button(L10n.text("Remove from FileFluss…"), role: .destructive) {
                                     pendingRemoveAccount = account
                                 }
                             }
@@ -374,14 +374,14 @@ struct SidebarView: View {
                         Button {
                             appState.syncManager.isAddingAccount = true
                         } label: {
-                            Label("Add Cloud Account…", systemImage: "plus.circle")
+                            Label(L10n.text("Add Cloud Account…"), systemImage: "plus.circle")
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .help("Add Cloud Account…")
+                        .help(L10n.text("Add Cloud Account…"))
                     }
                 } header: {
-                    if !collapsed { Text("Cloud Accounts") }
+                    if !collapsed { LText("Cloud Accounts") }
                 }
                 .task(id: appState.syncManager.accounts.map(\.id)) {
                     // Populate quota tooltips for every account once the
@@ -404,7 +404,7 @@ struct SidebarView: View {
                             isPresented: $showTransfersPopover
                         ) {
                             VStack(alignment: .leading, spacing: 0) {
-                                Text("Transfers")
+                                LText("Transfers")
                                     .font(.headline)
                                     .padding(.horizontal, 12)
                                     .padding(.top, 10)
@@ -424,7 +424,7 @@ struct SidebarView: View {
                         }
                     }
                 } else {
-                    Section("Transfers") {
+                    Section(L10n.text("Transfers")) {
                         ForEach(appState.transfers(for: panelSide)) { transfer in
                             TransferRow(transfer: transfer, panelSide: panelSide)
                         }
@@ -442,7 +442,7 @@ struct SidebarView: View {
                             isPresented: $showFolderSizesPopover
                         ) {
                             VStack(alignment: .leading, spacing: 0) {
-                                Text("Folder Sizes")
+                                LText("Folder Sizes")
                                     .font(.headline)
                                     .padding(.horizontal, 12)
                                     .padding(.top, 10)
@@ -462,7 +462,7 @@ struct SidebarView: View {
                         }
                     }
                 } else {
-                    Section("Folder Sizes") {
+                    Section(L10n.text("Folder Sizes")) {
                         ForEach(appState.folderSizes(for: panelSide)) { entry in
                             folderSizeRow(entry)
                         }
@@ -505,39 +505,39 @@ struct SidebarView: View {
                 break
             }
         }
-        .alert("Rename Favorite", isPresented: Binding(
+        .alert(L10n.text("Rename Favorite"), isPresented: Binding(
             get: { renamingFavorite != nil },
             set: { if !$0 { renamingFavorite = nil } }
         )) {
-            TextField("Name", text: $renameText)
-            Button("Rename") {
+            TextField(L10n.text("Name"), text: $renameText)
+            Button(L10n.text("Rename")) {
                 if let fav = renamingFavorite, !renameText.isEmpty {
                     appState.renameFavorite(id: fav.id, to: renameText, in: panelSide)
                 }
                 renamingFavorite = nil
             }
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 renamingFavorite = nil
             }
         } message: {
-            Text("Enter a new name for this favorite.")
+            LText("Enter a new name for this favorite.")
         }
-        .alert("Rename Cloud Account", isPresented: Binding(
+        .alert(L10n.text("Rename Cloud Account"), isPresented: Binding(
             get: { renamingAccountId != nil },
             set: { if !$0 { renamingAccountId = nil } }
         )) {
-            TextField("Name", text: $renameAccountText)
-            Button("Rename") {
+            TextField(L10n.text("Name"), text: $renameAccountText)
+            Button(L10n.text("Rename")) {
                 if let accountId = renamingAccountId, !renameAccountText.isEmpty {
                     appState.syncManager.renameAccount(id: accountId, to: renameAccountText)
                 }
                 renamingAccountId = nil
             }
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 renamingAccountId = nil
             }
         } message: {
-            Text("Enter a new name for this cloud account.")
+            LText("Enter a new name for this cloud account.")
         }
         .confirmationDialog(
             pendingRemoveAccount.map { "Remove \($0.displayName)?" } ?? "Remove Cloud Account?",
@@ -548,18 +548,18 @@ struct SidebarView: View {
             titleVisibility: .visible,
             presenting: pendingRemoveAccount
         ) { account in
-            Button("Remove", role: .destructive) {
+            Button(L10n.text("Remove"), role: .destructive) {
                 Task { await appState.syncManager.removeAccount(account) }
                 pendingRemoveAccount = nil
             }
-            Button("Cancel", role: .cancel) {
+            Button(L10n.text("Cancel"), role: .cancel) {
                 pendingRemoveAccount = nil
             }
         } message: { account in
-            Text("This disconnects \(account.displayName) from FileFluss. Files in the cloud aren't deleted.")
+            Text(L10n.format("This disconnects %@ from FileFluss. Files in the cloud aren't deleted.", account.displayName))
         }
-        .alert("Could not mount in Finder", isPresented: $showMountError, presenting: mountErrorMessage) { _ in
-            Button("OK", role: .cancel) {}
+        .alert(L10n.text("Could not mount in Finder"), isPresented: $showMountError, presenting: mountErrorMessage) { _ in
+            Button(L10n.text("OK"), role: .cancel) {}
         } message: { message in
             Text(message)
         }
@@ -675,10 +675,10 @@ struct SidebarView: View {
         // Show the indexed-at info as a disabled label so users can decide
         // whether a re-index is needed before triggering one.
         if let last = drive.lastIndexed {
-            Text("Indexed \(Self.shortIndexedSummary(date: last, files: drive.totalFiles))")
+            Text(L10n.format("Indexed %@", Self.shortIndexedSummary(date: last, files: drive.totalFiles)))
             Divider()
         } else {
-            Text("Not indexed yet")
+            LText("Not indexed yet")
             Divider()
         }
         if isOnline, let mount = appState.driveMonitor.mountURL(for: drive.id) {
@@ -687,14 +687,14 @@ struct SidebarView: View {
                     appState.indexingService.indexDrive(drive, mountURL: mount)
                 }
             } else {
-                Button("Cancel Indexing") {
+                Button(L10n.text("Cancel Indexing")) {
                     appState.indexingService.cancel(sourceId: drive.id)
                 }
             }
             Divider()
         }
         if drive.lastIndexed != nil {
-            Button("Remove Offline Index", role: .destructive) {
+            Button(L10n.text("Remove Offline Index"), role: .destructive) {
                 Task {
                     await SearchIndex.shared.dropSource(sourceId: drive.id)
                     var d = drive
@@ -709,7 +709,7 @@ struct SidebarView: View {
                 }
             }
         } else if !isOnline {
-            Button("Forget Drive", role: .destructive) {
+            Button(L10n.text("Forget Drive"), role: .destructive) {
                 appState.driveMonitor.forget(driveId: drive.id)
             }
         }
@@ -725,7 +725,7 @@ struct SidebarView: View {
         let activeMount = appState.mountService.mount(for: account.id)
         let isBusy = mountingAccountIds.contains(account.id)
         if let mount = activeMount {
-            Button("Reveal in Finder") {
+            Button(L10n.text("Reveal in Finder")) {
                 NSWorkspace.shared.activateFileViewerSelecting([mount.mountPoint])
             }
             Button(isBusy ? "Unmounting…" : "Unmount from Finder") {
@@ -738,7 +738,7 @@ struct SidebarView: View {
                 Task { await performMount(account: account) }
             }
             .disabled(isBusy)
-            .help("Open this account as a drive in Finder")
+            .help(L10n.text("Open this account as a drive in Finder"))
         }
     }
 
@@ -778,18 +778,18 @@ struct SidebarView: View {
     private func offlineModeMenu(for account: CloudAccount) -> some View {
         let hasFullIndex = appState.cloudIndexInfo[account.id] != nil
         if account.isOfflineMode {
-            Button("Go Online") {
+            Button(L10n.text("Go Online")) {
                 appState.syncManager.setOfflineMode(false, accountId: account.id)
             }
         } else if hasFullIndex {
-            Button("Go Offline") {
+            Button(L10n.text("Go Offline")) {
                 appState.syncManager.setOfflineMode(true, accountId: account.id)
             }
-            .help("Browse and search this account's last-indexed contents without contacting the server.")
+            .help(L10n.text("Browse and search this account's last-indexed contents without contacting the server."))
         } else {
-            Button("Go Offline") {}
+            Button(L10n.text("Go Offline")) {}
                 .disabled(true)
-                .help("Index this account for offline use first.")
+                .help(L10n.text("Index this account for offline use first."))
         }
     }
 
@@ -798,14 +798,14 @@ struct SidebarView: View {
         let activeJob = appState.indexingService.activeJob(sourceId: account.id.uuidString)
         let lastIndexed = appState.cloudIndexInfo[account.id]
         if let info = lastIndexed {
-            Text("Indexed \(Self.shortIndexedSummary(date: info.lastIndexed, files: info.totalFiles))")
+            Text(L10n.format("Indexed %@", Self.shortIndexedSummary(date: info.lastIndexed, files: info.totalFiles)))
             Divider()
         } else {
             // Distinct from "Never indexed" — covers both the
             // truly-untouched case and the "you've browsed a few folders
             // but never ran a full crawl" case, since the per-folder
             // upserts shouldn't be advertised as a complete index.
-            Text("Not fully indexed yet")
+            LText("Not fully indexed yet")
             Divider()
         }
         if account.isConnected {
@@ -814,13 +814,13 @@ struct SidebarView: View {
                     appState.indexingService.indexCloudAccount(account)
                 }
             } else {
-                Button("Cancel Indexing") {
+                Button(L10n.text("Cancel Indexing")) {
                     appState.indexingService.cancel(sourceId: account.id.uuidString)
                 }
             }
             if lastIndexed != nil {
                 Divider()
-                Button("Remove Offline Index", role: .destructive) {
+                Button(L10n.text("Remove Offline Index"), role: .destructive) {
                     let accountId = account.id
                     Task {
                         await SearchIndex.shared.dropCloudAccount(accountId: accountId)
@@ -836,12 +836,12 @@ struct SidebarView: View {
     private static func shortIndexedSummary(date: Date, files: Int) -> String {
         let secs = Date().timeIntervalSince(date)
         let when: String
-        if secs < 60 { when = "just now" }
-        else if secs < 86_400 { when = "today" }
-        else if secs < 86_400 * 2 { when = "yesterday" }
-        else { when = "\(Int(secs / 86_400)) days ago" }
+        if secs < 60 { when = L10n.text("just now") }
+        else if secs < 86_400 { when = L10n.text("today") }
+        else if secs < 86_400 * 2 { when = L10n.text("yesterday") }
+        else { when = L10n.format("%d days ago", Int(secs / 86_400)) }
         let countStr = NumberFormatter.localizedString(from: NSNumber(value: files), number: .decimal)
-        return "\(when) · \(countStr) files"
+        return L10n.format("%@ · %@ files", when, countStr)
     }
 }
 
@@ -870,7 +870,7 @@ private struct DriveRow: View {
                             .foregroundStyle(.secondary)
                     }
                 } else if !isOnline {
-                    Text("Offline")
+                    LText("Offline")
                         .font(.caption2)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -909,7 +909,7 @@ private struct TransferRow: View {
                 }
                 Spacer()
                 if transfer.isComplete {
-                    Button("Details") {
+                    Button(L10n.text("Details")) {
                         showDetails = true
                     }
                     .font(.caption2)
@@ -926,12 +926,12 @@ private struct TransferRow: View {
                     Button {
                         showCancelConfirmation = true
                     } label: {
-                        Text("Cancel")
+                        LText("Cancel")
                             .font(.caption2)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Cancel this transfer")
+                    .help(L10n.text("Cancel this transfer"))
                 }
             }
 
@@ -953,12 +953,12 @@ private struct TransferRow: View {
             isPresented: $showCancelConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Cancel Transfer", role: .destructive) {
+            Button(L10n.text("Cancel Transfer"), role: .destructive) {
                 transfer.cancel()
             }
-            Button("Keep Running", role: .cancel) {}
+            Button(L10n.text("Keep Running"), role: .cancel) {}
         } message: {
-            Text("Files already transferred will remain. Any partial file currently in flight will be discarded.")
+            LText("Files already transferred will remain. Any partial file currently in flight will be discarded.")
         }
     }
 }
@@ -1029,7 +1029,7 @@ private struct TransferDetailsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Transfer Details")
+            LText("Transfer Details")
                 .font(.headline)
 
             if let errorMessage = transfer.errorMessage {
@@ -1047,15 +1047,15 @@ private struct TransferDetailsView: View {
             if transfer.failureCount > 0 || transfer.successCount > 0 {
                 HStack(spacing: 10) {
                     if transfer.successCount > 0 {
-                        Label("\(transfer.successCount) succeeded", systemImage: "checkmark.circle.fill")
+                        Label(L10n.format("%d succeeded", transfer.successCount), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     }
                     if transfer.failureCount > 0 {
-                        Label("\(transfer.failureCount) failed", systemImage: "xmark.octagon.fill")
+                        Label(L10n.format("%d failed", transfer.failureCount), systemImage: "xmark.octagon.fill")
                             .foregroundStyle(.red)
                     }
                     if transfer.skippedCount > 0 {
-                        Label("\(transfer.skippedCount) skipped", systemImage: "minus.circle.fill")
+                        Label(L10n.format("%d skipped", transfer.skippedCount), systemImage: "minus.circle.fill")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -1107,7 +1107,7 @@ private struct TransferDetailsView: View {
     @ViewBuilder
     private var itemsList: some View {
         if !transfer.itemResults.isEmpty {
-            Text("Items (\(transfer.itemResults.count))")
+            Text(L10n.format("Items (%d)", transfer.itemResults.count))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -1123,7 +1123,7 @@ private struct TransferDetailsView: View {
         } else if !transfer.transferredFileNames.isEmpty {
             // Fallback for transfers that didn't record per-item results
             // (e.g. older code paths still in flight).
-            Text("Items (\(transfer.transferredFileNames.count))")
+            Text(L10n.format("Items (%d)", transfer.transferredFileNames.count))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
