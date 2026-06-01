@@ -131,3 +131,18 @@
 "Support the FileFluss Project" = "Support the FileFluss Project";
 "Run Version Test…" = "Run Version Test…";
 "Settings…" = "Settings…";
+
+/* Offline source view + table columns */
+"Offline Source" = "Offline Source";
+"Never indexed" = "Never indexed";
+"Indexed today" = "Indexed today";
+"Indexed 1 day ago" = "Indexed 1 day ago";
+"Indexed %d days ago" = "Indexed %d days ago";
+"Offline view — %@" = "Offline view — %@";
+"Read only" = "Read only";
+"Go back" = "Go back";
+"No indexed contents" = "No indexed contents";
+"Re-index this source while it's online to populate offline contents." = "Re-index this source while it's online to populate offline contents.";
+"Name" = "Name";
+"Size" = "Size";
+"Modified" = "Modified";

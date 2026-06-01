@@ -131,3 +131,18 @@
 "Support the FileFluss Project" = "Das FileFluss-Projekt unterstützen";
 "Run Version Test…" = "Versionstest ausführen …";
 "Settings…" = "Einstellungen …";
+
+/* Offline source view + table columns */
+"Offline Source" = "Offline-Quelle";
+"Never indexed" = "Nie indiziert";
+"Indexed today" = "Heute indiziert";
+"Indexed 1 day ago" = "Vor 1 Tag indiziert";
+"Indexed %d days ago" = "Vor %d Tagen indiziert";
+"Offline view — %@" = "Offline-Ansicht – %@";
+"Read only" = "Nur Lesen";
+"Go back" = "Zurück";
+"No indexed contents" = "Keine indizierten Inhalte";
+"Re-index this source while it's online to populate offline contents." = "Indiziere diese Quelle erneut, solange sie online ist, um Offline-Inhalte zu füllen.";
+"Name" = "Name";
+"Size" = "Größe";
+"Modified" = "Geändert";

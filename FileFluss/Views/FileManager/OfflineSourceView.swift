@@ -62,16 +62,16 @@ struct OfflineSourceView: View {
            let account = appState.syncManager.accountFor(id: uuid) {
             return account.displayName
         }
-        return fallbackTitle ?? "Offline Source"
+        return fallbackTitle ?? L10n.text("Offline Source")
     }
 
     private var lastIndexedText: String {
-        guard let date = source?.lastIndexed else { return "Never indexed" }
+        guard let date = source?.lastIndexed else { return L10n.text("Never indexed") }
         let interval = Date().timeIntervalSince(date)
         let days = Int(interval / 86_400)
-        if days == 0 { return "Indexed today" }
-        if days == 1 { return "Indexed 1 day ago" }
-        return "Indexed \(days) days ago"
+        if days == 0 { return L10n.text("Indexed today") }
+        if days == 1 { return L10n.text("Indexed 1 day ago") }
+        return L10n.format("Indexed %d days ago", days)
     }
 
     private var offlineBanner: some View {
@@ -79,14 +79,14 @@ struct OfflineSourceView: View {
             Image(systemName: "wifi.slash")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Offline view — \(displayName)")
+                Text(L10n.format("Offline view — %@", displayName))
                     .font(.callout.weight(.medium))
                 Text(lastIndexedText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text("Read only")
+            LText("Read only")
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -107,7 +107,7 @@ struct OfflineSourceView: View {
             }
             .buttonStyle(.borderless)
             .disabled(pathStack.isEmpty)
-            .help("Go back")
+            .help(L10n.text("Go back"))
 
             Text(path)
                 .font(.callout)
@@ -126,9 +126,9 @@ struct OfflineSourceView: View {
             Image(systemName: "tray")
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
-            Text("No indexed contents")
+            LText("No indexed contents")
                 .foregroundStyle(.secondary)
-            Text("Re-index this source while it's online to populate offline contents.")
+            LText("Re-index this source while it's online to populate offline contents.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -139,7 +139,7 @@ struct OfflineSourceView: View {
 
     private var list: some View {
         Table(rows) {
-            TableColumn("Name") { (item: SearchIndex.IndexedFile) in
+            TableColumn(L10n.text("Name")) { (item: SearchIndex.IndexedFile) in
                 HStack(spacing: 8) {
                     Image(systemName: item.isDirectory ? "folder.fill" : itemIcon(for: item.name))
                         .foregroundStyle(.secondary)
@@ -154,7 +154,7 @@ struct OfflineSourceView: View {
                     if item.isDirectory { drillInto(item.path) }
                 }
                 .contextMenu {
-                    Button("Copy Path") {
+                    Button(L10n.text("Copy Path")) {
                         let pb = NSPasteboard.general
                         pb.clearContents()
                         pb.setString(item.path, forType: .string)
@@ -162,12 +162,12 @@ struct OfflineSourceView: View {
                 }
             }
             .width(min: 200, ideal: 360)
-            TableColumn("Size") { (item: SearchIndex.IndexedFile) in
+            TableColumn(L10n.text("Size")) { (item: SearchIndex.IndexedFile) in
                 Text(item.isDirectory ? "--" : ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file))
                     .foregroundStyle(.secondary)
             }
             .width(min: 70, ideal: 90)
-            TableColumn("Modified") { (item: SearchIndex.IndexedFile) in
+            TableColumn(L10n.text("Modified")) { (item: SearchIndex.IndexedFile) in
                 Text(Self.dateFormatter.string(from: item.modificationDate))
                     .foregroundStyle(.secondary)
             }

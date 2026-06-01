@@ -131,3 +131,18 @@
 "Support the FileFluss Project" = "支持 FileFluss 專案";
 "Run Version Test…" = "執行版本測試…";
 "Settings…" = "設定…";
+
+/* Offline source view + table columns */
+"Offline Source" = "離線來源";
+"Never indexed" = "從未索引";
+"Indexed today" = "今天已索引";
+"Indexed 1 day ago" = "1 天前索引";
+"Indexed %d days ago" = "%d 天前索引";
+"Offline view — %@" = "離線檢視 — %@";
+"Read only" = "唯讀";
+"Go back" = "返回";
+"No indexed contents" = "沒有已索引的內容";
+"Re-index this source while it's online to populate offline contents." = "在該來源上線時重新索引，以填入離線內容。";
+"Name" = "名稱";
+"Size" = "大小";
+"Modified" = "修改時間";
