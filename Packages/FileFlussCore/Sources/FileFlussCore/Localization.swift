@@ -88,6 +88,12 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         case .english, .german, .simplifiedChinese, .traditionalChinese:
             defaults.set([language.rawValue], forKey: "AppleLanguages")
         }
+        // Force the write to disk *now*. The relaunch that follows reads
+        // AppleLanguages from the persistent store as the new process starts;
+        // without this flush it can race and read the previous language,
+        // leaving the macOS-provided menu bar in the old language while the
+        // in-window content (driven live by appLanguage) is already switched.
+        defaults.synchronize()
     }
 }
 
