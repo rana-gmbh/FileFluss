@@ -542,6 +542,26 @@ final class SyncViewModel {
         }
     }
 
+    /// Finalize a "Google Drive (Selected Folders)" account after OAuth + the
+    /// Picker. `credentials` come from the OAuth step; `roots` are the folders
+    /// the user picked. (Project B — drive.file.)
+    func addGoogleDrivePickerAccount(credentials: GoogleDrivePickerCredentials, roots: [GoogleDrivePickedRoot]) async {
+        let account = CloudAccount(providerType: .googleDrivePicker)
+        let provider = GoogleDrivePickerProvider(accountId: account.id)
+        authError = nil
+        do {
+            let displayName = try provider.finishConnecting(credentials: credentials, roots: roots)
+            var connectedAccount = account
+            connectedAccount.displayName = "Google Drive (\(displayName))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addJottacloudAccount(personalToken: String) async {
         let account = CloudAccount(providerType: .jottacloud)
         let provider = JottacloudProvider(accountId: account.id)
@@ -1039,6 +1059,11 @@ final class SyncViewModel {
                 }
             case .jottacloud:
                 let provider = JottacloudProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .googleDrivePicker:
+                let provider = GoogleDrivePickerProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

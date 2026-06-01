@@ -25,6 +25,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case internxt
     case terabox
     case jottacloud
+    case googleDrivePicker
 
     public var id: String { rawValue }
 
@@ -54,6 +55,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .internxt: return "Internxt"
         case .terabox: return "TeraBox"
         case .jottacloud: return "Jottacloud"
+        case .googleDrivePicker: return "Google Drive (Selected Folders)"
         }
     }
 
@@ -83,6 +85,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .internxt: return "lock.icloud.fill"
         case .terabox: return "shippingbox.and.arrow.backward.fill"
         case .jottacloud: return "cloud.fill"
+        case .googleDrivePicker: return "externaldrive.connected.to.line.below"
         }
     }
 
@@ -113,6 +116,8 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .internxt: return "InternxtLogo"
         case .terabox: return "TeraBoxLogo"
         case .jottacloud: return "JottacloudLogo"
+        // Shares the Google Drive logo — it's the same service, different access model.
+        case .googleDrivePicker: return "GoogleDriveLogo"
         }
     }
 }

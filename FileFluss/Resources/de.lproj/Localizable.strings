@@ -567,6 +567,11 @@
 "OTP Code (only if 2-factor auth is on)" = "OTP-Code (nur wenn 2-Faktor-Authentifizierung aktiv ist)";
 "Open Infomaniak token page" = "Infomaniak-Token-Seite öffnen";
 "Generate a Personal Login Token in your Jottacloud account, then paste it below." = "Erstellen Sie ein persönliches Login-Token in Ihrem Jottacloud-Konto und fügen Sie es unten ein.";
+"This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead." = "Diese Google-Drive-Option mit Vollzugriff hat ihr Nutzerlimit erreicht. Neue Nutzer sollten stattdessen „Google Drive (Ausgewählte Ordner)“ verwenden.";
+"For new Google Drive accounts — no user limit" = "Für neue Google-Drive-Konten – ohne Nutzerlimit";
+"Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick." = "Melden Sie sich bei Google an und wählen Sie die Ordner aus, die FileFluss verwenden darf. Sie können in diesen Ordnern Dateien hinzufügen und verwalten. Bereits vorhandene Dateien werden nicht aufgelistet – dieser Zugriffsmodus zeigt nur, was FileFluss hinzufügt oder Sie auswählen.";
+"To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." = "Um zu ändern, auf welche Ordner FileFluss zugreifen kann, entfernen Sie dieses Konto und fügen Sie es erneut hinzu, und wählen Sie dann die gewünschten Ordner aus.";
+"Choose the folders FileFluss may access" = "Wählen Sie die Ordner, auf die FileFluss zugreifen darf";
 "Open Jottacloud token page" = "Jottacloud-Token-Seite öffnen";
 "Personal Login Token" = "Persönliches Login-Token";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die in Ihrem Schlüsselbund gespeichert wird.";

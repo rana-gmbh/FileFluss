@@ -567,6 +567,11 @@
 "OTP Code (only if 2-factor auth is on)" = "OTP Code (only if 2-factor auth is on)";
 "Open Infomaniak token page" = "Open Infomaniak token page";
 "Generate a Personal Login Token in your Jottacloud account, then paste it below." = "Generate a Personal Login Token in your Jottacloud account, then paste it below.";
+"This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead." = "This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead.";
+"For new Google Drive accounts — no user limit" = "For new Google Drive accounts — no user limit";
+"Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick." = "Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick.";
+"To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." = "To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want.";
+"Choose the folders FileFluss may access" = "Choose the folders FileFluss may access";
 "Open Jottacloud token page" = "Open Jottacloud token page";
 "Personal Login Token" = "Personal Login Token";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.";

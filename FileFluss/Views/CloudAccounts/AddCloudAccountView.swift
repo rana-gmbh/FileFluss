@@ -140,8 +140,8 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .iCloud, .internxt, .jottacloud,
-        .kDrive, .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
+        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .googleDrivePicker, .iCloud, .internxt,
+        .jottacloud, .kDrive, .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
     ]
 
     /// Providers that show up under "Other Protocols" — generic transport
@@ -248,6 +248,8 @@ struct AddCloudAccountView: View {
                 oneDriveFields
             case .googleDrive:
                 googleDriveFields
+            case .googleDrivePicker:
+                googleDrivePickerFields
             case .dropbox:
                 dropboxFields
             case .gmxCloud:
@@ -515,7 +517,24 @@ struct AddCloudAccountView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                LText("This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    private var googleDrivePickerFields: some View {
+        VStack(spacing: 12) {
+            Label(L10n.text("For new Google Drive accounts — no user limit"), systemImage: "checkmark.seal.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+
+            LText("Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
     }
 
@@ -1185,6 +1204,7 @@ struct AddCloudAccountView: View {
         case .kDrive: return apiToken.isEmpty
         case .oneDrive: return false
         case .googleDrive: return false
+        case .googleDrivePicker: return false
         case .dropbox: return false
         case .nextCloud:
             switch nextCloudMode {
@@ -1404,6 +1424,23 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addJottacloudAccount(
                     personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
+            case .googleDrivePicker:
+                // Step 1: OAuth (system browser). Step 2: the Google Picker,
+                // also in the system browser (it needs the user's signed-in
+                // Google session), which hands back the chosen folders.
+                do {
+                    let creds = try await GoogleDrivePickerProvider.startOAuth()
+                    let roots = try await GoogleDrivePickerServer().pickFolders(accessToken: creds.accessToken)
+                    guard !roots.isEmpty else {
+                        // Cancelled in the browser — stay on the form.
+                        isAuthenticating = false
+                        loginTask = nil
+                        return
+                    }
+                    await appState.syncManager.addGoogleDrivePickerAccount(credentials: creds, roots: roots)
+                } catch {
+                    appState.syncManager.authError = error.localizedDescription
+                }
             case .pCloud:
                 let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedToken.isEmpty {

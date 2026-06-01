@@ -567,6 +567,11 @@
 "OTP Code (only if 2-factor auth is on)" = "OTP 驗證碼（僅當啟用雙重驗證時）";
 "Open Infomaniak token page" = "打開 Infomaniak 權杖頁面";
 "Generate a Personal Login Token in your Jottacloud account, then paste it below." = "在您的 Jottacloud 帳戶中產生個人登入權杖，然後將其貼到下方。";
+"This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead." = "此完全存取的 Google Drive 選項已達到使用者上限。新使用者應改用「Google Drive（所選資料夾）」。";
+"For new Google Drive accounts — no user limit" = "適用於新的 Google Drive 帳戶 — 無使用者上限";
+"Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick." = "使用 Google 登入並選擇允許 FileFluss 使用的資料夾。您可以在這些資料夾中新增和管理檔案。其中已有的檔案不會被列出 — 此存取模式僅顯示 FileFluss 新增或您選擇的內容。";
+"To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." = "若要變更 FileFluss 可存取的資料夾，請移除此帳戶並重新新增，然後選擇您想要的資料夾。";
+"Choose the folders FileFluss may access" = "選擇允許 FileFluss 存取的資料夾";
 "Open Jottacloud token page" = "開啟 Jottacloud 權杖頁面";
 "Personal Login Token" = "個人登入權杖";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證並儲存在您的鑰匙圈中。";

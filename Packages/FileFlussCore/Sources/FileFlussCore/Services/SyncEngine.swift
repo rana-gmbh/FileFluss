@@ -97,6 +97,7 @@ public actor SyncEngine {
         case .internxt: return InternxtProvider()
         case .terabox: return TeraBoxProvider()
         case .jottacloud: return JottacloudProvider()
+        case .googleDrivePicker: return GoogleDrivePickerProvider()
         }
     }
 }

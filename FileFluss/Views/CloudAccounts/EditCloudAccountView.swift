@@ -151,11 +151,20 @@ struct EditCloudAccountView: View {
             iCloudHint
         case .jottacloud:
             jottacloudHint
+        case .googleDrivePicker:
+            googleDrivePickerHint
         }
     }
 
     private var jottacloudHint: some View {
         LText("To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+    }
+
+    private var googleDrivePickerHint: some View {
+        LText("To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -650,7 +659,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud, .terabox, .jottacloud:
+        case .iCloud, .terabox, .jottacloud, .googleDrivePicker:
             EmptyView()
         case .dropbox, .googleDrive, .oneDrive, .box:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
@@ -696,7 +705,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -820,7 +829,7 @@ struct EditCloudAccountView: View {
             return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker:
             return true
         }
     }
@@ -984,7 +993,7 @@ struct EditCloudAccountView: View {
                     useTLS: ftpUseTLS,
                     allowInvalidCertificate: ftpAllowSelfSigned
                 )
-            case .iCloud, .terabox, .jottacloud:
+            case .iCloud, .terabox, .jottacloud, .googleDrivePicker:
                 break
             }
 
