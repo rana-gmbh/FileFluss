@@ -1481,14 +1481,6 @@ struct SidebarFavorite: Identifiable, Hashable, Codable {
     }
 }
 
-@available(*, deprecated, message: "Replaced by SidebarFavorite. Kept temporarily for one transitional release.")
-struct FavoriteFolder: Identifiable {
-    let id = UUID()
-    let url: URL
-    var displayName: String
-    let icon: String = "folder.fill"
-}
-
 struct FolderSizeEntry: Identifiable {
     let id = UUID()
     let url: URL?

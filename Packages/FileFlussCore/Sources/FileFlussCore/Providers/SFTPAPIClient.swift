@@ -511,6 +511,21 @@ public actor SFTPAPIClient {
         public let name: String
     }
 
+    /// Permissions block: a filetype char followed by the mode bits, plus
+    /// the `.`/`*`/`@`/`+` suffixes SELinux contexts and ACL markers add.
+    private static let permsClass = #"[dlcbps-][rwxsStT@+.\*\-]{9,}"#
+
+    /// Precompiled once and reused — `parseListingLine` runs per line of
+    /// every directory listing, so compiling these on each call (the old
+    /// behaviour) meant recompiling the regex thousands of times for a
+    /// large folder. `NSRegularExpression` is immutable and safe to share.
+    private static let classicListingRegex = try? NSRegularExpression(
+        pattern: "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\S+)\\s+(\\d{1,2})\\s+([\\d:]+|\\d{4})\\s+(.+)$"
+    )
+    private static let isoListingRegex = try? NSRegularExpression(
+        pattern: "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
+    )
+
     /// Parses one line of an SFTP server's long-form directory listing.
     /// Returns `nil` for blank lines, prompt lines, `.`/`..` entries, or
     /// rows that don't match any of the recognised longname formats.
@@ -518,8 +533,7 @@ public actor SFTPAPIClient {
     /// We try the classic OpenSSH `MONTH DAY TIME-OR-YEAR` form first
     /// (preserves every working server) and only fall back to the ISO
     /// `YYYY-MM-DD HH:MM[:SS]?` form emitted by ProFTPD `mod_sftp` and a
-    /// few other daemons. The permissions block also accepts `.` and `*`
-    /// suffix characters so SELinux-context rows (RHEL/CentOS) parse.
+    /// few other daemons.
     public static func parseListingLine(_ line: String) -> ParsedListingLine? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
@@ -527,14 +541,9 @@ public actor SFTPAPIClient {
         // Other leading chars (e.g. "total 4", "sftp>" prompts) are noise.
         guard let first = trimmed.first, "-dlcbps".contains(first) else { return nil }
 
-        // Common prefix: perms LINKS OWNER GROUP SIZE
-        let permsClass = #"[dlcbps-][rwxsStT@+.\*\-]{9,}"#
-        let classicPattern = "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\S+)\\s+(\\d{1,2})\\s+([\\d:]+|\\d{4})\\s+(.+)$"
-        let isoPattern = "^(\(permsClass))\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
-
         let range = NSRange(trimmed.startIndex..., in: trimmed)
 
-        if let regex = try? NSRegularExpression(pattern: classicPattern),
+        if let regex = Self.classicListingRegex,
            let match = regex.firstMatch(in: trimmed, range: range),
            let permsRange = Range(match.range(at: 1), in: trimmed),
            let sizeRange = Range(match.range(at: 5), in: trimmed),
@@ -566,7 +575,7 @@ public actor SFTPAPIClient {
             }
         }
 
-        if let regex = try? NSRegularExpression(pattern: isoPattern),
+        if let regex = Self.isoListingRegex,
            let match = regex.firstMatch(in: trimmed, range: range),
            let permsRange = Range(match.range(at: 1), in: trimmed),
            let sizeRange = Range(match.range(at: 5), in: trimmed),
