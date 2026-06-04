@@ -20,6 +20,10 @@ struct FileListView: View {
     @State private var showRenameDialog: Bool = false
     @State private var renameText: String = ""
     @State private var renameItem: FileItem?
+    /// Free/total bytes of the volume backing the current folder, shown in the
+    /// status bar like a cloud account's quota. Refreshed when the folder or
+    /// its contents change.
+    @State private var volumeCapacity: (free: Int64, total: Int64)?
 
     struct PendingCloudDrop {
         let sourceItems: [CloudFileItem]
@@ -570,10 +574,21 @@ struct FileListView: View {
                     Text(L10n.format("Selected: %d items, %@", selected.count, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
                 }
             }
+            if let cap = volumeCapacity {
+                Text("·")
+                Text(LocalVolumeFormatter.summary(free: cap.free, total: cap.total))
+            }
             Spacer()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+        .task(id: fm.currentDirectory) {
+            volumeCapacity = SpaceCheck.localVolumeCapacity(at: fm.currentDirectory)
+        }
+        .onChange(of: fm.items.count) { _, _ in
+            // A copy/move/delete into this folder changed free space.
+            volumeCapacity = SpaceCheck.localVolumeCapacity(at: fm.currentDirectory)
+        }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .background(.bar)

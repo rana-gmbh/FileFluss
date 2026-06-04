@@ -658,6 +658,7 @@
 "Browse..." = "瀏覽…";
 "Calculating the size of the items and the destination." = "正在計算項目和目標的大小。";
 "Checking available space…" = "正在檢查可用空間…";
+"%@ free of %@" = "%@ 可用，共 %@";
 "Create Rule" = "建立規則";
 "Create a sync rule to keep your local folders in sync with the cloud." = "建立一個同步規則，讓你的本機資料夾與雲端保持同步。";
 "FileFluss %@ is available" = "FileFluss %@ 已發佈";

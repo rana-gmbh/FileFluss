@@ -40,20 +40,33 @@ enum SpaceCheck {
     }
 
     /// Bytes free on the volume backing `url` (the directory data would land
-    /// in). Uses the "important usage" capacity macOS reports for user data,
-    /// which already accounts for purgeable space. `nil` if it can't be read.
+    /// in). `nil` if it can't be read.
+    ///
+    /// Takes the *larger* of the "important usage" capacity and the plain
+    /// available capacity. The important-usage figure is meant to include
+    /// purgeable space, but on external and network volumes it's frequently
+    /// reported as a tiny value (or zero) even when gigabytes are free —
+    /// which produced false "not enough space" warnings. The plain key is the
+    /// reliable floor, so the maximum gives a correct, non-pessimistic figure
+    /// on every volume type.
     static func localVolumeFreeBytes(at url: URL) -> Int64? {
-        let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        if let bytes = values?.volumeAvailableCapacityForImportantUsage {
-            return Int64(bytes)
-        }
-        // Fall back to the plain available-capacity key on volumes that don't
-        // surface the "important usage" figure.
-        let plain = try? url.resourceValues(forKeys: [.volumeAvailableCapacityKey])
-        if let capacity = plain?.volumeAvailableCapacity {
-            return Int64(capacity)
-        }
-        return nil
+        let v = try? url.resourceValues(forKeys: [
+            .volumeAvailableCapacityForImportantUsageKey,
+            .volumeAvailableCapacityKey,
+        ])
+        let important = v?.volumeAvailableCapacityForImportantUsage  // Int64?
+        let plain = v?.volumeAvailableCapacity.map { Int64($0) }     // Int64?
+        let candidates = [important, plain].compactMap { $0 }
+        return candidates.max()
+    }
+
+    /// Free and total bytes for the volume backing `url`, for display. `nil` if
+    /// the figures can't be read. Free space uses `localVolumeFreeBytes`.
+    static func localVolumeCapacity(at url: URL) -> (free: Int64, total: Int64)? {
+        guard let free = localVolumeFreeBytes(at: url),
+              let total = (try? url.resourceValues(forKeys: [.volumeTotalCapacityKey]))?.volumeTotalCapacity,
+              total > 0 else { return nil }
+        return (free, Int64(total))
     }
 
     /// Whether two locations live on the same volume. A move within one
@@ -64,6 +77,16 @@ enum SpaceCheck {
         let rhs = (try? b.resourceValues(forKeys: [.volumeIdentifierKey]))?.volumeIdentifier
         guard let lhs = lhs as? NSObject, let rhs = rhs as? NSObject else { return false }
         return lhs.isEqual(rhs)
+    }
+}
+
+/// Renders a local volume's free space the way cloud accounts show their quota,
+/// e.g. "120 GB free of 500 GB".
+enum LocalVolumeFormatter {
+    static func summary(free: Int64, total: Int64) -> String {
+        let freeStr = ByteCountFormatter.string(fromByteCount: max(0, free), countStyle: .file)
+        let totalStr = ByteCountFormatter.string(fromByteCount: max(0, total), countStyle: .file)
+        return L10n.format("%@ free of %@", freeStr, totalStr)
     }
 }
 

@@ -658,6 +658,7 @@
 "Browse..." = "Browse...";
 "Calculating the size of the items and the destination." = "Calculating the size of the items and the destination.";
 "Checking available space…" = "Checking available space…";
+"%@ free of %@" = "%@ free of %@";
 "Create Rule" = "Create Rule";
 "Create a sync rule to keep your local folders in sync with the cloud." = "Create a sync rule to keep your local folders in sync with the cloud.";
 "FileFluss %@ is available" = "FileFluss %@ is available";

@@ -134,6 +134,16 @@ struct SidebarView: View {
         return CloudQuotaFormatter.summary(quota, accountDisplayName: account.displayName)
     }
 
+    /// Mirrors the cloud-account tooltip for local drives: shows free / total
+    /// space when the drive is mounted, falling back to just the name.
+    private func driveTooltip(for drive: Drive) -> String {
+        guard let mount = appState.driveMonitor.mountURL(for: drive.id),
+              let cap = SpaceCheck.localVolumeCapacity(at: mount) else {
+            return drive.displayName
+        }
+        return "\(drive.displayName): \(LocalVolumeFormatter.summary(free: cap.free, total: cap.total))"
+    }
+
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
     /// the matching cloud provider's logo (when this is a cloud favorite)
     /// and a curated set of SF Symbols.
@@ -301,7 +311,7 @@ struct SidebarView: View {
                     ForEach(appState.driveMonitor.drives) { drive in
                         DriveRow(drive: drive, panelSide: panelSide)
                             .tag(SidebarItem.drive(driveId: drive.id))
-                            .help(drive.displayName)
+                            .help(driveTooltip(for: drive))
                             .contextMenu {
                                 driveContextMenu(for: drive)
                             }

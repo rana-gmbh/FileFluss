@@ -658,6 +658,7 @@
 "Browse..." = "Durchsuchen …";
 "Calculating the size of the items and the destination." = "Die Größe der Objekte und des Ziels wird berechnet.";
 "Checking available space…" = "Verfügbarer Speicher wird geprüft …";
+"%@ free of %@" = "%@ frei von %@";
 "Create Rule" = "Regel erstellen";
 "Create a sync rule to keep your local folders in sync with the cloud." = "Erstelle eine Sync-Regel, um deine lokalen Ordner mit der Cloud synchron zu halten.";
 "FileFluss %@ is available" = "FileFluss %@ ist verfügbar";
