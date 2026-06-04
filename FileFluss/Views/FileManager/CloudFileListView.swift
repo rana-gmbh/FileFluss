@@ -176,15 +176,18 @@ struct CloudFileListView: View {
             }
             Button(L10n.text("Cancel"), role: .cancel) {}
         }
-        .alert(L10n.text("Rename"), isPresented: $showRenameDialog) {
-            TextField(L10n.text("Name"), text: $renameText)
-            Button(L10n.text("Rename")) {
-                if let item = renameCloudItem {
-                    let newName = renameText
-                    Task { await vm.renameItem(item, to: newName) }
-                }
-            }
-            Button(L10n.text("Cancel"), role: .cancel) {}
+        .sheet(isPresented: $showRenameDialog) {
+            RenameSheet(
+                text: $renameText,
+                onRename: {
+                    if let item = renameCloudItem {
+                        let newName = renameText
+                        Task { await vm.renameItem(item, to: newName) }
+                    }
+                    showRenameDialog = false
+                },
+                onCancel: { showRenameDialog = false }
+            )
         }
         .confirmationDialog(
             L10n.format("Do you want to mount “%@” in Finder?", accountDisplayName),
