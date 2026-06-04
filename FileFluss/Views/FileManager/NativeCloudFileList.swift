@@ -31,6 +31,10 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
+    /// Bumped by AppState after a navigation that should keep keyboard focus in
+    /// this panel; drives `updateNSView` to re-take first responder even when
+    /// the table was rebuilt by the navigation.
+    var focusToken: UUID?
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -192,6 +196,13 @@ struct NativeCloudFileList: NSViewRepresentable {
             tableView.selectRowIndexes(indexSet as IndexSet, byExtendingSelection: false)
             coordinator.suppressSelectionUpdate = false
         }
+
+        // A navigation asked us to keep keyboard focus. Now that the reload is
+        // applied, re-assert first responder so the arrow keys keep working.
+        if let focusToken, focusToken != coordinator.lastFocusToken {
+            coordinator.lastFocusToken = focusToken
+            coordinator.focusTableViewSoon()
+        }
     }
 }
 
@@ -211,6 +222,18 @@ class CloudTableView: NSTableView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // See FileTableView: handle Open Folder / Parent Directory inline while
+        // this table is focused so keyboard navigation never loses focus to the
+        // menu (which would kill the arrow keys until the user clicked back in).
+        if window?.firstResponder === self,
+           let command = KeyboardShortcutManager.shared.navigationCommand(for: event) {
+            NotificationCenter.default.post(name: command.notification, object: nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -341,6 +364,36 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             MainActor.assumeIsolated {
                 self?.applyRowSize()
             }
+        }
+    }
+
+    /// The last navigation focus token we acted on, so `updateNSView` only
+    /// re-takes focus once per request.
+    var lastFocusToken: UUID?
+
+    @MainActor
+    func focusTableViewSoon() {
+        forceFocus(attemptsLeft: 6)
+    }
+
+    /// See NativeFileList.forceFocus: re-assert real first responder across the
+    /// next few run-loop turns so SwiftUI's hosting view can't leave the table
+    /// only optically focused after the navigation reload, and plant a
+    /// selection anchor so the arrow keys are live immediately.
+    @MainActor
+    private func forceFocus(attemptsLeft: Int) {
+        if let tableView, let window = tableView.window {
+            if tableView.selectedRow < 0 && tableView.numberOfRows > 0 {
+                tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+                tableView.scrollRowToVisible(0)
+            }
+            if window.firstResponder !== tableView {
+                window.makeFirstResponder(tableView)
+            }
+        }
+        guard attemptsLeft > 1 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.forceFocus(attemptsLeft: attemptsLeft - 1)
         }
     }
 

@@ -528,6 +528,10 @@ final class AppState {
         }
 
         // --- Panel navigation
+        on(.openDirectory) { [weak self] in
+            guard let self else { return }
+            Task { await self.navigateActiveInto() }
+        }
         on(.parentDirectory) { [weak self] in
             guard let self else { return }
             Task { await self.navigateActiveParent() }
@@ -612,6 +616,43 @@ final class AppState {
 
     // MARK: - Command implementations
 
+    /// Asks the active panel's visible file list to re-take keyboard focus
+    /// after a navigation. Keyboard-driven navigation reloads the table, which
+    /// can drop first responder so the arrow keys stop working until the user
+    /// clicks back in. The NativeFileList / NativeCloudFileList for this side
+    /// observes `.requestPanelFocus` and restores first responder.
+    /// Drives keyboard-focus restoration after a navigation. Navigating can
+    /// make SwiftUI rebuild the panel's table view (the `switch` in
+    /// ContentView.filePanelContent), which throws away the view that just had
+    /// first responder — leaving the new table only optically focused. Rather
+    /// than message a coordinator that may already be gone, we bump an
+    /// observable token; the file list reads it in `updateNSView` and the
+    /// *current* table re-takes real first responder. `focusRequestPanel` keeps
+    /// the bump targeted so the other panel isn't disturbed.
+    private(set) var focusRequestToken = UUID()
+    private(set) var focusRequestPanel: PanelSide?
+
+    func requestActivePanelFocus() {
+        focusRequestPanel = activePanel
+        focusRequestToken = UUID()
+    }
+
+    /// Open Folder (⌘↓): step into the selected folder, mirroring a
+    /// double-click. Files are opened with their default app on the local
+    /// panel; on the cloud panel only directories are entered (opening a
+    /// remote file needs the view-level download path).
+    private func navigateActiveInto() async {
+        if let id = cloudAccountId(for: activePanel) {
+            let vm = cloudFileManager(for: id, side: activePanel)
+            guard let item = vm.selectedItems.first, item.isDirectory else { return }
+            await vm.navigateTo(item.path)
+        } else {
+            guard let item = activeFileManager.selectedItems.first else { return }
+            await activeFileManager.openItem(item)
+        }
+        requestActivePanelFocus()
+    }
+
     private func navigateActiveParent() async {
         if let id = cloudAccountId(for: activePanel) {
             let vm = cloudFileManager(for: id, side: activePanel)
@@ -620,6 +661,7 @@ final class AppState {
         } else {
             await activeFileManager.navigateUp()
         }
+        requestActivePanelFocus()
     }
 
     private func navigateActiveBack() async {
@@ -628,6 +670,7 @@ final class AppState {
         } else {
             await activeFileManager.navigateBack()
         }
+        requestActivePanelFocus()
     }
 
     private func navigateActiveForward() async {
@@ -636,6 +679,7 @@ final class AppState {
         } else {
             await activeFileManager.navigateForward()
         }
+        requestActivePanelFocus()
     }
 
     private func navigateActiveToRoot() async {
@@ -646,6 +690,7 @@ final class AppState {
         } else {
             await activeFileManager.navigateTo(URL(fileURLWithPath: "/"))
         }
+        requestActivePanelFocus()
     }
 
     private func openSelectionInOtherPanel() {

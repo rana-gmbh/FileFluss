@@ -145,6 +145,9 @@ struct FileCommands: Commands {
         }
 
         CommandMenu(L10n.text("Go")) {
+            applyShortcut(.openDirectory, to: Button(L10n.text("Open Folder")) {
+                NotificationCenter.default.post(name: KeyboardCommand.openDirectory.notification, object: nil)
+            })
             applyShortcut(.parentDirectory, to: Button(L10n.text("Parent Directory")) {
                 NotificationCenter.default.post(name: KeyboardCommand.parentDirectory.notification, object: nil)
             })

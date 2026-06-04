@@ -406,7 +406,13 @@ struct FileListView: View {
                     selectedIDs: Bindable(fm).selectedItemIDs,
                     quickLookController: fm.quickLookController,
                     onDoubleClick: { item in
-                        Task { await fm.openItem(item) }
+                        Task {
+                            await fm.openItem(item)
+                            // Entering a folder reloads the list, which drops
+                            // first responder; ask for it back so the arrow
+                            // keys keep working without re-clicking the pane.
+                            if item.isDirectory { appState.requestActivePanelFocus() }
+                        }
                     },
                     onDrop: { droppedItems, targetURL in
                         let drop = FileManagerViewModel.PendingDrop(
@@ -525,7 +531,8 @@ struct FileListView: View {
                         let urls = items.map(\.url)
                         guard !urls.isEmpty else { return }
                         NSWorkspace.shared.activateFileViewerSelecting(urls)
-                    }
+                    },
+                    focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()
@@ -571,10 +578,15 @@ struct FileListView: View {
 
     private var pathComponents: [(name: String, url: URL)] {
         var components: [(String, URL)] = []
-        var url = fm.currentDirectory
+        // Standardize so a stray `/..` collapses to `/` instead of walking an
+        // endless `/../..` chain. The fixed-point check is a belt-and-braces
+        // guard against any URL whose parent never reduces to root.
+        var url = fm.currentDirectory.standardizedFileURL
         while url.path() != "/" {
+            let parent = url.deletingLastPathComponent().standardizedFileURL
+            if parent.path() == url.path() { break }
             components.insert((url.lastPathComponent, url), at: 0)
-            url = url.deletingLastPathComponent()
+            url = parent
         }
         components.insert(("/", URL(filePath: "/")), at: 0)
         return components

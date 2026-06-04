@@ -631,7 +631,12 @@ struct CloudFileListView: View {
                 quickLookController: vm.quickLookController,
                 onDoubleClick: { item in
                     if item.isDirectory {
-                        Task { await vm.openItem(item) }
+                        Task {
+                            await vm.openItem(item)
+                            // Reload drops first responder — reclaim it so the
+                            // arrow keys keep working without re-clicking.
+                            appState.requestActivePanelFocus()
+                        }
                     } else {
                         openCloudFile(item)
                     }
@@ -803,7 +808,8 @@ struct CloudFileListView: View {
                 onOpenInFinder: { items in
                     openInFinder(items)
                 },
-                canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress
+                canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress,
+                focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil
             )
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()

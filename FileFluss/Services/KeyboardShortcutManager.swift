@@ -66,6 +66,19 @@ final class KeyboardShortcutManager {
         return defaults(for: preset)[command]
     }
 
+    /// Maps a key event to one of the in-pane navigation commands (Open
+    /// Folder / Parent Directory) under the user's current bindings, or nil.
+    /// The file tables handle these inline so keyboard navigation never has to
+    /// round-trip through the menu — which would resign first responder and
+    /// leave the arrow keys dead until the user clicked back into the pane.
+    func navigationCommand(for event: NSEvent) -> KeyboardCommand? {
+        guard let pressed = ShortcutBinding.from(event) else { return nil }
+        for command in [KeyboardCommand.openDirectory, .parentDirectory] {
+            if binding(for: command) == pressed { return command }
+        }
+        return nil
+    }
+
     /// Whether the user has overridden the preset default for this command.
     func isCustomised(_ command: KeyboardCommand) -> Bool {
         customBindings[command] != nil
@@ -124,6 +137,7 @@ final class KeyboardShortcutManager {
         // Panel navigation
         .toggleActivePanel:  .plain("tab"),
         .parentDirectory:    .cmd("up"),
+        .openDirectory:      .cmd("down"),
         .historyBack:        .cmd("["),
         .historyForward:     .cmd("]"),
         .openInOtherPanel:   .cmdControl("right"),
@@ -181,6 +195,7 @@ final class KeyboardShortcutManager {
         // Panel navigation
         .toggleActivePanel:  .plain("tab"),
         .parentDirectory:    .plain("delete"),       // Backspace
+        .openDirectory:      .plain("return"),       // Enter opens the folder under the cursor
         .historyBack:        .cmd("left"),
         .historyForward:     .cmd("right"),
         .openInOtherPanel:   .cmdControl("right"),

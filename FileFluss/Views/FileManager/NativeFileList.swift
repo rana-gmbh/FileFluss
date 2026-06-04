@@ -27,6 +27,10 @@ struct NativeFileList: NSViewRepresentable {
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
+    /// Bumped by AppState after a navigation that should keep keyboard focus in
+    /// this panel. A change drives `updateNSView` to re-take first responder,
+    /// which survives the table being rebuilt during navigation.
+    var focusToken: UUID?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -208,6 +212,14 @@ struct NativeFileList: NSViewRepresentable {
             tableView.selectRowIndexes(indexSet as IndexSet, byExtendingSelection: false)
             coordinator.suppressSelectionUpdate = false
         }
+
+        // A navigation asked this panel to keep keyboard focus. The token
+        // changes once per request; whichever table is current (even one just
+        // rebuilt by the navigation) re-takes real first responder here.
+        if let focusToken, focusToken != coordinator.lastFocusToken {
+            coordinator.lastFocusToken = focusToken
+            coordinator.focusTableViewSoon()
+        }
     }
 }
 
@@ -228,6 +240,20 @@ class FileTableView: NSTableView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // When this table already owns keyboard focus, handle the Open Folder /
+        // Parent Directory shortcuts here instead of letting them reach the
+        // menu. Going through the menu resigns first responder (menu tracking),
+        // which leaves the arrow keys dead until the user clicks back in.
+        // Posting the command keeps focus on the table the whole time.
+        if window?.firstResponder === self,
+           let command = KeyboardShortcutManager.shared.navigationCommand(for: event) {
+            NotificationCenter.default.post(name: command.notification, object: nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -375,6 +401,40 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             MainActor.assumeIsolated {
                 self?.applyRowSize()
             }
+        }
+    }
+
+    /// The last navigation focus token we acted on, so `updateNSView` only
+    /// re-takes focus once per request (not on every unrelated update).
+    var lastFocusToken: UUID?
+
+    @MainActor
+    func focusTableViewSoon() {
+        forceFocus(attemptsLeft: 6)
+    }
+
+    /// Make the table the *real* first responder after a navigation. A single
+    /// `makeFirstResponder` doesn't hold: navigation can rebuild the table and
+    /// SwiftUI's hosting view reclaims first responder, leaving the table only
+    /// optically focused (focus ring, but the arrow keys are dead until the
+    /// user tabs into it). Re-asserting across the next few run-loop turns lets
+    /// the final assert land after SwiftUI has settled, so focus genuinely
+    /// sticks. Also plants a selection anchor so the arrow keys have a row to
+    /// move from (mirrors what tabbing into the table does).
+    @MainActor
+    private func forceFocus(attemptsLeft: Int) {
+        if let tableView, let window = tableView.window {
+            if tableView.selectedRow < 0 && tableView.numberOfRows > 0 {
+                tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+                tableView.scrollRowToVisible(0)
+            }
+            if window.firstResponder !== tableView {
+                window.makeFirstResponder(tableView)
+            }
+        }
+        guard attemptsLeft > 1 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.forceFocus(attemptsLeft: attemptsLeft - 1)
         }
     }
 

@@ -123,7 +123,13 @@ final class FileManagerViewModel {
     }
 
     func navigateUp() async {
-        let parent = currentDirectory.deletingLastPathComponent()
+        // `deletingLastPathComponent()` doesn't stop at the filesystem root —
+        // on `file:///` it returns `file:///../`, which escapes root and feeds
+        // the breadcrumb an endless `/../..` chain (a main-thread hang).
+        // Standardize and bail out once we're already at root.
+        let current = currentDirectory.standardizedFileURL
+        let parent = current.deletingLastPathComponent().standardizedFileURL
+        guard parent.path() != current.path() else { return }
         await navigateTo(parent)
     }
 

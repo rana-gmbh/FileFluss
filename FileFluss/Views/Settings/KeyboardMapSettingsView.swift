@@ -248,67 +248,16 @@ private struct ShortcutRecorder: NSViewRepresentable {
                 onCapture?(nil)
                 return
             }
-            guard let binding = Self.binding(from: event) else { return }
+            guard let binding = ShortcutBinding.from(event) else { return }
             onCapture?(binding)
         }
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            if let binding = Self.binding(from: event) {
+            if let binding = ShortcutBinding.from(event) {
                 onCapture?(binding)
                 return true
             }
             return super.performKeyEquivalent(with: event)
-        }
-
-        private static func binding(from event: NSEvent) -> ShortcutBinding? {
-            var mods: ShortcutBinding.Modifiers = []
-            if event.modifierFlags.contains(.command) { mods.insert(.command) }
-            if event.modifierFlags.contains(.shift)   { mods.insert(.shift) }
-            if event.modifierFlags.contains(.option)  { mods.insert(.option) }
-            if event.modifierFlags.contains(.control) { mods.insert(.control) }
-
-            switch event.keyCode {
-            case 36:  return ShortcutBinding(key: "return", modifiers: mods)
-            case 48:  return ShortcutBinding(key: "tab",    modifiers: mods)
-            case 49:  return ShortcutBinding(key: "space",  modifiers: mods)
-            case 51:  return ShortcutBinding(key: "delete", modifiers: mods)
-            case 117: return ShortcutBinding(key: "fwdDelete", modifiers: mods)
-            case 53:  return nil
-            case 123: return ShortcutBinding(key: "left",   modifiers: mods)
-            case 124: return ShortcutBinding(key: "right",  modifiers: mods)
-            case 125: return ShortcutBinding(key: "down",   modifiers: mods)
-            case 126: return ShortcutBinding(key: "up",     modifiers: mods)
-            case 115: return ShortcutBinding(key: "home",   modifiers: mods)
-            case 119: return ShortcutBinding(key: "end",    modifiers: mods)
-            case 116: return ShortcutBinding(key: "pgUp",   modifiers: mods)
-            case 121: return ShortcutBinding(key: "pgDown", modifiers: mods)
-            case 122: return ShortcutBinding(key: "f1",  modifiers: mods)
-            case 120: return ShortcutBinding(key: "f2",  modifiers: mods)
-            case 99:  return ShortcutBinding(key: "f3",  modifiers: mods)
-            case 118: return ShortcutBinding(key: "f4",  modifiers: mods)
-            case 96:  return ShortcutBinding(key: "f5",  modifiers: mods)
-            case 97:  return ShortcutBinding(key: "f6",  modifiers: mods)
-            case 98:  return ShortcutBinding(key: "f7",  modifiers: mods)
-            case 100: return ShortcutBinding(key: "f8",  modifiers: mods)
-            case 101: return ShortcutBinding(key: "f9",  modifiers: mods)
-            case 109: return ShortcutBinding(key: "f10", modifiers: mods)
-            case 103: return ShortcutBinding(key: "f11", modifiers: mods)
-            case 111: return ShortcutBinding(key: "f12", modifiers: mods)
-            default: break
-            }
-
-            guard let chars = event.charactersIgnoringModifiers?.lowercased(),
-                  let c = chars.first else { return nil }
-            switch c {
-            case ".": return ShortcutBinding(key: "period", modifiers: mods)
-            case ",": return ShortcutBinding(key: "comma", modifiers: mods)
-            case "+": return ShortcutBinding(key: "plus", modifiers: mods)
-            case "-": return ShortcutBinding(key: "minus", modifiers: mods)
-            case "=": return ShortcutBinding(key: "equals", modifiers: mods)
-            case "/": return ShortcutBinding(key: "slash", modifiers: mods)
-            case "\\": return ShortcutBinding(key: "backslash", modifiers: mods)
-            default: return ShortcutBinding(key: String(c), modifiers: mods)
-            }
         }
     }
 }
