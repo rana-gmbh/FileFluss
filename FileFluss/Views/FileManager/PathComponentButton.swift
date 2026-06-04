@@ -119,6 +119,12 @@ final class PathComponentNSButton: NSView {
     override func mouseExited(with event: NSEvent) { isHovered = false }
     override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
 
+    // Navigate on the first click even when this breadcrumb's pane isn't the
+    // active one. Without this the activating click is swallowed and the user
+    // has to click twice — once to focus the pane, once to navigate. (The file
+    // table behaves correctly because NSTableView already accepts first mouse.)
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     override func mouseDown(with event: NSEvent) {
         // Visual press feedback during the drag-detection window so a quick
         // click still feels responsive.
