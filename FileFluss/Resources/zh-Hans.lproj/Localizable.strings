@@ -662,6 +662,14 @@
 "Calculating the size of the items and the destination." = "正在计算项目和目标的大小。";
 "Checking available space…" = "正在检查可用空间…";
 "%@ free of %@" = "%@ 可用，共 %@";
+"Cache Location" = "缓存位置";
+"Location" = "位置";
+"Default (system folder)" = "默认（系统文件夹）";
+"Reset to Default" = "恢复默认";
+"Choose…" = "选择…";
+"Choose" = "选择";
+"Choose a folder for FileFluss to stage downloads and cache previews." = "选择一个文件夹，供 FileFluss 暂存下载和缓存预览。";
+"Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used." = "用于暂存下载和缓存预览的位置。选择外部驱动器上的文件夹，即可从云账户复制大文件而不会占满内置磁盘。如果该文件夹不可用，将使用系统文件夹。";
 "Create Rule" = "创建规则";
 "Create a sync rule to keep your local folders in sync with the cloud." = "创建一个同步规则，让你的本地文件夹与云端保持同步。";
 "FileFluss %@ is available" = "FileFluss %@ 已发布";

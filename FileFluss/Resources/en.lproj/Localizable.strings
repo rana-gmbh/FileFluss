@@ -662,6 +662,14 @@
 "Calculating the size of the items and the destination." = "Calculating the size of the items and the destination.";
 "Checking available space…" = "Checking available space…";
 "%@ free of %@" = "%@ free of %@";
+"Cache Location" = "Cache Location";
+"Location" = "Location";
+"Default (system folder)" = "Default (system folder)";
+"Reset to Default" = "Reset to Default";
+"Choose…" = "Choose…";
+"Choose" = "Choose";
+"Choose a folder for FileFluss to stage downloads and cache previews." = "Choose a folder for FileFluss to stage downloads and cache previews.";
+"Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used." = "Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used.";
 "Create Rule" = "Create Rule";
 "Create a sync rule to keep your local folders in sync with the cloud." = "Create a sync rule to keep your local folders in sync with the cloud.";
 "FileFluss %@ is available" = "FileFluss %@ is available";

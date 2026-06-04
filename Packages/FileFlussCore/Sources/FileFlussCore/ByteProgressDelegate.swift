@@ -51,61 +51,73 @@ public final class ByteProgressDelegate: NSObject, URLSessionTaskDelegate, URLSe
 /// `@Sendable` because URLSession delegates are invoked off the main actor.
 public typealias ByteProgressHandler = @Sendable (Int64) -> Void
 
-/// URLSessionDownloadDelegate that handles a single download, reporting bytes and
-/// resuming a continuation on completion. Owns the temp file so URLSession's own
-/// temp doesn't get deleted before the caller reads it.
-private final class DownloadProgressHandler: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onBytes: @Sendable (Int64) -> Void
+/// URLSessionDataDelegate that streams a download straight to a staging file in
+/// `StagingLocation`, reporting bytes and resuming a continuation on completion.
+///
+/// A data task (rather than a download task) is used deliberately: a download
+/// task always buffers the whole response in URLSession's own temp on the
+/// internal disk before handing it over, which defeats a user-chosen cache
+/// folder on an external drive. Writing each chunk to our own file as it
+/// arrives keeps memory flat and puts the bytes exactly where the user asked.
+private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let onBytes: (@Sendable (Int64) -> Void)?
     private var completion: ((Result<(URL, URLResponse), Error>) -> Void)?
-    private var lastWritten: Int64 = 0
-    private var savedTempURL: URL?
+    private let destURL: URL
+    private var handle: FileHandle?
+    private var response: URLResponse?
+    private var failure: Error?
     var ownedSession: URLSession?
 
-    init(onBytes: @escaping @Sendable (Int64) -> Void,
+    init(onBytes: (@Sendable (Int64) -> Void)?,
          completion: @escaping (Result<(URL, URLResponse), Error>) -> Void) {
         self.onBytes = onBytes
         self.completion = completion
+        self.destURL = StagingLocation.downloadStagingFile()
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
-        let delta = totalBytesWritten - lastWritten
-        if delta > 0 {
-            lastWritten = totalBytesWritten
-            onBytes(delta)
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                    didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        self.response = response
+        FileManager.default.createFile(atPath: destURL.path, contents: nil)
+        handle = try? FileHandle(forWritingTo: destURL)
+        if handle == nil {
+            failure = CocoaError(.fileWriteUnknown)
+            completionHandler(.cancel)
+            return
         }
+        completionHandler(.allow)
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {
-        // `location` is deleted after this callback returns — move to a file we own.
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("filefluss-dl-\(UUID().uuidString)")
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard failure == nil, let handle else { return }
         do {
-            try FileManager.default.moveItem(at: location, to: tempURL)
-            savedTempURL = tempURL
+            try handle.write(contentsOf: data)
+            onBytes?(Int64(data.count))
         } catch {
-            // didCompleteWithError will surface a failure; nothing to do here.
+            failure = error
+            dataTask.cancel()
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let completion else { return }
         self.completion = nil
+        try? handle?.close()
+        handle = nil
         defer { ownedSession?.finishTasksAndInvalidate() }
 
-        if let error {
-            if let savedTempURL { try? FileManager.default.removeItem(at: savedTempURL) }
-            completion(.failure(error))
+        if let err = error ?? failure {
+            try? FileManager.default.removeItem(at: destURL)
+            completion(.failure(err))
             return
         }
-        guard let tempURL = savedTempURL, let response = task.response else {
+        guard let response else {
+            try? FileManager.default.removeItem(at: destURL)
             completion(.failure(URLError(.cannotLoadFromNetwork)))
             return
         }
-        completion(.success((tempURL, response)))
+        completion(.success((destURL, response)))
     }
 }
 
@@ -113,10 +125,6 @@ extension URLSession {
     /// Download the request to a temp URL; reports byte progress if `onBytes` is non-nil.
     /// Returns (tempFileURL, URLResponse) like `session.download(for:)`.
     public func downloadReportingProgress(for request: URLRequest, onBytes: ByteProgressHandler?) async throws -> (URL, URLResponse) {
-        guard let onBytes else {
-            return try await download(for: request)
-        }
-
         return try await withCheckedThrowingContinuation { continuation in
             let handler = DownloadProgressHandler(onBytes: onBytes) { result in
                 switch result {
@@ -124,12 +132,12 @@ extension URLSession {
                 case .failure(let error): continuation.resume(throwing: error)
                 }
             }
-            // Dedicated session so the delegate is strongly retained and receives
-            // `didWriteData` reliably (per-task delegate on async `download(for:delegate:)`
-            // doesn't always deliver URLSessionDownloadDelegate callbacks).
+            // Dedicated session so the delegate is strongly retained and reliably
+            // receives the streaming `didReceive` callbacks (a per-task delegate
+            // on the async `data(for:delegate:)` doesn't always deliver them).
             let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
             handler.ownedSession = session
-            let task = session.downloadTask(with: request)
+            let task = session.dataTask(with: request)
             task.resume()
         }
     }

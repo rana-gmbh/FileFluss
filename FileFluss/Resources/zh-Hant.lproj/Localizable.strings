@@ -662,6 +662,14 @@
 "Calculating the size of the items and the destination." = "正在計算項目和目標的大小。";
 "Checking available space…" = "正在檢查可用空間…";
 "%@ free of %@" = "%@ 可用，共 %@";
+"Cache Location" = "快取位置";
+"Location" = "位置";
+"Default (system folder)" = "預設（系統資料夾）";
+"Reset to Default" = "重設為預設";
+"Choose…" = "選擇…";
+"Choose" = "選擇";
+"Choose a folder for FileFluss to stage downloads and cache previews." = "選擇一個資料夾，供 FileFluss 暫存下載與快取預覽。";
+"Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used." = "用於暫存下載與快取預覽的位置。選擇外接磁碟機上的資料夾，即可從雲端帳戶複製大型檔案而不會佔滿內部磁碟。若該資料夾無法使用，將改用系統資料夾。";
 "Create Rule" = "建立規則";
 "Create a sync rule to keep your local folders in sync with the cloud." = "建立一個同步規則，讓你的本機資料夾與雲端保持同步。";
 "FileFluss %@ is available" = "FileFluss %@ 已發佈";

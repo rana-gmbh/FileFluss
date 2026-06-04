@@ -169,8 +169,7 @@ public actor SynologyDriveAPIClient {
             ]
         )
 
-        let progressDelegate = onBytes.map { ByteProgressDelegate(onBytes: $0) }
-        let (tmp, response) = try await session.download(for: URLRequest(url: url), delegate: progressDelegate)
+        let (tmp, response) = try await session.downloadReportingProgress(for: URLRequest(url: url), onBytes: onBytes)
         try validateHTTP(response)
 
         try? FileManager.default.removeItem(at: localURL)

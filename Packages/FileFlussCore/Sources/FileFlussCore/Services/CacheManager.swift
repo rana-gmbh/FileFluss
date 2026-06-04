@@ -32,12 +32,18 @@ public final class CacheManager {
     /// preview/download caches; other transient temp files (sync staging,
     /// drag-out copies) clean themselves up in scope and aren't included.
     private func cacheDirectoryURLs() -> [URL] {
-        let tempDir = FileManager.default.temporaryDirectory
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: tempDir,
-            includingPropertiesForKeys: nil
-        ) else { return [] }
-        return contents.filter { $0.lastPathComponent.hasPrefix("FileFluss-cloud-") }
+        let fm = FileManager.default
+        var result: [URL] = []
+        var seen = Set<String>()
+        // Scan the current staging base plus the legacy temp root, so caches
+        // written before a custom cache folder was chosen are still found.
+        for root in StagingLocation.cacheScanRoots() {
+            guard let contents = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { continue }
+            for url in contents where url.lastPathComponent.hasPrefix("FileFluss-cloud-") {
+                if seen.insert(url.standardizedFileURL.path).inserted { result.append(url) }
+            }
+        }
+        return result
     }
 
     public func refreshSize() async {

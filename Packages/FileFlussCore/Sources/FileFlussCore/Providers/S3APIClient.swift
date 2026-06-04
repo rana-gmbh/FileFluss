@@ -267,8 +267,7 @@ public actor S3APIClient {
             request.httpMethod = "GET"
             try sign(&request, host: host, payloadHash: emptyPayloadHash, service: "s3", region: region)
 
-            let progressDelegate = onBytes.map { ByteProgressDelegate(onBytes: $0) }
-            let (tmp, response) = try await session.download(for: request, delegate: progressDelegate)
+            let (tmp, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
             try validate(response, body: nil)
 
             try? FileManager.default.removeItem(at: localURL)

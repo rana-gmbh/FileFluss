@@ -325,6 +325,8 @@ struct StorageSettingsView: View {
     @AppStorage("cacheAutoManage") private var autoManage = true
     @AppStorage("cacheMaxSizeMB") private var maxSizeMB = CacheManager.defaultMaxSizeMB
     @AppStorage("cacheAutoDeleteDays") private var autoDeleteDays = CacheManager.defaultAutoDeleteDays
+    /// Absolute path of the user-chosen cache/staging folder; empty = default.
+    @AppStorage(StagingLocation.customFolderKey) private var cacheFolderPath = ""
 
     @State private var cache = CacheManager.shared
     @State private var showClearConfirm = false
@@ -353,6 +355,31 @@ struct StorageSettingsView: View {
                     }
                     .disabled(cache.isClearing || (cache.currentSize ?? 0) == 0)
                 }
+            }
+
+            Section {
+                LabeledContent(L10n.text("Location")) {
+                    Text(cacheFolderPath.isEmpty
+                         ? L10n.text("Default (system folder)")
+                         : cacheFolderPath)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(cacheFolderPath.isEmpty ? "" : cacheFolderPath)
+                }
+                HStack {
+                    Spacer()
+                    if !cacheFolderPath.isEmpty {
+                        Button(L10n.text("Reset to Default")) { cacheFolderPath = "" }
+                    }
+                    Button(L10n.text("Choose…")) { chooseCacheFolder() }
+                }
+            } header: {
+                LText("Cache Location")
+            } footer: {
+                LText("Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -422,6 +449,18 @@ struct StorageSettingsView: View {
     private var currentSizeText: String {
         guard let size = cache.currentSize else { return L10n.text("Calculating…") }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    private func chooseCacheFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.text("Choose")
+        panel.message = L10n.text("Choose a folder for FileFluss to stage downloads and cache previews.")
+        if panel.runModal() == .OK, let url = panel.url {
+            cacheFolderPath = url.path
+        }
     }
 
     private func commitSliderValue() {

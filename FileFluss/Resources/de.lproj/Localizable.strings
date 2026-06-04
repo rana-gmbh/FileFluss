@@ -662,6 +662,14 @@
 "Calculating the size of the items and the destination." = "Die Größe der Objekte und des Ziels wird berechnet.";
 "Checking available space…" = "Verfügbarer Speicher wird geprüft …";
 "%@ free of %@" = "%@ frei von %@";
+"Cache Location" = "Cache-Speicherort";
+"Location" = "Speicherort";
+"Default (system folder)" = "Standard (Systemordner)";
+"Reset to Default" = "Auf Standard zurücksetzen";
+"Choose…" = "Auswählen…";
+"Choose" = "Auswählen";
+"Choose a folder for FileFluss to stage downloads and cache previews." = "Wählen Sie einen Ordner, in dem FileFluss Downloads zwischenspeichert und Vorschauen ablegt.";
+"Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used." = "Wo Downloads zwischengespeichert und Vorschauen abgelegt werden. Wählen Sie einen Ordner auf einer externen Festplatte, um große Dateien aus einem Cloud-Konto zu kopieren, ohne Ihre interne Festplatte zu füllen. Ist der Ordner nicht verfügbar, wird der Systemordner verwendet.";
 "Create Rule" = "Regel erstellen";
 "Create a sync rule to keep your local folders in sync with the cloud." = "Erstelle eine Sync-Regel, um deine lokalen Ordner mit der Cloud synchron zu halten.";
 "FileFluss %@ is available" = "FileFluss %@ ist verfügbar";

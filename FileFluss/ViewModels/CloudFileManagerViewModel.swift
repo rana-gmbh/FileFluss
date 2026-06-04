@@ -78,7 +78,7 @@ final class CloudFileManagerViewModel {
     init(accountId: UUID, providerType: CloudProviderType? = nil) {
         self.accountId = accountId
         self.providerType = providerType
-        self.tempDownloadDir = FileManager.default.temporaryDirectory
+        self.tempDownloadDir = StagingLocation.base()
             .appendingPathComponent("FileFluss-cloud-\(accountId.uuidString)", isDirectory: true)
         // The cache survives across navigations so Quick Look / downloads
         // don't have to redo the network round-trip on every open and
@@ -699,7 +699,7 @@ final class CloudFileManagerViewModel {
                     await loadDirectory(); return
                 case .keepBoth:
                     let uniqueName = Self.uniqueCloudName(for: name, existing: Set(existingByName.keys))
-                    let tempCopy = FileManager.default.temporaryDirectory.appendingPathComponent(uniqueName)
+                    let tempCopy = StagingLocation.base().appendingPathComponent(uniqueName)
                     try? FileManager.default.removeItem(at: tempCopy)
                     do { try FileManager.default.copyItem(at: url, to: tempCopy) } catch { break }
                     uploadURL = tempCopy
@@ -850,9 +850,7 @@ final class CloudFileManagerViewModel {
             }
         }
 
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("intra-cloud-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let tempDir = StagingLocation.stagingDirectory(prefix: "intra-cloud")
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         if let progress {

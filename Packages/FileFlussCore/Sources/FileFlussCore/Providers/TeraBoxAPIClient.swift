@@ -235,11 +235,10 @@ public actor TeraBoxAPIClient {
         }
         var request = URLRequest(url: url)
         request.setValue("pan.baidu.com", forHTTPHeaderField: "User-Agent")
-        let (tempURL, resp) = try await session.download(for: request)
+        let (tempURL, resp) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard (resp as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) == true else {
             throw CloudProviderError.serverError((resp as? HTTPURLResponse)?.statusCode ?? 0)
         }
-        onBytes?((try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int64 ?? 0) ?? 0)
         try? FileManager.default.removeItem(at: localURL)
         try FileManager.default.moveItem(at: tempURL, to: localURL)
     }

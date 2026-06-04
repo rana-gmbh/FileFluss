@@ -183,7 +183,7 @@ enum SyncExecutor {
                   let dstProvider = await SyncEngine.shared.provider(for: dstAccountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("filefluss-sync-\(UUID().uuidString)")
+            let tempURL = StagingLocation.base().appendingPathComponent("filefluss-sync-\(UUID().uuidString)")
             defer { try? FileManager.default.removeItem(at: tempURL) }
             try await srcProvider.downloadFile(remotePath: cloudJoin(srcRoot, sourceRelative), to: tempURL, onBytes: onDownloadBytes)
             let dstPath = cloudJoin(dstRoot, destRelative)
