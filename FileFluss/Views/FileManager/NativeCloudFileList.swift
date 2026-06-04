@@ -35,6 +35,9 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
     var focusToken: UUID?
+    /// Hides the "Copy/Move to other Panel" context-menu items when only one
+    /// pane is shown.
+    var singlePaneMode: Bool = false
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -154,6 +157,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
         coordinator.selectedIDs = _selectedIDs
 
@@ -329,6 +333,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
+    var singlePaneMode = false
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
@@ -634,14 +639,15 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         menu.addItem(.separator())
 
-        if !containsVirtualContainer {
+        // Copy/Move to the other panel only make sense with two panels.
+        if !singlePaneMode, !containsVirtualContainer {
             let copyItem = NSMenuItem(title: L10n.format("Copy to %@ Panel", otherPanelName), action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
             copyItem.target = self
             copyItem.representedObject = contextItems
             menu.addItem(copyItem)
         }
 
-        if !containsImmovable {
+        if !singlePaneMode, !containsImmovable {
             let moveItem = NSMenuItem(title: L10n.format("Move to %@ Panel", otherPanelName), action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
             moveItem.target = self
             moveItem.representedObject = contextItems

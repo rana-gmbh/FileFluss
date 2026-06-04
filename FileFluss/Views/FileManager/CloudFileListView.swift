@@ -812,7 +812,8 @@ struct CloudFileListView: View {
                     openInFinder(items)
                 },
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress,
-                focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil
+                focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
+                singlePaneMode: appState.singlePaneMode
             )
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()

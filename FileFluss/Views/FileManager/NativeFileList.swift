@@ -31,6 +31,9 @@ struct NativeFileList: NSViewRepresentable {
     /// this panel. A change drives `updateNSView` to re-take first responder,
     /// which survives the table being rebuilt during navigation.
     var focusToken: UUID?
+    /// Hides the "Copy/Move to other Panel" context-menu items when only one
+    /// pane is shown.
+    var singlePaneMode: Bool = false
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -173,6 +176,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.singlePaneMode = singlePaneMode
         coordinator.selectedIDs = _selectedIDs
 
         // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
@@ -363,6 +367,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
+    var singlePaneMode = false
     weak var tableView: FileTableView?
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
@@ -664,17 +669,20 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         menu.addItem(.separator())
 
-        let copyItem = NSMenuItem(title: L10n.format("Copy to %@ Panel", otherPanelName), action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
-        copyItem.target = self
-        copyItem.representedObject = contextItems
-        menu.addItem(copyItem)
+        // Copy/Move to the other panel only make sense with two panels.
+        if !singlePaneMode {
+            let copyItem = NSMenuItem(title: L10n.format("Copy to %@ Panel", otherPanelName), action: #selector(handleCopyToOtherPanel(_:)), keyEquivalent: "")
+            copyItem.target = self
+            copyItem.representedObject = contextItems
+            menu.addItem(copyItem)
 
-        let moveItem = NSMenuItem(title: L10n.format("Move to %@ Panel", otherPanelName), action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
-        moveItem.target = self
-        moveItem.representedObject = contextItems
-        menu.addItem(moveItem)
+            let moveItem = NSMenuItem(title: L10n.format("Move to %@ Panel", otherPanelName), action: #selector(handleMoveToOtherPanel(_:)), keyEquivalent: "")
+            moveItem.target = self
+            moveItem.representedObject = contextItems
+            menu.addItem(moveItem)
 
-        menu.addItem(.separator())
+            menu.addItem(.separator())
+        }
 
         // Rename — only for single selection
         if contextItems.count == 1 {

@@ -43,6 +43,8 @@
 "It's not possible to sync with an offline folder." = "无法与离线文件夹同步。";
 "Sync left and right panels" = "同步左右面板";
 "Compare" = "比较";
+"Single Pane" = "单窗格";
+"Show a single pane (hides the second panel)" = "仅显示单个窗格（隐藏第二个面板）";
 "Compare the two folders side by side" = "并排比较两个文件夹";
 "Filter visible items…" = "筛选可见项目…";
 "Clear filter" = "清除筛选";

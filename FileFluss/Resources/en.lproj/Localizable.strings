@@ -43,6 +43,8 @@
 "It's not possible to sync with an offline folder." = "It's not possible to sync with an offline folder.";
 "Sync left and right panels" = "Sync left and right panels";
 "Compare" = "Compare";
+"Single Pane" = "Single Pane";
+"Show a single pane (hides the second panel)" = "Show a single pane (hides the second panel)";
 "Compare the two folders side by side" = "Compare the two folders side by side";
 "Filter visible items…" = "Filter visible items…";
 "Clear filter" = "Clear filter";

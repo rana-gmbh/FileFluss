@@ -160,9 +160,11 @@ struct FileCommands: Commands {
             applyShortcut(.openInOtherPanel, to: Button(L10n.text("Open in Other Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.openInOtherPanel.notification, object: nil)
             })
+            .disabled(appState.singlePaneMode)
             applyShortcut(.targetToSource, to: Button(L10n.text("Target → Source")) {
                 NotificationCenter.default.post(name: KeyboardCommand.targetToSource.notification, object: nil)
             })
+            .disabled(appState.singlePaneMode)
             applyShortcut(.focusPathBar, to: Button(L10n.text("Go to Folder…")) {
                 NotificationCenter.default.post(name: KeyboardCommand.focusPathBar.notification, object: nil)
             })
@@ -231,15 +233,17 @@ struct FileCommands: Commands {
             applyShortcut(.syncPanels, to: Button(L10n.text("Sync Left and Right Panels…")) {
                 appState.showSyncSheet = true
             })
-            .disabled(appState.hasOfflineSelection)
+            .disabled(appState.hasOfflineSelection || appState.singlePaneMode)
 
             applyShortcut(.compareFolders, to: Button(L10n.text("Compare Folders")) {
                 NotificationCenter.default.post(name: KeyboardCommand.compareFolders.notification, object: nil)
             })
+            .disabled(appState.singlePaneMode)
 
             applyShortcut(.swapPanels, to: Button(L10n.text("Swap Panels")) {
                 NotificationCenter.default.post(name: KeyboardCommand.swapPanels.notification, object: nil)
             })
+            .disabled(appState.singlePaneMode)
 
             Divider()
 

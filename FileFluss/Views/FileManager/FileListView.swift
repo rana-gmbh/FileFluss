@@ -539,7 +539,8 @@ struct FileListView: View {
                         guard !urls.isEmpty else { return }
                         NSWorkspace.shared.activateFileViewerSelecting(urls)
                     },
-                    focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil
+                    focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
+                    singlePaneMode: appState.singlePaneMode
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()

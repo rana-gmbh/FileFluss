@@ -54,13 +54,18 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left panel: sidebar + file list
-            panelView(side: .left)
+            if appState.singlePaneMode {
+                // Single-pane mode: only the active pane is shown.
+                panelView(side: appState.activePanel)
+            } else {
+                // Left panel: sidebar + file list
+                panelView(side: .left)
 
-            Divider()
+                Divider()
 
-            // Right panel: file list + sidebar
-            panelView(side: .right)
+                // Right panel: file list + sidebar
+                panelView(side: .right)
+            }
         }
         .toolbar(id: "main") {
             FileToolbar()
@@ -80,7 +85,10 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: supportLog.isRecording)
         .animation(.easeInOut(duration: 0.2), value: appState.isCheckingSpace)
-        .sheet(isPresented: Bindable(appState).showSyncSheet) {
+        .sheet(isPresented: Binding(
+            get: { appState.showSyncSheet && !appState.singlePaneMode },
+            set: { appState.showSyncSheet = $0 }
+        )) {
             SyncPlannerView()
                 .environment(appState)
         }
@@ -223,8 +231,8 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .top) {
-            // Active panel indicator
-            if isActive {
+            // Active panel indicator — pointless with only one pane.
+            if isActive && !appState.singlePaneMode {
                 Rectangle()
                     .fill(Color.accentColor)
                     .frame(height: 2)

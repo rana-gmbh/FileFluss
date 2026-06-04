@@ -43,6 +43,8 @@
 "It's not possible to sync with an offline folder." = "Eine Synchronisierung mit einem Offline-Ordner ist nicht möglich.";
 "Sync left and right panels" = "Linken und rechten Bereich synchronisieren";
 "Compare" = "Vergleichen";
+"Single Pane" = "Einzelne Ansicht";
+"Show a single pane (hides the second panel)" = "Nur eine Ansicht zeigen (blendet die zweite aus)";
 "Compare the two folders side by side" = "Die beiden Ordner nebeneinander vergleichen";
 "Filter visible items…" = "Sichtbare Objekte filtern …";
 "Clear filter" = "Filter löschen";

@@ -39,6 +39,13 @@ final class AppState {
     var searchVM = SearchViewModel()
     var showSyncSheet = false
 
+    /// When true, only the active pane is shown. Dual-pane-only actions
+    /// (copy/move to the other panel, Open in Other Panel, Compare, Sync) are
+    /// hidden; within-pane copy/move/paste still work. Persisted across launches.
+    var singlePaneMode: Bool = UserDefaults.standard.bool(forKey: "singlePaneMode") {
+        didSet { UserDefaults.standard.set(singlePaneMode, forKey: "singlePaneMode") }
+    }
+
     /// When set, the Settings window selects this tab on open. Lets toolbar
     /// shortcuts (e.g. the cloud button) deep-link straight to a tab. Cleared
     /// by SettingsView once consumed.
@@ -554,7 +561,8 @@ final class AppState {
             Task { await self.navigateActiveToRoot() }
         }
         on(.openInOtherPanel) { [weak self] in
-            self?.openSelectionInOtherPanel()
+            guard let self, !self.singlePaneMode else { return }
+            self.openSelectionInOtherPanel()
         }
         on(.toggleActivePanel) { [weak self] in
             guard let self else { return }
@@ -574,8 +582,14 @@ final class AppState {
         on(.toggleHiddenFiles) { [weak self] in self?.toggleActiveHiddenFiles() }
 
         // --- Cross-panel
-        on(.swapPanels) { [weak self] in self?.swapPanelSelections() }
-        on(.targetToSource) { [weak self] in self?.copyActivePathToOtherPanel() }
+        on(.swapPanels) { [weak self] in
+            guard let self, !self.singlePaneMode else { return }
+            self.swapPanelSelections()
+        }
+        on(.targetToSource) { [weak self] in
+            guard let self, !self.singlePaneMode else { return }
+            self.copyActivePathToOtherPanel()
+        }
         on(.refreshActive) { [weak self] in
             guard let self else { return }
             Task { await self.refreshActivePanel() }
@@ -586,7 +600,7 @@ final class AppState {
         // posts a separate "show compare window" request that ContentView
         // listens for to call openWindow.
         on(.compareFolders) { [weak self] in
-            guard let self else { return }
+            guard let self, !self.singlePaneMode else { return }
             self.compareTrigger = UUID()
             NotificationCenter.default.post(name: .requestShowCompareWindow, object: nil)
         }

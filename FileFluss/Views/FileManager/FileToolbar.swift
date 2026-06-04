@@ -58,12 +58,25 @@ struct FileToolbar: CustomizableToolbarContent {
             .keyboardShortcut("f", modifiers: .command)
         }
 
-        ToolbarItem(id: "sync", placement: .primaryAction) {
-            SyncToolbarButton()
+        ToolbarItem(id: "singlePane", placement: .primaryAction) {
+            Toggle(isOn: Binding(
+                get: { appState.singlePaneMode },
+                set: { appState.singlePaneMode = $0 }
+            )) {
+                Label(L10n.text("Single Pane"), systemImage: "rectangle.split.2x1")
+            }
+            .help(L10n.text("Show a single pane (hides the second panel)"))
         }
 
-        ToolbarItem(id: "compare", placement: .primaryAction) {
-            CompareToolbarButton()
+        // Sync and Compare act on both panels, so hide them in single-pane mode.
+        if !appState.singlePaneMode {
+            ToolbarItem(id: "sync", placement: .primaryAction) {
+                SyncToolbarButton()
+            }
+
+            ToolbarItem(id: "compare", placement: .primaryAction) {
+                CompareToolbarButton()
+            }
         }
 
         ToolbarItem(id: "cloudAccounts", placement: .primaryAction) {
