@@ -501,6 +501,11 @@
 "When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes." = "When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes.";
 "macOS / Finder Style" = "macOS / Finder Style";
 
+/* Open in Finder context menu */
+"Open in Finder" = "Open in Finder";
+"Do you want to mount “%@” in Finder?" = "Do you want to mount “%@” in Finder?";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.";
+
 /* Transfer operation labels */
 "Copying" = "Copying";
 "Moving" = "Moving";

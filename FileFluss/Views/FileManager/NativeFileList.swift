@@ -26,6 +26,7 @@ struct NativeFileList: NSViewRepresentable {
     var onReceivePromises: ((URL) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
+    var onOpenInFinder: (([FileItem]) -> Void)?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -167,6 +168,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onReceivePromises = onReceivePromises
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
+        coordinator.onOpenInFinder = onOpenInFinder
         coordinator.selectedIDs = _selectedIDs
 
         // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
@@ -334,6 +336,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onReceivePromises: ((URL) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
+    var onOpenInFinder: (([FileItem]) -> Void)?
     weak var tableView: FileTableView?
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
@@ -574,6 +577,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
 
+        // Reveal in Finder — top of the menu, matching where Finder keeps
+        // its own "Open" entry.
+        let openInFinderItem = NSMenuItem(title: L10n.text("Open in Finder"), action: #selector(handleOpenInFinder(_:)), keyEquivalent: "")
+        openInFinderItem.target = self
+        openInFinderItem.representedObject = contextItems
+        menu.addItem(openInFinderItem)
+        menu.addItem(.separator())
+
         // Standard clipboard ops first so they line up with where users
         // expect them in Finder's context menu.
         let cutItem = NSMenuItem(title: L10n.text("Cut"), action: #selector(handleCut(_:)), keyEquivalent: "x")
@@ -653,6 +664,11 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleAddToFavorites(_ sender: NSMenuItem) {
         guard let folder = sender.representedObject as? FileItem else { return }
         onAddToFavorites?(folder)
+    }
+
+    @objc func handleOpenInFinder(_ sender: NSMenuItem) {
+        guard let contextItems = sender.representedObject as? [FileItem] else { return }
+        onOpenInFinder?(contextItems)
     }
 
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {

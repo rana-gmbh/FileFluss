@@ -519,6 +519,12 @@ struct FileListView: View {
                         renameItem = item
                         renameText = item.name
                         showRenameDialog = true
+                    },
+                    onOpenInFinder: { items in
+                        // Local files always have a real Finder path — reveal directly.
+                        let urls = items.map(\.url)
+                        guard !urls.isEmpty else { return }
+                        NSWorkspace.shared.activateFileViewerSelecting(urls)
                     }
                 )
                 .onChange(of: fm.selectedItemIDs) {

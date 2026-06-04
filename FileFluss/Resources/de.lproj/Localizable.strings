@@ -501,6 +501,11 @@
 "When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes." = "Wenn der Cache diese Größe überschreitet, werden die ältesten Dateien zuerst entfernt. Wird beim Start und bei Änderung dieses Werts angewendet.";
 "macOS / Finder Style" = "macOS- / Finder-Stil";
 
+/* Open in Finder context menu */
+"Open in Finder" = "Im Finder öffnen";
+"Do you want to mount “%@” in Finder?" = "Möchten Sie „%@“ im Finder einbinden?";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "Dieses Konto ist noch nicht eingebunden. Beim Einbinden wird es als Laufwerk im Finder hinzugefügt, damit Sie dieses Element dort öffnen können.";
+
 /* Transfer operation labels */
 "Copying" = "Wird kopiert";
 "Moving" = "Wird bewegt";

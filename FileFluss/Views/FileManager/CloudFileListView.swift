@@ -25,6 +25,10 @@ struct CloudFileListView: View {
     @State private var showRenameDialog = false
     @State private var renameText = ""
     @State private var renameCloudItem: CloudFileItem?
+    @State private var showMountPrompt = false
+    @State private var pendingFinderItems: [CloudFileItem] = []
+    @State private var mountErrorMessage: String?
+    @State private var showMountError = false
 
     struct PendingUpload {
         let urls: [URL]
@@ -181,6 +185,28 @@ struct CloudFileListView: View {
                 }
             }
             Button(L10n.text("Cancel"), role: .cancel) {}
+        }
+        .confirmationDialog(
+            L10n.format("Do you want to mount “%@” in Finder?", accountDisplayName),
+            isPresented: $showMountPrompt,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.text("Mount in Finder")) {
+                let items = pendingFinderItems
+                pendingFinderItems = []
+                mountThenReveal(items)
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(L10n.text("Cancel"), role: .cancel) {
+                pendingFinderItems = []
+            }
+        } message: {
+            Text(L10n.text("This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there."))
+        }
+        .alert(L10n.text("Could not mount in Finder"), isPresented: $showMountError, presenting: mountErrorMessage) { _ in
+            Button(L10n.text("OK"), role: .cancel) {}
+        } message: { message in
+            Text(message)
         }
     }
 
@@ -493,6 +519,60 @@ struct CloudFileListView: View {
     /// default app via NSWorkspace. Cached copies (same size + mtime) are
     /// reused so reopening a file is instant. A TransferProgress entry
     /// shows feedback while the download runs.
+    /// Right-click → Open in Finder. If the account is already mounted as a
+    /// WebDAV drive, reveal the item inside that volume. Otherwise ask the
+    /// user whether to mount it first, then reveal once the mount succeeds.
+    private func openInFinder(_ items: [CloudFileItem]) {
+        guard !items.isEmpty else { return }
+        if let mount = appState.mountService.mount(for: accountId) {
+            revealInMount(items, mount: mount)
+        } else {
+            pendingFinderItems = items
+            showMountPrompt = true
+        }
+    }
+
+    private func revealInMount(_ items: [CloudFileItem], mount: LoopbackMountService.ActiveMount) {
+        let urls = items.map { finderURL(for: $0, mount: mount) }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    /// Maps a cloud item's remote path to its location inside the mounted
+    /// volume. The mount serves `mount.providerRoot` at its root, so strip
+    /// that prefix (and any leading slash) before appending to the mount point.
+    private func finderURL(for item: CloudFileItem, mount: LoopbackMountService.ActiveMount) -> URL {
+        var relative = item.path
+        let root = mount.providerRoot
+        if root != "/", relative.hasPrefix(root) {
+            relative = String(relative.dropFirst(root.count))
+        }
+        while relative.hasPrefix("/") { relative.removeFirst() }
+        guard !relative.isEmpty else { return mount.mountPoint }
+        return mount.mountPoint.appendingPathComponent(relative)
+    }
+
+    private func mountThenReveal(_ items: [CloudFileItem]) {
+        Task {
+            guard let provider = await appState.syncManager.providerFor(accountId: accountId) else {
+                mountErrorMessage = L10n.text("The account isn't connected — sign in first.")
+                showMountError = true
+                return
+            }
+            do {
+                let mount = try await appState.mountService.mount(
+                    provider: provider,
+                    accountId: accountId,
+                    displayName: accountDisplayName
+                )
+                revealInMount(items, mount: mount)
+            } catch {
+                mountErrorMessage = error.localizedDescription
+                showMountError = true
+            }
+        }
+    }
+
     private func openCloudFile(_ item: CloudFileItem) {
         let transfer = TransferProgress(operation: "Opening", totalItems: 1)
         transfer.transferredFileNames = [item.name]
@@ -719,6 +799,9 @@ struct CloudFileListView: View {
                     renameCloudItem = item
                     renameText = item.name
                     showRenameDialog = true
+                },
+                onOpenInFinder: { items in
+                    openInFinder(items)
                 },
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress
             )

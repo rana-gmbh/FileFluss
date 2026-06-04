@@ -501,6 +501,11 @@
 "When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes." = "當快取超過此大小時，會先移除最舊的檔案。在啟動時以及此值更改時套用。";
 "macOS / Finder Style" = "macOS / Finder 風格";
 
+/* Open in Finder context menu */
+"Open in Finder" = "在 Finder 中打開";
+"Do you want to mount “%@” in Finder?" = "是否要在 Finder 中裝載「%@」？";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "此帳戶尚未裝載。裝載後會將其作為磁碟機加入 Finder，以便您在該處打開此項目。";
+
 /* Transfer operation labels */
 "Copying" = "正在複製";
 "Moving" = "正在移動";

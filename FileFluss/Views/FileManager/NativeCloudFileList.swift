@@ -29,6 +29,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
+    var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
 
     func makeCoordinator() -> CloudTableCoordinator {
@@ -148,6 +149,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onInternalCloudDrop = onInternalCloudDrop
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
+        coordinator.onOpenInFinder = onOpenInFinder
         coordinator.canCreateFolder = canCreateFolder
         coordinator.selectedIDs = _selectedIDs
 
@@ -302,6 +304,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
+    var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
@@ -543,6 +546,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         let containsVirtualContainer = contextItems.contains { $0.role == .virtualContainer }
         let containsImmovable = contextItems.contains { $0.role != .normal }
 
+        // Open in Finder — only for real items; synthetic container/drive-root
+        // rows don't map to a concrete path inside the mounted volume.
+        if !containsImmovable {
+            let openInFinderItem = NSMenuItem(title: L10n.text("Open in Finder"), action: #selector(handleOpenInFinder(_:)), keyEquivalent: "")
+            openInFinderItem.target = self
+            openInFinderItem.representedObject = contextItems
+            menu.addItem(openInFinderItem)
+            menu.addItem(.separator())
+        }
+
         if !containsImmovable {
             let cutCtx = NSMenuItem(title: L10n.text("Cut"), action: #selector(handleCut(_:)), keyEquivalent: "x")
             cutCtx.keyEquivalentModifierMask = [.command]
@@ -662,6 +675,11 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {
         guard let folder = sender.representedObject as? CloudFileItem else { return }
         onCalculateFolderSize?(folder)
+    }
+
+    @objc func handleOpenInFinder(_ sender: NSMenuItem) {
+        guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
+        onOpenInFinder?(contextItems)
     }
 
     @objc func handleCreateFolder(_ sender: NSMenuItem) {
