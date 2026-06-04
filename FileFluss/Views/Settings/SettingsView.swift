@@ -456,6 +456,9 @@ struct StorageSettingsView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
+        // Surface the panel's built-in "New Folder" button so the user can
+        // make a dedicated cache folder before selecting it.
+        panel.canCreateDirectories = true
         panel.prompt = L10n.text("Choose")
         panel.message = L10n.text("Choose a folder for FileFluss to stage downloads and cache previews.")
         if panel.runModal() == .OK, let url = panel.url {
