@@ -86,6 +86,9 @@
 /* Menu bar */
 "New Folder" = "Neuer Ordner";
 "Rename" = "Umbenennen";
+"Rename…" = "Umbenennen…";
+"Rename Account" = "Konto umbenennen";
+"Open cloud accounts settings" = "Cloud-Konten-Einstellungen öffnen";
 "Duplicate" = "Duplizieren";
 "Get Info" = "Informationen";
 "Copy to Other Panel" = "In anderen Bereich kopieren";

@@ -86,6 +86,9 @@
 /* Menu bar */
 "New Folder" = "新增資料夾";
 "Rename" = "重新命名";
+"Rename…" = "重新命名…";
+"Rename Account" = "重新命名帳戶";
+"Open cloud accounts settings" = "打開雲端帳戶設定";
 "Duplicate" = "製作副本";
 "Get Info" = "顯示簡介";
 "Copy to Other Panel" = "複製到另一面板";

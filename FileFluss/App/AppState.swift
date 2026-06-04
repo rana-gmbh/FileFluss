@@ -39,6 +39,11 @@ final class AppState {
     var searchVM = SearchViewModel()
     var showSyncSheet = false
 
+    /// When set, the Settings window selects this tab on open. Lets toolbar
+    /// shortcuts (e.g. the cloud button) deep-link straight to a tab. Cleared
+    /// by SettingsView once consumed.
+    var requestedSettingsTab: SettingsTab?
+
     /// Pending copy/move that would exceed the destination's available space.
     /// Set by `confirmSpace(...)`; a root-level confirmation dialog presents it
     /// with Cancel / "<verb> Anyway", and "anyway" runs `proceed`.

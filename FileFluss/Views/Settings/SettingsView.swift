@@ -2,38 +2,60 @@ import SwiftUI
 import AppKit
 import FileFlussCore
 
+/// Identifies the Settings tabs so other parts of the app (e.g. a toolbar
+/// button) can deep-link straight to one via `AppState.requestedSettingsTab`.
+enum SettingsTab: Hashable {
+    case general, cloud, storage, index, keyboard
+}
+
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @State private var selectedTab: SettingsTab = .general
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .tabItem {
                     Label { LText("General") } icon: { Image(systemName: "gear") }
                 }
+                .tag(SettingsTab.general)
 
             CloudSettingsView()
                 .tabItem {
                     Label { LText("Cloud Accounts") } icon: { Image(systemName: "cloud") }
                 }
+                .tag(SettingsTab.cloud)
 
             StorageSettingsView()
                 .tabItem {
                     Label { LText("Storage") } icon: { Image(systemName: "internaldrive") }
                 }
+                .tag(SettingsTab.storage)
 
             IndexStatusSettingsView()
                 .tabItem {
                     Label { LText("Index Status") } icon: { Image(systemName: "magnifyingglass.circle") }
                 }
+                .tag(SettingsTab.index)
 
             KeyboardMapSettingsView()
                 .tabItem {
                     Label { LText("Keyboard Map") } icon: { Image(systemName: "keyboard") }
                 }
+                .tag(SettingsTab.keyboard)
         }
         // The hosting `Window` scene (see FileFlussApp) handles min size,
         // default size, and resizability. No NSWindow workaround needed.
+        .onAppear { consumeRequestedTab() }
+        .onChange(of: appState.requestedSettingsTab) { _, _ in consumeRequestedTab() }
+    }
+
+    /// Switches to a tab requested via `AppState.requestedSettingsTab` (set by
+    /// a deep-link such as the toolbar's cloud button) and clears the request.
+    private func consumeRequestedTab() {
+        guard let tab = appState.requestedSettingsTab else { return }
+        selectedTab = tab
+        appState.requestedSettingsTab = nil
     }
 }
 
@@ -133,6 +155,8 @@ struct CloudSettingsView: View {
     /// window, one to the main window.
     @State private var showAddAccount = false
     @State private var editingAccount: CloudAccount?
+    @State private var renamingAccount: CloudAccount?
+    @State private var renameText: String = ""
 
     var body: some View {
         Group {
@@ -177,6 +201,10 @@ struct CloudSettingsView: View {
                                     editingAccount = account
                                 }
                             }
+                            Button(L10n.text("Rename…")) {
+                                renameText = account.displayName
+                                renamingAccount = account
+                            }
                             Button(L10n.text("Remove"), role: .destructive) {
                                 Task { await appState.syncManager.removeAccount(account) }
                             }
@@ -201,6 +229,22 @@ struct CloudSettingsView: View {
         .sheet(item: $editingAccount) { account in
             EditCloudAccountView(account: account)
                 .environment(appState)
+        }
+        .alert(L10n.text("Rename Account"), isPresented: Binding(
+            get: { renamingAccount != nil },
+            set: { if !$0 { renamingAccount = nil } }
+        )) {
+            TextField(L10n.text("Name"), text: $renameText)
+            Button(L10n.text("Rename")) {
+                if let account = renamingAccount {
+                    let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !newName.isEmpty {
+                        appState.syncManager.renameAccount(id: account.id, to: newName)
+                    }
+                }
+                renamingAccount = nil
+            }
+            Button(L10n.text("Cancel"), role: .cancel) { renamingAccount = nil }
         }
     }
 }

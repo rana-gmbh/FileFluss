@@ -86,6 +86,9 @@
 /* Menu bar */
 "New Folder" = "New Folder";
 "Rename" = "Rename";
+"Rename…" = "Rename…";
+"Rename Account" = "Rename Account";
+"Open cloud accounts settings" = "Open cloud accounts settings";
 "Duplicate" = "Duplicate";
 "Get Info" = "Get Info";
 "Copy to Other Panel" = "Copy to Other Panel";

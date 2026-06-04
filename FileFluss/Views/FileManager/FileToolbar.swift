@@ -66,6 +66,10 @@ struct FileToolbar: CustomizableToolbarContent {
             CompareToolbarButton()
         }
 
+        ToolbarItem(id: "cloudAccounts", placement: .primaryAction) {
+            CloudAccountsToolbarButton()
+        }
+
         ToolbarItem(id: "refresh", placement: .primaryAction) {
             Button {
                 Task { await appState.refreshAllPanels() }
@@ -169,6 +173,23 @@ private struct OpenWindowToolbarButton: View {
             Label(label, systemImage: systemImage)
         }
         .help(help)
+    }
+}
+
+/// Opens the Settings window straight to the Cloud Accounts tab. Sets the
+/// requested tab on `AppState` before opening so SettingsView can deep-link.
+private struct CloudAccountsToolbarButton: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button {
+            appState.requestedSettingsTab = .cloud
+            openWindow(id: "settings")
+        } label: {
+            Label(L10n.text("Cloud Accounts"), systemImage: "cloud")
+        }
+        .help(L10n.text("Open cloud accounts settings"))
     }
 }
 

@@ -86,6 +86,9 @@
 /* Menu bar */
 "New Folder" = "新建文件夹";
 "Rename" = "重命名";
+"Rename…" = "重命名…";
+"Rename Account" = "重命名账户";
+"Open cloud accounts settings" = "打开云账户设置";
 "Duplicate" = "复制副本";
 "Get Info" = "显示简介";
 "Copy to Other Panel" = "复制到另一面板";
