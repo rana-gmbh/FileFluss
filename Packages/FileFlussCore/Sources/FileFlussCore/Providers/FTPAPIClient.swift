@@ -109,7 +109,19 @@ public actor FTPAPIClient {
     }
 
     public func createFolder(at path: String) async throws {
-        _ = try await runCurl(["-Q", "MKD \(serverPath(path))", rootURL()])
+        do {
+            _ = try await runCurl(["-Q", "MKD \(serverPath(path))", rootURL()])
+        } catch {
+            // MKD returns 550 when the directory already exists, and curl
+            // reports that as a fatal "QUOT command failed". Treat creating an
+            // existing folder as success (idempotent "ensure folder" — needed
+            // when uploading several files into the same subfolder, or copying
+            // a folder tree). Only rethrow when the folder really isn't there.
+            if (try? await listFolder(path: path)) != nil {
+                return
+            }
+            throw error
+        }
     }
 
     public func deleteItem(at path: String, isDirectory: Bool) async throws {

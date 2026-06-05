@@ -230,10 +230,22 @@ public actor JottacloudAPIClient {
     }
 
     public func deleteItem(at path: String) async throws {
-        // dl=true moves the item to the Jottacloud trash (recoverable), matching
-        // the "delete" semantics of the other providers.
-        let url = jfsURL(forPath: path, query: [URLQueryItem(name: "dl", value: "true")])
-        _ = try await jfsRequest(url, method: "POST")
+        // Both move the item to the Jottacloud trash (recoverable). `dl=true`
+        // only deletes files; folders need `dlDir=true` (recursive), following
+        // Jottacloud's mkDir/dlDir naming. We don't know the item type here, so
+        // try the file form first (the common case, one request) and fall back
+        // to the folder form on failure.
+        let fileURL = jfsURL(forPath: path, query: [URLQueryItem(name: "dl", value: "true")])
+        do {
+            _ = try await jfsRequest(fileURL, method: "POST")
+        } catch {
+            let dirURL = jfsURL(forPath: path, query: [URLQueryItem(name: "dlDir", value: "true")])
+            do {
+                _ = try await jfsRequest(dirURL, method: "POST")
+            } catch {
+                throw error  // surface the original (file-delete) error
+            }
+        }
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
