@@ -34,6 +34,7 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - Koofr
 - Filen (filen.io)
 - Internxt (internxt.com — end-to-end encrypted)
+- Jottacloud (jottacloud.com)
 - NextCloud
 - Seafile
 - Synology Drive
@@ -61,6 +62,12 @@ Mount any connected cloud account as a drive in **Finder** and use it from every
 - Mount and unmount from the sidebar, with a one-click **Reveal in Finder**.
 - A local read cache makes reopening files instant, and mounts are cleaned up on quit.
 
+### Multiple languages
+
+![Multiple languages](Screenshots/FileFluss%20Multilanguage%20Chinese.webp)
+
+FileFluss is fully localized in **English, German, Simplified Chinese, and Traditional Chinese**. Pick your language in Settings → General — the window updates immediately and the menu bar follows after a quick relaunch. By default it follows your macOS system language.
+
 ### Offline Mode & offline search
 
 ![Offline Mode](Screenshots/FileFluss%20Offline%20Mode.webp)
@@ -85,9 +92,11 @@ Settings → Keyboard lets you remap every common file-manager command. Pick one
 
 ### Cache management
 
-![Storage settings](Screenshots/FileFluss%20storage%20settings.webp)
+![Cache location](Screenshots/FileFluss%20Cache%20Location.webp)
 
 Settings → Storage shows a live cache size and offers a one-click *Clear*. Optional auto-management on launch prunes entries older than N days, then enforces a size cap. Slider + numeric field for the max size, and a separate slider for auto-delete age.
+
+**Choose where the cache lives.** Downloads are staged through this folder. If you're copying large files from a cloud account to an external drive on a Mac with limited internal storage, point the cache at a folder on that external drive — big transfers then stay off your internal disk. Defaults to the system temporary folder, and falls back to it automatically if the chosen folder isn't available.
 
 ### Drag & drop, with shortcuts
 

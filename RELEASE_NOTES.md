@@ -1,39 +1,53 @@
-# FileFluss 1.3
+# FileFluss 1.4
 
-This release takes your cloud accounts beyond FileFluss itself — mount them straight into Finder — plus a roomier icon-only view, smarter storage-quota safeguards, and a new end-to-end encrypted provider.
+FileFluss 1.4 brings full multilanguage support, a configurable cache location so big transfers don't fill your internal disk, a focused single-pane view, much smoother keyboard navigation, and a new cloud provider.
 
 ## Highlights
 
-### Mount your cloud accounts in Finder
+### Now in four languages
 
-![Mount in Finder](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Mount%20in%20Finder.webp)
+![Multiple languages](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Multilanguage%20Chinese.webp)
 
-Mount any connected cloud account as a drive in **Finder** and use it from every app on your Mac — not just inside FileFluss. Open a cloud document straight into Word or Preview, attach files from a Save/Open dialog, drag into Mail — your cloud storage behaves like a local folder for file workflows everywhere in macOS. Mount and unmount from the sidebar, with a one-click **Reveal in Finder**.
+FileFluss is now fully localized in **English, German, Simplified Chinese, and Traditional Chinese**. Choose your language in Settings → General — the window switches instantly, and the menu bar follows after a quick relaunch. By default it follows your macOS system language.
 
-### Enhanced icon-mode view
+### Put the cache on an external drive
 
-![Icon mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Icon%20mode.webp)
+![Cache location](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Cache%20Location.webp)
 
-The sidebars now collapse to a refined, extra-small icon-only mode — each panel keeps its favourites, locations, and cloud accounts a click away while giving the file lists the maximum room. Left and right collapse independently and remember their width.
+Copying a large file from a cloud account stages it through a cache folder first — which can fill up a Mac with a small internal disk. In **Settings → Storage** you can now choose a cache folder on any drive. Point it at an external hard drive and big cloud-to-external transfers stay off your internal disk. Falls back to the system folder automatically if the chosen folder isn't available.
 
-### Storage-quota awareness for file operations and sync
+### Single-pane view
 
-![Sync with storage left](https://raw.githubusercontent.com/rana-gmbh/FileFluss/main/Screenshots/FileFluss%20Sync%20Calculation%20with%20storage%20left.webp)
+![Single-pane mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Single%20Pane%20mode.webp)
 
-- **Optional warning before copy & move.** Turn it on in **Settings → General** and FileFluss checks whether a transfer would exceed the destination's storage quota (or local free space) before it starts, with a Cancel / continue-anyway choice. Off by default so everyday file operations stay instant.
-- **Storage in the sync plan.** The sync pre-flight now shows the destination's available space and how much will be left after the sync, and warns when a sync would overflow the target — before a single byte moves.
+A new toolbar toggle collapses the two panels into one, for focused navigation within a single cloud account or drive. You can still copy and move files within that pane; the two-panel-only actions (copy/move to the other panel, Compare, Sync) are hidden while it's on.
 
-### New provider: Internxt
+### Much better keyboard navigation
 
-FileFluss now connects to **Internxt** (internxt.com), the end-to-end encrypted cloud storage, alongside the 20+ services already supported. Browse, upload, download, sync, and compare just like any other account.
+Moving through folders with the keyboard is far smoother now:
+
+- **⌘↓ "Open Folder"** steps into the selected folder, and **⌘↑** goes to the parent — both customizable in Settings → Keyboard.
+- Focus now stays in the file list after you navigate, so the arrow keys keep working without clicking back into the pane.
+- A single click on a path-bar breadcrumb in the inactive pane navigates immediately (no more click-twice).
+
+### New provider: Jottacloud
+
+FileFluss now connects to **Jottacloud** (jottacloud.com), alongside the 20+ services already supported. Browse, upload, download, sync, and compare just like any other account.
+
+### Google Drive: optional folder-picker connection
+
+Google limits how many apps can have full Drive access. FileFluss now also offers an alternative **folder-picker** connection: you pick specific folders inside Google Drive to grant access to. FileFluss can read and write the files and folders you create through it, but it **can't see files and folders that already existed** in your Drive. Use it if the standard full Google Drive connection isn't available to you.
 
 ## Other improvements
 
-- **Dropbox** now reliably shows its storage quota and account name, and recovers a stuck "Unknown" name on its own.
-- **SFTP folders no longer appear empty** on standard servers — fixes a listing bug that affected many SSH/SFTP hosts.
-- Reliability fixes for Internxt file replacement and transient server hiccups.
+- **Rename cloud accounts** directly in Settings → Cloud Accounts (now between Edit and Remove).
+- **Smarter inline rename** — only the file name is selected, not the extension, matching Finder.
+- **Open in Finder** added to the right-click menu (reveals local files, and offers to mount a cloud account first).
+- Local drives now show **free / total space**, and the optional copy/move space check no longer falsely warns on external drives.
+- A new toolbar **cloud button** jumps straight to Settings → Cloud Accounts.
+- Various UI polish and small reliability fixes.
 
-## Upgrading from 1.2
+## Upgrading from 1.3
 
 Your cloud accounts carry over — no need to re-add them after upgrading.
 
