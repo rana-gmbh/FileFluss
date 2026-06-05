@@ -36,10 +36,14 @@ public actor DropboxAPIClient {
     /// Space-separated OAuth scopes requested at authorize time. These
     /// must all be enabled in the Dropbox app console (Permissions tab) —
     /// requesting a scope the app isn't allowed to grant fails the whole
-    /// authorization. `account_info.read` is required for the storage
-    /// quota (/users/get_space_usage) and account name lookup; the
-    /// `files.*` scopes cover listing, up/download, and mutations.
-    static let oauthScopes = "account_info.read files.metadata.read files.metadata.write files.content.read files.content.write"
+    /// authorization. `account_info.read` covers the storage quota
+    /// (/users/get_space_usage) and account name lookup; `files.metadata.read`
+    /// covers listing/search/get_metadata; `files.content.read` covers
+    /// downloads; `files.content.write` covers upload/delete/move/copy/
+    /// create_folder. We deliberately do NOT request `files.metadata.write`
+    /// (only needed for the file-properties/templates API, which we don't use)
+    /// or `account_info.write` (we never modify the account).
+    static let oauthScopes = "account_info.read files.metadata.read files.content.read files.content.write"
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
