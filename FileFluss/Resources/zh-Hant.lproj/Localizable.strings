@@ -97,6 +97,10 @@
 "Move to Other Panel" = "移動到另一面板";
 "Copy Path" = "拷貝路徑";
 "Move to Trash" = "移到垃圾桶";
+"Delete Immediately?" = "立即刪除？";
+"Delete Permanently" = "永久刪除";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "「%@」無法移到垃圾桶，因為其所在的儲存裝置沒有垃圾桶。要永久刪除嗎？此操作無法復原。";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d 個項目無法移到垃圾桶，因為其所在的儲存裝置沒有垃圾桶。要永久刪除嗎？此操作無法復原。";
 "Cut" = "剪下";
 "Copy" = "拷貝";
 "Paste" = "貼上";

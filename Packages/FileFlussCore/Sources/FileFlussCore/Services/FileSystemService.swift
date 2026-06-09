@@ -55,6 +55,20 @@ public actor FileSystemService {
         }
     }
 
+    /// Whether the volume backing `url` has a Trash. Some external/USB volumes
+    /// (exFAT/FAT, certain network shares) don't, so `trashItem` fails there;
+    /// callers offer an immediate permanent delete instead, like Finder. Probed
+    /// by asking for the item's volume-appropriate trash directory — that lookup
+    /// fails on volumes without one. Only consulted after a trash attempt has
+    /// already failed, so it distinguishes "no Trash on this volume" from other
+    /// errors (permissions, etc.).
+    public nonisolated func volumeSupportsTrash(_ url: URL) -> Bool {
+        let trash = try? Foundation.FileManager.default.url(
+            for: .trashDirectory, in: .userDomainMask, appropriateFor: url, create: false
+        )
+        return trash != nil
+    }
+
     public func moveItem(from source: URL, to destination: URL) throws {
         do {
             try Foundation.FileManager.default.moveItem(at: source, to: destination)

@@ -250,16 +250,44 @@ final class FileManagerViewModel {
         }
     }
 
+    /// Items whose volume has no Trash, so they couldn't be moved there. When
+    /// non-empty the view offers an immediate permanent delete (like Finder).
+    var itemsNeedingPermanentDelete: [FileItem] = []
+
     func trashSelectedItems() async {
+        var needPermanent: [FileItem] = []
         for item in selectedItems {
             do {
                 try await FileSystemService.shared.trashItem(at: item.url)
             } catch {
-                self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
-                return
+                // On a volume without a Trash, offer to delete immediately
+                // instead of just failing. Any other failure is surfaced.
+                if !FileSystemService.shared.volumeSupportsTrash(item.url) {
+                    needPermanent.append(item)
+                } else {
+                    self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
+                }
             }
         }
         selectedItemIDs.removeAll()
+        await loadDirectory()
+        if !needPermanent.isEmpty {
+            itemsNeedingPermanentDelete = needPermanent
+        }
+    }
+
+    /// Permanently delete the items collected in `itemsNeedingPermanentDelete`
+    /// (a volume without a Trash). Called after the user confirms.
+    func permanentlyDeletePendingItems() async {
+        let items = itemsNeedingPermanentDelete
+        itemsNeedingPermanentDelete = []
+        for item in items {
+            do {
+                try await FileSystemService.shared.deleteItem(at: item.url)
+            } catch {
+                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+            }
+        }
         await loadDirectory()
     }
 

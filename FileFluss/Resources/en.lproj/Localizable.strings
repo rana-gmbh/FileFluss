@@ -97,6 +97,10 @@
 "Move to Other Panel" = "Move to Other Panel";
 "Copy Path" = "Copy Path";
 "Move to Trash" = "Move to Trash";
+"Delete Immediately?" = "Delete Immediately?";
+"Delete Permanently" = "Delete Permanently";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.";
 "Cut" = "Cut";
 "Copy" = "Copy";
 "Paste" = "Paste";

@@ -97,6 +97,10 @@
 "Move to Other Panel" = "移动到另一面板";
 "Copy Path" = "拷贝路径";
 "Move to Trash" = "移到废纸篓";
+"Delete Immediately?" = "立即删除？";
+"Delete Permanently" = "永久删除";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "“%@”无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d 个项目无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。";
 "Cut" = "剪切";
 "Copy" = "拷贝";
 "Paste" = "粘贴";

@@ -105,6 +105,29 @@ struct FileListView: View {
                 Text(L10n.format("Are you sure you want to move %d items to the Trash?", items.count))
             }
         }
+        .confirmationDialog(
+            L10n.text("Delete Immediately?"),
+            isPresented: Binding(
+                get: { !fm.itemsNeedingPermanentDelete.isEmpty },
+                set: { if !$0 { fm.itemsNeedingPermanentDelete = [] } }
+            )
+        ) {
+            Button(L10n.text("Delete Permanently"), role: .destructive) {
+                Task {
+                    await fm.permanentlyDeletePendingItems()
+                    await appState.refreshAllPanels()
+                }
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(L10n.text("Cancel"), role: .cancel) { fm.itemsNeedingPermanentDelete = [] }
+        } message: {
+            let items = fm.itemsNeedingPermanentDelete
+            if items.count == 1 {
+                Text(L10n.format("\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.", items[0].name))
+            } else {
+                Text(L10n.format("%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.", items.count))
+            }
+        }
         .sheet(isPresented: $showConflict) {
             if let conflict = fm.pendingConflict {
                 ConflictResolutionView(conflict: conflict) { resolution in

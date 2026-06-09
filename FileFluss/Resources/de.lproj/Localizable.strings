@@ -97,6 +97,10 @@
 "Move to Other Panel" = "In anderen Bereich bewegen";
 "Copy Path" = "Pfad kopieren";
 "Move to Trash" = "In den Papierkorb legen";
+"Delete Immediately?" = "Sofort löschen?";
+"Delete Permanently" = "Endgültig löschen";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "„%@“ kann nicht in den Papierkorb gelegt werden, da das Volume keinen besitzt. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d Objekte können nicht in den Papierkorb gelegt werden, da das Volume keinen besitzt. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
 "Cut" = "Ausschneiden";
 "Copy" = "Kopieren";
 "Paste" = "Einsetzen";
