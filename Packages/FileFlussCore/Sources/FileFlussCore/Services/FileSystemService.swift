@@ -55,18 +55,15 @@ public actor FileSystemService {
         }
     }
 
-    /// Whether the volume backing `url` has a Trash. Some external/USB volumes
-    /// (exFAT/FAT, certain network shares) don't, so `trashItem` fails there;
-    /// callers offer an immediate permanent delete instead, like Finder. Probed
-    /// by asking for the item's volume-appropriate trash directory — that lookup
-    /// fails on volumes without one. Only consulted after a trash attempt has
-    /// already failed, so it distinguishes "no Trash on this volume" from other
-    /// errors (permissions, etc.).
-    public nonisolated func volumeSupportsTrash(_ url: URL) -> Bool {
-        let trash = try? Foundation.FileManager.default.url(
-            for: .trashDirectory, in: .userDomainMask, appropriateFor: url, create: false
-        )
-        return trash != nil
+    /// Whether a `trashItem` failure is because the item's volume has no Trash
+    /// (some external/USB and read-only volumes). macOS reports this as
+    /// `NSFeatureUnsupportedError`, regardless of the file name — callers then
+    /// offer an immediate permanent delete instead, like Finder. Detecting it by
+    /// error code (rather than probing for a `.Trashes` folder) is filename- and
+    /// state-independent: the earlier probe wrongly reported "Trash supported"
+    /// once a volume already had a `.Trashes`, or for names beginning with `~`.
+    public nonisolated static func isNoTrashOnVolumeError(_ error: Error) -> Bool {
+        (error as? CocoaError)?.code == .featureUnsupported
     }
 
     public func moveItem(from source: URL, to destination: URL) throws {

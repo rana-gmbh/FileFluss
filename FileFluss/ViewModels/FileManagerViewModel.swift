@@ -262,7 +262,7 @@ final class FileManagerViewModel {
             } catch {
                 // On a volume without a Trash, offer to delete immediately
                 // instead of just failing. Any other failure is surfaced.
-                if !FileSystemService.shared.volumeSupportsTrash(item.url) {
+                if FileSystemService.isNoTrashOnVolumeError(error) {
                     needPermanent.append(item)
                 } else {
                     self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
