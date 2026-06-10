@@ -272,6 +272,7 @@ final class FileManagerViewModel {
         selectedItemIDs.removeAll()
         await loadDirectory()
         if !needPermanent.isEmpty {
+            SupportLogger.shared.log("trash fell back to permanent-delete prompt for \(needPermanent.count) item(s) on a no-Trash volume", category: "fs")
             itemsNeedingPermanentDelete = needPermanent
         }
     }

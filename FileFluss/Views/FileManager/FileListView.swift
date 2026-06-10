@@ -13,6 +13,13 @@ struct FileListView: View {
     @State private var showDropConfirmation: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var showConflict: Bool = false
+    /// Drives the "Delete Immediately?" dialog. We can't bind it straight to
+    /// `fm.itemsNeedingPermanentDelete` because that array is populated the
+    /// instant the "Move to Trash" dialog is dismissed, and SwiftUI refuses to
+    /// present a second confirmationDialog while another is still animating
+    /// away — so the prompt silently never appeared (the no-Trash-volume bug).
+    /// Instead we observe the array and flip this flag a beat later.
+    @State private var showPermanentDeleteConfirmation: Bool = false
     @State private var showCloudDropConfirmation: Bool = false
     @State private var pendingCloudDrop: PendingCloudDrop?
     @State private var showNewFolderDialog: Bool = false
@@ -105,12 +112,19 @@ struct FileListView: View {
                 Text(L10n.format("Are you sure you want to move %d items to the Trash?", items.count))
             }
         }
+        .onChange(of: fm.itemsNeedingPermanentDelete.isEmpty) { _, isEmpty in
+            guard !isEmpty else { return }
+            // Defer until the "Move to Trash" dialog has fully dismissed,
+            // otherwise SwiftUI swallows this presentation (see the
+            // `showPermanentDeleteConfirmation` declaration).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                showPermanentDeleteConfirmation = true
+            }
+        }
         .confirmationDialog(
             L10n.text("Delete Immediately?"),
-            isPresented: Binding(
-                get: { !fm.itemsNeedingPermanentDelete.isEmpty },
-                set: { if !$0 { fm.itemsNeedingPermanentDelete = [] } }
-            )
+            isPresented: $showPermanentDeleteConfirmation
         ) {
             Button(L10n.text("Delete Permanently"), role: .destructive) {
                 Task {
