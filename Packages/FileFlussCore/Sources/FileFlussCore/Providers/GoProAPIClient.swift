@@ -29,14 +29,39 @@ public actor GoProAPIClient {
     enum Dialect { case modern, legacy }
     private var dialect: Dialect?
 
+    /// `Authorization: Basic …` header value for COHN (camera on home network),
+    /// which serves the same API over HTTPS with Basic auth. nil for the
+    /// unauthenticated local AP/USB API.
+    private let basicAuthHeader: String?
+
+    /// Plain local API over the camera AP/USB link (`http://ip:8080`, no auth).
     public init(ipAddress: String, port: Int = 8080) {
         self.baseURL = URL(string: "http://\(ipAddress):\(port)")!
+        self.basicAuthHeader = nil
         let config = URLSessionConfiguration.default
         // The camera AP/USB link is local; fail fast rather than hang the UI
         // when it has gone to sleep or been unplugged.
         config.timeoutIntervalForRequest = 15
         config.waitsForConnectivity = false
         self.session = URLSession(configuration: config)
+    }
+
+    /// COHN: same endpoints over `https://ip` with Basic auth and the camera's
+    /// self-signed certificate (trusted via the session delegate). COHN is only
+    /// available on the modern API, so the dialect is fixed to `.modern`.
+    public init(cohnHost ipAddress: String, port: Int = 443, username: String, password: String) {
+        self.baseURL = URL(string: "https://\(ipAddress):\(port)")!
+        let token = Data("\(username):\(password)".utf8).base64EncodedString()
+        self.basicAuthHeader = "Basic \(token)"
+        self.dialect = .modern
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15
+        config.waitsForConnectivity = false
+        self.session = URLSession(
+            configuration: config,
+            delegate: GoProTLSDelegate(),
+            delegateQueue: nil
+        )
     }
 
     // MARK: - Reachability / lifecycle
@@ -124,6 +149,7 @@ public actor GoProAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        if let basicAuthHeader { request.setValue(basicAuthHeader, forHTTPHeaderField: "Authorization") }
 
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -181,6 +207,7 @@ public actor GoProAPIClient {
         guard let url = endpoint(path) else { throw CloudProviderError.invalidResponse }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        if let basicAuthHeader { request.setValue(basicAuthHeader, forHTTPHeaderField: "Authorization") }
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
@@ -217,4 +244,21 @@ private extension CharacterSet {
         set.remove(charactersIn: "&=?+/")
         return set
     }()
+}
+
+/// Trusts the GoPro camera's self-signed COHN certificate. COHN endpoints are
+/// reached by the IP the user provisioned via the GoPro app on their own LAN,
+/// and the camera presents a self-signed cert — the same trust model the
+/// Synology/Seafile/FTP providers already use for user-entered local servers.
+private final class GoProTLSDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
 }

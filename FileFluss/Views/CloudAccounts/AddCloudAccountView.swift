@@ -64,7 +64,14 @@ struct AddCloudAccountView: View {
     @State private var sftpKeyImporterPresented = false
     @State private var sftpKeyImportError: String?
 
-    // GoPro camera discovery (scan → select → connect).
+    // GoPro: either auto-discover (USB / Wi-Fi AP) or connect to a
+    // home-network camera (COHN) with manually entered credentials.
+    enum GoProAddMode: String, CaseIterable, Hashable, Identifiable {
+        case scan
+        case cohn
+        var id: String { rawValue }
+    }
+    @State private var goProMode: GoProAddMode = .scan
     @State private var goProCameras: [GoProCamera] = []
     @State private var goProSelectedCameraID: String?
     @State private var goProScanning = false
@@ -338,6 +345,7 @@ struct AddCloudAccountView: View {
                     sftpPrivateKeyContents = ""
                     sftpPrivateKeyFilename = ""
                     sftpKeyImportError = nil
+                    goProMode = .scan
                     goProCameras = []
                     goProSelectedCameraID = nil
                     goProScanning = false
@@ -943,7 +951,24 @@ struct AddCloudAccountView: View {
         }
     }
 
+    @ViewBuilder
     private var goProFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("", selection: $goProMode) {
+                Text(L10n.text("USB or Wi-Fi")).tag(GoProAddMode.scan)
+                Text(L10n.text("Home Wi-Fi (COHN)")).tag(GoProAddMode.cohn)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            switch goProMode {
+            case .scan: goProScanFields
+            case .cohn: goProCOHNFields
+            }
+        }
+    }
+
+    private var goProScanFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             LText("Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it.")
                 .font(.caption)
@@ -1001,6 +1026,26 @@ struct AddCloudAccountView: View {
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.leading)
             }
+        }
+    }
+
+    private var goProCOHNFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LText("Set up \"Camera on Home Network\" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+
+            TextField(L10n.text("Camera IP address"), text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            TextField(L10n.text("COHN Username"), text: $username)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+            SecureField(L10n.text("COHN Password"), text: $password)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
         }
     }
 
@@ -1331,7 +1376,11 @@ struct AddCloudAccountView: View {
         case .jottacloud: return apiToken.isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
-        case .gopro: return goProSelectedCameraID == nil
+        case .gopro:
+            switch goProMode {
+            case .scan: return goProSelectedCameraID == nil
+            case .cohn: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+            }
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -1548,8 +1597,17 @@ struct AddCloudAccountView: View {
                     await appState.syncManager.addPCloudAccount(email: email, password: password)
                 }
             case .gopro:
-                if let camera = goProCameras.first(where: { $0.id == goProSelectedCameraID }) {
-                    await appState.syncManager.addGoProAccount(camera: camera)
+                switch goProMode {
+                case .scan:
+                    if let camera = goProCameras.first(where: { $0.id == goProSelectedCameraID }) {
+                        await appState.syncManager.addGoProAccount(camera: camera)
+                    }
+                case .cohn:
+                    await appState.syncManager.addGoProCOHNAccount(
+                        ipAddress: serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                        username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+                        password: password
+                    )
                 }
             default:
                 break

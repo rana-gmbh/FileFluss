@@ -696,3 +696,9 @@
 "Scanning…" = "Suche läuft …";
 "No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again." = "Keine Kamera gefunden. Stelle sicher, dass sie eingeschaltet und per USB oder WLAN verbunden ist, und suche erneut.";
 "GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again." = "GoPro-Kameras verbinden sich automatisch, wenn sie eingeschaltet und erreichbar sind. Um eine andere Kamera zu koppeln, entferne diese und füge sie erneut hinzu.";
+"USB or Wi-Fi" = "USB oder WLAN";
+"Home Wi-Fi (COHN)" = "Heim-WLAN (COHN)";
+"Set up \"Camera on Home Network\" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows." = "Richte „Kamera im Heimnetzwerk“ (COHN) in der GoPro-Quik-App ein und gib dann die IP-Adresse der Kamera sowie den COHN-Benutzernamen und das Passwort ein, die angezeigt werden.";
+"Camera IP address" = "IP-Adresse der Kamera";
+"COHN Username" = "COHN-Benutzername";
+"COHN Password" = "COHN-Passwort";

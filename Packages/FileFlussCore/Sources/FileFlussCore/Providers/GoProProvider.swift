@@ -10,11 +10,23 @@ public struct GoProConnection: Codable, Sendable {
     public var cameraName: String
     public var mode: GoProConnectionMode
     public var lastKnownIP: String?
+    /// COHN credentials (mode == .cohn only). Stored in the Keychain alongside
+    /// the rest of the connection.
+    public var cohnUsername: String?
+    public var cohnPassword: String?
 
-    public init(cameraName: String, mode: GoProConnectionMode, lastKnownIP: String?) {
+    public init(
+        cameraName: String,
+        mode: GoProConnectionMode,
+        lastKnownIP: String?,
+        cohnUsername: String? = nil,
+        cohnPassword: String? = nil
+    ) {
         self.cameraName = cameraName
         self.mode = mode
         self.lastKnownIP = lastKnownIP
+        self.cohnUsername = cohnUsername
+        self.cohnPassword = cohnPassword
     }
 }
 
@@ -68,9 +80,31 @@ public final class GoProProvider: CloudProvider, @unchecked Sendable {
         goProProviderLog.info("[GoPro] connected to \(camera.name) at \(camera.ipAddress)")
     }
 
+    /// Connects to a camera on the user's home Wi-Fi (COHN): HTTPS + Basic
+    /// auth at a user-entered IP, provisioned beforehand via the GoPro app.
+    /// Confirms reachability before saving.
+    public func connectCOHN(ipAddress: String, username: String, password: String, cameraName: String?) async throws {
+        let client = GoProAPIClient(cohnHost: ipAddress, username: username, password: password)
+        guard await client.ping() else {
+            throw CloudProviderError.networkError(URLError(.cannotConnectToHost))
+        }
+        let conn = GoProConnection(
+            cameraName: cameraName?.isEmpty == false ? cameraName! : "GoPro Camera (Home Wi-Fi)",
+            mode: .cohn,
+            lastKnownIP: ipAddress,
+            cohnUsername: username,
+            cohnPassword: password
+        )
+        self.client = client
+        self.connection = conn
+        try KeychainService.save(key: keychainKey, value: conn)
+        startKeepAlive()
+        goProProviderLog.info("[GoPro] connected via COHN at \(ipAddress)")
+    }
+
     public func authenticate() async throws {
-        // GoPro accounts are established via `connect(camera:)` from the
-        // add-account discovery flow, not a credential prompt.
+        // GoPro accounts are established via `connect(camera:)` or
+        // `connectCOHN(...)` from the add-account flow, not a credential prompt.
         throw CloudProviderError.notAuthenticated
     }
 
@@ -91,6 +125,23 @@ public final class GoProProvider: CloudProvider, @unchecked Sendable {
     private func liveClient() async throws -> GoProAPIClient {
         guard let connection else { throw CloudProviderError.notAuthenticated }
         if let client, await client.ping() { return client }
+
+        // COHN: a fixed, user-provisioned IP on the home network — rebuild the
+        // HTTPS client directly rather than scanning local USB/AP subnets.
+        if connection.mode == .cohn {
+            guard let ip = connection.lastKnownIP,
+                  let user = connection.cohnUsername,
+                  let pass = connection.cohnPassword else {
+                throw CloudProviderError.notAuthenticated
+            }
+            let fresh = GoProAPIClient(cohnHost: ip, username: user, password: pass)
+            guard await fresh.ping() else {
+                throw CloudProviderError.networkError(URLError(.cannotConnectToHost))
+            }
+            self.client = fresh
+            startKeepAlive()
+            return fresh
+        }
 
         guard let ip = await GoProDiscovery.resolve(
             lastKnownIP: connection.lastKnownIP,

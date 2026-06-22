@@ -11,6 +11,9 @@ public enum GoProConnectionMode: String, Codable, Sendable {
     case wiredUSB
     /// Mac joined to the camera's own Wi-Fi access point (fixed IP 10.5.5.9).
     case wifiAP
+    /// Camera on the user's home Wi-Fi (COHN): HTTPS + Basic auth at a
+    /// user-entered IP, provisioned beforehand via the GoPro app.
+    case cohn
 }
 
 /// A camera found on the network/USB, ready to connect to.

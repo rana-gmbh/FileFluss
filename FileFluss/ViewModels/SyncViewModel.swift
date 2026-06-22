@@ -831,6 +831,24 @@ final class SyncViewModel {
         }
     }
 
+    func addGoProCOHNAccount(ipAddress: String, username: String, password: String) async {
+        let account = CloudAccount(providerType: .gopro)
+        let provider = GoProProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.connectCOHN(ipAddress: ipAddress, username: username, password: password, cameraName: nil)
+            var connectedAccount = account
+            connectedAccount.displayName = (try? await provider.userDisplayName()) ?? "GoPro Camera"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addKoofrAccount(email: String, appPassword: String) async {
         let account = CloudAccount(providerType: .koofr)
         let provider = KoofrProvider(accountId: account.id)
