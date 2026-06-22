@@ -691,3 +691,8 @@
 "Sync All" = "Alle synchronisieren";
 "Sync Rules" = "Sync-Regeln";
 "Upload" = "Hochladen";
+"Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it." = "Schalte die Kamera ein und verbinde sie per USB oder tritt ihrem WLAN bei. Suche dann danach.";
+"Scan for Cameras" = "Nach Kameras suchen";
+"Scanning…" = "Suche läuft …";
+"No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again." = "Keine Kamera gefunden. Stelle sicher, dass sie eingeschaltet und per USB oder WLAN verbunden ist, und suche erneut.";
+"GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again." = "GoPro-Kameras verbinden sich automatisch, wenn sie eingeschaltet und erreichbar sind. Um eine andere Kamera zu koppeln, entferne diese und füge sie erneut hinzu.";

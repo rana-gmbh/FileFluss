@@ -807,6 +807,30 @@ final class SyncViewModel {
         }
     }
 
+    /// Discovers reachable GoPro cameras (USB / Wi-Fi AP / Bonjour). Surfaced
+    /// by the Add-account "Scan" button; returns confirmed cameras only.
+    func scanForGoProCameras() async -> [GoProCamera] {
+        await GoProDiscovery.scan()
+    }
+
+    func addGoProAccount(camera: GoProCamera) async {
+        let account = CloudAccount(providerType: .gopro)
+        let provider = GoProProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.connect(camera: camera)
+            var connectedAccount = account
+            connectedAccount.displayName = camera.name
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     func addKoofrAccount(email: String, appPassword: String) async {
         let account = CloudAccount(providerType: .koofr)
         let provider = KoofrProvider(accountId: account.id)
@@ -1065,6 +1089,14 @@ final class SyncViewModel {
             case .googleDrivePicker:
                 let provider = GoogleDrivePickerProvider(accountId: account.id)
                 if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .gopro:
+                let provider = GoProProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    // The camera may be off/unplugged now; register anyway so
+                    // the account is present. The IP is re-resolved lazily on
+                    // first use, and unreachable cameras surface as offline.
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
             }

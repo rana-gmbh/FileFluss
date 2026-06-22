@@ -98,6 +98,7 @@ public actor SyncEngine {
         case .terabox: return TeraBoxProvider()
         case .jottacloud: return JottacloudProvider()
         case .googleDrivePicker: return GoogleDrivePickerProvider()
+        case .gopro: return GoProProvider()
         }
     }
 }

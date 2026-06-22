@@ -64,6 +64,12 @@ struct AddCloudAccountView: View {
     @State private var sftpKeyImporterPresented = false
     @State private var sftpKeyImportError: String?
 
+    // GoPro camera discovery (scan → select → connect).
+    @State private var goProCameras: [GoProCamera] = []
+    @State private var goProSelectedCameraID: String?
+    @State private var goProScanning = false
+    @State private var goProDidScan = false
+
     @State private var synologyOTP = ""
     @State private var synologyAllowSelfSigned = true
 
@@ -150,6 +156,12 @@ struct AddCloudAccountView: View {
         .ftp, .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
     ]
 
+    /// Local devices reached over their own HTTP API rather than a cloud
+    /// account — browsed and imported from, not synced to.
+    private let deviceProviders: [CloudProviderType] = [
+        .gopro,
+    ]
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -191,6 +203,11 @@ struct AddCloudAccountView: View {
             providerSection(
                 title: "Other Protocols",
                 providers: otherProtocolProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: "Cameras & Devices",
+                providers: deviceProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             Button(L10n.text("Cancel")) { dismiss() }
@@ -290,6 +307,8 @@ struct AddCloudAccountView: View {
                 teraboxFields
             case .ftp:
                 ftpFields
+            case .gopro:
+                goProFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -319,6 +338,10 @@ struct AddCloudAccountView: View {
                     sftpPrivateKeyContents = ""
                     sftpPrivateKeyFilename = ""
                     sftpKeyImportError = nil
+                    goProCameras = []
+                    goProSelectedCameraID = nil
+                    goProScanning = false
+                    goProDidScan = false
                     synologyOTP = ""
                     synologyAllowSelfSigned = true
                     seafileOTP = ""
@@ -920,6 +943,81 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var goProFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LText("Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+
+            Button {
+                scanForGoPro()
+            } label: {
+                HStack(spacing: 6) {
+                    if goProScanning {
+                        ProgressView().scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                    }
+                    Text(goProScanning ? L10n.text("Scanning…") : L10n.text("Scan for Cameras"))
+                }
+            }
+            .disabled(goProScanning || isAuthenticating)
+
+            ForEach(goProCameras) { camera in
+                Button {
+                    goProSelectedCameraID = camera.id
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: camera.mode == .wifiAP ? "wifi" : "cable.connector")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(camera.name)
+                            Text(camera.ipAddress)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if goProSelectedCameraID == camera.id {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        goProSelectedCameraID == camera.id
+                            ? AnyShapeStyle(Color.accentColor.opacity(0.12))
+                            : AnyShapeStyle(.quaternary),
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if goProDidScan && goProCameras.isEmpty && !goProScanning {
+                LText("No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.leading)
+            }
+        }
+    }
+
+    private func scanForGoPro() {
+        goProScanning = true
+        goProDidScan = false
+        Task {
+            let found = await appState.syncManager.scanForGoProCameras()
+            goProCameras = found
+            if goProSelectedCameraID == nil || !found.contains(where: { $0.id == goProSelectedCameraID }) {
+                goProSelectedCameraID = found.first?.id
+            }
+            goProScanning = false
+            goProDidScan = true
+        }
+    }
+
     private var teraboxFields: some View {
         VStack(spacing: 12) {
             if let qrData = appState.syncManager.teraboxQRImageData, let image = NSImage(data: qrData) {
@@ -1233,6 +1331,7 @@ struct AddCloudAccountView: View {
         case .jottacloud: return apiToken.isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .gopro: return goProSelectedCameraID == nil
         default: return email.isEmpty || password.isEmpty
         }
     }
@@ -1447,6 +1546,10 @@ struct AddCloudAccountView: View {
                     await appState.syncManager.addPCloudAccount(accessToken: trimmedToken)
                 } else {
                     await appState.syncManager.addPCloudAccount(email: email, password: password)
+                }
+            case .gopro:
+                if let camera = goProCameras.first(where: { $0.id == goProSelectedCameraID }) {
+                    await appState.syncManager.addGoProAccount(camera: camera)
                 }
             default:
                 break

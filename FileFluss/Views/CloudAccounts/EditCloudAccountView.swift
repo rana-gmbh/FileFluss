@@ -153,7 +153,16 @@ struct EditCloudAccountView: View {
             jottacloudHint
         case .googleDrivePicker:
             googleDrivePickerHint
+        case .gopro:
+            goProHint
         }
+    }
+
+    private var goProHint: some View {
+        Text(L10n.text("GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again."))
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var jottacloudHint: some View {
@@ -659,7 +668,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud, .terabox, .jottacloud, .googleDrivePicker:
+        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
             EmptyView()
         case .dropbox, .googleDrive, .oneDrive, .box:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
@@ -705,7 +714,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -829,7 +838,7 @@ struct EditCloudAccountView: View {
             return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
             return true
         }
     }
@@ -993,7 +1002,7 @@ struct EditCloudAccountView: View {
                     useTLS: ftpUseTLS,
                     allowInvalidCertificate: ftpAllowSelfSigned
                 )
-            case .iCloud, .terabox, .jottacloud, .googleDrivePicker:
+            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
                 break
             }
 

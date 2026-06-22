@@ -691,3 +691,8 @@
 "Sync All" = "Sync All";
 "Sync Rules" = "Sync Rules";
 "Upload" = "Upload";
+"Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it." = "Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it.";
+"Scan for Cameras" = "Scan for Cameras";
+"Scanning…" = "Scanning…";
+"No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again." = "No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again.";
+"GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again." = "GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again.";
