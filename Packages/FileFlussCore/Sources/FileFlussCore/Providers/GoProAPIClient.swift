@@ -21,6 +21,14 @@ public actor GoProAPIClient {
     private var cachedAt: Date?
     private let cacheTTL: TimeInterval = 5
 
+    /// GoPro shipped two HTTP dialects. HERO9 and newer use the Open GoPro
+    /// `/gopro/...` namespace; HERO5–HERO8 use the older `/gp/gpControl/...`
+    /// + `/gp/gpMediaList` endpoints. The media-list JSON and the
+    /// `/videos/DCIM/...` download path are identical, so only a few endpoints
+    /// differ. The dialect is detected once (on the first `ping`) and cached.
+    enum Dialect { case modern, legacy }
+    private var dialect: Dialect?
+
     public init(ipAddress: String, port: Int = 8080) {
         self.baseURL = URL(string: "http://\(ipAddress):\(port)")!
         let config = URLSessionConfiguration.default
@@ -34,14 +42,26 @@ public actor GoProAPIClient {
     // MARK: - Reachability / lifecycle
 
     /// Cheap liveness probe used at connect time and before lazy reconnects.
+    /// Also resolves (and caches) which HTTP dialect this camera speaks.
     @discardableResult
     public func ping() async -> Bool {
-        do {
-            _ = try await get("/gopro/camera/state")
-            return true
-        } catch {
-            return false
+        await resolveDialect() != nil
+    }
+
+    /// Probes the modern then legacy status endpoints, caching whichever
+    /// answers. Returns nil if the camera is unreachable.
+    @discardableResult
+    private func resolveDialect() async -> Dialect? {
+        if let dialect { return dialect }
+        if (try? await get("/gopro/camera/state")) != nil {
+            dialect = .modern
+            return .modern
         }
+        if (try? await get("/gp/gpControl/status")) != nil {
+            dialect = .legacy
+            return .legacy
+        }
+        return nil
     }
 
     /// Enables wired (USB) control so the HTTP API responds over the
@@ -52,8 +72,10 @@ public actor GoProAPIClient {
 
     /// Keeps the camera's Wi-Fi/connection awake during idle browsing.
     /// Best-effort; failures are ignored (the next real request will surface
-    /// a disconnect).
+    /// a disconnect). Only the modern API exposes an HTTP keep-alive (legacy
+    /// HERO5–8 use a UDP heartbeat we don't send — browsing traffic suffices).
     public func keepAlive() async {
+        guard await resolveDialect() == .modern else { return }
         _ = try? await get("/gopro/camera/keep_alive")
     }
 
@@ -82,7 +104,8 @@ public actor GoProAPIClient {
            Date().timeIntervalSince(cachedAt) < cacheTTL {
             return cachedList
         }
-        let data = try await get("/gopro/media/list")
+        let endpoint = await resolveDialect() == .legacy ? "/gp/gpMediaList" : "/gopro/media/list"
+        let data = try await get(endpoint)
         let list = try JSONDecoder().decode(GoProMediaList.self, from: data)
         cachedList = list
         cachedAt = Date()
@@ -119,7 +142,12 @@ public actor GoProAPIClient {
         guard let encoded = rel.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) else {
             throw CloudProviderError.notFound(path)
         }
-        _ = try await get("/gopro/media/delete?path=\(encoded)")
+        if await resolveDialect() == .legacy {
+            // HERO5–8 want a leading slash and the gpControl storage command.
+            _ = try await get("/gp/gpControl/command/storage/delete?p=/\(encoded)")
+        } else {
+            _ = try await get("/gopro/media/delete?path=\(encoded)")
+        }
         invalidateCache()
     }
 
@@ -130,6 +158,9 @@ public actor GoProAPIClient {
         let rel = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let encoded = rel.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) else {
             return nil
+        }
+        if await resolveDialect() == .legacy {
+            return try? await get("/gp/gpMediaMetadata?p=\(encoded)&t=screennail")
         }
         return try? await get("/gopro/media/thumbnail?path=\(encoded)")
     }
