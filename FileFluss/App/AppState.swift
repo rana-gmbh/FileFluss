@@ -181,12 +181,19 @@ final class AppState {
         return syncManager.accountFor(id: accountId)?.providerType
     }
 
-    /// Whether the active panel supports creating folders (WordPress doesn't).
+    /// Whether the active panel supports creating folders (WordPress doesn't;
+    /// read-only devices like a GoPro camera don't either).
     var canCreateFolderInActivePanel: Bool {
         if let providerType = activePanelProviderType {
-            return providerType != .wordpress
+            return providerType != .wordpress && !providerType.isReadOnly
         }
         return true // Local file system always supports it
+    }
+
+    /// Whether the active panel is an import-only cloud device (e.g. a GoPro
+    /// camera). Drives gating of Rename and other write affordances.
+    var activePanelIsReadOnly: Bool {
+        activePanelProviderType?.isReadOnly ?? false
     }
 
     var hasSelection: Bool {

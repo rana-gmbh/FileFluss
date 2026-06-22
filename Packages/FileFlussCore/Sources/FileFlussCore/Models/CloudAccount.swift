@@ -92,6 +92,17 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         }
     }
 
+    /// Whether the provider is import-only: media can be browsed, downloaded
+    /// and deleted, but not created, renamed or uploaded to. Used to hide write
+    /// affordances (New Folder, Rename, Paste, drops-in) for devices like a
+    /// GoPro camera whose HTTP API has no write path.
+    public var isReadOnly: Bool {
+        switch self {
+        case .gopro: return true
+        default: return false
+        }
+    }
+
     /// Asset catalog name for providers with official logos; nil falls back to SF Symbol `icon`.
     public var logoAssetName: String? {
         switch self {

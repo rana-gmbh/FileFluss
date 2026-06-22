@@ -58,6 +58,12 @@ struct CloudFileListView: View {
             ?? "this account"
     }
 
+    /// True for import-only devices (e.g. a GoPro camera): browse, download and
+    /// delete are allowed, but New Folder / Rename / Paste / drops-in are not.
+    private var isReadOnly: Bool {
+        appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false
+    }
+
     private var incomingDirection: ConflictDirection {
         panelSide == .right ? .leftToRight : .rightToLeft
     }
@@ -80,6 +86,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !isReadOnly else { return }
                 if let item = vm.selectedItems.first, vm.selectedItems.count == 1 {
                     renameCloudItem = item
                     renameText = item.name
@@ -440,6 +447,8 @@ struct CloudFileListView: View {
     // MARK: - DragDropMode dispatch
 
     private func presentOrRunUploadDrop(_ upload: PendingUpload) {
+        // Import-only devices (GoPro) can't receive uploads — ignore drops in.
+        guard !isReadOnly else { return }
         switch appState.dragDropMode {
         case .copy: runUploadDrop(upload, isMove: false)
         case .move: runUploadDrop(upload, isMove: true)
@@ -450,6 +459,7 @@ struct CloudFileListView: View {
     }
 
     private func presentOrRunCloudToCloudDrop(_ drop: PendingCloudToCloudDrop) {
+        guard !isReadOnly else { return }
         switch appState.dragDropMode {
         case .copy: runCloudToCloudDrop(drop, isMove: false)
         case .move: runCloudToCloudDrop(drop, isMove: true)
@@ -460,6 +470,7 @@ struct CloudFileListView: View {
     }
 
     private func presentOrRunInternalCloudDrop(_ drop: PendingInternalCloudDrop) {
+        guard !isReadOnly else { return }
         switch appState.dragDropMode {
         case .copy: runInternalCloudDrop(drop, isMove: false)
         case .move: runInternalCloudDrop(drop, isMove: true)
@@ -811,7 +822,8 @@ struct CloudFileListView: View {
                 onOpenInFinder: { items in
                     openInFinder(items)
                 },
-                canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress,
+                canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
+                isReadOnly: isReadOnly,
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode
             )

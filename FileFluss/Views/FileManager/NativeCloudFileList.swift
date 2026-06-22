@@ -31,6 +31,9 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
+    /// Import-only device (e.g. GoPro): suppress Paste / New Folder / Rename in
+    /// the context menu since the camera has no write path.
+    var isReadOnly: Bool = false
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
@@ -159,6 +162,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onOpenInFinder = onOpenInFinder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
+        coordinator.isReadOnly = isReadOnly
         coordinator.selectedIDs = _selectedIDs
 
         // Diff in a single pass — comparing via `.map(\.id) != …` three times
@@ -333,6 +337,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
+    var isReadOnly = false
     var singlePaneMode = false
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
@@ -571,7 +576,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         // Right-click on empty area — offer Paste + New Folder.
         if clickedRow < 0 || clickedRow >= items.count {
-            if inVirtualContainer { return }
+            if inVirtualContainer || isReadOnly { return }
             let pasteItem = NSMenuItem(title: L10n.text("Paste"), action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteItem.keyEquivalentModifierMask = [.command]
             pasteItem.target = self
@@ -629,8 +634,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         }
 
         // Paste targets the current directory, not the clicked item — only
-        // offer it when that directory is a real folder.
-        if !inVirtualContainer {
+        // offer it when that directory is a real folder and writable.
+        if !inVirtualContainer, !isReadOnly {
             let pasteCtx = NSMenuItem(title: L10n.text("Paste"), action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteCtx.keyEquivalentModifierMask = [.command]
             pasteCtx.target = self
@@ -656,8 +661,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         menu.addItem(.separator())
 
-        // Rename — only for single, renamable selection
-        if contextItems.count == 1, contextItems[0].role == .normal {
+        // Rename — only for single, renamable selection (not on read-only devices)
+        if contextItems.count == 1, contextItems[0].role == .normal, !isReadOnly {
             let renameItem = NSMenuItem(title: L10n.text("Rename"), action: #selector(handleRename(_:)), keyEquivalent: "")
             renameItem.target = self
             renameItem.representedObject = contextItems[0]

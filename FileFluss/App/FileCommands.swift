@@ -53,7 +53,7 @@ struct FileCommands: Commands {
             applyShortcut(.rename, to: Button(L10n.text("Rename")) {
                 NotificationCenter.default.post(name: KeyboardCommand.rename.notification, object: nil)
             })
-            .disabled(!appState.hasSingleSelection)
+            .disabled(!appState.hasSingleSelection || appState.activePanelIsReadOnly)
 
             applyShortcut(.duplicate, to: Button(L10n.text("Duplicate")) {
                 NotificationCenter.default.post(name: KeyboardCommand.duplicate.notification, object: nil)
