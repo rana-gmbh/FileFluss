@@ -49,5 +49,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!--
+	  GoPro discovery browses Bonjour for cameras and connects to them on
+	  the local network / USB link. macOS local-network privacy requires the
+	  advertised service type to be declared and a usage description shown.
+	-->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>FileFluss finds and connects to GoPro cameras on your local network or USB connection so you can browse and import their media.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_gopro-web._tcp</string>
+	</array>
 </dict>
 </plist>
