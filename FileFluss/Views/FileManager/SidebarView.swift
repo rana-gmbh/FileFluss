@@ -481,6 +481,17 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // Both sidebars live in a plain HStack, not a NavigationSplitView,
+        // so AppKit only recognises the leading one as "the" window
+        // sidebar: on macOS 26+ it stretches that one's material up under
+        // the toolbar (behind the window title) while the trailing one
+        // gets an unhosted vibrancy background whose icons re-render on
+        // hover. Hiding the List's own background and supplying one
+        // shared material view gives both sidebars the same look, keeps
+        // them below the toolbar, and gives the vibrant row icons a
+        // stable backing to draw against.
+        .scrollContentBackground(.hidden)
+        .background { SidebarMaterialBackground() }
         // Drops every row's text title and re-emits just the icon when
         // the sidebar is collapsed (narrow). `.help(...)` on each row
         // surfaces the full name as a hover tooltip in that mode.
@@ -1186,4 +1197,19 @@ private struct TransferItemRow: View {
             }
         }
     }
+}
+
+/// Sidebar material shared by the left and right sidebars. Uses the
+/// view-builder `.background { }` form at the call site so it respects
+/// the toolbar's safe area instead of extending under the title bar.
+private struct SidebarMaterialBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .withinWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
