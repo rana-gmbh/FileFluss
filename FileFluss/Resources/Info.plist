@@ -2,12 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleName</key>
-	<string>FileFluss</string>
-	<key>CFBundleDisplayName</key>
-	<string>FileFluss</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>FileFluss</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -15,50 +21,36 @@
 		<string>zh-Hans</string>
 		<string>zh-Hant</string>
 	</array>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleVersion</key>
-	<string>8</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.4</string>
+	<key>CFBundleName</key>
+	<string>FileFluss</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.4</string>
+	<key>CFBundleVersion</key>
+	<string>8</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Rana GmbH. Licensed under GPL-3.0.</string>
-	<!--
-	  FileFluss talks to self-hosted servers the user enters at runtime
-	  (Seafile, NextCloud, WebDAV, SFTP, S3-compatible, Synology Drive…),
-	  many of which run on local IPs or LAN domains without TLS. App
-	  Transport Security blocks plain http:// connections by default;
-	  enable arbitrary loads so the URLSession-based providers can reach
-	  those servers. The user already chose to type an http URL, so this
-	  is a user-controlled trust boundary rather than a silent downgrade.
-	-->
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-	<!--
-	  GoPro discovery browses Bonjour for cameras and connects to them on
-	  the local network / USB link. macOS local-network privacy requires the
-	  advertised service type to be declared and a usage description shown.
-	-->
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>FileFluss finds and connects to GoPro cameras on your local network or USB connection so you can browse and import their media.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_gopro-web._tcp</string>
 	</array>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Rana GmbH. Licensed under GPL-3.0.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>FileFluss finds and connects to GoPro cameras on your local network or USB connection so you can browse and import their media.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/rana-gmbh/filefluss/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string></string>
 </dict>
 </plist>

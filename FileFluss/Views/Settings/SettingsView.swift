@@ -66,6 +66,7 @@ struct GeneralSettingsView: View {
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("shareLinkPreferDirectDownload") private var shareLinkPreferDirectDownload = true
+    @AppStorage("automaticUpdateChecksEnabled") private var automaticUpdateChecks = true
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
     @AppStorage(AppLanguage.storageKey) private var appLanguage: String = AppLanguage.system.rawValue
     @State private var showRelaunchPrompt = false
@@ -115,6 +116,13 @@ struct GeneralSettingsView: View {
             Toggle(isOn: $confirmDelete) { LText("Confirm before deleting") }
             Toggle(isOn: $showSidebarAddAccount) { LText("Show \"Add Cloud Account\" in sidebars") }
             Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
+
+            Section {
+                Toggle(isOn: $automaticUpdateChecks) { LText("Check for updates automatically") }
+                LText("FileFluss checks daily, verifies each update's signature, and asks before installing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Section {
                 Toggle(isOn: $shareLinkPreferDirectDownload) { LText("Copy direct download links when available") }

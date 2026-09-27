@@ -3,12 +3,12 @@ import AppKit
 import FileFlussCore
 
 /// Custom About panel with version, links, credits, and a manual
-/// "Check for Updates" button driven by `UpdateChecker`.
+/// "Check for Updates" button driven by Sparkle.
 struct AboutView: View {
-    @StateObject private var checker = UpdateChecker()
+    @ObservedObject private var updater = AppUpdater.shared
 
     private var version: String {
-        UpdateLookup.currentVersion()
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
 
     private var releaseNotesURL: URL {
@@ -113,94 +113,27 @@ struct AboutView: View {
 
     @ViewBuilder
     private var updateSection: some View {
-        switch checker.state {
-        case .idle:
-            Button(action: {
-                checker.check()
-            }) { LText("Check for Updates") }
+        VStack(spacing: 8) {
+            Button {
+                updater.checkForUpdates(nil)
+            } label: {
+                LText("Check for Updates")
+            }
             .buttonStyle(.borderedProminent)
+            // Sparkle disables checking while one is already running.
+            .disabled(updater.isAvailable && !updater.canCheckForUpdates)
 
-        case .checking:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                LText("Checking for updates…")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
-            }
-
-        case .upToDate:
-            VStack(spacing: 8) {
-                Label(L10n.text("You're up to date"), systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.callout)
-                Button(action: {
-                    checker.check()
-                }) { LText("Check Again") }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .font(.caption)
-            }
-
-        case .available(let update):
-            VStack(alignment: .leading, spacing: 10) {
-                Label(L10n.format("FileFluss %@ is available!", update.version), systemImage: "arrow.down.circle.fill")
-                    .foregroundStyle(Color.accentColor)
-                    .font(.callout.bold())
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                if !update.releaseNotes.isEmpty {
-                    ScrollView {
-                        Group {
-                            if let attr = try? AttributedString(
-                                markdown: update.releaseNotes,
-                                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-                            ) {
-                                Text(attr)
-                            } else {
-                                Text(update.releaseNotes)
-                            }
-                        }
-                        .font(.caption)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(2)
-                    }
-                    .frame(height: 90)
-                    .padding(8)
-                    .background(.quinary, in: RoundedRectangle(cornerRadius: 6))
-                }
-
-                HStack {
-                    Button(action: {
-                        NSWorkspace.shared.open(update.releasePageURL)
-                    }) { LText("Release Page ↗") }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-
-                    Spacer()
-
-                    Button(action: {
-                        NSWorkspace.shared.open(update.downloadURL ?? update.releasePageURL)
-                    }) { LText("Download") }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-            }
-
-        case .failed(let message):
-            VStack(spacing: 8) {
-                Label(L10n.text("Could not check for updates"), systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-                Text(message)
+            if let last = updater.lastUpdateCheckDate {
+                Text(L10n.format("Last checked: %@", last.formatted(date: .abbreviated, time: .shortened)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button(action: {
-                    checker.check()
-                }) { LText("Try Again") }
-                .buttonStyle(.borderless)
-                .font(.caption)
+            } else if !updater.isAvailable {
+                // Unbundled dev runs and builds without the public key can't
+                // verify an update, so the button opens the releases page
+                // instead of pretending to check.
+                LText("Opens the releases page in your browser.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

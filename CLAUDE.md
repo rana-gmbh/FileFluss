@@ -45,9 +45,9 @@ Tests use Swift Testing framework (`@Suite`, `@Test` macros), not XCTest.
 - **Cloud providers**: Protocol-based (`CloudProvider`), with full implementations for each supported service (see Services/CloudProviders/)
 - **App Sandbox disabled** — app uses direct file system access with security-scoped bookmarks
 
-### No external dependencies
+### Dependencies
 
-Uses only Apple frameworks (SwiftUI, AppKit, Foundation, QuickLookUI, UniformTypeIdentifiers).
+Apple frameworks (SwiftUI, AppKit, Foundation, QuickLookUI, UniformTypeIdentifiers) plus **one** third-party package: [Sparkle](https://github.com/sparkle-project/Sparkle), pinned to an exact version in `project.yml`, for in-app updates. Keep it that way — anything else should be justified before it's added.
 
 ## Commits
 
@@ -65,6 +65,18 @@ Never set `sha256 :no_check` in the tap's cask. Homebrew warns on every install 
 VERSION=0.8.1
 curl -fL "https://github.com/rana-gmbh/filefluss/releases/download/v${VERSION}/FileFluss-v${VERSION}.dmg" | shasum -a 256
 ```
+
+## In-app updates (Sparkle)
+
+`AppUpdater` (`FileFluss/Services/AppUpdater.swift`) drives Sparkle 2. Three Info.plist keys matter: `SUFeedURL` (the `appcast.xml` attached to the latest GitHub release), `SUPublicEDKey` (the public half of the release signing key) and `SUEnableAutomaticChecks`. The user-facing toggle is Settings → "Check for updates automatically", stored as `automaticUpdateChecksEnabled`; Sparkle reads the same key.
+
+**`AppUpdater` refuses to start when `SUPublicEDKey` is empty**, which is deliberate: a build that can't verify a signature must not download and install one. "Check for Updates" then opens the releases page instead.
+
+Releases are signed with an EdDSA keypair. The private half lives **only** in the GitHub secret `SPARKLE_PRIVATE_KEY` (never in the repo); the public half sits in Info.plist. `release.yml` downloads Sparkle's pinned, checksummed tooling, generates `appcast.xml`, and refuses to publish an unsigned feed or one pointing at the wrong archive. `verify-sparkle-key.yml` (manual trigger) proves the secret and the public key are still a pair — run it after any key change.
+
+Sparkle updates from the **ZIP**, notarized and stapled, built from the same exported app as the DMG. The DMG remains the artifact humans download. `CFBundleVersion` is stamped in CI from the commit count and is what Sparkle compares, so the release checkout must stay `fetch-depth: 0` — a shallow clone counts 1 every time and nobody would ever be offered an update.
+
+The Homebrew cask carries `auto_updates true` so Homebrew doesn't fight Sparkle over the version it thinks is installed.
 
 ## Version test (debug builds only)
 

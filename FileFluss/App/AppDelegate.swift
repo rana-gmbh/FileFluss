@@ -17,7 +17,7 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
 
     private var appearanceObservation: NSKeyValueObservation?
     private var themeChangeObserver: NSObjectProtocol?
-    private let updateNotifier = UpdateNotifier()
+    private var updatePreferenceObserver: NSObjectProtocol?
 
     /// Set by `FileFlussApp` once `AppState` is constructed so we can drain
     /// `LoopbackMountService` at quit time. The delegate is created before
@@ -45,9 +45,8 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Default automatic update checks to on the first time the app
-        // is launched. Users can toggle this with
-        // `defaults write com.rana-gmbh.FileFluss automaticUpdateChecksEnabled -bool false`.
+        // Default automatic update checks to on the first time the app is
+        // launched. Settings has a toggle; Sparkle reads the same key.
         UserDefaults.standard.register(defaults: [
             "automaticUpdateChecksEnabled": true
         ])
@@ -81,8 +80,19 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let notifier = updateNotifier
-        Task { await notifier.start() }
+        // In-app updates. Sparkle checks on its own schedule, verifies the
+        // download against SUPublicEDKey and the Developer ID signature, and
+        // installs it — replacing the old check-and-open-the-browser flow.
+        AppUpdater.shared.start()
+        updatePreferenceObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: UserDefaults.standard,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                AppUpdater.shared.applyAutomaticChecksPreference()
+            }
+        }
 
         // Sweep up Finder mounts a previous run left behind (crash, force
         // quit, mid-mount hang…). Their backing server is gone; without

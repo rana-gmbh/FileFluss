@@ -276,7 +276,7 @@ struct FileCommands: Commands {
             HelpMenuButton()
             Divider()
             Button(L10n.text("Check for Updates…")) {
-                AboutWindowController.shared.show()
+                AppUpdater.shared.checkForUpdates(nil)
             }
             Button(L10n.text("GitHub Repository")) {
                 NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)

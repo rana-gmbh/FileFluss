@@ -13,8 +13,6 @@ final class AboutWindowController: NSObject, NSWindowDelegate {
             window.orderFrontRegardless()
             return
         }
-        // Reset stale reference so a freshly opened window restarts
-        // UpdateChecker in its idle state.
         window = nil
 
         let hosting = NSHostingController(rootView: AboutView())

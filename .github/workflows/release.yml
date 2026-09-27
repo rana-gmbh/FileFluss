@@ -30,10 +30,26 @@ jobs:
           fi
 
       - name: Checkout
+        # Full history: the build number below is the commit count, and
+        # Sparkle decides "is this newer" by comparing CFBundleVersion. A
+        # shallow clone counts 1 for every release, so no installed copy
+        # would ever be offered an update.
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Stamp version and build number
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD="$(git rev-list --count HEAD)"
+          PLIST=FileFluss/Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST"
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Version $VERSION, build $BUILD"
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -220,10 +236,74 @@ jobs:
 
           xcrun stapler staple "$DMG_PATH"
 
+      - name: Zip the notarized app for Sparkle
+        # Sparkle updates from a ZIP of the .app. It is built from the same
+        # exported bundle as the DMG, after stapling, so the archive users
+        # receive as an update carries the notarization ticket too.
+        run: |
+          APP_PATH="$RUNNER_TEMP/export/FileFluss.app"
+          xcrun stapler staple "$APP_PATH"
+          ZIP_PATH="$RUNNER_TEMP/FileFluss-${APP_VERSION}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
+          echo "ZIP_PATH=$ZIP_PATH" >> $GITHUB_ENV
+
+          # A missing framework means the update would crash at launch on the
+          # user's machine, which is the worst possible moment to find out.
+          test -d "$APP_PATH/Contents/Frameworks/Sparkle.framework" \
+            || { echo "::error::Sparkle.framework missing from the app bundle"; exit 1; }
+          codesign --verify --deep --strict "$APP_PATH"
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::SPARKLE_PRIVATE_KEY is not set — the appcast would be unsigned and every update rejected"
+            exit 1
+          fi
+
+          # Sparkle's own tooling, pinned and checksummed. Must stay in step
+          # with the framework version in project.yml.
+          SPARKLE_VERSION=2.9.6
+          SPARKLE_SHA256=52bf9e88cdd972fc0c81501377a880e90d47031bd8ca5462488f843e2609e192
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          echo "${SPARKLE_SHA256}  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" ./bin/generate_appcast
+          SPARKLE_BIN="$RUNNER_TEMP/sparkle/bin"
+
+          WORK="$RUNNER_TEMP/appcast"
+          mkdir -p "$WORK"
+          cp "$ZIP_PATH" "$WORK/"
+
+          # Release notes shown inside Sparkle's window: the same file the
+          # GitHub release uses, rendered to HTML.
+          gh api markdown -F text=@RELEASE_NOTES.md -f mode=gfm -f context="$GITHUB_REPOSITORY" \
+            > "$WORK/FileFluss-${APP_VERSION}.html"
+
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_BIN/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/" \
+            --link "https://github.com/${GITHUB_REPOSITORY}/releases/latest" \
+            --embed-release-notes \
+            --maximum-deltas 0 \
+            "$WORK"
+
+          grep -q 'sparkle:edSignature' "$WORK/appcast.xml" \
+            || { echo "::error::appcast.xml carries no EdDSA signature"; exit 1; }
+          grep -q "releases/download/${GITHUB_REF_NAME}/FileFluss-${APP_VERSION}.zip" "$WORK/appcast.xml" \
+            || { echo "::error::appcast.xml does not point at FileFluss-${APP_VERSION}.zip"; exit 1; }
+          echo "APPCAST_PATH=$WORK/appcast.xml" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ env.DMG_PATH }}
+          files: |
+            ${{ env.DMG_PATH }}
+            ${{ env.ZIP_PATH }}
+            ${{ env.APPCAST_PATH }}
           body_path: RELEASE_NOTES.md
           prerelease: ${{ steps.release_kind.outputs.is_prerelease }}
           make_latest: ${{ steps.release_kind.outputs.is_prerelease == 'false' && 'true' || 'false' }}

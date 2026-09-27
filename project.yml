@@ -31,6 +31,13 @@ packages:
     # local Swift package. Empty for now — file moves are landing
     # incrementally per follow-up commit.
     path: Packages/FileFlussCore
+  # In-app updates. Pinned exactly: a version bump has to happen together
+  # with the Sparkle tooling (sign_update / generate_appcast) that the
+  # release workflow downloads, or the appcast and the shipped framework
+  # can disagree about what a valid signature looks like.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.6
 
 targets:
   FileFluss:
@@ -40,6 +47,8 @@ targets:
       - FileFluss
     dependencies:
       - package: FileFlussCore
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rana-gmbh.FileFluss
