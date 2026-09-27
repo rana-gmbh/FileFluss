@@ -32,6 +32,26 @@ final class SyncViewModel {
     private let syncEngine = SyncEngine.shared
     private static let accountsKey = "cloudAccounts"
 
+    /// True when a stored account list existed but couldn't be decoded. In
+    /// that state `accounts` is empty through no fault of the user, and
+    /// writing that emptiness back would destroy the real list — so saving
+    /// is suppressed until the user actually changes something.
+    private var accountsLoadFailed = false
+
+    /// Where accounts are persisted. The unit tests run *inside the app
+    /// bundle*, so they share its preferences domain: a test that builds a
+    /// `SyncViewModel` and triggers a save would otherwise overwrite the
+    /// developer's real, hard-won list of connected accounts. Under XCTest
+    /// we therefore persist to a scratch suite instead.
+    static var defaults: UserDefaults {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                || ProcessInfo.processInfo.environment["XCTestSessionIdentifier"] != nil
+                || NSClassFromString("XCTestCase") != nil else {
+            return .standard
+        }
+        return UserDefaults(suiteName: "com.rana-gmbh.FileFluss.tests") ?? .standard
+    }
+
     init() {
         loadAccounts()
     }
@@ -1562,9 +1582,14 @@ final class SyncViewModel {
     // MARK: - Persistence
 
     func saveAccounts() {
+        // Never let a failed load turn into a wipe.
+        if accountsLoadFailed && accounts.isEmpty {
+            NSLog("[FileFluss] saveAccounts skipped: stored accounts couldn't be decoded, refusing to overwrite them")
+            return
+        }
         do {
             let data = try JSONEncoder().encode(accounts)
-            UserDefaults.standard.set(data, forKey: Self.accountsKey)
+            Self.defaults.set(data, forKey: Self.accountsKey)
         } catch {
             // A silent failure here would lose accounts the user just added —
             // surface it in the log so support has something to work with.
@@ -1573,8 +1598,13 @@ final class SyncViewModel {
     }
 
     private func loadAccounts() {
-        guard let data = UserDefaults.standard.data(forKey: Self.accountsKey),
-              let saved = try? JSONDecoder().decode([CloudAccount].self, from: data) else {
+        guard let data = Self.defaults.data(forKey: Self.accountsKey) else { return }
+        guard let saved = try? JSONDecoder().decode([CloudAccount].self, from: data) else {
+            // Stored data exists but doesn't decode — a model change, or a
+            // truncated write. Flag it so a later save can't replace the
+            // stored list with an empty one.
+            accountsLoadFailed = true
+            NSLog("[FileFluss] loadAccounts: stored account list could not be decoded — it will not be overwritten")
             return
         }
         accounts = saved
