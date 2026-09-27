@@ -433,6 +433,183 @@ public actor KDriveAPIClient {
         )
     }
 
+    /// Update body for `PUT /2/drive/{driveId}/files/{fileId}/link`.
+    ///
+    /// Same fields as `ShareLinkBody`, but every one is encoded explicitly —
+    /// including `valid_until: null`. PUT merges, so an *omitted* key leaves
+    /// the server's current value alone, and clearing an expiry has to be said
+    /// out loud. `ShareLinkBody`'s synthesised encoder drops nil keys, which is
+    /// exactly what creation wants and exactly what an update must not do.
+    private struct ShareLinkUpdateBody: Encodable {
+        let right: String
+        let password: String?
+        let valid_until: Int?
+        let can_download: Bool
+        let can_edit: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case right, password, valid_until, can_download, can_edit
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(right, forKey: .right)
+            // A nil password with `right: "public"` is how the password comes
+            // off again, so it is sent as an explicit null too.
+            try c.encode(password, forKey: .password)
+            try c.encode(valid_until, forKey: .valid_until)
+            try c.encode(can_download, forKey: .can_download)
+            try c.encode(can_edit, forKey: .can_edit)
+        }
+    }
+
+    /// The public link this file already has, or nil when it has none.
+    ///
+    /// Infomaniak reports "no link on this file" as a 404 (with an
+    /// `object_not_found`-style code), which is *not* a failure here: it is the
+    /// answer. Every other status is surfaced with the API's own message.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        let fileId = try await resolvePathToId(path)
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/link")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 404 { return nil }
+        guard (200...299).contains(status) else {
+            let envelope = try? JSONDecoder().decode(KDriveErrorEnvelope.self, from: data)
+            // Some deployments answer a link-less file with 403/422 and a
+            // not-found code rather than a 404 status.
+            if let code = envelope?.error?.code, code.contains("not_found") { return nil }
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] GET files/\(fileId)/link → HTTP \(status): \(bodyStr.prefix(500))")
+            if let message = envelope?.error?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: status)
+        }
+
+        // A success whose `data` isn't a link object (`null` on some
+        // deployments) is the other way this API says "no link on this file".
+        guard let parsed = try? JSONDecoder().decode(KDriveResponse<KDriveShareLink>.self, from: data) else {
+            KDriveProvider.log("[kDrive API] GET files/\(fileId)/link → 2xx without a link object, treating as not shared")
+            return nil
+        }
+        return try Self.shareLink(from: parsed.data, requestedPassword: false, requestedDownload: false)
+    }
+
+    /// Changes the existing link's password, expiry and download permission in
+    /// place. kDrive keeps the same URL.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let fileId = try await resolvePathToId(path)
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/link")!
+
+        let password = (options.password?.isEmpty ?? true) ? nil : options.password
+        let body = ShareLinkUpdateBody(
+            // The mode has to follow the password: leaving `right: "password"`
+            // in place while sending a null password is rejected.
+            right: password == nil ? "public" : "password",
+            password: password,
+            valid_until: options.expiry.map { Int($0.timeIntervalSince1970) },
+            can_download: options.allowDownload,
+            can_edit: false
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(status) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] PUT files/\(fileId)/link → HTTP \(status): \(bodyStr.prefix(500))")
+            if let message = (try? JSONDecoder().decode(KDriveErrorEnvelope.self, from: data))?.error?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: status)
+        }
+
+        if let parsed = try? JSONDecoder().decode(KDriveResponse<KDriveShareLink>.self, from: data) {
+            return try Self.shareLink(
+                from: parsed.data,
+                requestedPassword: password != nil,
+                requestedDownload: options.allowDownload
+            )
+        }
+        // Several Infomaniak write endpoints answer `{"result":"success",
+        // "data":true}` instead of echoing the object back. Read the link
+        // rather than assuming the request applied verbatim.
+        guard let fresh = try await existingShareLink(at: path) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return fresh
+    }
+
+    /// Withdraws the public link. A 404 means there was none, which is the
+    /// outcome the caller wanted, so it isn't reported as a failure.
+    public func removeShareLink(at path: String) async throws {
+        let fileId = try await resolvePathToId(path)
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/link")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 404 { return }
+        guard (200...299).contains(status) else {
+            let envelope = try? JSONDecoder().decode(KDriveErrorEnvelope.self, from: data)
+            if let code = envelope?.error?.code, code.contains("not_found") { return }
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] DELETE files/\(fileId)/link → HTTP \(status): \(bodyStr.prefix(500))")
+            if let message = envelope?.error?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: status)
+        }
+    }
+
+    /// Shared mapping from Infomaniak's link object to `CloudShareLink`.
+    /// `requestedPassword`/`requestedDownload` describe what the caller asked
+    /// for, and only matter when the server leaves a field out (create/update);
+    /// a plain lookup passes false for both.
+    private static func shareLink(
+        from link: KDriveShareLink,
+        requestedPassword: Bool,
+        requestedDownload: Bool
+    ) throws -> CloudShareLink {
+        guard let linkURL = URL(string: link.url) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // `capabilities` reports what the link ended up permitting, which can
+        // be less than we asked for on restricted workspaces — worth telling
+        // the user rather than silently disagreeing with the sheet.
+        var note: String?
+        if requestedDownload, link.capabilities?.canDownload == false {
+            note = L10n.text("kDrive created the link without download permission — recipients can view the file only.")
+        }
+
+        // kDrive documents no direct-download variant of the share URL — the
+        // link always lands on Infomaniak's viewer page.
+        return CloudShareLink(
+            url: linkURL,
+            directDownloadURL: nil,
+            expiresAt: link.validUntil.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+            hasPassword: link.right == "password" || requestedPassword,
+            note: note
+        )
+    }
+
     // MARK: - User Info
 
     public func userInfo() async throws -> String {

@@ -334,6 +334,256 @@ public actor NextCloudAPIClient {
         )
     }
 
+    /// One entry of the OCS share list. `id` comes back as a JSON string on
+    /// most releases and as a number on a few, and `share_type` the other way
+    /// round, so both are decoded leniently — a type mismatch here would
+    /// otherwise sink the whole lookup.
+    private struct OCSShareEntry: Decodable {
+        let id: String
+        /// 3 is the public link share; 0/1/… are user and group shares, which
+        /// the same endpoint returns for the same path.
+        let shareType: Int
+        let url: String?
+        let token: String?
+        /// "" or null when the link never expires.
+        let expiration: String?
+        /// Non-empty (a hash on current releases) while the link is password
+        /// protected, null once the password is cleared.
+        let password: String?
+        /// Permission bitmask. Echoed back unchanged on update so a folder
+        /// link that allows uploads isn't quietly downgraded to read-only.
+        let permissions: Int?
+        /// A JSON *string* carrying the share attributes, e.g.
+        /// `[{"scope":"permissions","key":"download","value":false}]`.
+        let attributes: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, url, token, expiration, password, permissions, attributes
+            case shareType = "share_type"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            if let raw = try? c.decode(String.self, forKey: .id) {
+                id = raw
+            } else {
+                id = String(try c.decode(Int.self, forKey: .id))
+            }
+            if let raw = try? c.decode(Int.self, forKey: .shareType) {
+                shareType = raw
+            } else {
+                shareType = Int((try? c.decode(String.self, forKey: .shareType)) ?? "") ?? -1
+            }
+            url = try? c.decode(String.self, forKey: .url)
+            token = try? c.decode(String.self, forKey: .token)
+            expiration = try? c.decode(String.self, forKey: .expiration)
+            password = try? c.decode(String.self, forKey: .password)
+            permissions = (try? c.decode(Int.self, forKey: .permissions))
+                ?? (try? c.decode(String.self, forKey: .permissions)).flatMap { Int($0) }
+            attributes = try? c.decode(String.self, forKey: .attributes)
+        }
+    }
+
+    /// OCS wraps every answer in `{"ocs":{"meta":…,"data":…}}`. `data` is an
+    /// array for the share *list* and a bare object for a single share (what
+    /// PUT answers with), so both shapes are accepted and flattened to
+    /// `shares`.
+    private struct OCSShareListEnvelope: Decodable {
+        let statuscode: Int
+        let message: String?
+        let shares: [OCSShareEntry]
+
+        private enum Root: String, CodingKey { case ocs }
+        private enum OCSKeys: String, CodingKey { case meta, data }
+        private enum MetaKeys: String, CodingKey { case statuscode, message }
+
+        init(from decoder: Decoder) throws {
+            let root = try decoder.container(keyedBy: Root.self)
+            let ocs = try root.nestedContainer(keyedBy: OCSKeys.self, forKey: .ocs)
+            let meta = try ocs.nestedContainer(keyedBy: MetaKeys.self, forKey: .meta)
+            if let raw = try? meta.decode(Int.self, forKey: .statuscode) {
+                statuscode = raw
+            } else {
+                statuscode = Int((try? meta.decode(String.self, forKey: .statuscode)) ?? "") ?? -1
+            }
+            message = try? meta.decode(String.self, forKey: .message)
+            if let list = try? ocs.decode([OCSShareEntry].self, forKey: .data) {
+                shares = list
+            } else if let single = try? ocs.decode(OCSShareEntry.self, forKey: .data) {
+                shares = [single]
+            } else {
+                shares = []
+            }
+        }
+    }
+
+    /// The public link this path already has, or nil when it has none.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let share = try await publicLinkShare(at: path) else { return nil }
+        return try Self.shareLink(from: share)
+    }
+
+    /// Changes an existing link's password, expiry and download permission in
+    /// place. The URL is preserved — Nextcloud keeps the share's token.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let share = try await publicLinkShare(at: path) else {
+            throw CloudProviderError.commandFailed(
+                L10n.text("This file has no public link to update. Create one first.")
+            )
+        }
+        guard let url = URL(string: "\(credentials.serverURL)/ocs/v2.php/apps/files_sharing/api/v1/shares/\(share.id)?format=json") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // An *empty* value is how OCS clears a field, so both are always sent:
+        // leaving `password` out would keep the existing password, which is the
+        // opposite of what "remove the password" has to do. Same for expiry.
+        var form: [(String, String)] = [
+            ("password", options.password ?? ""),
+            ("expireDate", options.expiry.map(Self.ocsExpireDate) ?? ""),
+            // The share's own bitmask rather than a constant: updating a folder
+            // link's password must not strip its upload permission.
+            ("permissions", String(share.permissions ?? 1)),
+        ]
+        if !options.allowDownload {
+            form.append(("attributes", #"[{"scope":"permissions","key":"download","value":false}]"#))
+        } else if Self.downloadDisabled(attributes: share.attributes) {
+            // Re-enabling download only needs saying when the link currently
+            // has the attribute — and its presence proves the server
+            // understands it (NC 26+), so nothing older gets an unknown field.
+            form.append(("attributes", #"[{"scope":"permissions","key":"download","value":true}]"#))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = Data(Self.formEncode(form).utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+
+        let envelope = try? JSONDecoder().decode(OCSShareListEnvelope.self, from: data)
+        let ocsStatus = envelope?.statuscode
+        guard let envelope, ocsStatus == 100 || ocsStatus == 200 else {
+            nextCloudLog.error("[NextCloud] share update failed: HTTP \(http.statusCode), OCS \(ocsStatus ?? -1)")
+            if let message = envelope?.message, !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+
+        if let updated = envelope.shares.first, updated.url != nil {
+            return try Self.shareLink(from: updated)
+        }
+        // A few releases answer PUT with an empty `data`. Re-read the share
+        // rather than guessing what the server actually applied.
+        guard let fresh = try await publicLinkShare(at: path) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return try Self.shareLink(from: fresh)
+    }
+
+    /// Withdraws the public link. Deliberately not an error when the path has
+    /// no link: the caller's goal — "this file is not shared" — already holds.
+    public func removeShareLink(at path: String) async throws {
+        guard let share = try await publicLinkShare(at: path) else {
+            nextCloudLog.info("[NextCloud] removeShareLink: no public link on that path, nothing to withdraw")
+            return
+        }
+        guard let url = URL(string: "\(credentials.serverURL)/ocs/v2.php/apps/files_sharing/api/v1/shares/\(share.id)?format=json") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+
+        let envelope = try? JSONDecoder().decode(OCSShareListEnvelope.self, from: data)
+        let ocsStatus = envelope?.statuscode
+        guard ocsStatus == 100 || ocsStatus == 200 else {
+            nextCloudLog.error("[NextCloud] share delete failed: HTTP \(http.statusCode), OCS \(ocsStatus ?? -1)")
+            if let message = envelope?.message, !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+    }
+
+    /// The `share_type == 3` (public link) share for `path`, or nil when the
+    /// file has none. A path can carry several shares — user, group, link —
+    /// and only the link one is ours. An unshared file is a *success* with an
+    /// empty `data` array; a 404 means the file itself is unknown, which stays
+    /// an error.
+    private func publicLinkShare(at path: String) async throws -> OCSShareEntry? {
+        let query = Self.formEncode([("path", path), ("reshares", "false"), ("format", "json")])
+        guard let url = URL(string: "\(credentials.serverURL)/ocs/v2.php/apps/files_sharing/api/v1/shares?\(query)") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        // Mandatory for every OCS call — without it the server answers 401.
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+
+        let envelope = try? JSONDecoder().decode(OCSShareListEnvelope.self, from: data)
+        let ocsStatus = envelope?.statuscode
+        guard let envelope, ocsStatus == 100 || ocsStatus == 200 else {
+            nextCloudLog.error("[NextCloud] share lookup failed: HTTP \(http.statusCode), OCS \(ocsStatus ?? -1)")
+            if let message = envelope?.message, !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+        return envelope.shares.first { $0.shareType == 3 }
+    }
+
+    private static func shareLink(from share: OCSShareEntry, note: String? = nil) throws -> CloudShareLink {
+        guard let link = share.url, let shareURL = URL(string: link) else {
+            throw CloudProviderError.invalidResponse
+        }
+        // `/s/<token>/download` streams the file itself, and is pointless on a
+        // link whose download button the share attributes switched off.
+        let allowsDownload = !downloadDisabled(attributes: share.attributes)
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: allowsDownload ? URL(string: link + "/download") : nil,
+            expiresAt: parseShareExpiry(share.expiration),
+            hasPassword: !(share.password ?? "").isEmpty,
+            note: note
+        )
+    }
+
+    /// True when the share carries the NC 26+ attribute that hides the
+    /// download button. The attribute list is a JSON string inside the JSON
+    /// body, so it's matched textually rather than decoded twice.
+    private static func downloadDisabled(attributes raw: String?) -> Bool {
+        guard let raw, !raw.isEmpty else { return false }
+        let compact = raw.replacingOccurrences(of: " ", with: "")
+        return compact.contains(#""key":"download""#) && compact.contains(#""value":false"#)
+    }
+
+    /// Nextcloud takes a plain `yyyy-MM-dd` for `expireDate`, in UTC.
+    private static func ocsExpireDate(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: date)
+    }
+
     private static func parseShareExpiry(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         let fmt = DateFormatter()

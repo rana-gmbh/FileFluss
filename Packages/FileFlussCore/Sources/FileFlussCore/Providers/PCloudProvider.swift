@@ -153,18 +153,42 @@ public final class PCloudProvider: CloudProvider, @unchecked Sendable {
     /// `expire` are Premium-only — the server rejects them on a free
     /// account, and `createShareLink` surfaces its message verbatim.
     /// There's no API switch for view-without-download.
+    ///
+    /// `listpublinks` enumerates the account's links so an existing one can be
+    /// found, and `changepublink` / `deletepublink` edit and withdraw it in
+    /// place — the link's `code`, and therefore its URL, survives an update.
     public var shareLinkCapabilities: ShareLinkCapabilities {
         ShareLinkCapabilities(
             canCreate: true,
+            canQueryExisting: true,
+            canUpdate: true,
+            canRemove: true,
             supportsPassword: true,
             supportsExpiry: true,
-            supportsDownloadToggle: false
+            supportsDownloadToggle: false,
+            passwordRequiresPaidPlan: true,
+            expiryRequiresPaidPlan: true
         )
     }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.updateShareLink(at: path, options: options)
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
     }
 
     // MARK: - Private

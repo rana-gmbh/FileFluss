@@ -297,7 +297,7 @@ public actor BoxAPIClient {
         let shared_link: SharedLink?
     }
 
-    /// Creates (or updates) the public shared link on an existing item.
+    /// Creates the public shared link on an existing item.
     ///
     /// `?fields=shared_link` is mandatory: without it Box answers 200 with
     /// the plain item representation and no link in it at all.
@@ -308,6 +308,67 @@ public actor BoxAPIClient {
     /// both cases with its own explanation, which we pass through verbatim
     /// rather than flattening into a generic error.
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        try await putSharedLink(at: path, options: options)
+    }
+
+    /// Box's sharing PUT is an upsert: the very same call that creates a
+    /// link rewrites the settings of one that already exists, and the URL
+    /// is preserved. So updating is creating with the new settings — no
+    /// separate endpoint, and the recipient's link keeps working.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        try await putSharedLink(at: path, options: options)
+    }
+
+    /// Reads back the item's current `shared_link`.
+    ///
+    /// Box always answers 200 with the item representation; `shared_link` is
+    /// `null` when the item isn't shared, which is the only "not shared"
+    /// signal — a 404 means the *item* is gone and stays an error, as does a
+    /// 403 from an admin-restricted account.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        let entry = try await resolvePathToEntry(path)
+        let collection = entry.isFolder ? "folders" : "files"
+        let envelope: BoxSharedLinkEnvelope = try await apiRequest(
+            .get,
+            path: "/\(collection)/\(entry.id)",
+            queryItems: [URLQueryItem(name: "fields", value: "shared_link")]
+        )
+        guard let link = envelope.shared_link else { return nil }
+        // Nothing was requested here, so the downgrade note is computed
+        // against the defaults: it still reports an admin-narrowed scope or a
+        // preview-only link, which is exactly what the user needs to know.
+        return Self.shareLink(from: link, requested: .default)
+    }
+
+    /// Withdraws the link by nulling `shared_link` on the item. Box needs an
+    /// explicit JSON `null` here (an omitted key is a no-op), hence the
+    /// hand-rolled encoder.
+    public func removeShareLink(at path: String) async throws {
+        struct ClearSharedLink: Encodable {
+            enum CodingKeys: String, CodingKey { case shared_link }
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeNil(forKey: .shared_link)
+            }
+        }
+        let entry = try await resolvePathToEntry(path)
+        let collection = entry.isFolder ? "folders" : "files"
+        // Reading the field back confirms the link really is gone rather
+        // than trusting a bare 200.
+        let envelope: BoxSharedLinkEnvelope = try await apiRequest(
+            .put,
+            path: "/\(collection)/\(entry.id)",
+            queryItems: [URLQueryItem(name: "fields", value: "shared_link")],
+            body: ClearSharedLink(),
+            surfaceServerMessage: true
+        )
+        if envelope.shared_link != nil {
+            boxLog.error("[Box] Unshare of /\(collection)/\(entry.id) left a shared_link in place")
+            throw CloudProviderError.commandFailed(L10n.text("Box kept the public link in place — check whether your administrator manages sharing for this item."))
+        }
+    }
+
+    private func putSharedLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         let entry = try await resolvePathToEntry(path)
         let collection = entry.isFolder ? "folders" : "files"
         guard let url = URL(string: "\(Self.apiURL)/\(collection)/\(entry.id)?fields=shared_link") else {
@@ -377,16 +438,28 @@ public actor BoxAPIClient {
         }
 
         let envelope = try JSONDecoder().decode(BoxSharedLinkEnvelope.self, from: data)
-        guard let link = envelope.shared_link, let raw = link.url, let shareURL = URL(string: raw) else {
+        guard let link = envelope.shared_link,
+              let shareLink = Self.shareLink(from: link, requested: options) else {
             throw CloudProviderError.invalidResponse
         }
+        return shareLink
+    }
 
+    /// Maps Box's `shared_link` object onto our own type. Nil when the object
+    /// carries no usable URL, which callers treat as an invalid response.
+    private static func shareLink(
+        from link: BoxSharedLinkEnvelope.SharedLink,
+        requested options: ShareLinkOptions
+    ) -> CloudShareLink? {
+        guard let raw = link.url, let shareURL = URL(string: raw) else { return nil }
+        let requestedPassword = (options.password?.isEmpty == false)
         return CloudShareLink(
             url: shareURL,
             directDownloadURL: link.download_url.flatMap { URL(string: $0) },
-            expiresAt: Self.parseShareExpiry(link.unshared_at),
-            hasPassword: link.is_password_enabled ?? (password != nil),
-            note: Self.shareDowngradeNote(link: link, options: options)
+            expiresAt: parseShareExpiry(link.unshared_at),
+            hasPassword: link.is_password_enabled ?? requestedPassword,
+            isPublic: (link.effective_access ?? "open").lowercased() == "open",
+            note: shareDowngradeNote(link: link, options: options)
         )
     }
 
@@ -840,7 +913,13 @@ public actor BoxAPIClient {
         case delete = "DELETE"
     }
 
-    private func apiRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil) async throws -> T {
+    /// - Parameter surfaceServerMessage: when true, a failure that carries a
+    ///   `{"message": …}` body throws `.commandFailed` with Box's own wording
+    ///   instead of the coarse mapping below. Used by the sharing paths, where
+    ///   the real cause (admin policy, plan limits) is only explicable
+    ///   server-side. Off by default so existing callers keep their error
+    ///   semantics.
+    private func apiRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil, surfaceServerMessage: Bool = false) async throws -> T {
         var components = URLComponents(string: "\(Self.apiURL)\(path)")!
         if !queryItems.isEmpty {
             components.queryItems = (components.queryItems ?? []) + queryItems
@@ -880,6 +959,9 @@ public actor BoxAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             boxLog.error("[Box] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if surfaceServerMessage, let message = Self.parseErrorMessage(from: data), !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
         }
         return try JSONDecoder().decode(T.self, from: data)
@@ -944,6 +1026,37 @@ public actor BoxAPIClient {
             let status: Int?
             let code: String?
             let message: String?
+        }
+        // Box's top-level message for a rejected share setting is just
+        // "Forbidden"; the useful part — which field it objected to — lives
+        // in context_info.errors.
+        struct BoxContext: Decodable {
+            struct Entry: Decodable {
+                let reason: String?
+                let name: String?
+                let message: String?
+            }
+            let errors: [Entry]?
+        }
+        struct BoxErrorWithContext: Decodable {
+            let message: String?
+            let code: String?
+            let context_info: BoxContext?
+        }
+        if let detailed = try? JSONDecoder().decode(BoxErrorWithContext.self, from: data),
+           let entries = detailed.context_info?.errors, !entries.isEmpty {
+            let details = entries
+                .map { entry in
+                    [entry.name, entry.message ?? entry.reason]
+                        .compactMap { $0 }
+                        .joined(separator: ": ")
+                }
+                .filter { !$0.isEmpty }
+                .joined(separator: "; ")
+            let head = detailed.message ?? detailed.code ?? ""
+            if !details.isEmpty {
+                return head.isEmpty ? details : "\(head) — \(details)"
+            }
         }
         guard let parsed = try? JSONDecoder().decode(BoxError.self, from: data) else { return nil }
         return parsed.message ?? parsed.code

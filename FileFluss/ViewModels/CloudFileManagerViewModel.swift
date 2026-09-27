@@ -41,6 +41,39 @@ final class CloudFileManagerViewModel {
     /// either because the provider doesn't support quota (S3, SFTP,
     /// WordPress) or because the first probe hasn't completed.
     var storageQuota: CloudStorageQuota?
+    /// Known public-link state per remote path: a link when the file is
+    /// shared, nil when it is known not to be. A path absent from the
+    /// dictionary simply hasn't been checked. Populated on demand (when a
+    /// single file is selected) and after every share action, because the
+    /// context menu is built synchronously and can't await a lookup.
+    var shareStates: [String: CloudShareLink?] = [:]
+
+    /// Share options this account has already rejected. Providers bill
+    /// passwords and expiry dates, and the API answers a request that uses
+    /// one with a flat refusal ("Forbidden"), so the only reliable way to
+    /// know is to be told once — after which the sheet stops offering it.
+    var rejectedPassword: Bool {
+        get { UserDefaults.standard.bool(forKey: "shareOptionRejected.password.\(accountId.uuidString)") }
+        set { UserDefaults.standard.set(newValue, forKey: "shareOptionRejected.password.\(accountId.uuidString)") }
+    }
+    var rejectedExpiry: Bool {
+        get { UserDefaults.standard.bool(forKey: "shareOptionRejected.expiry.\(accountId.uuidString)") }
+        set { UserDefaults.standard.set(newValue, forKey: "shareOptionRejected.expiry.\(accountId.uuidString)") }
+    }
+
+    /// Set once this account has produced a link that turned out to demand
+    /// a sign-in. Warning up front beats letting the user send a dead link
+    /// and find out from the recipient.
+    var linksAreNotPublic: Bool {
+        get { UserDefaults.standard.bool(forKey: "shareLinksNotPublic.\(accountId.uuidString)") }
+        set { UserDefaults.standard.set(newValue, forKey: "shareLinksNotPublic.\(accountId.uuidString)") }
+    }
+
+    /// Last share failure. Deliberately separate from `error`, which
+    /// replaces the whole panel with an error view — a share that fails
+    /// must not take the file listing down with it.
+    var shareError: String?
+
     /// What this account's provider can do with public share links.
     /// Refreshed with each directory load; `.unsupported` until then, so
     /// the menu simply omits the entries for providers without sharing.
@@ -582,6 +615,34 @@ final class CloudFileManagerViewModel {
     /// to use direct links"), so copying it unchecked would hand the user a
     /// link that fails for the recipient. The verdict is remembered per
     /// account, so this costs one extra request once, not on every share.
+    /// Confirms the link works for a stranger. Where the provider offers a
+    /// direct-download URL this checks that; otherwise it checks the share
+    /// page itself, because a link that lands on a sign-in page is the one
+    /// failure the user must not discover from the recipient.
+    private func verifiedShareLink(_ link: CloudShareLink) async -> CloudShareLink {
+        guard link.directDownloadURL == nil || link.directDownloadURL == link.url else {
+            return await verifiedDirectLink(link)
+        }
+        let result = await PublicURLCheck.isReachable(link.url)
+        if result.ok {
+            // A public link proves the account can make them after all.
+            if linksAreNotPublic { linksAreNotPublic = false }
+            return link
+        }
+        linksAreNotPublic = true
+        cloudFileVMLog.info("[Share] Link is not publicly reachable: \(result.detail ?? "no detail", privacy: .public)")
+        return CloudShareLink(
+            url: link.url,
+            directDownloadURL: link.directDownloadURL,
+            expiresAt: link.expiresAt,
+            hasPassword: link.hasPassword,
+            isPublic: false,
+            note: [link.note, L10n.format("Checked just now: %@", result.detail ?? L10n.text("the link is not reachable without signing in."))]
+                .compactMap { $0 }
+                .joined(separator: " ")
+        )
+    }
+
     private func verifiedDirectLink(_ link: CloudShareLink) async -> CloudShareLink {
         guard let direct = link.directDownloadURL, direct != link.url else { return link }
 
@@ -616,7 +677,8 @@ final class CloudFileManagerViewModel {
     func createShareLink(
         for item: CloudFileItem,
         options: ShareLinkOptions,
-        preferDirectDownload: Bool
+        preferDirectDownload: Bool,
+        reuseExisting: Bool = true
     ) async -> CloudShareLink? {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             error = L10n.text("Cloud account not connected")
@@ -624,26 +686,193 @@ final class CloudFileManagerViewModel {
         }
 
         do {
-            var link = try await provider.createShareLink(at: item.path, options: options)
-            if preferDirectDownload {
-                link = await verifiedDirectLink(link)
+            // A file that is already shared should hand back its existing
+            // link rather than failing — that is what the user asked for.
+            // `try?` flattens both "not shared" and a failed lookup to nil,
+            // and either way creating is the right next step.
+            var link: CloudShareLink
+            if reuseExisting,
+               provider.shareLinkCapabilities.canQueryExisting,
+               let existing = try? await provider.existingShareLink(at: item.path) {
+                link = existing
+            } else {
+                // Applying settings the user just chose must never hand back
+                // an old link that ignores them.
+                link = try await provider.createShareLink(at: item.path, options: options)
             }
-            let url = preferDirectDownload ? link.preferredURL : link.url
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(url.absoluteString, forType: .string)
+            shareStates[item.path] = link
+            noteShareOptionsAccepted(options)
+            link = await verifiedShareLink(link)
+            copyToPasteboard(link, preferDirectDownload: preferDirectDownload)
             return link
-        } catch CloudProviderError.unauthorized, CloudProviderError.notAuthenticated {
-            // Dropbox accounts linked before sharing support was added hold a
-            // token without the `sharing.write` scope; the panel's existing
-            // re-auth banner is the right way out.
+        } catch CloudProviderError.notAuthenticated {
+            // Only a genuine 401 means the session is over. A provider that
+            // refuses the *action* (403) must not send the user off to sign
+            // in again while browsing and downloading plainly still work —
+            // the Dropbox missing-scope case maps itself to this deliberately.
             needsReAuth = true
-            error = CloudProviderError.unauthorized.localizedDescription
+            shareError = CloudProviderError.unauthorized.localizedDescription
             return nil
         } catch {
-            self.error = error.localizedDescription
+            noteShareOptionsRejected(options, error: error)
+            shareError = L10n.format("Couldn't create the share link: %@", shareFailureMessage(error, options: options))
             return nil
         }
+    }
+
+    /// Applies the settings chosen in the sheet. Whether that means
+    /// creating or changing is decided by asking the provider *now*, not by
+    /// the cached state: the cache can say "shared" for a link that was
+    /// since removed elsewhere, or for a provider that can't read its own
+    /// links back, and trying to change a link that isn't there fails with
+    /// a message about a limitation the user never hit.
+    func applyShareOptions(
+        for item: CloudFileItem,
+        options: ShareLinkOptions,
+        preferDirectDownload: Bool
+    ) async -> CloudShareLink? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            shareError = L10n.text("Cloud account not connected")
+            return nil
+        }
+        let capabilities = provider.shareLinkCapabilities
+
+        var alreadyShared = false
+        if capabilities.canQueryExisting {
+            if let existing = try? await provider.existingShareLink(at: item.path) {
+                shareStates[item.path] = existing
+                alreadyShared = true
+            } else {
+                shareStates[item.path] = CloudShareLink?.none
+            }
+        }
+
+        if alreadyShared && capabilities.canUpdate {
+            return await updateShareLink(for: item, options: options, preferDirectDownload: preferDirectDownload)
+        }
+        return await createShareLink(
+            for: item,
+            options: options,
+            preferDirectDownload: preferDirectDownload,
+            reuseExisting: false
+        )
+    }
+
+    /// Re-copies the link a file already has.
+    func copyExistingShareLink(for item: CloudFileItem, preferDirectDownload: Bool) async -> CloudShareLink? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return nil }
+        do {
+            guard let link = try await provider.existingShareLink(at: item.path) else {
+                // Someone removed it elsewhere in the meantime.
+                shareStates[item.path] = CloudShareLink?.none
+                shareError = L10n.text("This file is no longer shared.")
+                return nil
+            }
+            shareStates[item.path] = link
+            let checked = await verifiedShareLink(link)
+            copyToPasteboard(checked, preferDirectDownload: preferDirectDownload)
+            return checked
+        } catch {
+            shareError = L10n.format("Couldn't read this file's share link: %@", error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// Applies new settings (password, expiry, download permission) to an
+    /// existing link.
+    func updateShareLink(
+        for item: CloudFileItem,
+        options: ShareLinkOptions,
+        preferDirectDownload: Bool
+    ) async -> CloudShareLink? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return nil }
+        do {
+            var link = try await provider.updateShareLink(at: item.path, options: options)
+            shareStates[item.path] = link
+            noteShareOptionsAccepted(options)
+            link = await verifiedShareLink(link)
+            copyToPasteboard(link, preferDirectDownload: preferDirectDownload)
+            return link
+        } catch {
+            noteShareOptionsRejected(options, error: error)
+            shareError = L10n.format("Couldn't change sharing: %@", shareFailureMessage(error, options: options))
+            return nil
+        }
+    }
+
+    /// Records that an option this account refused before now works — plans
+    /// get upgraded, and the sheet shouldn't keep hiding it.
+    private func noteShareOptionsAccepted(_ options: ShareLinkOptions) {
+        if options.password?.isEmpty == false, rejectedPassword { rejectedPassword = false }
+        if options.expiry != nil, rejectedExpiry { rejectedExpiry = false }
+    }
+
+    /// Remembers an option the provider refused, but only for refusals that
+    /// look like a plan or policy limit — a typo'd password or a network
+    /// blip must not permanently hide the control.
+    private func noteShareOptionsRejected(_ options: ShareLinkOptions, error: Error) {
+        let text = error.localizedDescription.lowercased()
+        let planRefusal = ["forbidden", "not_authorized", "not authorized", "settings_error",
+                           "403", "payment", "upgrade", "premium", "plan", "subscription"]
+        guard planRefusal.contains(where: text.contains) else { return }
+        if options.password?.isEmpty == false { rejectedPassword = true }
+        if options.expiry != nil { rejectedExpiry = true }
+    }
+
+    /// Adds the missing "why" to a bare refusal like Box's "Forbidden".
+    private func shareFailureMessage(_ error: Error, options: ShareLinkOptions) -> String {
+        let base = error.localizedDescription
+        let usedPassword = options.password?.isEmpty == false
+        let usedExpiry = options.expiry != nil
+        guard usedPassword || usedExpiry else { return base }
+        let text = base.lowercased()
+        let planRefusal = ["forbidden", "not_authorized", "not authorized", "settings_error",
+                           "403", "payment", "upgrade", "premium", "plan", "subscription"]
+        guard planRefusal.contains(where: text.contains) else { return base }
+        let what: String
+        switch (usedPassword, usedExpiry) {
+        case (true, true): what = L10n.text("a password and an expiry date")
+        case (true, false): what = L10n.text("a password")
+        default: what = L10n.text("an expiry date")
+        }
+        return base + "\n\n" + L10n.format(
+            "This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.",
+            what
+        )
+    }
+
+    /// Withdraws the public link. Returns true on success.
+    @discardableResult
+    func stopSharing(_ item: CloudFileItem) async -> Bool {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else { return false }
+        do {
+            try await provider.removeShareLink(at: item.path)
+            shareStates[item.path] = CloudShareLink?.none
+            return true
+        } catch {
+            shareError = L10n.format("Couldn't stop sharing: %@", error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Looks up whether `item` is shared, so the context menu can offer the
+    /// right actions. Cheap to call repeatedly: a path already known is not
+    /// asked about again.
+    func refreshShareState(for item: CloudFileItem) async {
+        guard !shareStates.keys.contains(item.path) else { return }
+        guard let provider = await SyncEngine.shared.provider(for: accountId),
+              provider.shareLinkCapabilities.canQueryExisting else { return }
+        // `try?` flattens a lookup failure and "not shared" into the same
+        // nil, and both mean the menu should offer to create a link.
+        let link = try? await provider.existingShareLink(at: item.path)
+        shareStates[item.path] = link
+    }
+
+    private func copyToPasteboard(_ link: CloudShareLink, preferDirectDownload: Bool) {
+        let url = preferDirectDownload ? link.preferredURL : link.url
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.absoluteString, forType: .string)
     }
 
     func downloadToTemp(_ item: CloudFileItem) async -> URL? {

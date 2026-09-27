@@ -707,11 +707,13 @@ public actor DropboxAPIClient {
         }
 
         // A token minted before `sharing.write` was requested (see oauthScopes):
-        // no refresh can fix it, the user has to re-link, and `.unauthorized`
-        // is what drives the panel's re-auth banner.
+        // no refresh can fix it, the user really does have to sign in again,
+        // so this is `.notAuthenticated` — which is what drives the panel's
+        // re-auth banner. (A 403, by contrast, means the provider refused the
+        // action, and must not send the user to a pointless re-login.)
         if Self.isMissingScope(statusCode: http.statusCode, body: data) {
             dropboxLog.error("[Dropbox] create_shared_link_with_settings rejected: token lacks the sharing.write scope")
-            throw CloudProviderError.unauthorized
+            throw CloudProviderError.notAuthenticated
         }
 
         let envelope = try? JSONDecoder().decode(DropboxShareErrorEnvelope.self, from: data)
@@ -776,6 +778,145 @@ public actor DropboxAPIClient {
             body: ListRequest(path: path, direct_only: true)
         )
         return response.links.first
+    }
+
+    /// The public link this path already has, or nil when it has none.
+    ///
+    /// `direct_only: true` leaves only links to the file itself, dropping any
+    /// inherited from a shared parent folder. An unshared file is an empty
+    /// `links` array — a success, not an error.
+    ///
+    /// Gated on `sharing.read`, which `oauthScopes` requests. A token minted
+    /// before that scope was asked for comes back as `missing_scope`, which is
+    /// reported as `.notAuthenticated` (the panel's re-auth banner) exactly as
+    /// in `createShareLink` — no refresh can add a scope.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        struct ListRequest: Encodable {
+            let path: String
+            let direct_only: Bool
+        }
+        struct ListResponse: Decodable {
+            let links: [DropboxSharedLinkMetadata]
+        }
+
+        let (data, http) = try await rpcRaw(
+            path: "/sharing/list_shared_links",
+            encodedBody: try JSONEncoder().encode(
+                ListRequest(path: dropboxPath(path), direct_only: true)
+            )
+        )
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.shareFailure(statusCode: http.statusCode, body: data, endpoint: "list_shared_links")
+        }
+        guard let first = try JSONDecoder().decode(ListResponse.self, from: data).links.first else {
+            return nil
+        }
+        return try Self.shareLink(from: first, requestedPassword: false)
+    }
+
+    /// Changes the existing link's settings in place, keeping the same URL.
+    ///
+    /// The endpoint is addressed by link URL rather than by path, so the
+    /// current link has to be looked up first. As with creation, password and
+    /// expiry are Professional/Business features: a free account answers with a
+    /// `settings_error`, whose summary is surfaced verbatim.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        struct Settings: Encodable {
+            let require_password: Bool
+            let link_password: String?
+            let expires: String?
+            let allow_download: Bool
+            let access: String
+        }
+        struct ModifyRequest: Encodable {
+            let url: String
+            let settings: Settings
+            let remove_expiration: Bool
+        }
+
+        guard let existing = try await existingShareLink(at: path) else {
+            throw CloudProviderError.commandFailed(
+                L10n.text("This file has no public link to update. Create one first.")
+            )
+        }
+
+        let password = (options.password?.isEmpty == false) ? options.password : nil
+        let requestBody = ModifyRequest(
+            url: existing.url.absoluteString,
+            settings: Settings(
+                // Sent as an explicit false here, unlike creation: false is
+                // what takes an existing password back off again.
+                require_password: password != nil,
+                link_password: password,
+                expires: options.expiry.map(Self.dropboxTimestamp),
+                allow_download: options.allowDownload,
+                // "viewer" is view+comment. The edit access levels need a
+                // shared *folder*, which a public file link isn't.
+                access: "viewer"
+            ),
+            // The only way to clear an expiry: `expires` can set or move the
+            // date, never remove it.
+            remove_expiration: options.expiry == nil
+        )
+
+        let (data, http) = try await rpcRaw(
+            path: "/sharing/modify_shared_link_settings",
+            encodedBody: try JSONEncoder().encode(requestBody)
+        )
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.shareFailure(
+                statusCode: http.statusCode,
+                body: data,
+                endpoint: "modify_shared_link_settings"
+            )
+        }
+        let metadata = try JSONDecoder().decode(DropboxSharedLinkMetadata.self, from: data)
+        return try Self.shareLink(from: metadata, requestedPassword: password != nil)
+    }
+
+    /// Withdraws the public link. Deliberately not an error when the path has
+    /// none: the caller's goal — "this file is not shared" — already holds.
+    /// Needs `sharing.write`, the same scope creation uses.
+    public func removeShareLink(at path: String) async throws {
+        struct RevokeRequest: Encodable {
+            let url: String
+        }
+
+        guard let existing = try await existingShareLink(at: path) else {
+            dropboxLog.info("[Dropbox] removeShareLink: no public link on that path, nothing to revoke")
+            return
+        }
+
+        let (data, http) = try await rpcRaw(
+            path: "/sharing/revoke_shared_link",
+            encodedBody: try JSONEncoder().encode(RevokeRequest(url: existing.url.absoluteString))
+        )
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.shareFailure(statusCode: http.statusCode, body: data, endpoint: "revoke_shared_link")
+        }
+    }
+
+    /// Best error a failed /sharing/* response can yield, in the order
+    /// `createShareLink` established: a missing scope first (no refresh can fix
+    /// it — the account has to be re-linked), then Dropbox's own
+    /// `error_summary`, then the plain-text explanation a malformed request
+    /// comes back with instead of the JSON envelope.
+    private static func shareFailure(statusCode: Int, body: Data, endpoint: String) -> CloudProviderError {
+        if isMissingScope(statusCode: statusCode, body: body) {
+            dropboxLog.error("[Dropbox] \(endpoint) rejected: token lacks the required sharing scope")
+            // Signing in again is genuinely the fix here, so this is the
+            // "session over" error that drives the re-auth banner.
+            return .notAuthenticated
+        }
+        if let summary = (try? JSONDecoder().decode(DropboxShareErrorEnvelope.self, from: body))?.error_summary,
+           !summary.isEmpty {
+            return .commandFailed(summary)
+        }
+        if let text = String(data: body, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return .commandFailed(String(text.prefix(300)))
+        }
+        return mapHTTPError(statusCode: statusCode, responseBody: body)
     }
 
     private static func shareLink(

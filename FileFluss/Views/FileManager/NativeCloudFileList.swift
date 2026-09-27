@@ -37,6 +37,13 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// Called with the file to share and whether the user asked for the
     /// options sheet (password / expiry) rather than a one-click link.
     var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
+    /// Copy the link a file already has.
+    var onCopyExistingShareLink: ((CloudFileItem) -> Void)?
+    /// Withdraw a file's public link.
+    var onStopSharing: ((CloudFileItem) -> Void)?
+    /// Paths known to be shared. Paths absent from the set are either not
+    /// shared or not yet checked — both cases offer the plain "share" items.
+    var sharedPaths: Set<String> = []
     /// Import-only device (e.g. GoPro): suppress Paste / New Folder / Rename in
     /// the context menu since the camera has no write path.
     var isReadOnly: Bool = false
@@ -171,6 +178,9 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.isReadOnly = isReadOnly
         coordinator.shareCapabilities = shareCapabilities
         coordinator.onCreateShareLink = onCreateShareLink
+        coordinator.onCopyExistingShareLink = onCopyExistingShareLink
+        coordinator.onStopSharing = onStopSharing
+        coordinator.sharedPaths = sharedPaths
         coordinator.selectedIDs = _selectedIDs
 
         // Diff in a single pass — comparing via `.map(\.id) != …` three times
@@ -348,6 +358,9 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var isReadOnly = false
     var shareCapabilities: ShareLinkCapabilities = .unsupported
     var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
+    var onCopyExistingShareLink: ((CloudFileItem) -> Void)?
+    var onStopSharing: ((CloudFileItem) -> Void)?
+    var sharedPaths: Set<String> = []
     var singlePaneMode = false
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
@@ -636,13 +649,41 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
            let file = contextItems.first,
            !file.isDirectory,
            file.role == .normal {
-            let shareItem = NSMenuItem(title: L10n.text("Copy Share Link"), action: #selector(handleCopyShareLink(_:)), keyEquivalent: "")
+            let isShared = sharedPaths.contains(file.path)
+
+            // A file that is already shared gets actions for the link it
+            // has, rather than a "create" that the provider would reject.
+            let shareItem = NSMenuItem(
+                title: L10n.text("Copy Share Link"),
+                action: isShared ? #selector(handleCopyExistingShareLink(_:)) : #selector(handleCopyShareLink(_:)),
+                keyEquivalent: ""
+            )
             shareItem.target = self
             shareItem.representedObject = file
             menu.addItem(shareItem)
 
-            // Only worth a sheet when there is actually something to set.
-            if shareCapabilities.hasOptions {
+            if isShared {
+                // The state marker: a checked item reading "Shared" tells the
+                // user at a glance, without a lookup on every right-click.
+                let marker = NSMenuItem(title: L10n.text("Shared"), action: nil, keyEquivalent: "")
+                marker.state = .on
+                marker.isEnabled = false
+                menu.addItem(marker)
+
+                if shareCapabilities.canUpdate, shareCapabilities.hasOptions {
+                    let changeItem = NSMenuItem(title: L10n.text("Change Sharing…"), action: #selector(handleShareLinkWithOptions(_:)), keyEquivalent: "")
+                    changeItem.target = self
+                    changeItem.representedObject = file
+                    menu.addItem(changeItem)
+                }
+                if shareCapabilities.canRemove {
+                    let stopItem = NSMenuItem(title: L10n.text("Stop Sharing"), action: #selector(handleStopSharing(_:)), keyEquivalent: "")
+                    stopItem.target = self
+                    stopItem.representedObject = file
+                    menu.addItem(stopItem)
+                }
+            } else if shareCapabilities.hasOptions {
+                // Only worth a sheet when there is actually something to set.
                 let optionsItem = NSMenuItem(title: L10n.text("Share Link…"), action: #selector(handleShareLinkWithOptions(_:)), keyEquivalent: "")
                 optionsItem.target = self
                 optionsItem.representedObject = file
@@ -771,6 +812,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleShareLinkWithOptions(_ sender: NSMenuItem) {
         guard let item = sender.representedObject as? CloudFileItem else { return }
         onCreateShareLink?(item, true)
+    }
+
+    @objc func handleCopyExistingShareLink(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? CloudFileItem else { return }
+        onCopyExistingShareLink?(item)
+    }
+
+    @objc func handleStopSharing(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? CloudFileItem else { return }
+        onStopSharing?(item)
     }
 
     @objc func handleAddToFavorites(_ sender: NSMenuItem) {

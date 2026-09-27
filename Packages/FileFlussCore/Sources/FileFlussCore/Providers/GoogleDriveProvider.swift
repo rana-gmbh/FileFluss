@@ -117,16 +117,41 @@ public final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
 
     /// Drive's "anyone with the link" permission carries no password and no
     /// expiry — those exist only on permissions granted to a named person —
-    /// and there is no view-without-download mode either. So creation is all
-    /// we can offer; a Workspace admin can still forbid it, which surfaces as
-    /// Google's own message from `createShareLink`.
+    /// and there is no view-without-download mode either. So there is nothing
+    /// an update could change: `canUpdate` stays false. Creating, reading back
+    /// and revoking the permission all work; a Workspace admin can still
+    /// forbid sharing, which surfaces as Google's own message.
     public var shareLinkCapabilities: ShareLinkCapabilities {
-        ShareLinkCapabilities(canCreate: true)
+        ShareLinkCapabilities(
+            canCreate: true,
+            canQueryExisting: true,
+            canUpdate: false,
+            canRemove: true
+        )
     }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    /// Deliberately unimplemented. An `anyone` permission has no password, no
+    /// expiry and no download toggle, so there is no setting to edit — and
+    /// deleting plus re-creating the permission would produce the identical
+    /// URL with the identical settings. `canUpdate` is false so the app never
+    /// offers this.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        throw CloudProviderError.notImplemented
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
     }
 
     // MARK: - Token Refresh

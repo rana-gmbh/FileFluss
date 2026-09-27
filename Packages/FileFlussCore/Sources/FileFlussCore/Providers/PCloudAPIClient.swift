@@ -140,7 +140,12 @@ public actor PCloudAPIClient {
             }
         }
         do {
-            let _: PCloudStatResponse = try await request("stat", params: ["path": path])
+            // Same `timeformat` requirement as above: a decode failure here
+            // would masquerade as "the file is still there".
+            let _: PCloudStatResponse = try await request(
+                "stat",
+                params: ["path": path, "timeformat": "timestamp"]
+            )
             throw CloudProviderError.serverError(0)
         } catch CloudProviderError.notFound {
             return
@@ -266,11 +271,7 @@ public actor PCloudAPIClient {
             params["linkpassword"] = password
         }
         if let expiry = options.expiry {
-            let fmt = DateFormatter()
-            fmt.locale = Locale(identifier: "en_US_POSIX")
-            fmt.timeZone = TimeZone(secondsFromGMT: 0)
-            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-            params["expire"] = fmt.string(from: expiry)
+            params["expire"] = Self.expiryParameter(expiry)
         }
 
         let response: PCloudPubLinkResponse = try await requestSurfacingServerMessage("getfilepublink", params: params)
@@ -294,6 +295,237 @@ public actor PCloudAPIClient {
             expiresAt: options.expiry,
             hasPassword: !(options.password ?? "").isEmpty
         )
+    }
+
+    /// One entry of `listpublinks`.
+    ///
+    /// pCloud has moved these fields around between API revisions and doesn't
+    /// return the same set for file and folder links, so every identifying
+    /// value is optional and read from wherever it turns up — the link object
+    /// itself or its `metadata`.
+    private struct PCloudPublink: Decodable {
+        let linkid: UInt64?
+        let code: String?
+        let link: String?
+        let fileid: UInt64?
+        let folderid: UInt64?
+        let path: String?
+        let haspassword: Bool?
+        let expire: PCloudLinkDate?
+        let expires: PCloudLinkDate?
+        let metadata: Metadata?
+
+        struct Metadata: Decodable {
+            let fileid: UInt64?
+            let folderid: UInt64?
+            let path: String?
+            let isfolder: Bool?
+        }
+
+        var resolvedFileId: UInt64? { fileid ?? metadata?.fileid }
+        var resolvedPath: String? { path ?? metadata?.path }
+        var expiryDate: Date? { (expire ?? expires)?.date }
+    }
+
+    /// pCloud reports dates as RFC 2822 text by default and as a Unix
+    /// timestamp when the call passes `timeformat=timestamp`. Accept both, so
+    /// an endpoint that ignores the parameter doesn't fail the whole decode.
+    private enum PCloudLinkDate: Decodable {
+        case timestamp(TimeInterval)
+        case text(String)
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let seconds = try? container.decode(TimeInterval.self) {
+                self = .timestamp(seconds)
+                return
+            }
+            self = .text(try container.decode(String.self))
+        }
+
+        var date: Date? {
+            switch self {
+            case .timestamp(let seconds):
+                // 0 is pCloud's "never expires".
+                return seconds > 0 ? Date(timeIntervalSince1970: seconds) : nil
+            case .text(let raw):
+                guard !raw.isEmpty, raw != "0" else { return nil }
+                let rfc2822 = DateFormatter()
+                rfc2822.locale = Locale(identifier: "en_US_POSIX")
+                rfc2822.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+                if let date = rfc2822.date(from: raw) { return date }
+                return ISO8601DateFormatter().date(from: raw)
+            }
+        }
+    }
+
+    private struct PCloudPublinksResponse: Decodable {
+        let result: Int
+        let error: String?
+        let publinks: [PCloudPublink]?
+    }
+
+    /// Returns the public link the file already has, or nil when it has none.
+    ///
+    /// pCloud has no "is this file shared?" call, so this lists the account's
+    /// public links and looks for this file among them. An empty match is the
+    /// "not shared" answer; a non-zero `result` (expired token, rate limit) is
+    /// a real error and propagates with pCloud's own wording.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let publink = try await findPublink(at: path) else { return nil }
+        return try await shareLink(from: publink, requestedPassword: nil)
+    }
+
+    /// Rewrites an existing link's password and expiry via `changepublink`.
+    /// The link (and its `code`) survives, so the URL the recipient has keeps
+    /// working.
+    ///
+    /// `deletepassword` / `deleteexpire` are what pCloud wants for *clearing*
+    /// a setting — omitting `linkpassword` simply leaves the old password in
+    /// place, so an options object asking for none has to say so explicitly.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let existing = try await findPublink(at: path), let linkId = existing.linkid else {
+            throw CloudProviderError.commandFailed(L10n.text("This file doesn't have a public link."))
+        }
+
+        var params: [String: String] = ["linkid": String(linkId)]
+        if let password = options.password, !password.isEmpty {
+            params["linkpassword"] = password
+        } else {
+            params["deletepassword"] = "1"
+        }
+        if let expiry = options.expiry {
+            params["expire"] = Self.expiryParameter(expiry)
+        } else {
+            params["deleteexpire"] = "1"
+        }
+
+        // Premium-only settings fail here exactly as they do on create, with
+        // pCloud's own explanation.
+        let _: PCloudBasicResponse = try await requestSurfacingServerMessage("changepublink", params: params)
+
+        // `changepublink` answers with the bare result envelope, so read the
+        // link back rather than assuming pCloud applied what we asked for.
+        if let updated = try await findPublink(at: path) {
+            return try await shareLink(from: updated, requestedPassword: options.password)
+        }
+        return try await shareLink(from: existing, requestedPassword: options.password)
+    }
+
+    /// Withdraws the link with `deletepublink`.
+    public func removeShareLink(at path: String) async throws {
+        guard let linkId = try await findPublink(at: path)?.linkid else {
+            throw CloudProviderError.commandFailed(L10n.text("This file doesn't have a public link."))
+        }
+        let _: PCloudBasicResponse = try await requestSurfacingServerMessage(
+            "deletepublink",
+            params: ["linkid": String(linkId)]
+        )
+    }
+
+    /// Finds `path` among the account's public links.
+    ///
+    /// Matching on `fileid` is exact, so that comes first: pCloud echoes the
+    /// stored path inconsistently (and omits it entirely for some links), and
+    /// a path match would also confuse two files whose links were made before
+    /// a rename. The path comparison stays as a fallback for links that carry
+    /// no id. A `stat` that fails (file gone) leaves only that fallback.
+    private func findPublink(at path: String) async throws -> PCloudPublink? {
+        var fileId: UInt64?
+        do {
+            fileId = try await self.fileId(at: path)
+        } catch {
+            SupportLogger.shared.log(
+                "pCloud: couldn't resolve a file id for \(path) — \(error.localizedDescription)",
+                category: "sharing",
+                level: .error
+            )
+        }
+        let response: PCloudPublinksResponse = try await requestSurfacingServerMessage(
+            "listpublinks",
+            params: ["timeformat": "timestamp"]
+        )
+        let links = response.publinks ?? []
+
+        if let fileId, let hit = links.first(where: { $0.resolvedFileId == fileId }) {
+            return hit
+        }
+        if let hit = links.first(where: { $0.resolvedPath == path }) {
+            return hit
+        }
+        // pCloud reports a link's path inconsistently (with or without the
+        // leading slash, sometimes only the file name via metadata), so fall
+        // back to comparing the last component before giving up.
+        let fileName = (path as NSString).lastPathComponent
+        if !fileName.isEmpty,
+           let hit = links.first(where: { link in
+               guard let candidate = link.resolvedPath else { return false }
+               return (candidate as NSString).lastPathComponent == fileName
+           }) {
+            return hit
+        }
+
+        // Nothing matched: record what came back, because "this file has no
+        // public link" is indistinguishable from "the matching failed"
+        // without seeing the payload.
+        SupportLogger.shared.log(
+            "pCloud listpublinks: no match for \(path) (fileid \(fileId.map(String.init) ?? "unknown")) among \(links.count) link(s): "
+                + links.map { "[id=\($0.linkid.map(String.init) ?? "?") fileid=\($0.resolvedFileId.map(String.init) ?? "?") path=\($0.resolvedPath ?? "?")]" }
+                    .joined(separator: " "),
+            category: "sharing",
+            level: .error
+        )
+        return nil
+    }
+
+    private func fileId(at path: String) async throws -> UInt64? {
+        // `timeformat=timestamp` is required, not decoration: without it
+        // pCloud returns RFC 2822 date *strings* where the metadata model
+        // expects numbers, the decode fails, and the caller silently ends up
+        // with no file id — which is exactly how "stop sharing" came to
+        // claim a shared file had no link.
+        let response: PCloudStatResponse = try await request(
+            "stat",
+            params: ["path": path, "timeformat": "timestamp"]
+        )
+        return response.metadata.fileid
+    }
+
+    /// Maps a `listpublinks` entry onto our own type, resolving the CDN URL
+    /// the same best-effort way `createShareLink` does.
+    private func shareLink(from publink: PCloudPublink, requestedPassword: String?) async throws -> CloudShareLink {
+        let landingURL: URL
+        if let raw = publink.link, let url = URL(string: raw) {
+            landingURL = url
+        } else if let code = publink.code,
+                  let url = URL(string: "https://my.pcloud.com/publink/show?code=\(code)") {
+            // `listpublinks` doesn't always echo the full link; the landing
+            // page is the documented `code` form.
+            landingURL = url
+        } else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var direct: URL?
+        if let code = publink.code {
+            direct = try? await publicLinkDownloadURL(code: code)
+        }
+
+        return CloudShareLink(
+            url: landingURL,
+            directDownloadURL: direct,
+            expiresAt: publink.expiryDate,
+            hasPassword: publink.haspassword ?? !(requestedPassword ?? "").isEmpty
+        )
+    }
+
+    /// pCloud's `expire` parameter: UTC, seconds precision.
+    private static func expiryParameter(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        return fmt.string(from: date)
     }
 
     /// Resolves a public-link `code` to the CDN URL serving the file bytes —

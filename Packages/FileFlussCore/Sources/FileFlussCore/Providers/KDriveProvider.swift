@@ -210,15 +210,34 @@ public final class KDriveProvider: CloudProvider, @unchecked Sendable {
     public var shareLinkCapabilities: ShareLinkCapabilities {
         ShareLinkCapabilities(
             canCreate: true,
+            canQueryExisting: true,
+            canUpdate: true,
+            canRemove: true,
             supportsPassword: true,
             supportsExpiry: true,
-            supportsDownloadToggle: true
+            supportsDownloadToggle: true,
+            expiryRequiresPaidPlan: true
         )
     }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.updateShareLink(at: path, options: options)
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
     }
 
     // MARK: - Private

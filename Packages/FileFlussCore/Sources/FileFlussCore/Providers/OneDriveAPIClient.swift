@@ -569,13 +569,35 @@ public actor OneDriveAPIClient {
             let type: String?
             let scope: String?
         }
+        /// Opaque permission id — the handle `DELETE .../permissions/{id}`
+        /// needs. Present on every permission Graph returns.
+        let id: String?
         let link: SharingLink?
         let hasPassword: Bool?
         let expirationDateTime: String?
     }
 
+    /// `GET .../permissions` envelope. An item nobody shared comes back 200
+    /// with an empty `value` array.
+    private struct GraphPermissionList: Decodable {
+        let value: [GraphPermission]
+    }
+
     /// Creates an anonymous view link via `createLink` on the drive item.
     ///
+    /// Resolves a remote path to its drive-item id.
+    ///
+    /// The sharing endpoints are addressed by *id*, not by path. Microsoft
+    /// documents `/me/drive/items/{id}/createLink`, and the path-addressed
+    /// form answers `accessDenied` on personal accounts even though reading
+    /// and writing the same item by path work fine — which is exactly the
+    /// failure this fixes.
+    private func itemId(at path: String) async throws -> String {
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        let item: GraphDriveItem = try await graphRequest(.get, path: "/me/drive/root:\(encodedPath):")
+        return item.id
+    }
+
     /// The item is addressed by path (`/me/drive/root:{path}:`) like every
     /// other call in this client, so there's no id round trip.
     ///
@@ -585,15 +607,16 @@ public actor OneDriveAPIClient {
     /// subscription. Both come back as a Graph error whose `message` we
     /// pass through verbatim.
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
-        let endpoint = "/me/drive/root:\(encodedPath):/createLink"
+        let endpoint = "/me/drive/items/\(try await itemId(at: path))/createLink"
         guard let url = URL(string: "\(graphURL)\(endpoint)") else {
             throw CloudProviderError.invalidResponse
         }
 
         struct CreateLinkBody: Encodable {
             let type: String
-            let scope: String
+            /// Omitted on the retry below, which lets the account apply its
+            /// own default link type.
+            let scope: String?
             let password: String?
             let expirationDateTime: String?
         }
@@ -613,45 +636,200 @@ public actor OneDriveAPIClient {
         let body = CreateLinkBody(type: "view", scope: "anonymous", password: password, expirationDateTime: expiration)
         let encodedBody = try JSONEncoder().encode(body)
 
-        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+        // The body is passed in rather than captured: Swift 6 rejects
+        // sending a mutable capture across the actor boundary.
+        func send(forceRefreshFirst: Bool, payload: Data) async throws -> (Data, HTTPURLResponse) {
             let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = encodedBody
+            request.httpBody = payload
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
             return (data, http)
         }
 
-        var (data, http) = try await send(forceRefreshFirst: false)
+        var (data, http) = try await send(forceRefreshFirst: false, payload: encodedBody)
         if http.statusCode == 401 {
             oneDriveLog.info("[OneDrive] POST createLink → 401, force-refreshing and retrying once")
-            (data, http) = try await send(forceRefreshFirst: true)
+            (data, http) = try await send(forceRefreshFirst: true, payload: encodedBody)
         }
+        // Deliberately NO retry without `scope` here. Letting the account
+        // pick its default turns a refused public link into a sign-in-only
+        // link that looks identical in the UI — the user copies it, sends
+        // it, and the recipient hits a Microsoft login. Failing with the
+        // account's real objection is the honest outcome; "share with
+        // specific people" is a different feature, not a silent substitute.
         // 201 for a newly minted link, 200 when an equivalent link this app
         // created already existed — both hand back the same Permission.
         guard http.statusCode == 200 || http.statusCode == 201 else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             oneDriveLog.error("[OneDrive] createLink → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
-            if let message = Self.parseGraphErrorMessage(from: data), !message.isEmpty {
-                throw CloudProviderError.commandFailed(message)
-            }
-            throw Self.mapHTTPError(statusCode: http.statusCode)
+            Self.logShareFailure(endpoint: endpoint, statusCode: http.statusCode, data: data)
+            throw Self.shareHTTPError(statusCode: http.statusCode, data: data)
         }
 
         let permission = try JSONDecoder().decode(GraphPermission.self, from: data)
-        guard let raw = permission.link?.webUrl, let shareURL = URL(string: raw) else {
+        SupportLogger.shared.log(
+            "OneDrive createLink granted type=\(permission.link?.type ?? "?") scope=\(permission.link?.scope ?? "?")",
+            category: "sharing"
+        )
+        guard let link = Self.shareLink(from: permission, requestedPassword: password != nil) else {
             throw CloudProviderError.invalidResponse
         }
+        return link
+    }
+
+    /// Reads back the sharing link the item already has.
+    ///
+    /// Graph answers 200 with `{"value": []}` for an item that isn't shared —
+    /// that empty collection is the "not shared" signal, and nil is returned.
+    /// A 404 (item deleted) or 403 (no permission to read the collection)
+    /// stays an error.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        do {
+            guard let permission = try await sharingPermission(at: path) else { return nil }
+            return Self.shareLink(from: permission, requestedPassword: false)
+        } catch {
+            // Personal accounts refuse to list an item's permissions
+            // ("accessDenied") even when creating a link on the same item
+            // works. Treat that as "can't tell" rather than an error: the
+            // caller then offers to create a link, which succeeds, instead
+            // of showing a failure for a lookup the user never asked for.
+            if Self.isAccessDenied(error) {
+                SupportLogger.shared.log(
+                    "OneDrive won't list permissions for this item — treating it as not shared",
+                    category: "sharing"
+                )
+                return nil
+            }
+            throw Self.shareError(error)
+        }
+    }
+
+    /// True for Graph's "you may not do this" refusals, whatever wording
+    /// they arrive in.
+    static func isAccessDenied(_ error: Error) -> Bool {
+        if case CloudProviderError.unauthorized = error { return true }
+        if case CloudProviderError.commandFailed(let message) = error {
+            let text = message.lowercased()
+            return text.contains("accessdenied") || text.contains("access denied")
+        }
+        return false
+    }
+
+    /// Changes an existing link's settings.
+    ///
+    /// Graph has no "edit this link" call: `createLink` with different
+    /// settings hands the *existing* permission straight back instead of
+    /// applying them. So the only way to change a password or an expiry is to
+    /// revoke the permission and mint a new one — which changes the URL, and
+    /// the returned link says so.
+    ///
+    /// The revoke happens first, so a failure in the create step leaves the
+    /// item unshared rather than half-updated; the thrown error is Graph's own
+    /// message, and the user can share again from scratch.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let existing: GraphPermission?
+        do {
+            existing = try await sharingPermission(at: path)
+            if let permissionId = existing?.id {
+                try await deleteSharingPermission(at: path, permissionId: permissionId)
+            }
+        } catch {
+            if Self.isAccessDenied(error) {
+                throw CloudProviderError.commandFailed(L10n.text("This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it."))
+            }
+            throw Self.shareError(error)
+        }
+        let fresh = try await createShareLink(at: path, options: options)
+        // Nothing was revoked, so nothing changed under the recipient's feet.
+        guard existing != nil else { return fresh }
+
+        let urlChanged = L10n.text("OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.")
+        return CloudShareLink(
+            url: fresh.url,
+            directDownloadURL: fresh.directDownloadURL,
+            expiresAt: fresh.expiresAt,
+            hasPassword: fresh.hasPassword,
+            note: [fresh.note, urlChanged].compactMap { $0 }.joined(separator: " ")
+        )
+    }
+
+    /// Withdraws the link by deleting its permission.
+    public func removeShareLink(at path: String) async throws {
+        let permission: GraphPermission?
+        do {
+            permission = try await sharingPermission(at: path)
+        } catch {
+            // Withdrawing needs the permission's id, and the id can only
+            // come from the listing this account refuses. Say what the user
+            // can actually do about it instead of repeating "access denied".
+            if Self.isAccessDenied(error) {
+                throw CloudProviderError.commandFailed(L10n.text("This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there."))
+            }
+            throw Self.shareError(error)
+        }
+        guard let permissionId = permission?.id else {
+            throw CloudProviderError.commandFailed(L10n.text("This item doesn't have a public link."))
+        }
+        do {
+            try await deleteSharingPermission(at: path, permissionId: permissionId)
+        } catch {
+            if Self.isAccessDenied(error) {
+                throw CloudProviderError.commandFailed(L10n.text("This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there."))
+            }
+            throw Self.shareError(error)
+        }
+    }
+
+    /// The item's anonymous ("anyone with the link") permission, or nil when
+    /// it has none.
+    ///
+    /// Falls back to any permission that carries a `link`, so a link a tenant
+    /// policy narrowed to `organization` is still found — the user can see and
+    /// withdraw it rather than being told the item isn't shared. Permissions
+    /// granted to named people have no `link` and are never touched.
+    private func sharingPermission(at path: String) async throws -> GraphPermission? {
+        let list: GraphPermissionList = try await graphRequest(
+            .get,
+            path: "/me/drive/items/\(try await itemId(at: path))/permissions"
+        )
+        let linkPermissions = list.value.filter { $0.link != nil }
+        return linkPermissions.first { $0.link?.scope?.lowercased() == "anonymous" } ?? linkPermissions.first
+    }
+
+    private func deleteSharingPermission(at path: String, permissionId: String) async throws {
+        let encodedId = permissionId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? permissionId
+        try await graphRequestVoid(.delete, path: "/me/drive/items/\(try await itemId(at: path))/permissions/\(encodedId)")
+    }
+
+    /// Maps a Graph Permission onto our own type. Nil when it carries no
+    /// usable link URL, which callers treat as an invalid response.
+    private static func shareLink(
+        from permission: GraphPermission,
+        requestedPassword: Bool
+    ) -> CloudShareLink? {
+        guard let raw = permission.link?.webUrl, let shareURL = URL(string: raw) else { return nil }
 
         // A tenant that only allows internal sharing normally rejects the
         // request outright, but if it instead hands back a narrower scope
         // the link isn't public and the user needs to know.
         var note: String?
-        if let scope = permission.link?.scope?.lowercased(), scope != "anonymous" {
-            note = L10n.text("Your organization restricted this link to signed-in people — it is not publicly accessible.")
+        let scope = permission.link?.scope?.lowercased()
+        let isPublic = (scope == nil) || scope == "anonymous"
+        if !isPublic {
+            // Name the type Microsoft actually granted: "users" means only
+            // named people, "organization" means signed-in colleagues. Both
+            // show the recipient a sign-in page.
+            let granted = [permission.link?.type, permission.link?.scope]
+                .compactMap { $0 }
+                .joined(separator: "/")
+            note = L10n.format(
+                "This link is not public: OneDrive granted it as \"%@\", so opening it asks for a Microsoft sign-in.",
+                granted.isEmpty ? "restricted" : granted
+            )
         }
 
         return CloudShareLink(
@@ -659,8 +837,9 @@ public actor OneDriveAPIClient {
             // Graph exposes no public direct-download URL for an anonymous
             // link; `/content` needs an access token.
             directDownloadURL: nil,
-            expiresAt: Self.parseGraphDate(permission.expirationDateTime),
-            hasPassword: permission.hasPassword ?? (password != nil),
+            expiresAt: parseGraphDate(permission.expirationDateTime),
+            hasPassword: permission.hasPassword ?? requestedPassword,
+            isPublic: isPublic,
             note: note
         )
     }
@@ -762,6 +941,12 @@ public actor OneDriveAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             oneDriveLog.error("[OneDrive] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if path.contains("/permissions") || path.contains("/createLink") {
+                Self.logShareFailure(endpoint: "\(method.rawValue) \(path)", statusCode: http.statusCode, data: data)
+            }
+            if let message = Self.parseGraphErrorMessage(from: data), !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
@@ -793,6 +978,12 @@ public actor OneDriveAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             oneDriveLog.error("[OneDrive] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if path.contains("/permissions") || path.contains("/createLink") {
+                Self.logShareFailure(endpoint: "\(method.rawValue) \(path)", statusCode: http.statusCode, data: data)
+            }
+            if let message = Self.parseGraphErrorMessage(from: data), !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
     }
@@ -801,6 +992,39 @@ public actor OneDriveAPIClient {
     /// The message is the only place the real cause shows up (tenant sharing
     /// policy, plan requirements), so callers that can surface it should.
     private static func parseGraphErrorMessage(from data: Data?) -> String? {
+        // "Access denied" on its own is unactionable; Graph's `code` and
+        // innerError say which rule was hit.
+        struct DetailedGraphError: Decodable {
+            struct Inner: Decodable {
+                let code: String?
+                let message: String?
+            }
+            struct Payload: Decodable {
+                let code: String?
+                let message: String?
+                let innerError: Inner?
+            }
+            let error: Payload
+        }
+        if let data,
+           let detailed = try? JSONDecoder().decode(DetailedGraphError.self, from: data) {
+            var parts: [String] = []
+            if let message = detailed.error.message, !message.isEmpty { parts.append(message) }
+            let codes = [detailed.error.code, detailed.error.innerError?.code]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+            if !codes.isEmpty { parts.append("(\(codes.joined(separator: " / ")))") }
+            if let innerMessage = detailed.error.innerError?.message,
+               !innerMessage.isEmpty,
+               innerMessage != detailed.error.message {
+                parts.append(innerMessage)
+            }
+            if !parts.isEmpty { return parts.joined(separator: " ") }
+        }
+        return legacyGraphErrorMessage(from: data)
+    }
+
+    private static func legacyGraphErrorMessage(from data: Data?) -> String? {
         guard let data else { return nil }
         struct GraphError: Decodable {
             struct Detail: Decodable {
@@ -812,6 +1036,46 @@ public actor OneDriveAPIClient {
         guard let parsed = try? JSONDecoder().decode(GraphError.self, from: data) else { return nil }
         if let message = parsed.error?.message, !message.isEmpty { return message }
         return parsed.error?.code
+    }
+
+    /// Error mapping for the sharing calls. Graph answers "you may not
+    /// create this link" with 403, which the generic mapping turns into
+    /// `.unauthorized` — i.e. "sign in again", which is both wrong and
+    /// useless when reading and downloading plainly still work. Anonymous
+    /// links are commonly switched off by an administrator, and some
+    /// business tenants only allow links for people inside the organisation.
+    /// Records a rejected sharing call in the support log: endpoint, status
+    /// and Graph's whole response. "Access denied" alone doesn't say whether
+    /// the account, the item or the request is at fault.
+    static func logShareFailure(endpoint: String, statusCode: Int, data: Data?) {
+        let body = data.flatMap { String(data: $0.prefix(1500), encoding: .utf8) } ?? "<no body>"
+        SupportLogger.shared.log(
+            "OneDrive sharing refused — \(endpoint) → HTTP \(statusCode): \(body)",
+            category: "sharing",
+            level: .error
+        )
+    }
+
+    static func shareHTTPError(statusCode: Int, data: Data?) -> CloudProviderError {
+        if let message = parseGraphErrorMessage(from: data), !message.isEmpty {
+            return .commandFailed(message)
+        }
+        switch statusCode {
+        case 401: return .notAuthenticated
+        case 403:
+            return .commandFailed(L10n.text("OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation."))
+        default: return mapHTTPError(statusCode: statusCode)
+        }
+    }
+
+    /// Re-maps an error thrown by the generic helpers for a sharing call.
+    static func shareError(_ error: Error) -> Error {
+        switch error {
+        case CloudProviderError.unauthorized:
+            return shareHTTPError(statusCode: 403, data: nil)
+        default:
+            return error
+        }
     }
 
     private static func mapHTTPError(statusCode: Int) -> CloudProviderError {

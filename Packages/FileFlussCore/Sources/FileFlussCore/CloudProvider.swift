@@ -81,6 +81,18 @@ public protocol CloudProvider: Sendable {
     /// or expiry needs a paid plan) are only explicable server-side.
     func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink
 
+    /// Returns the public link this file already has, or nil when it isn't
+    /// shared. Only meaningful when `shareLinkCapabilities.canQueryExisting`;
+    /// the default throws `.notImplemented`.
+    func existingShareLink(at path: String) async throws -> CloudShareLink?
+
+    /// Changes an existing link's settings (password, expiry, download
+    /// permission) in place, keeping the same URL where the provider allows.
+    func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink
+
+    /// Withdraws the public link, making the file private again.
+    func removeShareLink(at path: String) async throws
+
     /// Account-wide storage usage. Returning nil means the provider has no
     /// quota API or hasn't been wired to surface one — the status bar then
     /// renders no quota line for that account. The default implementation
@@ -129,6 +141,18 @@ extension CloudProvider {
     public var shareLinkCapabilities: ShareLinkCapabilities { .unsupported }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        throw CloudProviderError.notImplemented
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        throw CloudProviderError.notImplemented
+    }
+
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        throw CloudProviderError.notImplemented
+    }
+
+    public func removeShareLink(at path: String) async throws {
         throw CloudProviderError.notImplemented
     }
 }

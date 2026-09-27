@@ -450,26 +450,10 @@ public actor SynologyDriveAPIClient {
             extra.append(URLQueryItem(name: "password", value: password))
         }
         if let expiry = options.expiry {
-            let fmt = DateFormatter()
-            fmt.locale = Locale(identifier: "en_US_POSIX")
-            fmt.timeZone = TimeZone(secondsFromGMT: 0)
-            fmt.dateFormat = "yyyy-MM-dd"
-            extra.append(URLQueryItem(name: "date_expired", value: Self.jsonQuoted(fmt.string(from: expiry))))
+            extra.append(URLQueryItem(name: "date_expired", value: Self.jsonQuoted(Self.expiryDateString(expiry))))
         }
 
-        let result: SynologySharingLinksData
-        do {
-            result = try await call(
-                api: "SYNO.FileStation.Sharing",
-                version: "3",
-                method: "create",
-                extra: extra
-            )
-        } catch CloudProviderError.serverError(let code) {
-            // `mapAPIError` only knows the generic DSM codes; the 2000-range
-            // ones are specific to sharing.
-            throw Self.mapSharingError(code: code)
-        }
+        let result: SynologySharingLinksData = try await sharingCall(method: "create", extra: extra)
 
         guard let link = result.links.first else { throw CloudProviderError.invalidResponse }
         if let code = link.error, code != 0 {
@@ -487,8 +471,188 @@ public actor SynologyDriveAPIClient {
             // DSM doesn't echo the effective expiry back on create.
             expiresAt: options.expiry,
             hasPassword: !(options.password ?? "").isEmpty,
-            note: "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it."
+            note: Self.lanAddressNote
         )
+    }
+
+    /// Payload of `SYNO.FileStation.Sharing` `list` and `getinfo`: the links
+    /// the logged-in user owns, with the settings DSM currently holds for
+    /// each. Field coverage varies across DSM 6/7, so everything but the
+    /// array itself is optional.
+    private struct SynologySharingListData: Decodable {
+        let links: [Entry]
+        let total: Int?
+
+        struct Entry: Decodable {
+            let id: String?
+            let url: String?
+            /// The shared path, in File Station's own form (`/volume1/…` or
+            /// `/share/…` depending on how the link was made).
+            let path: String?
+            /// "0" (or absent) when the link never expires, otherwise
+            /// "yyyy-MM-dd", which DSM 7 may extend with a time.
+            let date_expired: String?
+            let has_password: Bool?
+            /// Remaining download allowance; 0 means unlimited.
+            let expire_times: Int?
+        }
+    }
+
+    /// Returns the File Station link this path already has, or nil when it has
+    /// none.
+    ///
+    /// DSM has no per-path lookup, so this pages through the links the account
+    /// owns and matches on `path`. Not finding the path is the "not shared"
+    /// answer; a DSM error code (session expired, insufficient privilege,
+    /// sharing subsystem unreachable) is a real error and propagates.
+    ///
+    /// Only links this account owns are visible, so a link another DSM user
+    /// made for the same file reads as "not shared" here.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let entry = try await findSharingLink(at: path) else { return nil }
+        guard let link = Self.shareLink(from: entry, requestedPassword: nil, requestedExpiry: nil) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return link
+    }
+
+    /// Rewrites an existing link's password and expiry with `edit`. The link
+    /// id — and therefore the URL recipients already have — is preserved.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let existing = try await findSharingLink(at: path), let id = existing.id else {
+            throw CloudProviderError.commandFailed(L10n.text("This item doesn't have a public link."))
+        }
+
+        // File Station clears a password with an empty string and lifts an
+        // expiry with the literal "0" — leaving either parameter out keeps the
+        // setting that's already there, so "no password" and "no expiry" have
+        // to be stated explicitly.
+        let password = (options.password?.isEmpty == false) ? options.password! : ""
+        let extra: [URLQueryItem] = [
+            URLQueryItem(name: "id", value: Self.jsonQuoted(id)),
+            URLQueryItem(name: "password", value: password),
+            URLQueryItem(
+                name: "date_expired",
+                value: Self.jsonQuoted(options.expiry.map(Self.expiryDateString) ?? "0")
+            ),
+            // The download-count limit. 0 is unlimited; set it every time so
+            // an edit doesn't leave a previously counted-down link in place.
+            URLQueryItem(name: "expire_times", value: "0"),
+        ]
+
+        let _: SynologyEmptyData = try await sharingCall(method: "edit", extra: extra)
+
+        // `edit` answers with an empty payload, so read the link back instead
+        // of assuming DSM applied what we asked for.
+        let effective = (try? await sharingLink(id: id)) ?? nil
+        guard let link = Self.shareLink(
+            from: effective ?? existing,
+            requestedPassword: options.password,
+            requestedExpiry: options.expiry
+        ) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return link
+    }
+
+    /// Withdraws the link with `delete`. DSM answers success for an id it no
+    /// longer knows, so this only fails when the path has no link at all.
+    public func removeShareLink(at path: String) async throws {
+        guard let id = try await findSharingLink(at: path)?.id else {
+            throw CloudProviderError.commandFailed(L10n.text("This item doesn't have a public link."))
+        }
+        let _: SynologyEmptyData = try await sharingCall(
+            method: "delete",
+            extra: [URLQueryItem(name: "id", value: Self.jsonQuoted(id))]
+        )
+    }
+
+    /// Pages through the account's links looking for `path`. The page cap is a
+    /// guard against a DSM build that ignores `offset` and keeps answering
+    /// with the same first page.
+    private func findSharingLink(at path: String) async throws -> SynologySharingListData.Entry? {
+        let pageSize = 200
+        var offset = 0
+        for _ in 0..<50 {
+            let page: SynologySharingListData = try await sharingCall(
+                method: "list",
+                extra: [
+                    URLQueryItem(name: "offset", value: String(offset)),
+                    URLQueryItem(name: "limit", value: String(pageSize)),
+                ]
+            )
+            if let hit = page.links.first(where: { $0.path == path }) { return hit }
+            if page.links.count < pageSize { return nil }
+            offset += page.links.count
+            if let total = page.total, offset >= total { return nil }
+        }
+        return nil
+    }
+
+    /// `getinfo` for one known link id.
+    private func sharingLink(id: String) async throws -> SynologySharingListData.Entry? {
+        let info: SynologySharingListData = try await sharingCall(
+            method: "getinfo",
+            extra: [URLQueryItem(name: "id", value: Self.jsonQuoted(id))]
+        )
+        return info.links.first
+    }
+
+    /// Every `SYNO.FileStation.Sharing` call, with the sharing-specific error
+    /// codes mapped. `mapAPIError` only knows the generic DSM ones; the
+    /// 2000-range codes belong to sharing.
+    private func sharingCall<T: Decodable>(method: String, extra: [URLQueryItem]) async throws -> T {
+        do {
+            return try await call(
+                api: "SYNO.FileStation.Sharing",
+                version: "3",
+                method: method,
+                extra: extra
+            )
+        } catch CloudProviderError.serverError(let code) {
+            throw Self.mapSharingError(code: code)
+        }
+    }
+
+    private static func shareLink(
+        from entry: SynologySharingListData.Entry,
+        requestedPassword: String?,
+        requestedExpiry: Date?
+    ) -> CloudShareLink? {
+        guard let raw = entry.url, let url = URL(string: raw) else { return nil }
+        return CloudShareLink(
+            url: url,
+            directDownloadURL: nil,
+            expiresAt: parseExpiryDate(entry.date_expired) ?? requestedExpiry,
+            hasPassword: entry.has_password ?? !(requestedPassword ?? "").isEmpty,
+            note: lanAddressNote
+        )
+    }
+
+    /// DSM builds the link from whatever address it believes it has, which is
+    /// frequently a LAN address or an unreachable DDNS name.
+    private static let lanAddressNote = "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it."
+
+    /// `date_expired` as File Station wants it: a UTC calendar day.
+    private static func expiryDateString(_ date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: date)
+    }
+
+    /// Reads `date_expired` back. "0" and "" both mean "never expires".
+    private static func parseExpiryDate(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty, raw != "0" else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(secondsFromGMT: 0)
+        for format in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
+            fmt.dateFormat = format
+            if let date = fmt.date(from: raw) { return date }
+        }
+        return nil
     }
 
     private static func mapSharingError(code: Int) -> CloudProviderError {

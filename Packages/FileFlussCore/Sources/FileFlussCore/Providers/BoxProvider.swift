@@ -143,7 +143,9 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Share links
 
-    /// Box supports the full set on `PUT /files/{id}`. These are only the
+    /// Box supports the full set on `PUT /files/{id}` — including reading the
+    /// current link back, editing it in place (the PUT is an upsert) and
+    /// withdrawing it by nulling the field. These are only the
     /// API's *capabilities*: password and expiry need a paid plan, and an
     /// enterprise admin can restrict or disable public links — in which
     /// case creation either fails with Box's own message or comes back
@@ -151,15 +153,35 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
     public var shareLinkCapabilities: ShareLinkCapabilities {
         ShareLinkCapabilities(
             canCreate: true,
+            canQueryExisting: true,
+            canUpdate: true,
+            canRemove: true,
             supportsPassword: true,
             supportsExpiry: true,
-            supportsDownloadToggle: true
+            supportsDownloadToggle: true,
+            passwordRequiresPaidPlan: true,
+            expiryRequiresPaidPlan: true
         )
     }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.updateShareLink(at: path, options: options)
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
     }
 
     // MARK: - Token refresh

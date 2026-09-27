@@ -37,6 +37,12 @@ public struct CloudShareLink: Sendable, Equatable {
     public let expiresAt: Date?
     /// Whether the created link actually ended up password-protected.
     public let hasPassword: Bool
+    /// False when the link does NOT work for just anyone — e.g. OneDrive
+    /// tenants that forbid anonymous links hand back an organisation-only
+    /// link, and Box admins can downgrade a link to collaborators. The user
+    /// has to be told: a link that silently needs a sign-in looks identical
+    /// to a public one until the recipient hits a login page.
+    public let isPublic: Bool
     /// Optional note worth surfacing to the user — e.g. when the server
     /// granted less than we asked for.
     public let note: String?
@@ -46,12 +52,14 @@ public struct CloudShareLink: Sendable, Equatable {
         directDownloadURL: URL? = nil,
         expiresAt: Date? = nil,
         hasPassword: Bool = false,
+        isPublic: Bool = true,
         note: String? = nil
     ) {
         self.url = url
         self.directDownloadURL = directDownloadURL
         self.expiresAt = expiresAt
         self.hasPassword = hasPassword
+        self.isPublic = isPublic
         self.note = note
     }
 
@@ -72,9 +80,22 @@ public struct CloudShareLink: Sendable, Equatable {
 /// surface the server's own message rather than a generic one.
 public struct ShareLinkCapabilities: Sendable, Equatable {
     public let canCreate: Bool
+    /// The provider can be asked whether a file already has a public link.
+    /// Without this the app can only know about links it made itself.
+    public let canQueryExisting: Bool
+    /// An existing link's password/expiry can be changed in place.
+    public let canUpdate: Bool
+    /// Sharing can be withdrawn again.
+    public let canRemove: Bool
     public let supportsPassword: Bool
     public let supportsExpiry: Bool
     public let supportsDownloadToggle: Bool
+    /// These options exist in the provider's API but are billed features,
+    /// so an account on a free plan gets the request rejected outright
+    /// rather than the option being ignored. The UI says so up front
+    /// instead of letting the user discover it through an error.
+    public let passwordRequiresPaidPlan: Bool
+    public let expiryRequiresPaidPlan: Bool
     /// True when the provider *requires* an expiry date (S3 presigned
     /// URLs, which are signed for a fixed window).
     public let requiresExpiry: Bool
@@ -84,16 +105,26 @@ public struct ShareLinkCapabilities: Sendable, Equatable {
 
     public init(
         canCreate: Bool,
+        canQueryExisting: Bool = false,
+        canUpdate: Bool = false,
+        canRemove: Bool = false,
         supportsPassword: Bool = false,
         supportsExpiry: Bool = false,
         supportsDownloadToggle: Bool = false,
+        passwordRequiresPaidPlan: Bool = false,
+        expiryRequiresPaidPlan: Bool = false,
         requiresExpiry: Bool = false,
         maximumExpiry: TimeInterval? = nil
     ) {
         self.canCreate = canCreate
+        self.canQueryExisting = canQueryExisting
+        self.canUpdate = canUpdate
+        self.canRemove = canRemove
         self.supportsPassword = supportsPassword
         self.supportsExpiry = supportsExpiry
         self.supportsDownloadToggle = supportsDownloadToggle
+        self.passwordRequiresPaidPlan = passwordRequiresPaidPlan
+        self.expiryRequiresPaidPlan = expiryRequiresPaidPlan
         self.requiresExpiry = requiresExpiry
         self.maximumExpiry = maximumExpiry
     }

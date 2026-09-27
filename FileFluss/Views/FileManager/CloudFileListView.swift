@@ -32,6 +32,9 @@ struct CloudFileListView: View {
     /// after a link was copied.
     @State private var shareLinkItem: CloudFileItem?
     @State private var shareLinkResult: CloudShareLink?
+    /// File awaiting confirmation for "Stop Sharing" — withdrawing a link
+    /// breaks it for everyone who already has it, so it gets a prompt.
+    @State private var stopSharingItem: CloudFileItem?
     @State private var showMountError = false
 
     struct PendingUpload {
@@ -204,10 +207,56 @@ struct CloudFileListView: View {
             ShareLinkSheet(
                 fileName: item.name,
                 capabilities: vm.shareCapabilities,
+                existingLink: vm.shareStates[item.path] ?? nil,
+                providerName: appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "",
+                rejectedPassword: vm.rejectedPassword,
+                rejectedExpiry: vm.rejectedExpiry,
+                linksAreNotPublic: vm.linksAreNotPublic,
                 onCreate: { options in
-                    createShareLink(for: item, options: options)
+                    applyShareOptions(for: item, options: options)
                 }
             )
+        }
+        .confirmationDialog(
+            L10n.text("Stop sharing this file?"),
+            isPresented: Binding(
+                get: { stopSharingItem != nil },
+                set: { if !$0 { stopSharingItem = nil } }
+            ),
+            presenting: stopSharingItem
+        ) { item in
+            Button(L10n.text("Stop Sharing"), role: .destructive) {
+                let target = item
+                stopSharingItem = nil
+                Task { await vm.stopSharing(target) }
+            }
+            Button(L10n.text("Cancel"), role: .cancel) { stopSharingItem = nil }
+        } message: { item in
+            Text(L10n.format("The link to \"%@\" stops working for everyone who has it. This can't be undone.", item.name))
+        }
+        .alert(
+            L10n.text("Sharing failed"),
+            isPresented: Binding(
+                get: { vm.shareError != nil },
+                set: { if !$0 { vm.shareError = nil } }
+            )
+        ) {
+            Button(L10n.text("OK"), role: .cancel) { vm.shareError = nil }
+        } message: {
+            // The provider's own words: the usual causes (admin disabled
+            // sharing, password or expiry needs a paid plan) are only
+            // explicable server-side.
+            Text(vm.shareError ?? "")
+        }
+        .onChange(of: vm.selectedItemIDs) {
+            // Look up share state for a single selected file so the context
+            // menu — which is built synchronously — already knows whether to
+            // offer "Stop Sharing" by the time it opens.
+            guard vm.shareCapabilities.canQueryExisting,
+                  vm.selectedItemIDs.count == 1,
+                  let item = vm.selectedItems.first,
+                  !item.isDirectory else { return }
+            Task { await vm.refreshShareState(for: item) }
         }
         .overlay(alignment: .bottom) {
             if let link = shareLinkResult {
@@ -563,6 +612,37 @@ struct CloudFileListView: View {
     /// provider offers one, rather than its landing page.
     @AppStorage("shareLinkPreferDirectDownload") private var preferDirectDownload = true
 
+    /// Create or change, decided by a fresh lookup inside the view model.
+    private func applyShareOptions(for item: CloudFileItem, options: ShareLinkOptions) {
+        Task {
+            guard let link = await vm.applyShareOptions(
+                for: item,
+                options: options,
+                preferDirectDownload: preferDirectDownload
+            ) else { return }
+            showShareBanner(link)
+        }
+    }
+
+    private func updateShareLink(for item: CloudFileItem, options: ShareLinkOptions) {
+        Task {
+            guard let link = await vm.updateShareLink(
+                for: item,
+                options: options,
+                preferDirectDownload: preferDirectDownload
+            ) else { return }
+            showShareBanner(link)
+        }
+    }
+
+    private func showShareBanner(_ link: CloudShareLink) {
+        Task {
+            shareLinkResult = link
+            try? await Task.sleep(for: .seconds(6))
+            if shareLinkResult == link { shareLinkResult = nil }
+        }
+    }
+
     private func createShareLink(for item: CloudFileItem, options: ShareLinkOptions) {
         Task {
             guard let link = await vm.createShareLink(
@@ -583,9 +663,12 @@ struct CloudFileListView: View {
         let shown = preferDirectDownload ? link.preferredURL : link.url
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "link")
-                    .foregroundStyle(.tint)
-                LText("Share link copied")
+                // A link that isn't public looks exactly like one that is
+                // until the recipient hits a sign-in page — so say it here,
+                // not only in the small print below.
+                Image(systemName: link.isPublic ? "link" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(link.isPublic ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.orange))
+                LText(link.isPublic ? "Share link copied" : "Link copied — not public")
                     .font(.callout.weight(.medium))
                 Spacer(minLength: 12)
                 Button {
@@ -918,6 +1001,17 @@ struct CloudFileListView: View {
                         createShareLink(for: item, options: .default)
                     }
                 },
+                onCopyExistingShareLink: { item in
+                    Task {
+                        if let link = await vm.copyExistingShareLink(for: item, preferDirectDownload: preferDirectDownload) {
+                            showShareBanner(link)
+                        }
+                    }
+                },
+                onStopSharing: { item in
+                    stopSharingItem = item
+                },
+                sharedPaths: Set(vm.shareStates.compactMap { $0.value == nil ? nil : $0.key }),
                 isReadOnly: isReadOnly,
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode

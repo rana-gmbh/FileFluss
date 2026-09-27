@@ -1101,6 +1101,64 @@ public actor GoogleDriveAPIClient {
             surfaceServerMessage: true
         )
 
+        return try await shareLink(fileId: fileId)
+    }
+
+    /// Reads back whether the file carries the public `anyone` permission.
+    ///
+    /// The permissions collection is the only place this shows up:
+    /// `webViewLink` exists whether or not a file is shared, so it can't
+    /// answer the question. An empty result (no `anyone` entry) is the "not
+    /// shared" signal and returns nil; a 403 (link sharing forbidden, or the
+    /// user can't read the permissions of a file they don't own) and a 404
+    /// (file gone) stay errors, carrying Google's own message.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
+        let fileId = (try await resolvePathToCachedFile(path)).id
+        guard try await anyonePermissionId(fileId: fileId) != nil else { return nil }
+        return try await shareLink(fileId: fileId)
+    }
+
+    /// Revokes the `anyone` permission, making the file private again.
+    ///
+    /// Permissions granted to named people are left alone — only the public
+    /// one is deleted.
+    public func removeShareLink(at path: String) async throws {
+        guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
+        let fileId = (try await resolvePathToCachedFile(path)).id
+        guard let permissionId = try await anyonePermissionId(fileId: fileId) else {
+            throw CloudProviderError.commandFailed(L10n.text("This file isn't shared with anyone who has the link."))
+        }
+        try await apiRequestVoid(.delete, path: "/files/\(fileId)/permissions/\(permissionId)")
+    }
+
+    /// The id of the file's `type: "anyone"` permission, or nil when it has
+    /// none. `fields` keeps the response to the three values we look at.
+    private func anyonePermissionId(fileId: String) async throws -> String? {
+        struct PermissionList: Decodable {
+            struct Permission: Decodable {
+                let id: String?
+                let type: String?
+                let role: String?
+            }
+            /// Absent rather than empty on some responses, so optional.
+            let permissions: [Permission]?
+        }
+
+        let list: PermissionList = try await apiRequest(
+            .get,
+            path: "/files/\(fileId)/permissions",
+            queryItems: [
+                URLQueryItem(name: "supportsAllDrives", value: "true"),
+                URLQueryItem(name: "fields", value: "permissions(id,type,role)"),
+            ],
+            surfaceServerMessage: true
+        )
+        return (list.permissions ?? []).first { $0.type?.lowercased() == "anyone" }?.id
+    }
+
+    /// Drive's two link forms for a file that is (already) publicly shared.
+    private func shareLink(fileId: String) async throws -> CloudShareLink {
         struct FileLinks: Decodable {
             let webViewLink: String?
             let webContentLink: String?
@@ -1109,7 +1167,10 @@ public actor GoogleDriveAPIClient {
         let links: FileLinks = try await apiRequest(
             .get,
             path: "/files/\(fileId)",
-            queryItems: driveParams + [URLQueryItem(name: "fields", value: "webViewLink,webContentLink")],
+            queryItems: [
+                URLQueryItem(name: "supportsAllDrives", value: "true"),
+                URLQueryItem(name: "fields", value: "webViewLink,webContentLink"),
+            ],
             surfaceServerMessage: true
         )
 

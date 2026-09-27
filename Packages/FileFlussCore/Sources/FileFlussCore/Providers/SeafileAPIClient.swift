@@ -641,6 +641,13 @@ public actor SeafileAPIClient {
         let expire_date: String?
         let is_expired: Bool?
         let permissions: Permissions?
+        /// Only some releases report this on a *listed* link (as a hash, or
+        /// null). Absent means "unknown", not "no password" — see
+        /// `existingShareLink`.
+        let password: String?
+        /// Seafile 11+ answers the list endpoint with this flag; older ones
+        /// leave it out.
+        let is_password_set: Bool?
     }
 
     /// Seafile's error bodies aren't consistent across versions and API
@@ -728,6 +735,139 @@ public actor SeafileAPIClient {
             expiresAt: Self.parseShareExpiry(parsed.expire_date),
             hasPassword: !(options.password ?? "").isEmpty
         )
+    }
+
+    /// The public link this path already has, or nil when it has none.
+    ///
+    /// Seafile answers an unshared path with `200 []`, so "not shared" is an
+    /// empty list, never an error status — anything non-2xx really is a
+    /// failure and carries the server's message. The synthetic library list at
+    /// `/` isn't a shareable object, so it resolves to nil as well.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let existing = try await firstShareLink(at: path) else { return nil }
+        return try Self.shareLink(from: existing)
+    }
+
+    /// Seafile has no endpoint that changes a live link's password: the v2.1
+    /// share-links API only creates and deletes. So the link is replaced —
+    /// which means a *new* token and a new URL, and the returned
+    /// `CloudShareLink.note` says so, because anyone holding the old URL loses
+    /// access.
+    ///
+    /// The old link is deleted first because Seafile refuses a second link for
+    /// the same path. If creation then fails (an admin-enforced password, say)
+    /// the file ends up unshared and the server's own message explains why —
+    /// the alternative, creating before deleting, simply isn't available.
+    public func updateShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let existing = try await firstShareLink(at: path), let token = existing.token else {
+            throw CloudProviderError.commandFailed(
+                L10n.text("This file has no public link to update. Create one first.")
+            )
+        }
+
+        try await deleteShareLink(token: token)
+        let fresh = try await createShareLink(at: path, options: options)
+
+        let replaced = L10n.text("Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.")
+        let note = [fresh.note, replaced].compactMap { $0 }.joined(separator: " ")
+        return CloudShareLink(
+            url: fresh.url,
+            directDownloadURL: fresh.directDownloadURL,
+            expiresAt: fresh.expiresAt,
+            hasPassword: fresh.hasPassword,
+            note: note
+        )
+    }
+
+    /// Withdraws the public link. Deliberately not an error when the path has
+    /// none: the caller's goal — "this file is not shared" — already holds.
+    public func removeShareLink(at path: String) async throws {
+        guard let existing = try await firstShareLink(at: path), let token = existing.token else {
+            seafileLog.info("[Seafile] removeShareLink: no public link on that path, nothing to withdraw")
+            return
+        }
+        try await deleteShareLink(token: token)
+    }
+
+    /// `GET /api/v2.1/share-links/?repo_id=…&path=…` → the first link for that
+    /// path, or nil when the list is empty. Seafile allows several links per
+    /// path in some configurations; the first is the one the UI shows.
+    private func firstShareLink(at path: String) async throws -> SeafileShareLinkResponse? {
+        guard let resolved = try await resolveLibrary(forPath: path) else { return nil }
+        let inner = resolved.innerPath.isEmpty ? "/" : resolved.innerPath
+        let query = "repo_id=\(Self.queryEncoded(resolved.repoId))&path=\(Self.queryEncoded(inner))"
+
+        var request = try authenticatedRequest(path: "/api/v2.1/share-links/?\(query)")
+        request.httpMethod = "GET"
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            seafileLog.error("[Seafile] share-links lookup failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if let message = (try? JSONDecoder().decode(SeafileErrorBody.self, from: data))?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+
+        let links = try JSONDecoder().decode([SeafileShareLinkResponse].self, from: data)
+        return links.first
+    }
+
+    /// `DELETE /api/v2.1/share-links/<token>/`. A 404 means the link is
+    /// already gone, which is the outcome the caller wanted.
+    private func deleteShareLink(token: String) async throws {
+        var request = try authenticatedRequest(path: "/api/v2.1/share-links/\(Self.queryEncoded(token))/")
+        request.httpMethod = "DELETE"
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        if http.statusCode == 404 { return }
+        guard (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            seafileLog.error("[Seafile] share-link delete failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if let message = (try? JSONDecoder().decode(SeafileErrorBody.self, from: data))?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+    }
+
+    private static func shareLink(from parsed: SeafileShareLinkResponse, note: String? = nil) throws -> CloudShareLink {
+        guard let link = parsed.link, let shareURL = URL(string: link) else {
+            throw CloudProviderError.invalidResponse
+        }
+        // `?dl=1` on the landing page streams the file itself. Pointless when
+        // the link doesn't grant download permission.
+        let canDownload = parsed.permissions?.can_download ?? true
+        let direct = canDownload
+            ? URL(string: link.contains("?") ? "\(link)&dl=1" : "\(link)?dl=1")
+            : nil
+
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: direct,
+            expiresAt: parseShareExpiry(parsed.expire_date),
+            // Not every release reports the password state on a listed link.
+            // Where it's absent the link is reported as open, which is the
+            // safer direction: it never claims protection the link may not have.
+            hasPassword: parsed.is_password_set ?? !(parsed.password ?? "").isEmpty,
+            note: note
+        )
+    }
+
+    /// Strict percent-encoding for a query value: `.urlQueryAllowed` leaves
+    /// `&`, `=` and `+` intact, and a filename containing any of those would
+    /// otherwise split the query.
+    private static func queryEncoded(_ raw: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~/")
+        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
     }
 
     /// Seafile reports `expire_date` as an ISO-8601 stamp — with an offset on
