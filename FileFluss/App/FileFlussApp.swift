@@ -67,6 +67,16 @@ struct FileFlussApp: App {
         .defaultSize(width: 640, height: 560)
         .windowResizability(.contentMinSize)
 
+        Window(L10n.text("Storage Analysis"), id: "storage") {
+            LocalizedRoot {
+                StorageAnalysisView()
+                    .environment(appState)
+                    .frame(minWidth: 680, minHeight: 440)
+            }
+        }
+        .defaultSize(width: 900, height: 620)
+        .windowResizability(.contentMinSize)
+
         Window(L10n.text("FileFluss Help"), id: "help") {
             LocalizedRoot {
                 HelpView()

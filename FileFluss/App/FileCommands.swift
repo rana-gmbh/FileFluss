@@ -240,6 +240,10 @@ struct FileCommands: Commands {
             })
             .disabled(appState.singlePaneMode)
 
+            Button(L10n.text("Storage Analysis…")) {
+                NotificationCenter.default.post(name: .requestShowStorageWindow, object: nil)
+            }
+
             applyShortcut(.swapPanels, to: Button(L10n.text("Swap Panels")) {
                 NotificationCenter.default.post(name: KeyboardCommand.swapPanels.notification, object: nil)
             })

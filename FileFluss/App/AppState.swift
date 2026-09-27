@@ -29,6 +29,7 @@ extension Notification.Name {
     /// — `openWindow` is a SwiftUI environment value not reachable from
     /// AppState.
     static let requestShowCompareWindow = Notification.Name("FileFluss.requestShowCompareWindow")
+    static let requestShowStorageWindow = Notification.Name("FileFluss.requestShowStorageWindow")
 }
 
 @Observable @MainActor

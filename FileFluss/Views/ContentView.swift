@@ -116,6 +116,9 @@ struct ContentView: View {
         } message: { warning in
             Text(SpaceImpactFormatter.warning(warning.impact, verb: warning.verb))
         }
+        .onReceive(NotificationCenter.default.publisher(for: .requestShowStorageWindow)) { _ in
+            openWindow(id: "storage")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .requestShowCompareWindow)) { _ in
             openWindow(id: "compare")
         }
