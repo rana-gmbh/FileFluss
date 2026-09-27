@@ -558,6 +558,122 @@ public actor OneDriveAPIClient {
         return CloudStorageQuota(usedBytes: drive.quota.used ?? 0, totalBytes: total)
     }
 
+    // MARK: - Share links
+
+    /// The Permission object Graph answers `createLink` with. We only need
+    /// the nested sharing link, plus the two fields that tell us what the
+    /// service actually applied.
+    private struct GraphPermission: Decodable {
+        struct SharingLink: Decodable {
+            let webUrl: String?
+            let type: String?
+            let scope: String?
+        }
+        let link: SharingLink?
+        let hasPassword: Bool?
+        let expirationDateTime: String?
+    }
+
+    /// Creates an anonymous view link via `createLink` on the drive item.
+    ///
+    /// The item is addressed by path (`/me/drive/root:{path}:`) like every
+    /// other call in this client, so there's no id round trip.
+    ///
+    /// Two failures are common and only explicable server-side: a tenant
+    /// administrator can forbid anonymous links outright, and on consumer
+    /// OneDrive a password or an expiry date needs a Microsoft 365
+    /// subscription. Both come back as a Graph error whose `message` we
+    /// pass through verbatim.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        let endpoint = "/me/drive/root:\(encodedPath):/createLink"
+        guard let url = URL(string: "\(graphURL)\(endpoint)") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        struct CreateLinkBody: Encodable {
+            let type: String
+            let scope: String
+            let password: String?
+            let expirationDateTime: String?
+        }
+
+        var expiration: String?
+        if let expiry = options.expiry {
+            // Graph wants "yyyy-MM-ddTHH:mm:ssZ".
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            expiration = formatter.string(from: expiry)
+        }
+        let password = (options.password?.isEmpty == false) ? options.password : nil
+        // "view" + "anonymous" is the public read-only link. There is no
+        // download toggle on a Graph sharing link, so `allowDownload` is
+        // not represented here — `shareLinkCapabilities` hides the control.
+        let body = CreateLinkBody(type: "view", scope: "anonymous", password: password, expirationDateTime: expiration)
+        let encodedBody = try JSONEncoder().encode(body)
+
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = encodedBody
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            oneDriveLog.info("[OneDrive] POST createLink → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
+        // 201 for a newly minted link, 200 when an equivalent link this app
+        // created already existed — both hand back the same Permission.
+        guard http.statusCode == 200 || http.statusCode == 201 else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            oneDriveLog.error("[OneDrive] createLink → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if let message = Self.parseGraphErrorMessage(from: data), !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+
+        let permission = try JSONDecoder().decode(GraphPermission.self, from: data)
+        guard let raw = permission.link?.webUrl, let shareURL = URL(string: raw) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // A tenant that only allows internal sharing normally rejects the
+        // request outright, but if it instead hands back a narrower scope
+        // the link isn't public and the user needs to know.
+        var note: String?
+        if let scope = permission.link?.scope?.lowercased(), scope != "anonymous" {
+            note = L10n.text("Your organization restricted this link to signed-in people — it is not publicly accessible.")
+        }
+
+        return CloudShareLink(
+            url: shareURL,
+            // Graph exposes no public direct-download URL for an anonymous
+            // link; `/content` needs an access token.
+            directDownloadURL: nil,
+            expiresAt: Self.parseGraphDate(permission.expirationDateTime),
+            hasPassword: permission.hasPassword ?? (password != nil),
+            note: note
+        )
+    }
+
+    private static func parseGraphDate(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
+    }
+
     // MARK: - Search
 
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
@@ -653,7 +769,7 @@ public actor OneDriveAPIClient {
     }
 
     private func graphRequestVoid(_ method: HTTPMethod, path: String) async throws {
-        var components = URLComponents(string: "\(graphURL)\(path)")!
+        let components = URLComponents(string: "\(graphURL)\(path)")!
         guard let url = components.url else {
             throw CloudProviderError.invalidResponse
         }
@@ -679,6 +795,23 @@ public actor OneDriveAPIClient {
             oneDriveLog.error("[OneDrive] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
+    }
+
+    /// Decodes Graph's error envelope: `{ "error": { "code": …, "message": … } }`.
+    /// The message is the only place the real cause shows up (tenant sharing
+    /// policy, plan requirements), so callers that can surface it should.
+    private static func parseGraphErrorMessage(from data: Data?) -> String? {
+        guard let data else { return nil }
+        struct GraphError: Decodable {
+            struct Detail: Decodable {
+                let code: String?
+                let message: String?
+            }
+            let error: Detail?
+        }
+        guard let parsed = try? JSONDecoder().decode(GraphError.self, from: data) else { return nil }
+        if let message = parsed.error?.message, !message.isEmpty { return message }
+        return parsed.error?.code
     }
 
     private static func mapHTTPError(statusCode: Int) -> CloudProviderError {

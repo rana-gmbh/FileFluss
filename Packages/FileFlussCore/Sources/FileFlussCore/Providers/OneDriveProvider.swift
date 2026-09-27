@@ -116,6 +116,28 @@ public final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Microsoft Graph's `createLink` takes a password and an expiry, but
+    /// has no download toggle for a sharing link. As everywhere else these
+    /// are only the API's capabilities: a tenant administrator can forbid
+    /// anonymous links, and on consumer OneDrive password and expiry need a
+    /// Microsoft 365 subscription — creation then fails with Graph's own
+    /// message.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: false
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Token Refresh
 
     /// Refreshes credentials if expired and persists the updated tokens.

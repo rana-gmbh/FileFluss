@@ -129,6 +129,26 @@ public final class DropboxProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Dropbox's link settings cover the full set. Password and expiry are
+    /// Professional/Business features though, so a free account's request for
+    /// either comes back as an error — creation can fail even where these
+    /// capabilities say yes.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Token Refresh
 
     public func refreshIfNeeded() async throws {

@@ -245,6 +245,113 @@ public actor NextCloudAPIClient {
         return CloudStorageQuota(usedBytes: used, totalBytes: total)
     }
 
+    // MARK: - Share links
+
+    /// OCS share API response. We ask for `?format=json` so this stays a
+    /// small Decodable instead of another XMLParser delegate.
+    private struct OCSShareEnvelope: Decodable {
+        struct OCS: Decodable {
+            struct Meta: Decodable {
+                let statuscode: Int
+                let message: String?
+            }
+            struct ShareData: Decodable {
+                let url: String?
+                let token: String?
+                /// Nextcloud returns "" for no expiry, "YYYY-MM-DD HH:MM:SS" otherwise.
+                let expiration: String?
+            }
+            let meta: Meta
+            let data: ShareData?
+        }
+        let ocs: OCS
+    }
+
+    /// Creates a public link share (`shareType=3`).
+    ///
+    /// Admins can disable link shares entirely, and can *enforce* a
+    /// password or an expiry date — in which case the server rejects a
+    /// request that omits them. We surface the OCS `message` verbatim so
+    /// the user sees the server's own reason rather than a generic error.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let url = URL(string: "\(credentials.serverURL)/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var form: [(String, String)] = [
+            ("path", path),
+            ("shareType", "3"),
+        ]
+        if let password = options.password, !password.isEmpty {
+            form.append(("password", password))
+        }
+        if let expiry = options.expiry {
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(secondsFromGMT: 0)
+            fmt.dateFormat = "yyyy-MM-dd"
+            form.append(("expireDate", fmt.string(from: expiry)))
+        }
+        if !options.allowDownload {
+            // Share attribute added in NC 26: hides the download button.
+            form.append(("attributes", #"[{"scope":"permissions","key":"download","value":false}]"#))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        // Mandatory for every OCS call — without it the server answers 401.
+        request.setValue("true", forHTTPHeaderField: "OCS-APIRequest")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = Data(Self.formEncode(form).utf8)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+
+        let envelope = try? JSONDecoder().decode(OCSShareEnvelope.self, from: data)
+        // OCS reports failures inside the body with HTTP 200 as often as not,
+        // so check the OCS status code, not just the HTTP one.
+        let ocsStatus = envelope?.ocs.meta.statuscode
+        guard let envelope, ocsStatus == 100 || ocsStatus == 200 else {
+            if let message = envelope?.ocs.meta.message, !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+        guard let link = envelope.ocs.data?.url, let shareURL = URL(string: link) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // `/s/<token>/download` streams the file itself.
+        let direct = options.allowDownload ? URL(string: link + "/download") : nil
+
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: direct,
+            expiresAt: Self.parseShareExpiry(envelope.ocs.data?.expiration),
+            hasPassword: !(options.password ?? "").isEmpty
+        )
+    }
+
+    private static func parseShareExpiry(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return fmt.date(from: raw)
+    }
+
+    private static func formEncode(_ pairs: [(String, String)]) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return pairs.map { key, value in
+            let k = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? key
+            let v = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+            return "\(k)=\(v)"
+        }.joined(separator: "&")
+    }
+
     // MARK: - File Operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {

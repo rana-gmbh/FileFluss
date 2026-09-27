@@ -1057,6 +1057,75 @@ public actor GoogleDriveAPIClient {
         return allItems.map { $0.toCloudFileItem(parentPath: "/") }
     }
 
+    // MARK: - Share links
+
+    /// Grants the `anyone` reader permission and reads back Drive's two link
+    /// forms.
+    ///
+    /// Google offers neither a password nor an expiry on an "anyone" link
+    /// (expiration exists only for a *named* member's permission), so
+    /// `options` is accepted and ignored — `shareLinkCapabilities` advertises
+    /// only `canCreate`, so the UI never offers those fields in the first
+    /// place.
+    ///
+    /// A Workspace admin can forbid sharing outside the domain, in which case
+    /// the permission POST fails with Google's own explanation; the requests
+    /// pass `surfaceServerMessage` so that text reaches the user verbatim
+    /// instead of a bare "Server error (HTTP 403)".
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        // The synthetic "Shared drives" nodes have no file ID to share.
+        guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
+        let fileId = (try await resolvePathToCachedFile(path)).id
+
+        // Single-file endpoints take `supportsAllDrives` only — the corpus
+        // params in `driveQueryItems` are files.list-specific. Without the
+        // flag, an item that lives on a shared drive is rejected outright.
+        let driveParams = [URLQueryItem(name: "supportsAllDrives", value: "true")]
+
+        struct PermissionBody: Encodable {
+            let role: String
+            let type: String
+        }
+        struct Permission: Decodable {
+            let id: String?
+        }
+
+        // Drive's docs state that concurrent permission changes on one file
+        // aren't supported, so these two calls stay strictly sequential — the
+        // metadata read only starts once the permission write has returned.
+        let _: Permission = try await apiRequest(
+            .post,
+            path: "/files/\(fileId)/permissions",
+            queryItems: driveParams,
+            body: PermissionBody(role: "reader", type: "anyone"),
+            surfaceServerMessage: true
+        )
+
+        struct FileLinks: Decodable {
+            let webViewLink: String?
+            let webContentLink: String?
+        }
+
+        let links: FileLinks = try await apiRequest(
+            .get,
+            path: "/files/\(fileId)",
+            queryItems: driveParams + [URLQueryItem(name: "fields", value: "webViewLink,webContentLink")],
+            surfaceServerMessage: true
+        )
+
+        guard let view = links.webViewLink, let shareURL = URL(string: view) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // `webContentLink` only exists for files with real bytes behind them.
+        // Google Docs/Sheets/Slides have no stored content to stream, so they
+        // come back with the landing page alone.
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: links.webContentLink.flatMap { URL(string: $0) }
+        )
+    }
+
     // MARK: - HTTP Helpers
 
     private enum HTTPMethod: String {
@@ -1066,7 +1135,13 @@ public actor GoogleDriveAPIClient {
         case delete = "DELETE"
     }
 
-    private func apiRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil) async throws -> T {
+    /// - Parameter surfaceServerMessage: when true, a failure that carries a
+    ///   `{"error":{"message":…}}` body throws `.commandFailed` with that
+    ///   message instead of the coarse mapping below. Used by the sharing path,
+    ///   where the only useful explanation ("admin has disabled link sharing")
+    ///   is server-side. Off by default so existing callers keep their
+    ///   established error semantics.
+    private func apiRequest<T: Decodable>(_ method: HTTPMethod, path: String, queryItems: [URLQueryItem] = [], body: (any Encodable)? = nil, surfaceServerMessage: Bool = false) async throws -> T {
         var components = URLComponents(string: "\(apiURL)\(path)")!
         var queryItems = queryItems
         // Every /files call must declare shared-drive support, or the API
@@ -1112,6 +1187,11 @@ public actor GoogleDriveAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             googleLog.error("[Google] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(1000))")
+            if surfaceServerMessage,
+               let message = Self.parseGoogleErrorMessage(from: data),
+               !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
         }
 

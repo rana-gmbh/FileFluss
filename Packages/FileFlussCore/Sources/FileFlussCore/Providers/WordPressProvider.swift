@@ -101,6 +101,24 @@ public final class WordPressProvider: CloudProvider, @unchecked Sendable {
         return try await client.searchFiles(query: query, path: path)
     }
 
+    // MARK: - Share links
+
+    /// The media file already has a public URL; there is no link to
+    /// create, and therefore no password, expiry or unshare either.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(canCreate: true)
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        let url = try await client.publicMediaURL(at: path)
+        return CloudShareLink(
+            url: url,
+            directDownloadURL: url,
+            note: L10n.text("This file was already public — WordPress media has no private state.")
+        )
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

@@ -111,6 +111,38 @@ public final class S3Provider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(path: path)
     }
 
+    // MARK: - Share links
+
+    /// S3 has no server-side "share" concept: the link is a presigned GET
+    /// URL signed locally with the account's own credentials. It therefore
+    /// always expires (7 days maximum, and sooner with temporary
+    /// credentials) and cannot carry a password.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: false,
+            supportsExpiry: true,
+            supportsDownloadToggle: false,
+            requiresExpiry: true,
+            maximumExpiry: S3APIClient.maximumPresignedExpiry
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        // The sheet always supplies an expiry for S3 (requiresExpiry), but
+        // fall back to the maximum rather than failing if it somehow didn't.
+        let seconds = options.expiry.map { $0.timeIntervalSinceNow } ?? S3APIClient.maximumPresignedExpiry
+        let url = try await client.presignedDownloadURL(remotePath: path, expiresIn: seconds)
+        return CloudShareLink(
+            url: url,
+            directDownloadURL: url,
+            expiresAt: Date().addingTimeInterval(min(seconds, S3APIClient.maximumPresignedExpiry)),
+            hasPassword: false,
+            note: L10n.text("Anyone with this link can download the file until it expires. The link cannot be revoked early.")
+        )
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

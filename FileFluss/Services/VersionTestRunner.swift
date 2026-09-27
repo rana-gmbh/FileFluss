@@ -110,11 +110,17 @@ enum VersionTestRunner {
         let createFolder: StepResult
         let uploads: [StepResult]
         let replaces: [StepResult]
+        /// Share-link steps: creating the link, then fetching it without any
+        /// credentials. Empty for providers with no sharing API.
+        var shareLink: [StepResult] = []
+        /// The created link, recorded so a human can eyeball it. It dies with
+        /// the test file during the delete phase a moment later.
+        var shareLinkURL: String?
         let deletes: [StepResult]
         let cleanupFolder: StepResult
 
         var allSteps: [StepResult] {
-            [createFolder] + uploads + replaces + deletes + [cleanupFolder]
+            [createFolder] + uploads + replaces + shareLink + deletes + [cleanupFolder]
         }
         var passCount: Int { allSteps.filter { $0.ok }.count }
         var totalCount: Int { allSteps.count }
@@ -272,6 +278,46 @@ enum VersionTestRunner {
             replaces.append(step)
         }
 
+        // Phase 3.5 — share link. Runs against the first uploaded test file,
+        // never a real file of the user's, and the file is deleted moments
+        // later in phase 4, which takes the link down with it.
+        var shareSteps: [StepResult] = []
+        var shareURL: String?
+        let shareCaps = provider.shareLinkCapabilities
+        if let firstFile = localFiles.first, uploads.first?.ok == true {
+            let sharePath = testFolderPath + "/" + firstFile.relativePath
+            if shareCaps.canCreate {
+                var created: CloudShareLink?
+                let createLinkStep = await measure(name: "create share link (\(firstFile.relativePath))") {
+                    // Deliberately no password and no expiry unless the
+                    // provider insists: both are paid-plan features almost
+                    // everywhere, and a plan rejection would look like a bug.
+                    let options = ShareLinkOptions(
+                        expiry: shareCaps.requiresExpiry ? Date().addingTimeInterval(3600) : nil
+                    )
+                    let link = try await provider.createShareLink(at: sharePath, options: options)
+                    created = link
+                }
+                shareSteps.append(createLinkStep)
+
+                if let link = created {
+                    shareURL = link.preferredURL.absoluteString
+                    // The real proof: fetch the link with no credentials at
+                    // all. A link that only works while signed in is useless
+                    // to the person it was sent to.
+                    let fetchStep = await measure(name: "fetch share link anonymously") {
+                        try await verifyPublicURL(link.preferredURL)
+                    }
+                    shareSteps.append(fetchStep)
+                }
+            } else {
+                shareSteps.append(StepResult(
+                    label: "share link not supported by this provider",
+                    ok: true, durationMs: 0, error: nil, diagnostics: nil
+                ))
+            }
+        }
+
         // Phase 4 — delete
         var deletes: [StepResult] = []
         for local in localFiles {
@@ -305,9 +351,40 @@ enum VersionTestRunner {
 
         return AccountResult(
             accountDisplayName: displayName, provider: providerName,
-            createFolder: createStep, uploads: uploads, replaces: replaces, deletes: deletes,
-            cleanupFolder: cleanup
+            createFolder: createStep, uploads: uploads, replaces: replaces,
+            shareLink: shareSteps, shareLinkURL: shareURL,
+            deletes: deletes, cleanupFolder: cleanup
         )
+    }
+
+    /// GETs `url` with a session that carries no cookies and no credentials,
+    /// so the result reflects what an outside recipient would see. Accepts
+    /// any 2xx; a provider landing page and a direct download both qualify.
+    private static func verifyPublicURL(_ url: URL) async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
+        config.timeoutIntervalForRequest = 30
+        let session = URLSession(configuration: config)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        // Enough to prove the link serves something without pulling the whole
+        // file; servers that ignore Range just send more than we need.
+        request.setValue("bytes=0-2047", forHTTPHeaderField: "Range")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw VersionTestError.verificationFailed("no HTTP response from share link")
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw VersionTestError.verificationFailed(
+                "share link returned HTTP \(http.statusCode) to an anonymous request"
+            )
+        }
+        if data.isEmpty {
+            throw VersionTestError.verificationFailed("share link returned an empty body")
+        }
     }
 
     private static func verifyAbsent(
@@ -498,9 +575,15 @@ enum VersionTestRunner {
             out += row(phase: "Create folder", step: account.createFolder)
             for step in account.uploads { out += row(phase: "Upload", step: step) }
             for step in account.replaces { out += row(phase: "Replace", step: step) }
+            for step in account.shareLink { out += row(phase: "Share link", step: step) }
             for step in account.deletes { out += row(phase: "Delete", step: step) }
             out += row(phase: "Cleanup folder", step: account.cleanupFolder)
             out += "\n"
+
+            if let link = account.shareLinkURL {
+                out += "Share link created: `\(link)`\n\n"
+                out += "_The shared file is deleted in the delete phase above, so this link is already dead._\n\n"
+            }
 
             // Diagnostics section: emit the listing captured at each failure.
             let failing = account.allSteps.filter { !$0.ok && ($0.diagnostics?.isEmpty == false) }

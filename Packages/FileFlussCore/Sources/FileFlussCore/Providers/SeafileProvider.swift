@@ -117,6 +117,26 @@ public final class SeafileProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Seafile supports the full set. As with Nextcloud these are the
+    /// server's *capabilities* only: an admin can disable share links, or
+    /// force a password or an expiry, in which case creation fails with the
+    /// server's own message.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

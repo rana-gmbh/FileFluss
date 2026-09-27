@@ -144,6 +144,24 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.searchFiles(query: query, path: path)
     }
 
+    // MARK: - Share links
+
+    /// File Station's sharing API takes a password and an expiry date. It
+    /// has no view-only mode — a sharing link is a download link.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: false
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // No storageQuota override: the DSM `SYNO.Core.Quota` API requires
     // admin permissions or DSM-version-specific endpoints that vary
     // across appliances. Falling through to the default nil impl keeps

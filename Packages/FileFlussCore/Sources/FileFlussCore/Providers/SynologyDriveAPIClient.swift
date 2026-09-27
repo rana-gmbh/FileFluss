@@ -420,6 +420,95 @@ public actor SynologyDriveAPIClient {
         }
     }
 
+    // MARK: - Share links
+
+    /// Payload of `SYNO.FileStation.Sharing` `create`. DSM answers with one
+    /// entry per requested path, each carrying its own `error` code even
+    /// when the envelope reports `success`.
+    private struct SynologySharingLinksData: Decodable {
+        let links: [Link]
+        struct Link: Decodable {
+            let id: String?
+            let url: String?
+            let qrcode: String?
+            /// 0 on success, otherwise a sharing error code.
+            let error: Int?
+        }
+    }
+
+    /// Creates a File Station public sharing link for `path`.
+    ///
+    /// DSM builds the returned URL from whatever address it believes it has,
+    /// which is frequently a LAN address or an unreachable DDNS name — the
+    /// caller surfaces that caveat via `CloudShareLink.note`.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        // Sharing's `path` is a JSON-encoded parameter, like `List.getinfo`'s.
+        var extra: [URLQueryItem] = [
+            URLQueryItem(name: "path", value: Self.jsonQuoted(path))
+        ]
+        if let password = options.password, !password.isEmpty {
+            extra.append(URLQueryItem(name: "password", value: password))
+        }
+        if let expiry = options.expiry {
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(secondsFromGMT: 0)
+            fmt.dateFormat = "yyyy-MM-dd"
+            extra.append(URLQueryItem(name: "date_expired", value: Self.jsonQuoted(fmt.string(from: expiry))))
+        }
+
+        let result: SynologySharingLinksData
+        do {
+            result = try await call(
+                api: "SYNO.FileStation.Sharing",
+                version: "3",
+                method: "create",
+                extra: extra
+            )
+        } catch CloudProviderError.serverError(let code) {
+            // `mapAPIError` only knows the generic DSM codes; the 2000-range
+            // ones are specific to sharing.
+            throw Self.mapSharingError(code: code)
+        }
+
+        guard let link = result.links.first else { throw CloudProviderError.invalidResponse }
+        if let code = link.error, code != 0 {
+            throw Self.mapSharingError(code: code)
+        }
+        guard let urlString = link.url, let url = URL(string: urlString) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        return CloudShareLink(
+            url: url,
+            // File Station has no documented suffix that streams the file
+            // itself, so there's no verified direct-download form.
+            directDownloadURL: nil,
+            // DSM doesn't echo the effective expiry back on create.
+            expiresAt: options.expiry,
+            hasPassword: !(options.password ?? "").isEmpty,
+            note: "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it."
+        )
+    }
+
+    private static func mapSharingError(code: Int) -> CloudProviderError {
+        switch code {
+        case 2000: return .commandFailed("The sharing link does not exist.")
+        case 2001: return .commandFailed("The NAS has reached its maximum number of sharing links — delete some in File Station and try again.")
+        case 2002: return .commandFailed("Failed to access the NAS's sharing links.")
+        default: return .serverError(code)
+        }
+    }
+
+    /// Encodes a value as a JSON string literal, for the FileStation
+    /// parameters that expect JSON rather than a bare value.
+    private static func jsonQuoted(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
     // MARK: - Plumbing
 
     /// Issues a `webapi/entry.cgi` call with the provided API/version/method

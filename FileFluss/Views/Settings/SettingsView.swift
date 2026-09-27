@@ -65,6 +65,7 @@ struct GeneralSettingsView: View {
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
+    @AppStorage("shareLinkPreferDirectDownload") private var shareLinkPreferDirectDownload = true
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
     @AppStorage(AppLanguage.storageKey) private var appLanguage: String = AppLanguage.system.rawValue
     @State private var showRelaunchPrompt = false
@@ -114,6 +115,13 @@ struct GeneralSettingsView: View {
             Toggle(isOn: $confirmDelete) { LText("Confirm before deleting") }
             Toggle(isOn: $showSidebarAddAccount) { LText("Show \"Add Cloud Account\" in sidebars") }
             Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
+
+            Section {
+                Toggle(isOn: $shareLinkPreferDirectDownload) { LText("Copy direct download links when available") }
+                LText("\"Copy Share Link\" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Section {
                 Toggle(isOn: $checkSpaceBeforeTransfer) { LText("Check available space before copy or move") }

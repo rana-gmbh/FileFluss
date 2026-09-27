@@ -141,6 +141,27 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Box supports the full set on `PUT /files/{id}`. These are only the
+    /// API's *capabilities*: password and expiry need a paid plan, and an
+    /// enterprise admin can restrict or disable public links — in which
+    /// case creation either fails with Box's own message or comes back
+    /// downgraded (see `shareDowngradeNote`).
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Token refresh
 
     public func refreshIfNeeded() async throws {

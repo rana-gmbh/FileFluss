@@ -163,6 +163,26 @@ public final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Nextcloud supports the full set. Note these are only the server's
+    /// *capabilities*: an admin can switch link sharing off, or enforce a
+    /// password or expiry, in which case creation fails with the server's
+    /// own message.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

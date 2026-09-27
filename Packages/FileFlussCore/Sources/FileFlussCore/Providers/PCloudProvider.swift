@@ -147,6 +147,26 @@ public final class PCloudProvider: CloudProvider, @unchecked Sendable {
         )
     }
 
+    // MARK: - Share links
+
+    /// pCloud creates public links on any plan, but `linkpassword` and
+    /// `expire` are Premium-only — the server rejects them on a free
+    /// account, and `createShareLink` surfaces its message verbatim.
+    /// There's no API switch for view-without-download.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: false
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

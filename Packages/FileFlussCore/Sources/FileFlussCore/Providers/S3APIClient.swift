@@ -519,6 +519,141 @@ public actor S3APIClient {
         return total
     }
 
+    // MARK: - Share links (presigned URLs)
+
+    /// SigV4 caps a presigned URL at 7 days.
+    public static let maximumPresignedExpiry: TimeInterval = 7 * 24 * 60 * 60
+
+    /// Builds a presigned GET URL for `remotePath`. Nothing is sent to the
+    /// server: the signature is computed locally from the stored
+    /// credentials, and the resulting URL streams the object directly to
+    /// anyone who has it, until it expires.
+    ///
+    /// This is deliberately the only sharing mechanism we offer for S3.
+    /// Making an object public instead would mean switching off Block
+    /// Public Access on the user's bucket — a permanent, account-wide
+    /// security change that an app has no business making, and one that
+    /// also yields a link with no expiry and no way to revoke it.
+    ///
+    /// Note the link carries the signer's own authority, so it can never
+    /// outlive the credentials that signed it: with temporary (STS)
+    /// credentials the effective lifetime is much shorter than 7 days
+    /// regardless of what is requested here.
+    public func presignedDownloadURL(remotePath: String, expiresIn: TimeInterval) async throws -> URL {
+        let (bucket, key) = try splitPath(remotePath)
+        guard !key.isEmpty else { throw CloudProviderError.invalidResponse }
+
+        let seconds = max(1, min(Int(expiresIn.rounded()), Int(Self.maximumPresignedExpiry)))
+
+        // A HEAD warms the bucket→region cache: signing against the wrong
+        // region produces a URL that fails only when the recipient opens
+        // it, which is a miserable way to find out.
+        _ = try? await withResolvedRegion(bucket: bucket) {
+            let region = regionFor(bucket: bucket)
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = bucketHost(bucket, region: region)
+            components.path = "/" + key
+            guard let url = components.url else { throw CloudProviderError.invalidResponse }
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+            try sign(&request, host: components.host!, payloadHash: emptyPayloadHash, service: "s3", region: region)
+            let (data, response) = try await session.data(for: request)
+            try validate(response, body: data)
+            return true
+        }
+
+        let region = regionFor(bucket: bucket)
+        // Serve the object as a download under its original name rather
+        // than letting the browser render it inline.
+        let filename = (key as NSString).lastPathComponent
+        return try Self.presignedGetURL(
+            host: bucketHost(bucket, region: region),
+            key: key,
+            region: region,
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            expiresInSeconds: seconds,
+            attachmentFilename: filename.isEmpty ? nil : filename,
+            now: Date()
+        )
+    }
+
+    /// Pure SigV4 query-string signing, split out from the actor so it can
+    /// be checked against AWS's published test vector (see
+    /// `S3PresignTests`). `now` is injected for the same reason.
+    public static func presignedGetURL(
+        host: String,
+        key: String,
+        region: String,
+        accessKeyId: String,
+        secretAccessKey: String,
+        expiresInSeconds: Int,
+        attachmentFilename: String?,
+        now: Date
+    ) throws -> URL {
+        let amzDate = Self.amzDateFormatter.string(from: now)
+        let dateStamp = Self.dateStampFormatter.string(from: now)
+        let credentialScope = "\(dateStamp)/\(region)/s3/aws4_request"
+
+        // Everything the recipient's browser needs travels in the query
+        // string, so every parameter below is part of the signature.
+        var query: [(String, String)] = [
+            ("X-Amz-Algorithm", "AWS4-HMAC-SHA256"),
+            ("X-Amz-Credential", "\(accessKeyId)/\(credentialScope)"),
+            ("X-Amz-Date", amzDate),
+            ("X-Amz-Expires", String(expiresInSeconds)),
+            ("X-Amz-SignedHeaders", "host"),
+        ]
+        if let attachmentFilename {
+            query.append(("response-content-disposition", "attachment; filename=\"\(attachmentFilename)\""))
+        }
+
+        // Split into steps: as one chained expression the type checker
+        // gives up on this.
+        var encodedQuery: [(String, String)] = []
+        for (name, value) in query {
+            encodedQuery.append((Self.encodeQueryComponent(name), Self.encodeQueryComponent(value)))
+        }
+        encodedQuery.sort { lhs, rhs in
+            lhs.0 == rhs.0 ? lhs.1 < rhs.1 : lhs.0 < rhs.0
+        }
+        let canonicalQuery: String = encodedQuery
+            .map { pair in pair.0 + "=" + pair.1 }
+            .joined(separator: "&")
+
+        let canonicalURI = ("/" + key)
+            .addingPercentEncoding(withAllowedCharacters: Self.uriAllowed) ?? ("/" + key)
+
+        // UNSIGNED-PAYLOAD is the documented payload hash for presigned GETs.
+        let canonicalRequest = [
+            "GET",
+            canonicalURI,
+            canonicalQuery,
+            "host:\(host)\n",
+            "host",
+            "UNSIGNED-PAYLOAD",
+        ].joined(separator: "\n")
+
+        let stringToSign = [
+            "AWS4-HMAC-SHA256",
+            amzDate,
+            credentialScope,
+            Self.sha256HexStatic(canonicalRequest),
+        ].joined(separator: "\n")
+
+        let kDate = Self.hmacStatic(key: Data(("AWS4" + secretAccessKey).utf8), message: dateStamp)
+        let kRegion = Self.hmacStatic(key: kDate, message: region)
+        let kService = Self.hmacStatic(key: kRegion, message: "s3")
+        let kSigning = Self.hmacStatic(key: kService, message: "aws4_request")
+        let signature = Self.hmacStatic(key: kSigning, message: stringToSign).map { String(format: "%02x", $0) }.joined()
+
+        guard let url = URL(string: "https://\(host)\(canonicalURI)?\(canonicalQuery)&X-Amz-Signature=\(signature)") else {
+            throw CloudProviderError.invalidResponse
+        }
+        return url
+    }
+
     // MARK: - Helpers
 
     private func isFolder(bucket: String, key: String) async throws -> Bool {
@@ -715,6 +850,19 @@ public actor S3APIClient {
 
     private func trimWhitespace(_ s: String) -> String {
         s.trimmingCharacters(in: .whitespaces)
+    }
+
+    static func encodeQueryComponent(_ s: String) -> String {
+        s.addingPercentEncoding(withAllowedCharacters: Self.queryAllowed) ?? s
+    }
+
+    static func hmacStatic(key: Data, message: String) -> Data {
+        let signed = HMAC<SHA256>.authenticationCode(for: Data(message.utf8), using: SymmetricKey(data: key))
+        return Data(signed)
+    }
+
+    static func sha256HexStatic(_ s: String) -> String {
+        SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private func hmac(key: Data, message: String) -> Data {

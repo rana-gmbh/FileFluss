@@ -113,6 +113,22 @@ public final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Drive's "anyone with the link" permission carries no password and no
+    /// expiry — those exist only on permissions granted to a named person —
+    /// and there is no view-without-download mode either. So creation is all
+    /// we can offer; a Workspace admin can still forbid it, which surfaces as
+    /// Google's own message from `createShareLink`.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(canCreate: true)
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Token Refresh
 
     public func refreshIfNeeded() async throws {

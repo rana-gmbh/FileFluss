@@ -31,6 +31,12 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
+    /// What the account's provider can do with public share links; decides
+    /// whether the "Copy Share Link" entries appear at all.
+    var shareCapabilities: ShareLinkCapabilities = .unsupported
+    /// Called with the file to share and whether the user asked for the
+    /// options sheet (password / expiry) rather than a one-click link.
+    var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
     /// Import-only device (e.g. GoPro): suppress Paste / New Folder / Rename in
     /// the context menu since the camera has no write path.
     var isReadOnly: Bool = false
@@ -163,6 +169,8 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
         coordinator.isReadOnly = isReadOnly
+        coordinator.shareCapabilities = shareCapabilities
+        coordinator.onCreateShareLink = onCreateShareLink
         coordinator.selectedIDs = _selectedIDs
 
         // Diff in a single pass — comparing via `.map(\.id) != …` three times
@@ -338,6 +346,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
+    var shareCapabilities: ShareLinkCapabilities = .unsupported
+    var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
     var singlePaneMode = false
     weak var tableView: CloudTableView?
     var suppressSelectionUpdate = false
@@ -619,6 +629,28 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             menu.addItem(.separator())
         }
 
+        // Share links are per-file: folders, multi-selections and synthetic
+        // rows have no single shareable path.
+        if shareCapabilities.canCreate,
+           contextItems.count == 1,
+           let file = contextItems.first,
+           !file.isDirectory,
+           file.role == .normal {
+            let shareItem = NSMenuItem(title: L10n.text("Copy Share Link"), action: #selector(handleCopyShareLink(_:)), keyEquivalent: "")
+            shareItem.target = self
+            shareItem.representedObject = file
+            menu.addItem(shareItem)
+
+            // Only worth a sheet when there is actually something to set.
+            if shareCapabilities.hasOptions {
+                let optionsItem = NSMenuItem(title: L10n.text("Share Link…"), action: #selector(handleShareLinkWithOptions(_:)), keyEquivalent: "")
+                optionsItem.target = self
+                optionsItem.representedObject = file
+                menu.addItem(optionsItem)
+            }
+            menu.addItem(.separator())
+        }
+
         if !containsImmovable {
             let cutCtx = NSMenuItem(title: L10n.text("Cut"), action: #selector(handleCut(_:)), keyEquivalent: "x")
             cutCtx.keyEquivalentModifierMask = [.command]
@@ -729,6 +761,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleMoveToOtherPanel(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
         onMoveToOtherPanel?(contextItems)
+    }
+
+    @objc func handleCopyShareLink(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? CloudFileItem else { return }
+        onCreateShareLink?(item, false)
+    }
+
+    @objc func handleShareLinkWithOptions(_ sender: NSMenuItem) {
+        guard let item = sender.representedObject as? CloudFileItem else { return }
+        onCreateShareLink?(item, true)
     }
 
     @objc func handleAddToFavorites(_ sender: NSMenuItem) {

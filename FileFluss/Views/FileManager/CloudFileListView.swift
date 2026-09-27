@@ -28,6 +28,10 @@ struct CloudFileListView: View {
     @State private var showMountPrompt = false
     @State private var pendingFinderItems: [CloudFileItem] = []
     @State private var mountErrorMessage: String?
+    /// File awaiting the share-options sheet, and the result banner shown
+    /// after a link was copied.
+    @State private var shareLinkItem: CloudFileItem?
+    @State private var shareLinkResult: CloudShareLink?
     @State private var showMountError = false
 
     struct PendingUpload {
@@ -196,6 +200,23 @@ struct CloudFileListView: View {
                 onCancel: { showRenameDialog = false }
             )
         }
+        .sheet(item: $shareLinkItem) { item in
+            ShareLinkSheet(
+                fileName: item.name,
+                capabilities: vm.shareCapabilities,
+                onCreate: { options in
+                    createShareLink(for: item, options: options)
+                }
+            )
+        }
+        .overlay(alignment: .bottom) {
+            if let link = shareLinkResult {
+                shareLinkBanner(link)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: shareLinkResult != nil)
         .confirmationDialog(
             L10n.format("Do you want to mount “%@” in Finder?", accountDisplayName),
             isPresented: $showMountPrompt,
@@ -536,6 +557,72 @@ struct CloudFileListView: View {
     /// Right-click → Open in Finder. If the account is already mounted as a
     /// WebDAV drive, reveal the item inside that volume. Otherwise ask the
     /// user whether to mount it first, then reveal once the mount succeeds.
+    // MARK: - Share links
+
+    /// Preference set in Settings: copy the direct-download URL where the
+    /// provider offers one, rather than its landing page.
+    @AppStorage("shareLinkPreferDirectDownload") private var preferDirectDownload = true
+
+    private func createShareLink(for item: CloudFileItem, options: ShareLinkOptions) {
+        Task {
+            guard let link = await vm.createShareLink(
+                for: item,
+                options: options,
+                preferDirectDownload: preferDirectDownload
+            ) else { return }
+
+            shareLinkResult = link
+            // The banner is a confirmation, not a dialog — it goes away on
+            // its own. The link is already on the clipboard.
+            try? await Task.sleep(for: .seconds(6))
+            if shareLinkResult == link { shareLinkResult = nil }
+        }
+    }
+
+    private func shareLinkBanner(_ link: CloudShareLink) -> some View {
+        let shown = preferDirectDownload ? link.preferredURL : link.url
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "link")
+                    .foregroundStyle(.tint)
+                LText("Share link copied")
+                    .font(.callout.weight(.medium))
+                Spacer(minLength: 12)
+                Button {
+                    shareLinkResult = nil
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+            Text(shown.absoluteString)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if let expiresAt = link.expiresAt {
+                Text(L10n.format("Expires %@", expiresAt.formatted(date: .abbreviated, time: .shortened)))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            // Where the server granted less than we asked for, or the link
+            // behaves unusually, the provider's note explains it.
+            if let note = link.note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 420, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.secondary.opacity(0.2)))
+        .shadow(radius: 6, y: 2)
+    }
+
     private func openInFinder(_ items: [CloudFileItem]) {
         guard !items.isEmpty else { return }
         if let mount = appState.mountService.mount(for: accountId) {
@@ -823,6 +910,14 @@ struct CloudFileListView: View {
                     openInFinder(items)
                 },
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
+                shareCapabilities: vm.shareCapabilities,
+                onCreateShareLink: { item, wantsOptions in
+                    if wantsOptions {
+                        shareLinkItem = item
+                    } else {
+                        createShareLink(for: item, options: .default)
+                    }
+                },
                 isReadOnly: isReadOnly,
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode

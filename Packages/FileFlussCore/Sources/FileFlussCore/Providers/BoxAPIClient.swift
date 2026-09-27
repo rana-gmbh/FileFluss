@@ -274,6 +274,156 @@ public actor BoxAPIClient {
         return CloudStorageQuota(usedBytes: me.space_used ?? 0, totalBytes: total)
     }
 
+    // MARK: - Share links
+
+    /// The `shared_link` sub-object Box returns for an item. We only ever
+    /// ask for this one field (`?fields=shared_link`), so the envelope
+    /// stays this small.
+    private struct BoxSharedLinkEnvelope: Decodable {
+        struct SharedLink: Decodable {
+            let url: String?
+            /// Direct-download URL. Always null for folders, and null for
+            /// files whose effective permission is preview-only.
+            let download_url: String?
+            let is_password_enabled: Bool?
+            /// RFC3339, or absent when the link never expires.
+            let unshared_at: String?
+            /// What the link *actually* grants after enterprise policy is
+            /// applied: "open", "company" or "collaborators".
+            let effective_access: String?
+            /// "can_download" or "can_preview" after policy is applied.
+            let effective_permission: String?
+        }
+        let shared_link: SharedLink?
+    }
+
+    /// Creates (or updates) the public shared link on an existing item.
+    ///
+    /// `?fields=shared_link` is mandatory: without it Box answers 200 with
+    /// the plain item representation and no link in it at all.
+    ///
+    /// A password is only accepted alongside `access: "open"` and must be
+    /// at least 8 characters with a digit, an uppercase letter or a
+    /// non-alphanumeric; `unshared_at` is a paid-plan feature. Box rejects
+    /// both cases with its own explanation, which we pass through verbatim
+    /// rather than flattening into a generic error.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let entry = try await resolvePathToEntry(path)
+        let collection = entry.isFolder ? "folders" : "files"
+        guard let url = URL(string: "\(Self.apiURL)/\(collection)/\(entry.id)?fields=shared_link") else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        struct SharedLinkBody: Encodable {
+            struct Permissions: Encodable {
+                let can_download: Bool
+                let can_preview: Bool
+            }
+            struct Link: Encodable {
+                let access: String
+                let password: String?
+                let unshared_at: String?
+                let permissions: Permissions
+            }
+            let shared_link: Link
+        }
+
+        var unsharedAt: String?
+        if let expiry = options.expiry {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            unsharedAt = formatter.string(from: expiry)
+        }
+        let password = (options.password?.isEmpty == false) ? options.password : nil
+        let body = SharedLinkBody(shared_link: SharedLinkBody.Link(
+            access: "open",
+            password: password,
+            unshared_at: unsharedAt,
+            // Preview stays on even when downloads are off: that's the
+            // point of a view-only link.
+            permissions: .init(can_download: options.allowDownload, can_preview: true)
+        ))
+        let encodedBody = try JSONEncoder().encode(body)
+
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            request.httpBody = encodedBody
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            boxLog.info("[Box] PUT /\(collection)/\(entry.id) shared_link → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            boxLog.error("[Box] Share link failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            // Box explains the real cause (password policy, plan limits,
+            // admin restrictions) in its own message — surface it as-is.
+            if let message = Self.parseErrorMessage(from: data), !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+
+        let envelope = try JSONDecoder().decode(BoxSharedLinkEnvelope.self, from: data)
+        guard let link = envelope.shared_link, let raw = link.url, let shareURL = URL(string: raw) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: link.download_url.flatMap { URL(string: $0) },
+            expiresAt: Self.parseShareExpiry(link.unshared_at),
+            hasPassword: link.is_password_enabled ?? (password != nil),
+            note: Self.shareDowngradeNote(link: link, options: options)
+        )
+    }
+
+    /// Enterprise policy can silently downgrade what we asked for: a
+    /// shared link requested as "open" comes back scoped to "company" or
+    /// "collaborators", and downloads can be forced off. The request still
+    /// succeeds, so the only way the user learns the link isn't public is
+    /// if we read the effective values back and say so.
+    private static func shareDowngradeNote(
+        link: BoxSharedLinkEnvelope.SharedLink,
+        options: ShareLinkOptions
+    ) -> String? {
+        var notes: [String] = []
+        if let access = link.effective_access?.lowercased(), access != "open" {
+            if access == "company" {
+                notes.append(L10n.text("Your Box administrator restricted this link to people in your company — it is not publicly accessible."))
+            } else {
+                notes.append(L10n.text("Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible."))
+            }
+        }
+        if options.allowDownload, link.effective_permission?.lowercased() == "can_preview" {
+            notes.append(L10n.text("Your Box administrator disabled downloads for shared links — recipients can only preview the file."))
+        }
+        return notes.isEmpty ? nil : notes.joined(separator: " ")
+    }
+
+    /// Box returns `unshared_at` as RFC3339, with or without fractional
+    /// seconds depending on the endpoint.
+    private static func parseShareExpiry(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: raw) { return date }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: raw)
+    }
+
     // MARK: - File operations
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {

@@ -240,9 +240,111 @@ public actor PCloudAPIClient {
         )
     }
 
+    // MARK: - Share links
+
+    /// `getfilepublink` reply. `code` is the short public-link code that
+    /// `getpublinkdownload` needs to resolve the CDN URL.
+    private struct PCloudPubLinkResponse: Decodable {
+        let result: Int
+        let error: String?
+        let link: String?
+        let linkid: UInt64?
+        let code: String?
+    }
+
+    /// Creates a public download link for `path`.
+    ///
+    /// Password (`linkpassword`) and expiry (`expire`) are Premium-only
+    /// features: a free account gets a non-zero `result` with pCloud's own
+    /// wording, which we pass through verbatim rather than flattening to a
+    /// code the user can't act on.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        // Every other call in this client addresses files by `path`, so use
+        // that rather than `fileid` — no extra stat round-trip needed.
+        var params: [String: String] = ["path": path]
+        if let password = options.password, !password.isEmpty {
+            params["linkpassword"] = password
+        }
+        if let expiry = options.expiry {
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(secondsFromGMT: 0)
+            fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+            params["expire"] = fmt.string(from: expiry)
+        }
+
+        let response: PCloudPubLinkResponse = try await requestSurfacingServerMessage("getfilepublink", params: params)
+        guard let link = response.link, let shareURL = URL(string: link) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // Second hop resolves the landing page to a host we can stream the
+        // bytes from. Best effort: a landing-page-only link is still useful,
+        // so a failure here must not sink the whole operation.
+        var direct: URL?
+        if let code = response.code {
+            direct = try? await publicLinkDownloadURL(code: code)
+        }
+
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: direct,
+            // `getfilepublink` doesn't echo the effective expiry back, so
+            // report what we asked for.
+            expiresAt: options.expiry,
+            hasPassword: !(options.password ?? "").isEmpty
+        )
+    }
+
+    /// Resolves a public-link `code` to the CDN URL serving the file bytes —
+    /// same `hosts` + `path` shape as `getfilelink`.
+    private func publicLinkDownloadURL(code: String) async throws -> URL {
+        let response: PCloudFileLinkResponse = try await request("getpublinkdownload", params: ["code": code])
+        guard let host = response.hosts?.first, let filePath = response.path,
+              let url = URL(string: "https://\(host)\(filePath)") else {
+            throw CloudProviderError.invalidResponse
+        }
+        return url
+    }
+
     // MARK: - HTTP
 
     private func request<T: Decodable>(_ method: String, params: [String: String]) async throws -> T {
+        let data = try await fetch(method, params: params)
+
+        // Check pCloud result code
+        if let basicResult = try? JSONDecoder().decode(PCloudBasicResponse.self, from: data),
+           basicResult.result != 0 {
+            throw Self.mapError(code: basicResult.result)
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Variant of `request` that surfaces pCloud's own `error` text.
+    ///
+    /// The plain helper collapses a non-zero `result` to a mapped code so
+    /// callers like `deleteFile` can pattern-match on `.notFound` /
+    /// `.serverError(2055)`. Share-link creation wants the opposite: its
+    /// interesting failures (password and expiry need Premium) are only
+    /// explicable in pCloud's own words.
+    private func requestSurfacingServerMessage<T: Decodable>(_ method: String, params: [String: String]) async throws -> T {
+        let data = try await fetch(method, params: params)
+
+        if let envelope = try? JSONDecoder().decode(PCloudErrorEnvelope.self, from: data), envelope.result != 0 {
+            if let message = envelope.error, !message.isEmpty {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapError(code: envelope.result)
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Shared plumbing: auth-stamped GET against the account's own API host
+    /// (`api.pcloud.com` for US accounts, `eapi.pcloud.com` for EU ones —
+    /// `credentials.hostname` records which one logged in).
+    private func fetch(_ method: String, params: [String: String]) async throws -> Data {
         var components = URLComponents(string: "\(baseURL)/\(method)")!
         var queryItems = [URLQueryItem(name: "auth", value: credentials.accessToken)]
         for (key, value) in params {
@@ -264,13 +366,7 @@ public actor PCloudAPIClient {
             throw CloudProviderError.serverError(httpResponse.statusCode)
         }
 
-        // Check pCloud result code
-        if let basicResult = try? JSONDecoder().decode(PCloudBasicResponse.self, from: data),
-           basicResult.result != 0 {
-            throw Self.mapError(code: basicResult.result)
-        }
-
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 
     private static func mapError(code: Int) -> CloudProviderError {
@@ -291,6 +387,13 @@ public actor PCloudAPIClient {
 
 struct PCloudBasicResponse: Decodable {
     let result: Int
+}
+
+/// Non-zero `result` plus pCloud's own human-readable reason. Used where a
+/// caller wants to show the server's wording instead of a mapped code.
+struct PCloudErrorEnvelope: Decodable {
+    let result: Int
+    let error: String?
 }
 
 struct PCloudListFolderResponse: Decodable {

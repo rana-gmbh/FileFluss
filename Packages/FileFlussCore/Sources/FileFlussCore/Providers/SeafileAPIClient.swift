@@ -608,7 +608,145 @@ public actor SeafileAPIClient {
         return entries.first(where: { $0.name == name })?.type == "dir"
     }
 
-    // MARK: - Errors
+    // MARK: - Share links
+
+    /// Request body for `POST /api/v2.1/share-links/`. Optional fields are
+    /// omitted by `JSONEncoder` when nil, which matters here: sending
+    /// `expire_days: null` is rejected by servers that would happily accept
+    /// the key being absent.
+    private struct SeafileShareLinkRequest: Encodable {
+        struct Permissions: Encodable {
+            let can_edit: Bool
+            let can_download: Bool
+            let can_upload: Bool
+        }
+        let repo_id: String
+        let path: String
+        let password: String?
+        let expire_days: Int?
+        let permissions: Permissions?
+    }
+
+    /// Successful response shape. `link` is the landing page
+    /// (`https://server/f/<token>/`); the rest is echoed-back state we use to
+    /// report what the server actually granted.
+    private struct SeafileShareLinkResponse: Decodable {
+        struct Permissions: Decodable {
+            let can_edit: Bool?
+            let can_download: Bool?
+            let can_upload: Bool?
+        }
+        let link: String?
+        let token: String?
+        let expire_date: String?
+        let is_expired: Bool?
+        let permissions: Permissions?
+    }
+
+    /// Seafile's error bodies aren't consistent across versions and API
+    /// generations: v2.1 endpoints use `error_msg`, DRF's own validation
+    /// layer uses `detail`, and a few older paths use `error`.
+    private struct SeafileErrorBody: Decodable {
+        let error_msg: String?
+        let detail: String?
+        let error: String?
+
+        var message: String? {
+            [error_msg, detail, error]
+                .compactMap { $0 }
+                .first { !$0.isEmpty }
+        }
+    }
+
+    /// Creates a public share link for a file or folder.
+    ///
+    /// Seafile's API is library-scoped, so the panel-level path is split into
+    /// `(repo_id, path)` by the same `resolveLibrary(forPath:)` used by every
+    /// other call. An admin can force a password or an expiry — or switch
+    /// link sharing off entirely — so we surface the server's `error_msg`
+    /// verbatim rather than a generic failure.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let resolved = try await resolveLibrary(forPath: path) else {
+            throw CloudProviderError.commandFailed("Cannot share the Seafile library list — pick a file or folder inside a library.")
+        }
+
+        // Seafile takes a whole number of days, not a date. Round up so a
+        // "tomorrow morning" pick never lands in the past, and keep the
+        // minimum at 1 — 0 means "never expires" to the server.
+        var expireDays: Int?
+        if let expiry = options.expiry {
+            expireDays = max(1, Int(ceil(expiry.timeIntervalSinceNow / 86_400)))
+        }
+
+        // Only send `permissions` when we actually need to restrict something:
+        // the key arrived in Seafile 9 and older servers reject unknown fields.
+        let permissions = options.allowDownload
+            ? nil
+            : SeafileShareLinkRequest.Permissions(can_edit: false, can_download: false, can_upload: false)
+
+        let payload = SeafileShareLinkRequest(
+            repo_id: resolved.repoId,
+            path: resolved.innerPath.isEmpty ? "/" : resolved.innerPath,
+            password: (options.password?.isEmpty ?? true) ? nil : options.password,
+            expire_days: expireDays,
+            permissions: permissions
+        )
+
+        var request = try authenticatedRequest(path: "/api/v2.1/share-links/")
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            seafileLog.error("[Seafile] share-links failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if let message = (try? JSONDecoder().decode(SeafileErrorBody.self, from: data))?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+
+        let parsed = try JSONDecoder().decode(SeafileShareLinkResponse.self, from: data)
+        guard let link = parsed.link, let shareURL = URL(string: link) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // `?dl=1` on the landing page streams the file itself. Pointless when
+        // the link was created without download permission.
+        let canDownload = parsed.permissions?.can_download ?? options.allowDownload
+        let direct = canDownload
+            ? URL(string: link.contains("?") ? "\(link)&dl=1" : "\(link)?dl=1")
+            : nil
+
+        return CloudShareLink(
+            url: shareURL,
+            directDownloadURL: direct,
+            expiresAt: Self.parseShareExpiry(parsed.expire_date),
+            hasPassword: !(options.password ?? "").isEmpty
+        )
+    }
+
+    /// Seafile reports `expire_date` as an ISO-8601 stamp — with an offset on
+    /// current releases, without one on some older builds — and as `""` or
+    /// null when the link never expires.
+    private static func parseShareExpiry(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: raw) { return date }
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: raw) { return date }
+        // Zone-less fallback: the server's own local time, which is the best
+        // we can do without a timezone hint.
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return fmt.date(from: raw)
+    }
 
     // MARK: - Self-signed cert support
 

@@ -41,6 +41,10 @@ final class CloudFileManagerViewModel {
     /// either because the provider doesn't support quota (S3, SFTP,
     /// WordPress) or because the first probe hasn't completed.
     var storageQuota: CloudStorageQuota?
+    /// What this account's provider can do with public share links.
+    /// Refreshed with each directory load; `.unsupported` until then, so
+    /// the menu simply omits the entries for providers without sharing.
+    var shareCapabilities: ShareLinkCapabilities = .unsupported
 
     let quickLookController = QuickLookController()
 
@@ -199,6 +203,11 @@ final class CloudFileManagerViewModel {
             }
 
             let loadedItems = try await provider.listDirectory(at: targetPath)
+
+            // Cheap (it's a static property) but only reachable through the
+            // provider actor, so cache it here: the context menu is built
+            // synchronously and can't await anything.
+            self.shareCapabilities = provider.shareLinkCapabilities
 
             // A racing load might have already moved the panel elsewhere
             // (the user clicked rapidly through folders). Drop the result
@@ -555,6 +564,43 @@ final class CloudFileManagerViewModel {
             downloadedCount += 1
             progress?.totalFiles = downloadedCount
             progress?.completedItems = downloadedCount
+        }
+    }
+
+    // MARK: - Share links
+
+    /// Creates a public link for `item` and puts it on the clipboard.
+    /// Returns the link on success, nil on failure — in which case
+    /// `error` carries the server's own message, which is what the user
+    /// needs: the usual reasons are an admin disabling link sharing or a
+    /// password/expiry needing a paid plan.
+    func createShareLink(
+        for item: CloudFileItem,
+        options: ShareLinkOptions,
+        preferDirectDownload: Bool
+    ) async -> CloudShareLink? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            error = L10n.text("Cloud account not connected")
+            return nil
+        }
+
+        do {
+            let link = try await provider.createShareLink(at: item.path, options: options)
+            let url = preferDirectDownload ? link.preferredURL : link.url
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(url.absoluteString, forType: .string)
+            return link
+        } catch CloudProviderError.unauthorized, CloudProviderError.notAuthenticated {
+            // Dropbox accounts linked before sharing support was added hold a
+            // token without the `sharing.write` scope; the panel's existing
+            // re-auth banner is the right way out.
+            needsReAuth = true
+            error = CloudProviderError.unauthorized.localizedDescription
+            return nil
+        } catch {
+            self.error = error.localizedDescription
+            return nil
         }
     }
 

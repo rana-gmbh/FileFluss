@@ -68,6 +68,19 @@ public protocol CloudProvider: Sendable {
     /// behaviour across drives, local folders, and cloud accounts.
     func setModificationDate(at remotePath: String, to date: Date) async throws
 
+    /// What this provider's public-link API can do. Defaults to
+    /// `.unsupported` so providers without sharing need no changes; the
+    /// context menu uses it to decide which entries to offer.
+    var shareLinkCapabilities: ShareLinkCapabilities { get }
+
+    /// Creates a public share link for an existing remote file. Default
+    /// implementation throws `.notImplemented`.
+    ///
+    /// Implementations should return the server's own error message where
+    /// they can: the common failures (admin disabled link sharing, password
+    /// or expiry needs a paid plan) are only explicable server-side.
+    func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink
+
     /// Account-wide storage usage. Returning nil means the provider has no
     /// quota API or hasn't been wired to surface one — the status bar then
     /// renders no quota line for that account. The default implementation
@@ -111,5 +124,11 @@ extension CloudProvider {
 
     public func storageQuota() async throws -> CloudStorageQuota? {
         nil
+    }
+
+    public var shareLinkCapabilities: ShareLinkCapabilities { .unsupported }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        throw CloudProviderError.notImplemented
     }
 }

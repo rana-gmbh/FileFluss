@@ -40,10 +40,19 @@ public actor DropboxAPIClient {
     /// (/users/get_space_usage) and account name lookup; `files.metadata.read`
     /// covers listing/search/get_metadata; `files.content.read` covers
     /// downloads; `files.content.write` covers upload/delete/move/copy/
-    /// create_folder. We deliberately do NOT request `files.metadata.write`
-    /// (only needed for the file-properties/templates API, which we don't use)
-    /// or `account_info.write` (we never modify the account).
-    static let oauthScopes = "account_info.read files.metadata.read files.content.read files.content.write"
+    /// create_folder; `sharing.write` covers creating public share links
+    /// (/sharing/create_shared_link_with_settings). We deliberately do NOT
+    /// request `files.metadata.write` (only needed for the
+    /// file-properties/templates API, which we don't use) or
+    /// `account_info.write` (we never modify the account).
+    ///
+    /// Accounts linked before `sharing.write` joined this list still hold a
+    /// token without it. The sharing call then fails with HTTP 401 and a
+    /// `missing_scope` tag — the same failure shape as the `account_info.read`
+    /// case noted on `storageQuota` — which `createShareLink` maps to
+    /// `.unauthorized` so the panel's re-auth banner asks the user to sign in
+    /// again and pick the new scope up.
+    static let oauthScopes = "account_info.read files.metadata.read files.content.read files.content.write sharing.write"
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
@@ -641,6 +650,194 @@ public actor DropboxAPIClient {
         return total
     }
 
+    // MARK: - Share links
+
+    /// Creates a public link for `path` — or hands back the one that already
+    /// exists.
+    ///
+    /// Dropbox reports "this file is already shared" as an *error*
+    /// (`shared_link_already_exists`) rather than returning the link, so the
+    /// failure body has to be inspected: it normally carries the existing
+    /// link's metadata inline, and when it doesn't we ask
+    /// /sharing/list_shared_links for it.
+    ///
+    /// `require_password` and `expires` are Professional/Business features. A
+    /// free account gets a `settings_error`, whose `error_summary` we surface
+    /// verbatim — only Dropbox can explain which plan the user would need.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        struct Settings: Encodable {
+            let require_password: Bool?
+            let link_password: String?
+            let expires: String?
+            let allow_download: Bool
+            let access: String
+        }
+        struct CreateRequest: Encodable {
+            let path: String
+            let settings: Settings
+        }
+
+        let dbPath = dropboxPath(path)
+        let password = (options.password?.isEmpty == false) ? options.password : nil
+        let requestBody = CreateRequest(
+            path: dbPath,
+            settings: Settings(
+                // Omitted rather than sent as false: on a free account any
+                // password field at all turns the call into a settings_error.
+                require_password: password != nil ? true : nil,
+                link_password: password,
+                expires: options.expiry.map(Self.dropboxTimestamp),
+                allow_download: options.allowDownload,
+                // "viewer" is view+comment. The edit access levels need a
+                // shared *folder*, which a public file link isn't.
+                access: "viewer"
+            )
+        )
+
+        let (data, http) = try await rpcRaw(
+            path: "/sharing/create_shared_link_with_settings",
+            encodedBody: try JSONEncoder().encode(requestBody)
+        )
+        if (200...299).contains(http.statusCode) {
+            let metadata = try JSONDecoder().decode(DropboxSharedLinkMetadata.self, from: data)
+            return try Self.shareLink(from: metadata, requestedPassword: password != nil)
+        }
+
+        // A token minted before `sharing.write` was requested (see oauthScopes):
+        // no refresh can fix it, the user has to re-link, and `.unauthorized`
+        // is what drives the panel's re-auth banner.
+        if Self.isMissingScope(statusCode: http.statusCode, body: data) {
+            dropboxLog.error("[Dropbox] create_shared_link_with_settings rejected: token lacks the sharing.write scope")
+            throw CloudProviderError.unauthorized
+        }
+
+        let envelope = try? JSONDecoder().decode(DropboxShareErrorEnvelope.self, from: data)
+
+        // Already shared: the error payload *is* the link we wanted.
+        if let alreadyExists = envelope?.error?.shared_link_already_exists {
+            if let metadata = alreadyExists.metadata {
+                return try Self.shareLink(
+                    from: metadata,
+                    requestedPassword: false,
+                    note: Self.existingLinkNote(options: options)
+                )
+            }
+            // Dropbox can answer `.tag: "unverified"` with no metadata at all.
+            // The link exists, we just weren't told which one — look it up.
+            // Best-effort: the lookup needs the `sharing.read` scope we don't
+            // request, so a failure here must not replace the real situation
+            // ("already shared") with a scope error.
+            if let existing = try? await firstDirectSharedLink(path: dbPath) {
+                return try Self.shareLink(
+                    from: existing,
+                    requestedPassword: false,
+                    note: Self.existingLinkNote(options: options)
+                )
+            }
+            throw CloudProviderError.commandFailed(
+                L10n.text("This file already has a public link. Open it in Dropbox to copy that link.")
+            )
+        }
+
+        if let summary = envelope?.error_summary, !summary.isEmpty {
+            throw CloudProviderError.commandFailed(summary)
+        }
+        throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+    }
+
+    /// Existing links for one path. `direct_only` drops links that were
+    /// inherited from a shared parent folder, leaving only links to the file
+    /// itself — which is what `shared_link_already_exists` refers to.
+    ///
+    /// Note this endpoint is gated on `sharing.read`, which we don't request,
+    /// so in practice it fails with `missing_scope`. The one caller treats it
+    /// as best-effort for exactly that reason; adding `sharing.read` to
+    /// `oauthScopes` (and enabling it in the Dropbox app console) is what
+    /// would make this path actually resolve the existing link.
+    private func firstDirectSharedLink(path: String) async throws -> DropboxSharedLinkMetadata? {
+        struct ListRequest: Encodable {
+            let path: String
+            let direct_only: Bool
+        }
+        struct ListResponse: Decodable {
+            let links: [DropboxSharedLinkMetadata]
+        }
+        let response: ListResponse = try await rpcRequest(
+            path: "/sharing/list_shared_links",
+            body: ListRequest(path: path, direct_only: true)
+        )
+        return response.links.first
+    }
+
+    private static func shareLink(
+        from metadata: DropboxSharedLinkMetadata,
+        requestedPassword: Bool,
+        note: String? = nil
+    ) throws -> CloudShareLink {
+        guard let url = URL(string: metadata.url) else { throw CloudProviderError.invalidResponse }
+        // Honour what the server reports, falling back to what we asked for
+        // when it leaves the field out.
+        let allowsDownload = metadata.link_permissions?.allow_download ?? true
+        return CloudShareLink(
+            url: url,
+            directDownloadURL: allowsDownload ? Self.directDownloadURL(from: metadata.url) : nil,
+            expiresAt: metadata.expires.flatMap { Self.dropboxDate(from: $0) },
+            hasPassword: metadata.link_permissions?.require_password ?? requestedPassword,
+            note: note
+        )
+    }
+
+    /// Dropbox hands back a preview link ending in `?dl=0`; flipping the
+    /// parameter to `dl=1` streams the bytes. Rebuilding the query rather
+    /// than string-replacing also covers a link that arrives with `dl=1`
+    /// already, or with no `dl` at all (then it's appended with the right
+    /// `?`/`&` separator).
+    private static func directDownloadURL(from raw: String) -> URL? {
+        guard var components = URLComponents(string: raw) else { return nil }
+        var items = components.queryItems ?? []
+        if let index = items.firstIndex(where: { $0.name == "dl" }) {
+            items[index].value = "1"
+        } else {
+            items.append(URLQueryItem(name: "dl", value: "1"))
+        }
+        components.queryItems = items
+        return components.url
+    }
+
+    /// The already-exists path returns the link Dropbox already had, with its
+    /// own settings — nothing we asked for was applied, so say so when the
+    /// user actually asked for something.
+    private static func existingLinkNote(options: ShareLinkOptions) -> String? {
+        let askedForSettings = !(options.password ?? "").isEmpty || options.expiry != nil || !options.allowDownload
+        guard askedForSettings else { return nil }
+        return L10n.text("This file already had a public link, so the requested settings were not applied.")
+    }
+
+    /// Whole-second UTC ("2026-01-01T12:00:00Z"). Dropbox rejects a
+    /// fractional-seconds timestamp as a malformed datetime.
+    private static func dropboxTimestamp(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
+    }
+
+    private static func dropboxDate(from raw: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.date(from: raw)
+    }
+
+    /// Dropbox answers a scope-less token with HTTP 401 and a `missing_scope`
+    /// tag naming the scope it wanted. Matched on the raw body in the same
+    /// spirit as the `not_found` check in `mapHTTPError` — the 401 envelope is
+    /// plain text as often as JSON.
+    private static func isMissingScope(statusCode: Int, body: Data) -> Bool {
+        guard statusCode == 401, let text = String(data: body, encoding: .utf8) else { return false }
+        return text.contains("missing_scope")
+    }
+
     // MARK: - RPC Helper
 
     /// Force a refresh regardless of the cached `expiresAt`. Used after a
@@ -741,90 +938,59 @@ public actor DropboxAPIClient {
         return response.matches.compactMap { $0.metadata.metadata.toCloudFileItem() }
     }
 
-    private func rpcRequest<B: Encodable, T: Decodable>(path: String, body: B) async throws -> T {
+    /// Sends an RPC POST and returns the response as-is, error statuses
+    /// included. `rpcRequest`/`rpcRequestVoid` add the usual status check on
+    /// top; the sharing path needs the raw body, because Dropbox reports
+    /// "link already exists" as an error whose payload is the link we want.
+    ///
+    /// Keeping the token handling here means there is still exactly one auth
+    /// path: refresh-if-stale, and one forced refresh + retry on a 401.
+    private func rpcRaw(path: String, encodedBody: Data) async throws -> (Data, HTTPURLResponse) {
         let creds = try await refreshTokenIfNeeded()
-        let encodedBody = try JSONEncoder().encode(body)
         let url = URL(string: "\(Self.rpcURL)\(path)")!
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = encodedBody
+        func send(accessToken: String) async throws -> (Data, HTTPURLResponse) {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = encodedBody
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CloudProviderError.invalidResponse
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw CloudProviderError.invalidResponse
+            }
+            return (data, http)
         }
+
+        var (data, http) = try await send(accessToken: creds.accessToken)
 
         // Retry once on 401 with a forced token refresh
         if http.statusCode == 401 {
             dropboxLog.info("[Dropbox] Got 401 on \(path), refreshing token and retrying")
             let newCreds = try await forceRefreshToken()
-            var retryRequest = URLRequest(url: url)
-            retryRequest.httpMethod = "POST"
-            retryRequest.setValue("Bearer \(newCreds.accessToken)", forHTTPHeaderField: "Authorization")
-            retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            retryRequest.httpBody = encodedBody
-
-            let (retryData, retryResponse) = try await session.data(for: retryRequest)
-            guard let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) else {
-                let retryHttp = retryResponse as? HTTPURLResponse
-                let bodyStr = String(data: retryData, encoding: .utf8) ?? ""
-                dropboxLog.error("[Dropbox] Retry POST \(path) → HTTP \(retryHttp?.statusCode ?? 0): \(bodyStr.prefix(1000))")
-                throw Self.mapHTTPError(statusCode: retryHttp?.statusCode ?? 0, responseBody: retryData)
-            }
-            return try JSONDecoder().decode(T.self, from: retryData)
+            (data, http) = try await send(accessToken: newCreds.accessToken)
         }
 
-        guard (200...299).contains(http.statusCode) else {
+        if !(200...299).contains(http.statusCode) {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             dropboxLog.error("[Dropbox] POST \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(1000))")
-            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
         }
 
+        return (data, http)
+    }
+
+    private func rpcRequest<B: Encodable, T: Decodable>(path: String, body: B) async throws -> T {
+        let (data, http) = try await rpcRaw(path: path, encodedBody: try JSONEncoder().encode(body))
+        guard (200...299).contains(http.statusCode) else {
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
         return try JSONDecoder().decode(T.self, from: data)
     }
 
     private func rpcRequestVoid<B: Encodable>(path: String, body: B) async throws {
-        let creds = try await refreshTokenIfNeeded()
-        let encodedBody = try JSONEncoder().encode(body)
-        let url = URL(string: "\(Self.rpcURL)\(path)")!
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = encodedBody
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw CloudProviderError.invalidResponse
-        }
-
-        // Retry once on 401 with a forced token refresh
-        if http.statusCode == 401 {
-            dropboxLog.info("[Dropbox] Got 401 on \(path), refreshing token and retrying")
-            let newCreds = try await forceRefreshToken()
-            var retryRequest = URLRequest(url: url)
-            retryRequest.httpMethod = "POST"
-            retryRequest.setValue("Bearer \(newCreds.accessToken)", forHTTPHeaderField: "Authorization")
-            retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            retryRequest.httpBody = encodedBody
-
-            let (retryData, retryResponse) = try await session.data(for: retryRequest)
-            guard let retryHttp = retryResponse as? HTTPURLResponse, (200...299).contains(retryHttp.statusCode) else {
-                let retryHttp = retryResponse as? HTTPURLResponse
-                let bodyStr = String(data: retryData, encoding: .utf8) ?? ""
-                dropboxLog.error("[Dropbox] Retry POST \(path) → HTTP \(retryHttp?.statusCode ?? 0): \(bodyStr.prefix(1000))")
-                throw Self.mapHTTPError(statusCode: retryHttp?.statusCode ?? 0, responseBody: retryData)
-            }
-            return
-        }
-
+        let (data, http) = try await rpcRaw(path: path, encodedBody: try JSONEncoder().encode(body))
         guard (200...299).contains(http.statusCode) else {
-            let bodyStr = String(data: data, encoding: .utf8) ?? ""
-            dropboxLog.error("[Dropbox] POST \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(1000))")
             throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
         }
     }
@@ -946,6 +1112,47 @@ private struct DropboxAccountInfo: Decodable {
 
     struct DropboxName: Decodable {
         let display_name: String
+    }
+}
+
+/// The part of Dropbox's `SharedLinkMetadata` we use. Returned both by
+/// /sharing/create_shared_link_with_settings and, for a link that already
+/// existed, nested inside that call's error body.
+private struct DropboxSharedLinkMetadata: Decodable {
+    /// Preview link, ending in `?dl=0`.
+    let url: String
+    /// ISO8601 UTC; present only on a link that is set to expire.
+    let expires: String?
+    let link_permissions: LinkPermissions?
+
+    struct LinkPermissions: Decodable {
+        let require_password: Bool?
+        let allow_download: Bool?
+    }
+}
+
+/// Error envelope of /sharing/create_shared_link_with_settings. The
+/// `shared_link_already_exists` member isn't really a failure: its payload
+/// carries the metadata of the link the file already has.
+private struct DropboxShareErrorEnvelope: Decodable {
+    /// Dropbox's own summary, e.g. `settings_error/not_authorized/` for a
+    /// password or expiry on a free plan. Surfaced to the user verbatim.
+    let error_summary: String?
+    let error: ErrorDetail?
+
+    struct ErrorDetail: Decodable {
+        let tag: String?
+        let shared_link_already_exists: AlreadyExists?
+
+        enum CodingKeys: String, CodingKey {
+            case tag = ".tag"
+            case shared_link_already_exists
+        }
+
+        /// `.tag` is "metadata" (with the link) or "unverified" (without).
+        struct AlreadyExists: Decodable {
+            let metadata: DropboxSharedLinkMetadata?
+        }
     }
 }
 

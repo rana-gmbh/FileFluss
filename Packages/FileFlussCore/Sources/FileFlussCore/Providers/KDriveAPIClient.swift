@@ -354,6 +354,85 @@ public actor KDriveAPIClient {
         return total
     }
 
+    // MARK: - Share links
+
+    /// Request body for `POST /2/drive/{driveId}/files/{fileId}/link`.
+    /// Optional fields are dropped by `JSONEncoder` when nil, which keeps
+    /// `valid_until` out of the request entirely on free tiers where the
+    /// field isn't allowed.
+    private struct ShareLinkBody: Encodable {
+        /// `"public"` for an open link, `"password"` when one is set — the
+        /// password alone doesn't switch the mode.
+        let right: String
+        let password: String?
+        let valid_until: Int?
+        let can_download: Bool
+        let can_edit: Bool
+    }
+
+    /// Creates a public share link for the file or folder at `path`.
+    ///
+    /// Expiry is a paid kSuite feature: free workspaces reject `valid_until`
+    /// with their own explanation, so the response body's message is surfaced
+    /// verbatim instead of a bare status code. Unlike the other calls in this
+    /// file this one doesn't go through `request(_:path:…)` for exactly that
+    /// reason — the generic helper discards the body on failure.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let fileId = try await resolvePathToId(path)
+        let url = URL(string: "\(baseURL)/2/drive/\(credentials.driveId)/files/\(fileId)/link")!
+
+        let password = (options.password?.isEmpty ?? true) ? nil : options.password
+        let body = ShareLinkBody(
+            right: password == nil ? "public" : "password",
+            password: password,
+            // Infomaniak dates are Unix timestamps throughout this API
+            // (`last_modified_at`, `created_at`), so `valid_until` follows.
+            valid_until: options.expiry.map { Int($0.timeIntervalSince1970) },
+            can_download: options.allowDownload,
+            can_edit: false
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(status) else {
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            KDriveProvider.log("[kDrive API] POST files/\(fileId)/link → HTTP \(status): \(bodyStr.prefix(500))")
+            if let message = (try? JSONDecoder().decode(KDriveErrorEnvelope.self, from: data))?.error?.message {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapHTTPError(statusCode: status)
+        }
+
+        let parsed = try JSONDecoder().decode(KDriveResponse<KDriveShareLink>.self, from: data)
+        guard let linkURL = URL(string: parsed.data.url) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        // `capabilities` reports what the link ended up permitting, which can
+        // be less than we asked for on restricted workspaces — worth telling
+        // the user rather than silently disagreeing with the sheet.
+        var note: String?
+        if options.allowDownload, parsed.data.capabilities?.canDownload == false {
+            note = L10n.text("kDrive created the link without download permission — recipients can view the file only.")
+        }
+
+        // kDrive documents no direct-download variant of the share URL — the
+        // link always lands on Infomaniak's viewer page.
+        return CloudShareLink(
+            url: linkURL,
+            directDownloadURL: nil,
+            expiresAt: parsed.data.validUntil.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+            hasPassword: parsed.data.right == "password" || password != nil,
+            note: note
+        )
+    }
+
     // MARK: - User Info
 
     public func userInfo() async throws -> String {
@@ -478,6 +557,60 @@ struct KDriveDriveInfo: Decodable {
 
 struct KDriveFolderSize: Decodable {
     let size: Int64
+}
+
+/// `data` payload of `POST /2/drive/{driveId}/files/{fileId}/link`.
+/// `valid_until` is null for a link that never expires, and `capabilities`
+/// reports what the created link actually permits.
+struct KDriveShareLink: Decodable {
+    struct Capabilities: Decodable {
+        let canEdit: Bool?
+        let canDownload: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case canEdit = "can_edit"
+            case canDownload = "can_download"
+        }
+    }
+
+    let url: String
+    /// `"public"` or `"password"` — echoed back from the request.
+    let right: String?
+    let validUntil: Int?
+    let capabilities: Capabilities?
+
+    private enum CodingKeys: String, CodingKey {
+        case url, right, capabilities
+        case validUntil = "valid_until"
+    }
+}
+
+/// Infomaniak's failure envelope: `{"result":"error","error":{"code":…,
+/// "description":…}}`. Some endpoints send `message` instead of
+/// `description`, so both are accepted and the code is the last resort.
+struct KDriveErrorEnvelope: Decodable {
+    struct APIError: Decodable {
+        let code: String?
+        let errorDescription: String?
+        let messageText: String?
+
+        /// Best human-readable text this error carries. The error code is the
+        /// last resort — it's terse (`"validation_failed"`) but still more
+        /// useful than an HTTP status on its own.
+        var message: String? {
+            [errorDescription, messageText, code]
+                .compactMap { $0 }
+                .first { !$0.isEmpty }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case code
+            case errorDescription = "description"
+            case messageText = "message"
+        }
+    }
+    let result: String?
+    let error: APIError?
 }
 
 struct KDriveFileMetadata: Decodable {

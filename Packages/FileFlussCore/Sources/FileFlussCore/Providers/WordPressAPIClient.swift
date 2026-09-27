@@ -302,6 +302,29 @@ public actor WordPressAPIClient {
         return mediaItemToCloudFile(item, basePath: (path as NSString).deletingLastPathComponent)
     }
 
+    /// WordPress media is already served publicly from the uploads
+    /// directory, so "sharing" means handing back `source_url` — which is
+    /// itself the direct-download URL. Nothing is changed on the server.
+    ///
+    /// The URL is only reachable if the uploads directory is publicly
+    /// served: membership plugins, private sites and maintenance mode can
+    /// all make it 403/404, and we deliberately don't promise otherwise.
+    public func publicMediaURL(at path: String) async throws -> URL {
+        let mediaId = try await resolveMediaId(for: path)
+
+        let request = try makeRequest(path: "/media/\(mediaId)", query: [])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw CloudProviderError.notFound(path)
+        }
+
+        let item = try JSONDecoder().decode(WPMediaItem.self, from: data)
+        guard let source = item.source_url, let url = URL(string: source) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return url
+    }
+
     public func folderSize(path: String) async throws -> Int64 {
         let items = try await listFolder(path: path)
         var total: Int64 = 0

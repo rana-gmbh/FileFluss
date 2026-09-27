@@ -201,6 +201,26 @@ public final class KDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// kDrive's link API covers the full set, but expiry (`valid_until`) is a
+    /// paid kSuite feature — free workspaces reject it. We still offer the
+    /// control and let the server explain itself when it refuses, which is
+    /// the only place that distinction is knowable.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            supportsPassword: true,
+            supportsExpiry: true,
+            supportsDownloadToggle: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {
