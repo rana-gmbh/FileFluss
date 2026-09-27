@@ -128,4 +128,34 @@ public final class JottacloudProvider: CloudProvider, @unchecked Sendable {
         guard let client = apiClient else { return nil }
         return try await client.storageQuota()
     }
+
+    // MARK: - Share links
+
+    /// Jottacloud sharing is a plain on/off toggle: `enableShare` takes no
+    /// password, no expiry and no view-without-download mode, and the link
+    /// can be read back off the file and switched off again. With nothing a
+    /// change could apply to, `canUpdate` stays false.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            canQueryExisting: true,
+            canUpdate: false,
+            canRemove: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
+    }
 }

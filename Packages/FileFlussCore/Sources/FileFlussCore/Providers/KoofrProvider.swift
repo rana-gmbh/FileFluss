@@ -105,6 +105,36 @@ public final class KoofrProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Share links
+
+    /// Koofr's link API takes a path and nothing else: no password, no expiry,
+    /// no view-without-download mode. Links can be created, listed back and
+    /// deleted, so those three are offered; there is no verified way to change
+    /// a live link, which is why `canUpdate` stays false.
+    public var shareLinkCapabilities: ShareLinkCapabilities {
+        ShareLinkCapabilities(
+            canCreate: true,
+            canQueryExisting: true,
+            canUpdate: false,
+            canRemove: true
+        )
+    }
+
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.createShareLink(at: path, options: options)
+    }
+
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.existingShareLink(at: path)
+    }
+
+    public func removeShareLink(at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.removeShareLink(at: path)
+    }
+
     // MARK: - Private
 
     private func restoreCredentials() {

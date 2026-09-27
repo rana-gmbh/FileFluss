@@ -247,6 +247,173 @@ public actor KoofrAPIClient {
         return total
     }
 
+    // MARK: - Share links
+    //
+    // Koofr's published API reference doesn't document link sharing at all.
+    // The endpoints below are the ones rclone's "koofr" backend has shipped
+    // for years (`/mounts/{mountId}/links`), so they're treated as observed
+    // behaviour rather than a contract.
+    //
+    //   POST   /mounts/{mountId}/links        {"path":"/full/path"}  → link
+    //   GET    /mounts/{mountId}/links                               → all links
+    //   DELETE /mounts/{mountId}/links/{id}                          → unshare
+    //
+    // There is no create-time password, expiry or download toggle: the body
+    // carries the path and nothing else. `PUT …/links/{id}` appears to exist
+    // but rclone doesn't use it and its fields are unverified, so updating a
+    // link is deliberately left unimplemented (`canUpdate` is false).
+
+    /// One entry of the account's link list, and the body `POST …/links`
+    /// answers with. Everything but `id`/`path`/`url` is optional: the shape
+    /// is undocumented, and a missing field must not sink the whole lookup.
+    private struct KoofrLink: Decodable {
+        let id: String
+        let path: String
+        let url: String
+        let shortUrl: String?
+        let hasPassword: Bool?
+        /// Milliseconds since the Unix epoch, as everywhere else in this API.
+        /// Absent or 0 means the link never expires.
+        let validTo: Int64?
+    }
+
+    /// `GET …/links` answers `{"links":[…]}`. A bare array is accepted too,
+    /// since the endpoint is undocumented; anything else throws rather than
+    /// decoding to an empty list, which would masquerade as "not shared".
+    private struct KoofrLinksResponse: Decodable {
+        let links: [KoofrLink]
+
+        private enum CodingKeys: String, CodingKey { case links }
+
+        init(from decoder: Decoder) throws {
+            if let keyed = try? decoder.container(keyedBy: CodingKeys.self) {
+                links = try keyed.decode([KoofrLink].self, forKey: .links)
+            } else {
+                links = try [KoofrLink](from: decoder)
+            }
+        }
+    }
+
+    /// Creates a public link for `path`.
+    ///
+    /// `options` is accepted and ignored — the create body has no password,
+    /// expiry or download field, and `shareLinkCapabilities` advertises none
+    /// of them, so the UI never offers those controls in the first place.
+    /// Sharing can still be refused account-side, so the request surfaces
+    /// Koofr's own message.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        struct CreateBody: Encodable { let path: String }
+        let link: KoofrLink = try await request(
+            .post,
+            path: "/mounts/\(mountId)/links",
+            body: CreateBody(path: path),
+            surfaceServerMessage: true
+        )
+        return try await shareLink(from: link)
+    }
+
+    /// The public link this path already has, or nil when it has none.
+    ///
+    /// Koofr has no per-path link lookup, so the account's whole link list is
+    /// fetched and matched on `path`. No match is the "not shared" answer and
+    /// returns nil; an HTTP failure still throws, so a refused or broken
+    /// request never reads as "this file isn't shared".
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        guard let link = try await findLink(at: path) else { return nil }
+        return try await shareLink(from: link)
+    }
+
+    /// Withdraws the public link. Deliberately not an error when the path has
+    /// no link: the caller's goal — "this file is not shared" — already holds.
+    public func removeShareLink(at path: String) async throws {
+        guard let link = try await findLink(at: path) else {
+            koofrLog.info("[Koofr] removeShareLink: no link on that path, nothing to withdraw")
+            return
+        }
+        try await requestVoid(
+            .delete,
+            path: "/mounts/\(mountId)/links/\(link.id)",
+            surfaceServerMessage: true
+        )
+    }
+
+    private func findLink(at path: String) async throws -> KoofrLink? {
+        let response: KoofrLinksResponse = try await request(
+            .get,
+            path: "/mounts/\(mountId)/links",
+            surfaceServerMessage: true
+        )
+        let wanted = Self.normalizedLinkPath(path)
+        return response.links.first { Self.normalizedLinkPath($0.path) == wanted }
+    }
+
+    private func shareLink(from link: KoofrLink) async throws -> CloudShareLink {
+        // `shortUrl` is the same landing page behind a shorter host; prefer the
+        // canonical `url` and only fall back when the primary one is unusable.
+        guard let landing = URL(string: link.url) ?? link.shortUrl.flatMap({ URL(string: $0) }) else {
+            throw CloudProviderError.invalidResponse
+        }
+        let expiry = link.validTo.flatMap {
+            $0 > 0 ? Date(timeIntervalSince1970: TimeInterval($0) / 1000.0) : nil
+        }
+        return CloudShareLink(
+            url: landing,
+            directDownloadURL: await directContentURL(for: link),
+            expiresAt: expiry,
+            // Nothing here can set a password, but a link made in Koofr's web
+            // UI can carry one — report what the server says, not what we asked.
+            hasPassword: link.hasPassword ?? false
+        )
+    }
+
+    /// Koofr's direct-content URL for a link: the landing URL with `/links`
+    /// swapped for `/content/links` and the file-fetch suffix appended. The
+    /// `path` parameter has to be exactly `%2F` — any other value answers 404.
+    ///
+    /// Per rclone's backend this serves the file itself *only* for an item
+    /// sitting in the mount root. Deeper in the tree Koofr answers with a ZIP
+    /// containing the single member, and a folder link is a ZIP by definition —
+    /// so both get no direct URL at all. Handing someone a ZIP when they
+    /// expect the file is worse than handing them the landing page.
+    private func directContentURL(for link: KoofrLink) async -> URL? {
+        let path = Self.normalizedLinkPath(link.path)
+        let parent = (path as NSString).deletingLastPathComponent
+        guard parent.isEmpty || parent == "/" else { return nil }
+        // One extra request, and only for root-level items: everything deeper
+        // has already returned above. Anything we can't confirm to be a file
+        // stays nil rather than risking the ZIP.
+        guard let info = try? await getFileInfo(at: path), !info.isDirectory else { return nil }
+        guard let range = link.url.range(of: "/links") else { return nil }
+        let content = link.url.replacingCharacters(in: range, with: "/content/links")
+        return URL(string: content + "/files/get?path=%2F")
+    }
+
+    /// Link paths come back exactly as they were submitted, so they're compared
+    /// normalised: a trailing slash or a missing leading one would otherwise
+    /// hide an existing link.
+    private static func normalizedLinkPath(_ path: String) -> String {
+        var p = path.hasPrefix("/") ? path : "/\(path)"
+        while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+        return p
+    }
+
+    /// Koofr's failure bodies are JSON, and the shape is undocumented: the
+    /// human-readable text has been seen both at the top level
+    /// (`{"error":"…"}`) and nested (`{"error":{"message":"…"}}`). Both are
+    /// tried; anything else falls back to the coarse status mapping.
+    private static func serverMessage(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        if let message = object["message"] as? String, !message.isEmpty { return message }
+        if let error = object["error"] as? String, !error.isEmpty { return error }
+        if let error = object["error"] as? [String: Any] {
+            if let message = error["message"] as? String, !message.isEmpty { return message }
+            if let code = error["code"] as? String, !code.isEmpty { return code }
+        }
+        return nil
+    }
+
     // MARK: - HTTP
 
     private enum HTTPMethod: String {
@@ -256,7 +423,13 @@ public actor KoofrAPIClient {
         case delete = "DELETE"
     }
 
-    private func request<T: Decodable>(_ method: HTTPMethod, path: String, queryString: String = "", body: (any Encodable)? = nil) async throws -> T {
+    /// - Parameter surfaceServerMessage: when true, a failure whose body
+    ///   carries a human-readable message throws `.commandFailed` with that
+    ///   text instead of the coarse mapping below. Used by the sharing path,
+    ///   where the only useful explanation ("link sharing isn't available on
+    ///   this plan") is server-side. Off by default so existing callers keep
+    ///   their established error semantics.
+    private func request<T: Decodable>(_ method: HTTPMethod, path: String, queryString: String = "", body: (any Encodable)? = nil, surfaceServerMessage: Bool = false) async throws -> T {
         let urlString = queryString.isEmpty
             ? "\(baseURL)\(path)"
             : "\(baseURL)\(path)?\(queryString)"
@@ -281,6 +454,9 @@ public actor KoofrAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             koofrLog.error("[Koofr] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if surfaceServerMessage, let message = Self.serverMessage(from: data) {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
@@ -316,7 +492,8 @@ public actor KoofrAPIClient {
         }
     }
 
-    private func requestVoid(_ method: HTTPMethod, path: String, queryString: String = "") async throws {
+    /// - Parameter surfaceServerMessage: see `request(_:path:queryString:body:surfaceServerMessage:)`.
+    private func requestVoid(_ method: HTTPMethod, path: String, queryString: String = "", surfaceServerMessage: Bool = false) async throws {
         let urlString = queryString.isEmpty
             ? "\(baseURL)\(path)"
             : "\(baseURL)\(path)?\(queryString)"
@@ -336,6 +513,9 @@ public actor KoofrAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             koofrLog.error("[Koofr] \(method.rawValue) \(path) → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            if surfaceServerMessage, let message = Self.serverMessage(from: data) {
+                throw CloudProviderError.commandFailed(message)
+            }
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
     }

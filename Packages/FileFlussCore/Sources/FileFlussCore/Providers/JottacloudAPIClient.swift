@@ -70,6 +70,8 @@ public actor JottacloudAPIClient {
 
     private static let jfsBase = "https://jfs.jottacloud.com/jfs/"
     private static let apiBase = "https://api.jottacloud.com/"
+    /// Host the public share links point at — the same one the web UI serves.
+    private static let wwwBase = "https://www.jottacloud.com/"
     static let defaultTokenURL = "https://id.jottacloud.com/auth/realms/jottacloud/protocol/openid-connect/token"
 
     private var accessToken: String?
@@ -354,6 +356,125 @@ public actor JottacloudAPIClient {
         return CloudStorageQuota(usedBytes: usage.usage, totalBytes: total)
     }
 
+    // MARK: - Share links
+    //
+    // Sharing is part of the same undocumented JFS API, and these are the
+    // endpoints rclone's jottacloud backend has used for years:
+    //
+    //   GET {jfsURL}?mode=enableShare    turn the public link on
+    //   GET {jfsURL}?mode=disableShare   turn it off again
+    //   GET {jfsURL}                     read it back
+    //
+    // All three answer with the file's ordinary JFS XML; a shared file's
+    // document additionally carries <publicURI> and <publicSharePath>. There
+    // is no password and no expiry — sharing is a plain on/off toggle, so
+    // there is nothing an update could change (`canUpdate` is false).
+
+    /// Turns the public link on and returns it.
+    ///
+    /// `options` is accepted and ignored: `enableShare` takes no parameters,
+    /// and `shareLinkCapabilities` advertises neither password nor expiry, so
+    /// the UI never offers those fields.
+    public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
+        let url = jfsURL(forPath: path, query: [URLQueryItem(name: "mode", value: "enableShare")])
+        let data = try await shareRequest(url)
+        guard let share = Self.parsePublicShare(data: data) else {
+            // A 2xx whose XML carries no <publicURI> means the toggle didn't
+            // take — an account or plan that can't share, most likely.
+            throw CloudProviderError.commandFailed(
+                L10n.text("Jottacloud accepted the request but returned no public link for this file.")
+            )
+        }
+        return try shareLink(from: share)
+    }
+
+    /// The public link this file already has, or nil when it isn't shared.
+    ///
+    /// A plain file GET carries <publicURI> only while sharing is on, so its
+    /// absence *is* the "not shared" answer rather than a failure. A missing
+    /// file still throws (`shareRequest` maps 404 to `.notFound`), so the two
+    /// can't be confused.
+    public func existingShareLink(at path: String) async throws -> CloudShareLink? {
+        let data = try await shareRequest(jfsURL(forPath: path))
+        guard let share = Self.parsePublicShare(data: data) else { return nil }
+        return try shareLink(from: share)
+    }
+
+    /// Withdraws the public link. `disableShare` on a file that isn't shared is
+    /// a no-op that succeeds, so this deliberately doesn't look first: the
+    /// caller's goal — "this file is not shared" — ends up true either way.
+    public func removeShareLink(at path: String) async throws {
+        let url = jfsURL(forPath: path, query: [URLQueryItem(name: "mode", value: "disableShare")])
+        _ = try await shareRequest(url)
+    }
+
+    /// What a shared file's JFS document says about its public link.
+    private struct PublicShare {
+        /// Opaque id the public-download endpoint is keyed by.
+        let publicURI: String
+        /// Path of the public landing page under www.jottacloud.com. Empty on
+        /// the (unexpected) documents that carry only a publicURI.
+        let publicSharePath: String
+    }
+
+    private func shareLink(from share: PublicShare) throws -> CloudShareLink {
+        let direct = URL(string: Self.wwwBase
+            + "opin/io/downloadPublic/"
+            + encodePath(credentials.username) + "/"
+            + encodePath(share.publicURI))
+        let page = share.publicSharePath.isEmpty
+            ? nil
+            : URL(string: Self.wwwBase + encodePath(relativePath(share.publicSharePath)))
+        // The landing page is what the web UI hands out; fall back to the
+        // direct link so a document missing publicSharePath still yields
+        // something usable rather than an error.
+        guard let landing = page ?? direct else { throw CloudProviderError.invalidResponse }
+        return CloudShareLink(url: landing, directDownloadURL: direct)
+    }
+
+    /// A share-mode JFS request. Same access token, session and error mapping
+    /// as `jfsRequest`; the one difference is that a failure body is scanned
+    /// for JFS's own `<message>`, so a refusal reaches the user in
+    /// Jottacloud's words rather than as a bare status code.
+    private func shareRequest(_ url: URL) async throws -> Data {
+        let req = try await authedRequest(url, method: "GET")
+        let (data, response) = try await session.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            jottaLog.error("[Jottacloud] share request failed: HTTP \(http.statusCode)")
+            // 404 keeps its mapped `.notFound` so callers can still tell a
+            // missing file from a share the server refused.
+            if http.statusCode != 404, let message = Self.parseShareError(data: data) {
+                throw CloudProviderError.commandFailed(message)
+            }
+            throw Self.mapError(http.statusCode, path: url.path)
+        }
+        return data
+    }
+
+    /// `<publicURI>`/`<publicSharePath>` out of a JFS file document, or nil
+    /// when the file carries no (non-empty) publicURI — i.e. isn't shared.
+    private static func parsePublicShare(data: Data) -> PublicShare? {
+        let delegate = ShareDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        parser.parse()
+        guard let uri = delegate.publicURI, !uri.isEmpty else { return nil }
+        return PublicShare(publicURI: uri, publicSharePath: delegate.publicSharePath ?? "")
+    }
+
+    /// JFS wraps a failure in `<error>` with a `<message>` and a `<reason>`.
+    private static func parseShareError(data: Data) -> String? {
+        let delegate = ShareDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        parser.parse()
+        for candidate in [delegate.message, delegate.reason] {
+            if let candidate, !candidate.isEmpty { return candidate }
+        }
+        return nil
+    }
+
     // MARK: - Request plumbing
 
     private func authedRequest(_ url: URL, method: String) async throws -> URLRequest {
@@ -526,5 +647,53 @@ public actor JottacloudAPIClient {
             case uploadUrl = "upload_url"
             case resumePos = "resume_pos"
         }
+    }
+}
+
+// MARK: - Share XML
+
+/// Pulls the public-link fields out of a JFS file document, and the error
+/// fields out of a JFS failure body.
+///
+/// `<publicURI>` and `<publicSharePath>` are direct children of `<file>`, and
+/// `<message>`/`<reason>` of `<error>`; none of those names occurs anywhere
+/// else in a JFS document, so a flat scan is enough and no depth tracking is
+/// needed. Kept private here rather than added to `JottacloudXMLParser`, whose
+/// two delegates parse listings and quota and have no share concern.
+private final class ShareDelegate: NSObject, XMLParserDelegate {
+    var publicURI: String?
+    var publicSharePath: String?
+    var message: String?
+    var reason: String?
+
+    private var text = ""
+    private var capturing = false
+
+    private static let wanted: Set<String> = ["publicURI", "publicSharePath", "message", "reason"]
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes attributeDict: [String: String] = [:]) {
+        capturing = Self.wanted.contains(elementName)
+        text = ""
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if capturing { text += string }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName: String?) {
+        if capturing {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // First occurrence wins, so a later empty element can't clear a
+            // value that was already found.
+            switch elementName {
+            case "publicURI": if publicURI == nil { publicURI = value }
+            case "publicSharePath": if publicSharePath == nil { publicSharePath = value }
+            case "message": if message == nil { message = value }
+            case "reason": if reason == nil { reason = value }
+            default: break
+            }
+        }
+        capturing = false
+        text = ""
     }
 }
