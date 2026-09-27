@@ -41,10 +41,13 @@ public actor DropboxAPIClient {
     /// covers listing/search/get_metadata; `files.content.read` covers
     /// downloads; `files.content.write` covers upload/delete/move/copy/
     /// create_folder; `sharing.write` covers creating public share links
-    /// (/sharing/create_shared_link_with_settings). We deliberately do NOT
-    /// request `files.metadata.write` (only needed for the
-    /// file-properties/templates API, which we don't use) or
-    /// `account_info.write` (we never modify the account).
+    /// (/sharing/create_shared_link_with_settings) and `sharing.read` the
+    /// lookup of a link that already exists (/sharing/list_shared_links) —
+    /// the console grants the two together, ticking `sharing.write` selects
+    /// `sharing.read` as well and it can't be unticked, so requesting both
+    /// costs nothing. We deliberately do NOT request `files.metadata.write`
+    /// (only needed for the file-properties/templates API, which we don't
+    /// use) or `account_info.write` (we never modify the account).
     ///
     /// Accounts linked before `sharing.write` joined this list still hold a
     /// token without it. The sharing call then fails with HTTP 401 and a
@@ -52,7 +55,7 @@ public actor DropboxAPIClient {
     /// case noted on `storageQuota` — which `createShareLink` maps to
     /// `.unauthorized` so the panel's re-auth banner asks the user to sign in
     /// again and pick the new scope up.
-    static let oauthScopes = "account_info.read files.metadata.read files.content.read files.content.write sharing.write"
+    static let oauthScopes = "account_info.read files.metadata.read files.content.read files.content.write sharing.write sharing.read"
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
@@ -724,8 +727,8 @@ public actor DropboxAPIClient {
             }
             // Dropbox can answer `.tag: "unverified"` with no metadata at all.
             // The link exists, we just weren't told which one — look it up.
-            // Best-effort: the lookup needs the `sharing.read` scope we don't
-            // request, so a failure here must not replace the real situation
+            // Best-effort: on a token predating the `sharing.read` scope this
+            // lookup fails, and that must not replace the real situation
             // ("already shared") with a scope error.
             if let existing = try? await firstDirectSharedLink(path: dbPath) {
                 return try Self.shareLink(
@@ -749,11 +752,10 @@ public actor DropboxAPIClient {
     /// inherited from a shared parent folder, leaving only links to the file
     /// itself — which is what `shared_link_already_exists` refers to.
     ///
-    /// Note this endpoint is gated on `sharing.read`, which we don't request,
-    /// so in practice it fails with `missing_scope`. The one caller treats it
-    /// as best-effort for exactly that reason; adding `sharing.read` to
-    /// `oauthScopes` (and enabling it in the Dropbox app console) is what
-    /// would make this path actually resolve the existing link.
+    /// Gated on `sharing.read`, which `oauthScopes` requests. The caller
+    /// still treats this as best-effort: an account linked before that scope
+    /// was requested fails here with `missing_scope`, and that must not
+    /// replace the real situation ("already shared") with a scope error.
     private func firstDirectSharedLink(path: String) async throws -> DropboxSharedLinkMetadata? {
         struct ListRequest: Encodable {
             let path: String
