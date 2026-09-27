@@ -27,7 +27,7 @@ struct S3PresignTests {
     @Test("matches AWS's published signature for the documented example")
     func matchesAWSExampleVector() throws {
         let url = try S3APIClient.presignedGetURL(
-            host: "examplebucket.s3.amazonaws.com",
+            rawHost: "examplebucket.s3.amazonaws.com",
             key: "test.txt",
             region: "us-east-1",
             accessKeyId: accessKey,
@@ -50,11 +50,37 @@ struct S3PresignTests {
         #expect(value("X-Amz-Signature") == "aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404")
     }
 
+    @Test("signs the lowercased host, so a mixed-case bucket still verifies")
+    func lowercasesHostBeforeSigning() throws {
+        // Backblaze allows mixed-case bucket names; browsers lowercase the
+        // host before sending it. If the signature covered the mixed-case
+        // spelling, the recipient would get SignatureDoesNotMatch.
+        func signature(host: String) throws -> String? {
+            let url = try S3APIClient.presignedGetURL(
+                rawHost: host,
+                key: "test.txt",
+                region: "us-east-1",
+                accessKeyId: accessKey,
+                secretAccessKey: secret,
+                expiresInSeconds: 86400,
+                attachmentFilename: nil,
+                now: referenceDate
+            )
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            return items.first { $0.name == "X-Amz-Signature" }?.value
+        }
+
+        let mixed = try signature(host: "FileFluss.s3.eu-central-003.backblazeb2.com")
+        let lower = try signature(host: "filefluss.s3.eu-central-003.backblazeb2.com")
+        #expect(mixed == lower)
+        #expect(mixed?.isEmpty == false)
+    }
+
     @Test("signs the content-disposition parameter it adds")
     func includesAttachmentFilenameInSignature() throws {
         func signature(filename: String?) throws -> String? {
             let url = try S3APIClient.presignedGetURL(
-                host: "examplebucket.s3.amazonaws.com",
+                rawHost: "examplebucket.s3.amazonaws.com",
                 key: "holiday photo.jpg",
                 region: "eu-central-1",
                 accessKeyId: accessKey,

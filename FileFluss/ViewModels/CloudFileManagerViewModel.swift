@@ -700,7 +700,14 @@ final class CloudFileManagerViewModel {
                 // an old link that ignores them.
                 link = try await provider.createShareLink(at: item.path, options: options)
             }
-            shareStates[item.path] = link
+            // Only remember a link for providers that can read one back.
+            // S3-style accounts have no stored link at all — every share is
+            // a freshly signed URL — so recording one would make the menu
+            // offer "copy the existing link" for something that can't be
+            // looked up.
+            if provider.shareLinkCapabilities.canQueryExisting {
+                shareStates[item.path] = link
+            }
             noteShareOptionsAccepted(options)
             link = await verifiedShareLink(link)
             copyToPasteboard(link, preferDirectDownload: preferDirectDownload)
@@ -761,6 +768,15 @@ final class CloudFileManagerViewModel {
     /// Re-copies the link a file already has.
     func copyExistingShareLink(for item: CloudFileItem, preferDirectDownload: Bool) async -> CloudShareLink? {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else { return nil }
+        // A provider that can't read its links back can still make one, and
+        // that is what the user asked for.
+        guard provider.shareLinkCapabilities.canQueryExisting else {
+            return await createShareLink(
+                for: item,
+                options: .default,
+                preferDirectDownload: preferDirectDownload
+            )
+        }
         do {
             guard let link = try await provider.existingShareLink(at: item.path) else {
                 // Someone removed it elsewhere in the meantime.

@@ -568,7 +568,7 @@ public actor S3APIClient {
         // than letting the browser render it inline.
         let filename = (key as NSString).lastPathComponent
         return try Self.presignedGetURL(
-            host: bucketHost(bucket, region: region),
+            rawHost: bucketHost(bucket, region: region),
             key: key,
             region: region,
             accessKeyId: credentials.accessKeyId,
@@ -583,7 +583,7 @@ public actor S3APIClient {
     /// be checked against AWS's published test vector (see
     /// `S3PresignTests`). `now` is injected for the same reason.
     public static func presignedGetURL(
-        host: String,
+        rawHost: String,
         key: String,
         region: String,
         accessKeyId: String,
@@ -592,6 +592,12 @@ public actor S3APIClient {
         attachmentFilename: String?,
         now: Date
     ) throws -> URL {
+        // Host names are case-insensitive and every HTTP client lowercases
+        // them before sending — browsers included. SigV4 signs the host as
+        // the *server* will see it, so a mixed-case bucket (Backblaze allows
+        // them, AWS does not) must be lowercased before signing, or the
+        // recipient's browser gets SignatureDoesNotMatch.
+        let host = rawHost.lowercased()
         let amzDate = Self.amzDateFormatter.string(from: now)
         let dateStamp = Self.dateStampFormatter.string(from: now)
         let credentialScope = "\(dateStamp)/\(region)/s3/aws4_request"
@@ -762,9 +768,13 @@ public actor S3APIClient {
     /// must match the region of the URL host — bucket-scoped requests
     /// pass the bucket's resolved region, top-level (ListBuckets) pass
     /// the credentials' default region.
-    private func sign(_ request: inout URLRequest, host: String, payloadHash: String, service: String, region: String? = nil) throws {
+    private func sign(_ request: inout URLRequest, host rawHost: String, payloadHash: String, service: String, region: String? = nil) throws {
         let signingRegion = region ?? credentials.region
         guard let url = request.url else { throw CloudProviderError.invalidResponse }
+        // Sign the host as it goes on the wire: lowercased (see
+        // `presignedGetURL`). Mixed-case bucket names otherwise sign one
+        // value and send another.
+        let host = rawHost.lowercased()
 
         let now = Date()
         let amzDate = Self.amzDateFormatter.string(from: now)        // e.g. 20260510T123045Z

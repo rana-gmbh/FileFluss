@@ -1011,7 +1011,12 @@ struct CloudFileListView: View {
                 onStopSharing: { item in
                     stopSharingItem = item
                 },
-                sharedPaths: Set(vm.shareStates.compactMap { $0.value == nil ? nil : $0.key }),
+                // "Shared" is only meaningful where the provider can be
+                // asked about an existing link; S3-style accounts mint a new
+                // signed URL every time and have nothing to withdraw.
+                sharedPaths: vm.shareCapabilities.canQueryExisting
+                    ? Set(vm.shareStates.compactMap { $0.value == nil ? nil : $0.key })
+                    : [],
                 isReadOnly: isReadOnly,
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode
