@@ -25,7 +25,7 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Pinned and checksum-verified. Keep in step with Package.swift /
       # Package.resolved: bump SPARKLE_VERSION and SPARKLE_SHA256 together.
