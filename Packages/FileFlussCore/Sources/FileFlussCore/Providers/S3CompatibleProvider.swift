@@ -164,8 +164,16 @@ public final class S3CompatibleProvider: CloudProvider, @unchecked Sendable {
     /// `us-east-1` (the convention used by MinIO + Backblaze) when we
     /// can't tell.
     public static func regionGuess(fromHost host: String) -> String {
-        let head = host.split(separator: ".").first.map(String.init) ?? ""
-        return head.isEmpty ? "us-east-1" : head
+        let labels = host.split(separator: ".").map(String.init)
+        guard let head = labels.first, !head.isEmpty else { return "us-east-1" }
+        // Backblaze puts the service first and the region second
+        // (`s3.eu-central-003.backblazeb2.com`), so a bare first label would
+        // sign against a region called "s3". B2 happens to accept that;
+        // other services don't.
+        if head.lowercased() == "s3", labels.count > 1, !labels[1].isEmpty {
+            return labels[1]
+        }
+        return head
     }
 
     // MARK: - Share links

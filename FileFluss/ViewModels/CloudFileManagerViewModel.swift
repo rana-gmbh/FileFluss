@@ -569,6 +569,45 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Share links
 
+    /// UserDefaults key recording that this account's provider refuses to
+    /// serve its own direct-download URLs.
+    private var directLinkBlockedKey: String { "shareLinkDirectBlocked.\(accountId.uuidString)" }
+
+    /// Confirms the provider's direct-download URL actually serves the file
+    /// to someone without an account, and drops back to the share page when
+    /// it doesn't.
+    ///
+    /// Box hands back a `download_url` on every plan but refuses to serve it
+    /// on plans without the direct-links feature ("This user is not allowed
+    /// to use direct links"), so copying it unchecked would hand the user a
+    /// link that fails for the recipient. The verdict is remembered per
+    /// account, so this costs one extra request once, not on every share.
+    private func verifiedDirectLink(_ link: CloudShareLink) async -> CloudShareLink {
+        guard let direct = link.directDownloadURL, direct != link.url else { return link }
+
+        if UserDefaults.standard.bool(forKey: directLinkBlockedKey) {
+            return withoutDirectDownload(link, note: L10n.text("This account can't serve direct download links, so the share page link was copied instead."))
+        }
+
+        let result = await PublicURLCheck.isReachable(direct)
+        guard result.ok else {
+            UserDefaults.standard.set(true, forKey: directLinkBlockedKey)
+            cloudFileVMLog.info("[Share] Direct link rejected for account \(self.accountId, privacy: .public) — falling back to the share page")
+            return withoutDirectDownload(link, note: L10n.text("This account can't serve direct download links, so the share page link was copied instead."))
+        }
+        return link
+    }
+
+    private func withoutDirectDownload(_ link: CloudShareLink, note: String) -> CloudShareLink {
+        CloudShareLink(
+            url: link.url,
+            directDownloadURL: nil,
+            expiresAt: link.expiresAt,
+            hasPassword: link.hasPassword,
+            note: [link.note, note].compactMap { $0 }.joined(separator: " ")
+        )
+    }
+
     /// Creates a public link for `item` and puts it on the clipboard.
     /// Returns the link on success, nil on failure — in which case
     /// `error` carries the server's own message, which is what the user
@@ -585,7 +624,10 @@ final class CloudFileManagerViewModel {
         }
 
         do {
-            let link = try await provider.createShareLink(at: item.path, options: options)
+            var link = try await provider.createShareLink(at: item.path, options: options)
+            if preferDirectDownload {
+                link = await verifiedDirectLink(link)
+            }
             let url = preferDirectDownload ? link.preferredURL : link.url
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()

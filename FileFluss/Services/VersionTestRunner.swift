@@ -29,10 +29,17 @@ enum VersionTestRunner {
             return
         }
 
-        let accounts = appState.syncManager.accounts
-        guard !accounts.isEmpty else {
+        let allAccounts = appState.syncManager.accounts
+        guard !allAccounts.isEmpty else {
             presentSimpleAlert(title: "Version Test",
                                message: "No cloud accounts connected.")
+            return
+        }
+
+        // A full pass over every account takes minutes; when chasing one
+        // provider's failure you want just that provider. Remembering the
+        // last choice means a repeated single-provider run is two clicks.
+        guard let accounts = selectAccounts(from: allAccounts), !accounts.isEmpty else {
             return
         }
 
@@ -42,8 +49,16 @@ enum VersionTestRunner {
         )
         let startDate = Date()
 
+        // Per account: create folder + upload/replace/delete per file +
+        // up to two share-link steps + cleanup.
+        let stepsPerAccount = 3 * localFiles.count + 4
+        let progress = ProgressPanel(total: accounts.count * stepsPerAccount)
+        defer { progress.close() }
+
         var accountResults: [AccountResult] = []
-        for account in accounts {
+        for (index, account) in accounts.enumerated() {
+            progress.beginAccount(account.displayName, index: index + 1, of: accounts.count)
+            if progress.isCancelled { break }
             if Self.skippedProviders.contains(account.providerType) {
                 let note = StepResult(
                     label: "skipped (\(account.providerType.displayName) has no folder concept)",
@@ -59,7 +74,8 @@ enum VersionTestRunner {
             }
             let result = await runForAccount(
                 account: account,
-                localFiles: localFiles
+                localFiles: localFiles,
+                progress: progress
             )
             accountResults.append(result)
         }
@@ -116,6 +132,10 @@ enum VersionTestRunner {
         /// The created link, recorded so a human can eyeball it. It dies with
         /// the test file during the delete phase a moment later.
         var shareLinkURL: String?
+        /// The provider's own remark about the link — notably Box saying an
+        /// admin downgraded it from public, which is exactly what explains a
+        /// failing anonymous fetch.
+        var shareLinkNote: String?
         let deletes: [StepResult]
         let cleanupFolder: StepResult
 
@@ -188,7 +208,11 @@ enum VersionTestRunner {
 
     // MARK: - Per-account
 
-    private static func runForAccount(account: CloudAccount, localFiles: [LocalFile]) async -> AccountResult {
+    private static func runForAccount(
+        account: CloudAccount,
+        localFiles: [LocalFile],
+        progress: ProgressPanel? = nil
+    ) async -> AccountResult {
         let displayName = account.displayName
         let providerName = account.providerType.displayName
         SupportLogger.shared.log(
@@ -217,6 +241,7 @@ enum VersionTestRunner {
         // Phase 1 — create folder
         let createStep = await measure(
             name: "create \(testFolderName)",
+            progress: progress,
             diagnostics: { await listingDiagnostic(provider: provider, parent: testRoot, expectedName: testFolderName) }
         ) {
             try await provider.createDirectory(at: testFolderPath)
@@ -247,6 +272,7 @@ enum VersionTestRunner {
             let filename = (destPath as NSString).lastPathComponent
             let step = await measure(
                 name: "upload \(local.relativePath)",
+                progress: progress,
                 diagnostics: { await listingDiagnostic(provider: provider, parent: parentPath, expectedName: filename) }
             ) {
                 if parentPath != testFolderPath {
@@ -258,14 +284,19 @@ enum VersionTestRunner {
             uploads.append(step)
         }
 
+        // Cancelling stops new work but never skips phases 4 and 5 — the
+        // test folder must not be left behind on the user's account.
+        let cancelled = { progress?.isCancelled == true }
+
         // Phase 3 — replace (upload again)
         var replaces: [StepResult] = []
-        for local in localFiles {
+        for local in localFiles where !cancelled() {
             let destPath = testFolderPath + "/" + local.relativePath
             let parentPath = (destPath as NSString).deletingLastPathComponent
             let filename = (destPath as NSString).lastPathComponent
             let step = await measure(
                 name: "replace \(local.relativePath)",
+                progress: progress,
                 diagnostics: { await listingDiagnostic(provider: provider, parent: parentPath, expectedName: filename) }
             ) {
                 try await provider.uploadFile(from: local.url, to: destPath)
@@ -283,12 +314,13 @@ enum VersionTestRunner {
         // later in phase 4, which takes the link down with it.
         var shareSteps: [StepResult] = []
         var shareURL: String?
+        var shareNote: String?
         let shareCaps = provider.shareLinkCapabilities
-        if let firstFile = localFiles.first, uploads.first?.ok == true {
+        if let firstFile = localFiles.first, uploads.first?.ok == true, !cancelled() {
             let sharePath = testFolderPath + "/" + firstFile.relativePath
             if shareCaps.canCreate {
                 var created: CloudShareLink?
-                let createLinkStep = await measure(name: "create share link (\(firstFile.relativePath))") {
+                let createLinkStep = await measure(name: "create share link (\(firstFile.relativePath))", progress: progress) {
                     // Deliberately no password and no expiry unless the
                     // provider insists: both are paid-plan features almost
                     // everywhere, and a plan rejection would look like a bug.
@@ -301,12 +333,30 @@ enum VersionTestRunner {
                 shareSteps.append(createLinkStep)
 
                 if let link = created {
-                    shareURL = link.preferredURL.absoluteString
+                    shareNote = link.note
                     // The real proof: fetch the link with no credentials at
                     // all. A link that only works while signed in is useless
                     // to the person it was sent to.
-                    let fetchStep = await measure(name: "fetch share link anonymously") {
-                        try await verifyPublicURL(link.preferredURL)
+                    //
+                    // Mirror the app's fallback: when a provider refuses to
+                    // serve its own direct-download URL (Box does so on plans
+                    // without direct links), the app copies the share page
+                    // instead, so that is what has to be reachable.
+                    var candidate = link.preferredURL
+                    if let direct = link.directDownloadURL, direct != link.url {
+                        let directResult = await PublicURLCheck.isReachable(direct)
+                        if !directResult.ok {
+                            candidate = link.url
+                            let reason = directResult.detail ?? "no detail"
+                            shareNote = [shareNote, "Direct download link rejected by the provider, fell back to the share page — \(reason)"]
+                                .compactMap { $0 }
+                                .joined(separator: " · ")
+                        }
+                    }
+                    shareURL = candidate.absoluteString
+                    let fetchURL = candidate
+                    let fetchStep = await measure(name: "fetch share link anonymously", progress: progress) {
+                        try await verifyPublicURL(fetchURL)
                     }
                     shareSteps.append(fetchStep)
                 }
@@ -326,6 +376,7 @@ enum VersionTestRunner {
             let filename = (destPath as NSString).lastPathComponent
             let step = await measure(
                 name: "delete \(local.relativePath)",
+                progress: progress,
                 diagnostics: { await listingDiagnostic(provider: provider, parent: parentPath, expectedName: filename) }
             ) {
                 try await provider.deleteItem(at: destPath)
@@ -343,6 +394,7 @@ enum VersionTestRunner {
         // Phase 5 — cleanup (always attempted)
         let cleanup = await measure(
             name: "cleanup \(testFolderName)",
+            progress: progress,
             diagnostics: { await listingDiagnostic(provider: provider, parent: "/", expectedName: testFolderName) }
         ) {
             try await provider.deleteItem(at: testFolderPath)
@@ -352,38 +404,19 @@ enum VersionTestRunner {
         return AccountResult(
             accountDisplayName: displayName, provider: providerName,
             createFolder: createStep, uploads: uploads, replaces: replaces,
-            shareLink: shareSteps, shareLinkURL: shareURL,
+            shareLink: shareSteps, shareLinkURL: shareURL, shareLinkNote: shareNote,
             deletes: deletes, cleanupFolder: cleanup
         )
     }
 
-    /// GETs `url` with a session that carries no cookies and no credentials,
-    /// so the result reflects what an outside recipient would see. Accepts
-    /// any 2xx; a provider landing page and a direct download both qualify.
+    /// Anonymous reachability check, shared with the app's own share action
+    /// so the test exercises exactly what users get.
     private static func verifyPublicURL(_ url: URL) async throws {
-        let config = URLSessionConfiguration.ephemeral
-        config.httpCookieStorage = nil
-        config.urlCredentialStorage = nil
-        config.timeoutIntervalForRequest = 30
-        let session = URLSession(configuration: config)
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        // Enough to prove the link serves something without pulling the whole
-        // file; servers that ignore Range just send more than we need.
-        request.setValue("bytes=0-2047", forHTTPHeaderField: "Range")
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw VersionTestError.verificationFailed("no HTTP response from share link")
-        }
-        guard (200...299).contains(http.statusCode) else {
+        let result = await PublicURLCheck.isReachable(url)
+        guard result.ok else {
             throw VersionTestError.verificationFailed(
-                "share link returned HTTP \(http.statusCode) to an anonymous request"
+                "share link is not reachable anonymously — \(result.detail ?? "no detail")"
             )
-        }
-        if data.isEmpty {
-            throw VersionTestError.verificationFailed("share link returned an empty body")
         }
     }
 
@@ -466,9 +499,12 @@ enum VersionTestRunner {
 
     private static func measure(
         name: String,
+        progress: ProgressPanel? = nil,
         diagnostics: (() async -> String?)? = nil,
         work: () async throws -> Void
     ) async -> StepResult {
+        progress?.beginStep(name)
+        defer { progress?.finishStep() }
         let start = Date()
         do {
             try await work()
@@ -580,6 +616,9 @@ enum VersionTestRunner {
             out += row(phase: "Cleanup folder", step: account.cleanupFolder)
             out += "\n"
 
+            if let note = account.shareLinkNote {
+                out += "Share link note from the provider: \(note)\n\n"
+            }
             if let link = account.shareLinkURL {
                 out += "Share link created: `\(link)`\n\n"
                 out += "_The shared file is deleted in the delete phase above, so this link is already dead._\n\n"
@@ -599,7 +638,168 @@ enum VersionTestRunner {
         return out
     }
 
+    // MARK: - Progress
+
+    /// Floating progress panel for the run. A full pass is minutes of work
+    /// across every account, and without this the app looks hung.
+    @MainActor
+    final class ProgressPanel {
+        private let window: NSWindow
+        private let accountLabel: NSTextField
+        private let stepLabel: NSTextField
+        private let bar: NSProgressIndicator
+        private let cancelButton: NSButton
+        private var completed = 0
+        private var total = 1
+        private(set) var isCancelled = false
+
+        init(total: Int) {
+            self.total = max(1, total)
+
+            accountLabel = NSTextField(labelWithString: "Starting…")
+            accountLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+            accountLabel.lineBreakMode = .byTruncatingTail
+
+            stepLabel = NSTextField(labelWithString: "")
+            stepLabel.font = .systemFont(ofSize: 11)
+            stepLabel.textColor = .secondaryLabelColor
+            stepLabel.lineBreakMode = .byTruncatingMiddle
+
+            bar = NSProgressIndicator()
+            bar.isIndeterminate = false
+            bar.minValue = 0
+            bar.maxValue = Double(self.total)
+            bar.doubleValue = 0
+            bar.controlSize = .regular
+
+            cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+            cancelButton.bezelStyle = .rounded
+
+            let stack = NSStackView(views: [accountLabel, bar, stepLabel, cancelButton])
+            stack.orientation = .vertical
+            stack.alignment = .leading
+            stack.spacing = 8
+            stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+            stack.translatesAutoresizingMaskIntoConstraints = false
+
+            window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 440, height: 130),
+                styleMask: [.titled],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Version Test"
+            window.isReleasedWhenClosed = false
+            window.level = .floating
+            window.center()
+            window.contentView = stack
+
+            NSLayoutConstraint.activate([
+                bar.widthAnchor.constraint(equalToConstant: 408),
+                accountLabel.widthAnchor.constraint(equalToConstant: 408),
+                stepLabel.widthAnchor.constraint(equalToConstant: 408),
+            ])
+
+            cancelButton.target = self
+            cancelButton.action = #selector(cancelPressed)
+            window.makeKeyAndOrderFront(nil)
+        }
+
+        @objc private func cancelPressed() {
+            isCancelled = true
+            cancelButton.isEnabled = false
+            stepLabel.stringValue = "Cancelling — finishing the current step and cleaning up…"
+        }
+
+        func beginAccount(_ name: String, index: Int, of count: Int) {
+            accountLabel.stringValue = "\(name)  (\(index) of \(count))"
+        }
+
+        func beginStep(_ label: String) {
+            stepLabel.stringValue = label
+        }
+
+        func finishStep() {
+            completed += 1
+            // The step count is an estimate (share-link phases vary per
+            // provider), so never let the bar run past its own end.
+            bar.doubleValue = Double(min(completed, total))
+        }
+
+        func close() {
+            window.orderOut(nil)
+        }
+    }
+
     // MARK: - Alerts
+
+    /// Checkbox list of the connected accounts. Returns nil when cancelled.
+    /// Skipped when there is only one account — nothing to choose.
+    private static func selectAccounts(from accounts: [CloudAccount]) -> [CloudAccount]? {
+        guard accounts.count > 1 else { return accounts }
+
+        let remembered = Set(UserDefaults.standard.stringArray(forKey: selectionDefaultsKey) ?? [])
+
+        let alert = NSAlert()
+        alert.messageText = "Run Version Test"
+        alert.informativeText = "Choose the accounts to test. Each one runs the full create/upload/replace/share/delete pass."
+        alert.addButton(withTitle: "Run Test")
+        alert.addButton(withTitle: "Cancel")
+
+        let rowHeight: CGFloat = 22
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+
+        var boxes: [(NSButton, CloudAccount)] = []
+        for account in accounts {
+            let box = NSButton(checkboxWithTitle: "\(account.displayName) — \(account.providerType.displayName)", target: nil, action: nil)
+            // First run has nothing remembered: test everything.
+            box.state = (remembered.isEmpty || remembered.contains(account.id.uuidString)) ? .on : .off
+            stack.addArrangedSubview(box)
+            boxes.append((box, account))
+        }
+
+        let toggleAll = NSButton(title: "Select All / None", target: AllToggler.shared, action: #selector(AllToggler.toggle(_:)))
+        toggleAll.bezelStyle = .rounded
+        AllToggler.shared.boxes = boxes.map { $0.0 }
+        stack.addArrangedSubview(toggleAll)
+
+        let contentHeight = rowHeight * CGFloat(accounts.count + 1) + 8
+        let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: contentHeight))
+        stack.frame = documentView.bounds
+        documentView.addSubview(stack)
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 360, height: min(contentHeight, 420)))
+        scroll.hasVerticalScroller = contentHeight > 420
+        scroll.documentView = documentView
+        alert.accessoryView = scroll
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+
+        let chosen = boxes.filter { $0.0.state == .on }.map { $0.1 }
+        UserDefaults.standard.set(chosen.map { $0.id.uuidString }, forKey: selectionDefaultsKey)
+        if chosen.isEmpty {
+            presentSimpleAlert(title: "Version Test", message: "No accounts selected.")
+        }
+        return chosen
+    }
+
+    private static let selectionDefaultsKey = "versionTestSelectedAccountIds"
+
+    /// Target for the "Select All / None" button — NSButton needs an
+    /// Objective-C target, and the alert is built inside a static func.
+    @MainActor
+    private final class AllToggler: NSObject {
+        static let shared = AllToggler()
+        var boxes: [NSButton] = []
+
+        @objc func toggle(_ sender: NSButton) {
+            let turningOn = boxes.contains { $0.state == .off }
+            for box in boxes { box.state = turningOn ? .on : .off }
+        }
+    }
 
     private static func presentSimpleAlert(title: String, message: String) {
         let alert = NSAlert()

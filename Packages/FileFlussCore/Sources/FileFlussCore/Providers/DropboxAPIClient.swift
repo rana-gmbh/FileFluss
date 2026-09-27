@@ -745,6 +745,13 @@ public actor DropboxAPIClient {
         if let summary = envelope?.error_summary, !summary.isEmpty {
             throw CloudProviderError.commandFailed(summary)
         }
+        // A malformed request comes back as HTTP 400 with a *plain-text*
+        // explanation ("Error in call to API function …"), not the JSON
+        // envelope above. Passing it through beats reporting a bare 400.
+        if let text = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            throw CloudProviderError.commandFailed(String(text.prefix(300)))
+        }
         throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
     }
 
