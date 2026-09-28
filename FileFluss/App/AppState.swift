@@ -1438,6 +1438,71 @@ final class AppState {
         Task { await fileManager(for: activePanel).navigateTo(url) }
     }
 
+    // MARK: - Startup locations (issue #49)
+
+    /// Opens each panel where the startup setting says it should be.
+    ///
+    /// Split in two phases on purpose: a local folder is available the
+    /// instant the app starts, while a cloud panel needs its account back
+    /// first. Making the local case wait for the network would mean staring
+    /// at the home folder for as long as reconnecting takes — which, with a
+    /// dozen accounts, is seconds.
+    private func restoreStartupLocations(cloudOnly: Bool) {
+        let locations = PanelStartupState.startupLocations()
+        guard locations.left != nil || locations.right != nil else { return }
+        let connected = Set(syncManager.accounts.filter(\.isConnected).map(\.id))
+
+        for (side, location) in [(PanelSide.left, locations.left), (PanelSide.right, locations.right)] {
+            guard let location else { continue }
+            guard location.isCloud == cloudOnly else { continue }
+            guard PanelStartupState.isUsable(location, connectedAccountIDs: connected) else { continue }
+            open(location, on: side)
+        }
+    }
+
+    private func open(_ location: PanelLocation, on side: PanelSide) {
+        switch location {
+        case .local(let path):
+            let url = URL(fileURLWithPath: path, isDirectory: true)
+            setSidebarSelection(.location(url), for: side)
+            Task { await fileManager(for: side).navigateTo(url) }
+        case .cloud(let accountId, let path):
+            guard let account = syncManager.accountFor(id: accountId) else { return }
+            setSidebarSelection(.cloudAccount(account), for: side)
+            Task {
+                let vm = cloudFileManager(for: accountId, side: side)
+                await vm.navigateTo(path)
+            }
+        }
+    }
+
+    /// Where a panel currently is, for storing. Nil for panels showing
+    /// something there is no sense in restoring — an offline source, the
+    /// favourites list.
+    func currentLocation(for side: PanelSide) -> PanelLocation? {
+        if let accountId = cloudAccountId(for: side) {
+            let vm = cloudFileManager(for: accountId, side: side)
+            return .cloud(accountId: accountId, path: vm.currentPath)
+        }
+        switch sidebarSelection(for: side) {
+        case .location, .home, .drive, .none:
+            return .local(path: fileManager(for: side).currentDirectory.path)
+        default:
+            return nil
+        }
+    }
+
+    /// Called as the app quits. Recording here rather than on every
+    /// navigation keeps the write to once per session — the value is only
+    /// ever read at launch.
+    func recordSessionLocations() {
+        guard PanelStartupState.mode == .lastSession else { return }
+        PanelStartupState.recordSession(
+            left: currentLocation(for: .left),
+            right: currentLocation(for: .right)
+        )
+    }
+
     private func indexActiveSource() {
         // Drive case: active panel is on .drive() and mounted.
         if case .drive(let driveId) = sidebarSelection(for: activePanel),
@@ -1486,6 +1551,9 @@ final class AppState {
 
         setupCommandHandlers()
 
+        // Local folders first, before any network work.
+        restoreStartupLocations(cloudOnly: false)
+
         Task {
             await syncManager.reconnectSavedAccounts()
             try? await SearchIndex.shared.open()
@@ -1497,6 +1565,10 @@ final class AppState {
             await SearchIndex.shared.purgeOrphanCloudSources(keepAccountIds: liveIds)
             await refreshIndexInfo()
             await Self.runCacheMaintenanceIfEnabled()
+            // Cloud panels only: the accounts are back by now. A location
+            // that is no longer usable falls back to the home folder rather
+            // than erroring at launch.
+            restoreStartupLocations(cloudOnly: true)
         }
     }
 }

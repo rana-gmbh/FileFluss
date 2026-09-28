@@ -163,6 +163,11 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     /// we can drain them — otherwise Finder is left holding `/Volumes/`
     /// entries pointing at a server that vanishes mid-quit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Where the panels are, for the "folders from last time" setting.
+        // Recorded before the unmount path below, which may end the process
+        // on a different route.
+        appState?.recordSessionLocations()
+
         for window in NSApp.windows {
             if let sheet = window.attachedSheet {
                 window.endSheet(sheet, returnCode: .cancel)

@@ -67,6 +67,11 @@ struct GeneralSettingsView: View {
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("shareLinkPreferDirectDownload") private var shareLinkPreferDirectDownload = true
     @AppStorage("automaticUpdateChecksEnabled") private var automaticUpdateChecks = true
+    @AppStorage("panelStartupMode") private var panelStartupMode = PanelStartupMode.home.rawValue
+    /// Mirrors the stored "specific folders" so the picker shows what is set
+    /// without re-reading defaults on every redraw.
+    @State private var specificLeft: String = ""
+    @State private var specificRight: String = ""
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
     @AppStorage(AppLanguage.storageKey) private var appLanguage: String = AppLanguage.system.rawValue
     @State private var showRelaunchPrompt = false
@@ -118,6 +123,25 @@ struct GeneralSettingsView: View {
             Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
 
             Section {
+                Picker(selection: $panelStartupMode) {
+                    ForEach(PanelStartupMode.allCases) { mode in
+                        Text(L10n.text(mode.label)).tag(mode.rawValue)
+                    }
+                } label: {
+                    LText("When FileFluss opens")
+                }
+
+                if panelStartupMode == PanelStartupMode.specific.rawValue {
+                    startupFolderRow(title: L10n.text("Left panel"), path: $specificLeft, side: .left)
+                    startupFolderRow(title: L10n.text("Right panel"), path: $specificRight, side: .right)
+                }
+
+                LText("A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle(isOn: $automaticUpdateChecks) { LText("Check for updates automatically") }
                 LText("FileFluss checks daily, verifies each update's signature, and asks before installing.")
                     .font(.caption)
@@ -158,6 +182,53 @@ struct GeneralSettingsView: View {
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
             Task { @MainActor in NSApp.terminate(nil) }
         }
+    }
+
+    // MARK: - Startup folders (issue #49)
+
+    @ViewBuilder
+    private func startupFolderRow(title: String, path: Binding<String>, side: PanelSide) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .frame(width: 90, alignment: .leading)
+            Text(path.wrappedValue.isEmpty ? L10n.text("Home folder") : path.wrappedValue)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(path.wrappedValue.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+            Spacer()
+            Button(L10n.text("Choose…")) { chooseStartupFolder(for: side, into: path) }
+            if !path.wrappedValue.isEmpty {
+                Button(L10n.text("Reset")) {
+                    path.wrappedValue = ""
+                    persistSpecificFolders()
+                }
+            }
+        }
+        .onAppear { loadSpecificFolders() }
+    }
+
+    private func chooseStartupFolder(for side: PanelSide, into binding: Binding<String>) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.text("Choose")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        binding.wrappedValue = url.path
+        persistSpecificFolders()
+    }
+
+    private func loadSpecificFolders() {
+        let stored = PanelStartupState.specificFolders()
+        if case .local(let path)? = stored.left { specificLeft = path }
+        if case .local(let path)? = stored.right { specificRight = path }
+    }
+
+    private func persistSpecificFolders() {
+        PanelStartupState.setSpecificFolders(
+            left: specificLeft.isEmpty ? nil : .local(path: specificLeft),
+            right: specificRight.isEmpty ? nil : .local(path: specificRight)
+        )
     }
 }
 

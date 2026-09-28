@@ -11,6 +11,7 @@ struct RootView: View {
 
     var body: some View {
         ContentView()
+            .background(WindowFrameAutosaver(defaultsKey: "mainWindowFrame"))
             .sheet(isPresented: $showWelcome) {
                 WelcomeView()
             }
