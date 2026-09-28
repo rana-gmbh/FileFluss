@@ -1124,6 +1124,19 @@ final class SyncViewModel {
         }
     }
 
+    /// Records that an account's credentials stopped working, so the
+    /// sidebar stops showing it as connected.
+    ///
+    /// Without this the dot stays green while the panel says "sign in
+    /// required" — the app contradicting itself in two places at once
+    /// (issue #46).
+    func markNeedsReAuthentication(accountId: UUID) {
+        guard let idx = accounts.firstIndex(where: { $0.id == accountId }),
+              accounts[idx].isConnected else { return }
+        accounts[idx].isConnected = false
+        saveAccounts()
+    }
+
     func accountFor(id: UUID) -> CloudAccount? {
         accounts.first { $0.id == id }
     }

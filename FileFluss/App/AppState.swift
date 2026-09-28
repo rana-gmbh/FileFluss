@@ -30,6 +30,8 @@ extension Notification.Name {
     /// AppState.
     static let requestShowCompareWindow = Notification.Name("FileFluss.requestShowCompareWindow")
     static let requestShowStorageWindow = Notification.Name("FileFluss.requestShowStorageWindow")
+    /// A cloud panel found its credentials no longer work.
+    static let cloudAccountNeedsReAuthentication = Notification.Name("FileFluss.cloudAccountNeedsReAuthentication")
 }
 
 @Observable @MainActor
@@ -1537,6 +1539,18 @@ final class AppState {
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
         loadFavorites()
+
+        NotificationCenter.default.addObserver(
+            forName: .cloudAccountNeedsReAuthentication, object: nil, queue: .main
+        ) { [weak self] note in
+            // Read the id out before hopping isolation: the Notification
+            // itself isn't Sendable, a UUID is.
+            let accountId = note.userInfo?["accountId"] as? UUID
+            MainActor.assumeIsolated {
+                guard let self, let accountId else { return }
+                self.syncManager.markNeedsReAuthentication(accountId: accountId)
+            }
+        }
 
         NotificationCenter.default.addObserver(
             forName: .indexingDidFinish, object: nil, queue: .main

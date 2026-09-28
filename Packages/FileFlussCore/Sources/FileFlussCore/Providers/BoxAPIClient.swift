@@ -12,6 +12,20 @@ public struct BoxCredentials: Codable, Sendable {
     public let expiresAt: Date
     public let userLogin: String
     public let displayName: String
+
+    public init(
+        accessToken: String,
+        refreshToken: String,
+        expiresAt: Date,
+        userLogin: String,
+        displayName: String
+    ) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.expiresAt = expiresAt
+        self.userLogin = userLogin
+        self.displayName = displayName
+    }
 }
 
 public actor BoxAPIClient {
@@ -39,6 +53,20 @@ public actor BoxAPIClient {
     private static let singlePutMaxBytes: Int64 = 50 * 1024 * 1024
 
     private(set) var credentials: BoxCredentials
+    /// Called whenever the credentials change, so the new ones reach the
+    /// keychain immediately.
+    ///
+    /// This is not optional housekeeping for Box: every refresh returns a
+    /// NEW refresh token and invalidates the previous one. Keeping the new
+    /// token only in memory means the stored one is already dead — the next
+    /// launch asks the user to sign in again, every time (issue #46).
+    /// Dropbox survives the same structure only because its refresh tokens
+    /// are not rotated.
+    private var credentialsDidChange: (@Sendable (BoxCredentials) -> Void)?
+
+    public func setCredentialsDidChange(_ handler: @escaping @Sendable (BoxCredentials) -> Void) {
+        credentialsDidChange = handler
+    }
     private let session: URLSession
 
     /// Path → Box file/folder ID cache. Root is always "0". Walking the
@@ -244,6 +272,7 @@ public actor BoxAPIClient {
             displayName: credentials.displayName
         )
         credentials = newCreds
+        credentialsDidChange?(newCreds)
         return newCreds
     }
 

@@ -25,9 +25,27 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
         restoreCredentials()
     }
 
+    /// Unused in this app, and a hazard: it stores under a different key
+    /// (`box.<login>`) than `init(accountId:)` (`box.<uuid>`), so an account
+    /// created through here is invisible to the normal path and asks for
+    /// sign-in forever. Kept only because this package is shared with the
+    /// iOS app.
+    @available(*, deprecated, message: "Use init(accountId:) — this stores credentials under a key the rest of the app never reads.")
     public init(credentials: BoxCredentials) {
         self.keychainKey = "box.\(credentials.userLogin)"
         self.apiClient = BoxAPIClient(credentials: credentials)
+    }
+
+    /// Persists every credential change the client makes — above all the
+    /// rotated refresh token, which Box issues on each refresh and which is
+    /// worthless if it only ever lives in memory (issue #46).
+    private func persistCredentialChanges(from client: BoxAPIClient) {
+        let key = keychainKey
+        Task {
+            await client.setCredentialsDidChange { creds in
+                try? KeychainService.save(key: key, value: creds)
+            }
+        }
     }
 
     // MARK: - Authentication
@@ -36,6 +54,7 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
         let credentials = try await BoxAPIClient.startOAuthFlow()
         let client = BoxAPIClient(credentials: credentials)
         self.apiClient = client
+        persistCredentialChanges(from: client)
         try KeychainService.save(key: keychainKey, value: credentials)
         boxProviderLog.info("[Box] Authenticated as \(credentials.userLogin)")
         return credentials
@@ -196,7 +215,9 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
 
     private func restoreCredentials() {
         if let creds = KeychainService.load(key: keychainKey, as: BoxCredentials.self) {
-            apiClient = BoxAPIClient(credentials: creds)
+            let client = BoxAPIClient(credentials: creds)
+            apiClient = client
+            persistCredentialChanges(from: client)
             Task { try? await refreshIfNeeded() }
         }
     }

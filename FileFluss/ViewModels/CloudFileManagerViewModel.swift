@@ -284,7 +284,7 @@ final class CloudFileManagerViewModel {
             if let cpe = error as? CloudProviderError {
                 switch cpe {
                 case .notAuthenticated, .unauthorized, .invalidCredentials:
-                    self.needsReAuth = true
+                    self.flagNeedsReAuthentication()
                 default:
                     break
                 }
@@ -793,6 +793,18 @@ final class CloudFileManagerViewModel {
             options: options,
             preferDirectDownload: preferDirectDownload,
             reuseExisting: false
+        )
+    }
+
+    /// Marks the panel as needing a sign-in and tells the rest of the app,
+    /// so the sidebar's connection dot stops claiming everything is fine
+    /// while this panel says otherwise (issue #46).
+    private func flagNeedsReAuthentication() {
+        needsReAuth = true
+        NotificationCenter.default.post(
+            name: .cloudAccountNeedsReAuthentication,
+            object: nil,
+            userInfo: ["accountId": accountId]
         )
     }
 

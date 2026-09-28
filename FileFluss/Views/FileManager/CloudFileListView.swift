@@ -5,7 +5,12 @@ struct CloudFileListView: View {
     let panelSide: PanelSide
     let accountId: UUID
     @Environment(AppState.self) private var appState
-    @Environment(\.openSettings) private var openSettings
+    // Not @Environment(\.openSettings): this app deliberately uses a plain
+    // Window(id: "settings") rather than SwiftUI's Settings scene (which
+    // wasn't resizable on Tahoe — see FileFlussApp), so openSettings() has
+    // no scene to open and silently throws. The button did nothing at all
+    // (issue #46).
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("showStatusBar") private var showStatusBar = true
     @AppStorage("hideFileExtensions") private var hideFileExtensions = false
     /// Mirrors the Settings → "Confirm before deleting" toggle. When off,
@@ -1231,7 +1236,7 @@ struct CloudFileListView: View {
                         .controlSize(.regular)
                     }
                     Button(canReauthInline ? L10n.text("Open Settings…") : L10n.text("Open Settings to Re-Connect…")) {
-                        try? openSettings()
+                        openWindow(id: "settings")
                     }
                     .controlSize(.regular)
                 }
