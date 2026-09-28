@@ -4,9 +4,7 @@ import FileFlussCore
 @Observable @MainActor
 final class SyncViewModel {
     var accounts: [CloudAccount] = []
-    var syncRules: [SyncRule] = []
     var isAddingAccount: Bool = false
-    var isAddingRule: Bool = false
     var authError: String?
 
     // TeraBox device-code (QR) login state. The view shows `teraboxQRImageData`
@@ -894,7 +892,6 @@ final class SyncViewModel {
 
     func removeAccount(_ account: CloudAccount) async {
         accounts.removeAll { $0.id == account.id }
-        syncRules.removeAll { $0.accountId == account.id }
         await syncEngine.removeProvider(for: account.id)
         saveAccounts()
         // Drop search-index rows so the account no longer surfaces under
@@ -1121,47 +1118,6 @@ final class SyncViewModel {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
             }
-        }
-    }
-
-    func addSyncRule(localPath: URL, remotePath: String, accountId: UUID, direction: SyncDirection) {
-        let rule = SyncRule(
-            localPath: localPath,
-            remotePath: remotePath,
-            accountId: accountId,
-            direction: direction
-        )
-        syncRules.append(rule)
-    }
-
-    func removeSyncRule(_ rule: SyncRule) {
-        syncRules.removeAll { $0.id == rule.id }
-    }
-
-    func toggleRule(_ rule: SyncRule) {
-        guard let index = syncRules.firstIndex(where: { $0.id == rule.id }) else { return }
-        syncRules[index].isEnabled.toggle()
-    }
-
-    func syncNow(rule: SyncRule) async {
-        guard let index = syncRules.firstIndex(where: { $0.id == rule.id }) else { return }
-        syncRules[index].status = .syncing
-
-        do {
-            try await syncEngine.sync(rule: rule)
-            syncRules[index].status = .idle
-            syncRules[index].lastSyncDate = Date()
-            syncRules[index].errorMessage = nil
-        } catch {
-            syncRules[index].status = .error
-            syncRules[index].errorMessage = error.localizedDescription
-        }
-    }
-
-    func syncAll() async {
-        let enabledRules = syncRules.filter(\.isEnabled)
-        for rule in enabledRules {
-            await syncNow(rule: rule)
         }
     }
 

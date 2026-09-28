@@ -16,40 +16,6 @@ struct SyncEngineTests {
         }
     }
 
-    @Test("Register and use provider")
-    func registerProvider() async throws {
-        let engine = SyncEngine.shared
-        let accountId = UUID()
-        // Use a stub provider that doesn't require authentication
-        let provider = ICloudProvider()
-
-        await engine.registerProvider(for: accountId, provider: provider)
-
-        let rule = SyncRule(
-            localPath: FileManager.default.temporaryDirectory,
-            remotePath: "/test",
-            accountId: accountId,
-            direction: .upload
-        )
-
-        // Stub provider should work without throwing notAuthenticated
-        try await engine.sync(rule: rule)
-    }
-
-    @Test("Sync without registered provider throws notAuthenticated")
-    func syncWithoutProvider() async {
-        let engine = SyncEngine.shared
-        let rule = SyncRule(
-            localPath: URL(filePath: "/tmp"),
-            remotePath: "/test",
-            accountId: UUID() // unregistered
-        )
-
-        await #expect(throws: CloudProviderError.self) {
-            try await engine.sync(rule: rule)
-        }
-    }
-
     @Test("Stub providers return empty list and start unauthenticated")
     func stubProviderInitialState() async {
         let providers: [any CloudProvider] = [

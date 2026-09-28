@@ -1913,7 +1913,6 @@ enum SidebarItem: Hashable, Identifiable {
     case location(URL)
     case cloudAccount(CloudAccount)
     case cloudFolder(accountId: UUID, path: String)
-    case syncRules
     /// An external or network drive. When online, panel navigates to its
     /// mount path via `.location`. When offline, panel shows OfflineSourceView.
     case drive(driveId: String)
@@ -1928,7 +1927,6 @@ enum SidebarItem: Hashable, Identifiable {
         case .location(let url): return url.path()
         case .cloudAccount(let account): return account.id.uuidString
         case .cloudFolder(let accountId, let path): return "cloud:\(accountId.uuidString):\(path)"
-        case .syncRules: return "syncRules"
         case .drive(let id): return "drive:\(id)"
         case .offlineFolder(let sourceId, let path): return "offline:\(sourceId):\(path)"
         }
