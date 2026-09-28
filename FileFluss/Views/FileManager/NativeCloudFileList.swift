@@ -13,6 +13,9 @@ struct NativeCloudFileList: NSViewRepresentable {
     @Binding var selectedIDs: Set<String>
     var quickLookController: QuickLookController?
     var onDoubleClick: (CloudFileItem) -> Void
+    /// A drag has hovered over this folder long enough that it should open,
+    /// so the user can carry the drag on into it (issue #47).
+    var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var onDrop: (([URL], CloudFileItem?) -> Void)?
     var onKeySpace: () -> Void
     var onDelete: (() -> Void)?
@@ -127,6 +130,9 @@ struct NativeCloudFileList: NSViewRepresentable {
         tableView.onBecameFirstResponder = { [weak coordinator] in
             coordinator?.onBecameActive?()
         }
+        tableView.onDragLeft = { [weak coordinator] in
+            coordinator?.cancelSpringLoad()
+        }
 
         // Quick Look controller
         if let qlController = quickLookController {
@@ -173,6 +179,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
         coordinator.isReadOnly = isReadOnly
@@ -236,6 +243,10 @@ struct NativeCloudFileList: NSViewRepresentable {
 
 class CloudTableView: NSTableView {
     var onSpaceKey: (() -> Void)?
+    /// Called when a drag leaves or ends — `validateDrop` reports where the
+    /// cursor is but never that it has gone, so a pending spring-load has to
+    /// be cancelled from here.
+    var onDragLeft: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBecameFirstResponder: (() -> Void)?
     var quickLookController: QuickLookController?
@@ -248,6 +259,16 @@ class CloudTableView: NSTableView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        onDragLeft?()
+        super.draggingExited(sender)
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        onDragLeft?()
+        super.draggingEnded(sender)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -354,6 +375,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
+    var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
     var shareCapabilities: ShareLinkCapabilities = .unsupported
@@ -374,6 +396,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     let filePromiseDelegate = CloudFilePromiseDelegate()
 
     private var currentDragItems: [CloudFileItem] = []
+    private let springLoad = SpringLoadTimer()
 
     override init() {
         super.init()
@@ -963,7 +986,37 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     // MARK: - Drop Destination (accept local files for upload)
 
+    /// Arms the spring for the hovered row, or cancels it when there is no
+    /// folder worth opening under the cursor. The folder a drag came from is
+    /// excluded: opening it would move the ground under the drag.
+    private func armSpringLoad(row: Int?) {
+        guard onSpringLoadFolder != nil else { return }
+        guard let row, row >= 0, row < items.count else {
+            springLoad.disarm()
+            return
+        }
+        let item = items[row]
+        guard item.isDirectory, !currentDragItems.contains(where: { $0.id == item.id }) else {
+            springLoad.disarm()
+            return
+        }
+        springLoad.arm(row) { [weak self] in
+            guard let self, row < self.items.count else { return }
+            let folder = self.items[row]
+            guard folder.isDirectory, folder.id == item.id else { return }
+            self.onSpringLoadFolder?(folder)
+        }
+    }
+
+    func cancelSpringLoad() {
+        springLoad.disarm()
+    }
+
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        // Hovering a folder opens it after a moment, so a drag can be carried
+        // into a subfolder without dropping first.
+        armSpringLoad(row: dropOperation == .on ? row : nil)
+
         // Internal drag from the same cloud panel: allow drop onto a subfolder row
         if !currentDragItems.isEmpty, dropOperation == .on, row >= 0, row < items.count {
             let target = items[row]
@@ -988,6 +1041,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        cancelSpringLoad()
+
         // Resolve an optional subfolder target from the drop row
         var targetFolder: CloudFileItem?
         if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {

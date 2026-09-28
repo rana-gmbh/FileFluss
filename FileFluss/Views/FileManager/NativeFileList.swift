@@ -14,6 +14,9 @@ struct NativeFileList: NSViewRepresentable {
     @Binding var selectedIDs: Set<String>
     var quickLookController: QuickLookController?
     var onDoubleClick: (FileItem) -> Void
+    /// A drag has hovered over this folder long enough that it should open,
+    /// so the user can carry the drag on into it (issue #47).
+    var onSpringLoadFolder: ((FileItem) -> Void)?
     var onDrop: ([FileItem], URL) -> Void
     var onKeySpace: () -> Void
     var onDelete: (() -> Void)?
@@ -131,6 +134,10 @@ struct NativeFileList: NSViewRepresentable {
             coordinator?.onBecameActive?()
         }
 
+        tableView.onDragLeft = { [weak coordinator] in
+            coordinator?.cancelSpringLoad()
+        }
+
         // Quick Look controller
         if let qlController = quickLookController {
             tableView.quickLookController = qlController
@@ -176,6 +183,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.selectedIDs = _selectedIDs
 
@@ -237,6 +245,11 @@ struct NativeFileList: NSViewRepresentable {
 
 class FileTableView: NSTableView {
     var onSpaceKey: (() -> Void)?
+    /// Called when a drag leaves or ends. `validateDrop` tells the
+    /// coordinator where the cursor is, but never that it has gone, so a
+    /// pending spring-load would otherwise open a folder after the drag was
+    /// already over somewhere else.
+    var onDragLeft: (() -> Void)?
     var onDelete: (() -> Void)?
     var onBecameFirstResponder: (() -> Void)?
     var quickLookController: QuickLookController?
@@ -250,6 +263,16 @@ class FileTableView: NSTableView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        onDragLeft?()
+        super.draggingExited(sender)
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        onDragLeft?()
+        super.draggingEnded(sender)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -373,6 +396,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
+    var onSpringLoadFolder: ((FileItem) -> Void)?
     var singlePaneMode = false
     weak var tableView: FileTableView?
     var suppressSelectionUpdate = false
@@ -389,6 +413,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     // Parallel set of IDs for the active drag. Cheaper than a linear search
     // through `currentDragItems` on every cursor move during validateDrop.
     private var currentDragItemIDs: Set<String> = []
+    private let springLoad = SpringLoadTimer()
 
     override init() {
         super.init()
@@ -871,10 +896,43 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         currentDragItemIDs = []
     }
 
+    // MARK: - Spring-loaded Folders
+
+    /// Arms the spring for the hovered row, or cancels it when the cursor is
+    /// not over a folder it makes sense to open. A row the drag itself came
+    /// from is excluded — opening that would pull the ground out from under
+    /// the drag.
+    private func armSpringLoad(row: Int?) {
+        guard onSpringLoadFolder != nil else { return }
+        guard let row, row >= 0, row < items.count else {
+            springLoad.disarm()
+            return
+        }
+        let item = items[row]
+        guard item.isDirectory, !currentDragItemIDs.contains(item.id) else {
+            springLoad.disarm()
+            return
+        }
+        springLoad.arm(row) { [weak self] in
+            guard let self, row < self.items.count else { return }
+            let folder = self.items[row]
+            guard folder.isDirectory, folder.id == item.id else { return }
+            self.onSpringLoadFolder?(folder)
+        }
+    }
+
+    func cancelSpringLoad() {
+        springLoad.disarm()
+    }
+
     // MARK: - Drop Destination
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
         // Accept file promises from cloud panels
+        // Hovering a folder opens it after a moment, so a drag can be
+        // carried into a subfolder without dropping first.
+        armSpringLoad(row: dropOperation == .on ? row : nil)
+
         let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
         if hasPromises {
             // Allow drop onto a specific subfolder row; otherwise target the current directory.
@@ -905,6 +963,8 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        cancelSpringLoad()
+
         // Determine target directory
         let targetURL: URL
         if row >= 0, row < items.count, dropOperation == .on {

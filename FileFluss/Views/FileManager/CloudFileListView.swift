@@ -830,6 +830,11 @@ struct CloudFileListView: View {
                         openCloudFile(item)
                     }
                 },
+                onSpringLoadFolder: { folder in
+                    // Navigate only — no focus request: taking first
+                    // responder mid-drag would fight the drag session.
+                    Task { await vm.openItem(folder) }
+                },
                 onDrop: { urls, targetFolder in
                     presentOrRunUploadDrop(PendingUpload(urls: urls, targetFolder: targetFolder))
                 },

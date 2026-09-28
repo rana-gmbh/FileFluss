@@ -115,6 +115,11 @@ struct SidebarView: View {
     /// over the section; otherwise the position in the favorites
     /// array where the dropped folder would land.
     @State private var favoritesInsertIndex: Int?
+    /// Favourite currently highlighted as a drop-into target (issue #47).
+    @State private var transferHoverFavoriteID: UUID?
+    /// Cloud account currently highlighted as a drop-into target. Separate
+    /// from the favourites state so a drag can't light up both at once.
+    @State private var transferHoverAccountID: UUID?
     /// Mirrors the SyncManager's quota cache as a SwiftUI-observable
     /// dictionary so `.help(...)` can show the latest figure without
     /// each sidebar row spawning its own task. Refreshed in a single
@@ -225,12 +230,68 @@ struct SidebarView: View {
         }
     }
 
+    /// The sidebar selection this favourite stands for — what a click on it
+    /// would select, and what a drag resting on it opens.
+    private func sidebarItem(for fav: SidebarFavorite) -> SidebarItem? {
+        switch fav.kind {
+        case .localPath:
+            guard let url = fav.url else { return nil }
+            return .location(url)
+        case .cloudFolder:
+            guard let accountId = fav.accountId, let path = fav.cloudPath else { return nil }
+            return .cloudFolder(accountId: accountId, path: path)
+        }
+    }
+
+    /// Opens a sidebar row in this panel while a drag is still in flight, so
+    /// the user can carry on into one of its folders (issue #47). Routed
+    /// through the same selection binding a click uses, so the panel lands
+    /// exactly where clicking would have put it.
+    private func springLoad(_ item: SidebarItem?) {
+        guard let item, selection.wrappedValue != item else { return }
+        selection.wrappedValue = item
+    }
+
+    /// Where a drop onto a cloud account row should go: the account's root.
+    /// Nil when it can't be written to — not connected, or forced offline.
+    private func transferDestination(for account: CloudAccount) -> TransferDestination? {
+        guard account.isConnected, !account.isOfflineMode else { return nil }
+        let root = account.rootPath.isEmpty ? "/" : account.rootPath
+        return .cloud(accountId: account.id, path: root, panel: panelSide)
+    }
+
+    /// Where a drop on this favourite should go. Nil when the favourite
+    /// can't be written to — a cloud folder whose account is gone.
+    private func transferDestination(for fav: SidebarFavorite) -> TransferDestination? {
+        switch fav.kind {
+        case .localPath:
+            guard let url = fav.url else { return nil }
+            return .local(directory: url, panel: panelSide)
+        case .cloudFolder:
+            guard let accountId = fav.accountId,
+                  let path = fav.cloudPath,
+                  let account = appState.syncManager.accountFor(id: accountId),
+                  account.isConnected else { return nil }
+            return .cloud(accountId: accountId, path: path, panel: panelSide)
+        }
+    }
+
     var body: some View {
         List(selection: selection) {
             Section(isExpanded: favoritesExpanded) {
                 let favs = appState.favorites(for: panelSide)
                 ForEach(Array(favs.enumerated()), id: \.element.id) { idx, fav in
                     favoriteRow(fav)
+                        // Distinct from the insertion line: a filled
+                        // surround means "into this folder", the line means
+                        // "reorder to here".
+                        .background {
+                            if transferHoverFavoriteID == fav.id {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.accentColor.opacity(0.25))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 1.5))
+                            }
+                        }
                         .contextMenu {
                             Button(L10n.text("Rename")) {
                                 renameText = fav.displayName
@@ -248,11 +309,19 @@ struct SidebarView: View {
                         // Home/Desktop are tagged with their own URLs and
                         // otherwise reject the drop).
                         .overlay {
-                            FavoritesDropTarget(
+                            SidebarDropTarget(
                                 panelSide: panelSide,
                                 appState: appState,
                                 position: .row(index: idx),
-                                setHoverInsertIndex: { favoritesInsertIndex = $0 }
+                                setHoverInsertIndex: { favoritesInsertIndex = $0 },
+                                transferDestination: transferDestination(for: fav),
+                                transferDestinationName: fav.displayName,
+                                setTransferHovered: { hovering in
+                                    transferHoverFavoriteID = hovering ? fav.id : (transferHoverFavoriteID == fav.id ? nil : transferHoverFavoriteID)
+                                },
+                                springLoadAction: {
+                                    springLoad(sidebarItem(for: fav))
+                                }
                             )
                         }
                         // Blue insertion line centred in the visible
@@ -282,7 +351,7 @@ struct SidebarView: View {
                     LText("Favorites")
                         // Dropping on the header inserts at the very top.
                         .overlay {
-                            FavoritesDropTarget(
+                            SidebarDropTarget(
                                 panelSide: panelSide,
                                 appState: appState,
                                 position: .header,
@@ -296,7 +365,7 @@ struct SidebarView: View {
                     Color.clear
                         .frame(height: 1)
                         .overlay {
-                            FavoritesDropTarget(
+                            SidebarDropTarget(
                                 panelSide: panelSide,
                                 appState: appState,
                                 position: .header,
@@ -355,6 +424,34 @@ struct SidebarView: View {
                             CloudProviderIcon(providerType: account.providerType, size: 16)
                         }
                         .tag(SidebarItem.cloudAccount(account))
+                        .background {
+                            if transferHoverAccountID == account.id {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.accentColor.opacity(0.25))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 1.5))
+                            }
+                        }
+                        // Dropping on an account uploads into its root;
+                        // resting on it opens the account in this panel so
+                        // the drag can go on into a folder (issue #47).
+                        .overlay {
+                            SidebarDropTarget(
+                                panelSide: panelSide,
+                                appState: appState,
+                                position: .fixedRow,
+                                setHoverInsertIndex: { _ in },
+                                transferDestination: transferDestination(for: account),
+                                transferDestinationName: account.displayName,
+                                setTransferHovered: { hovering in
+                                    transferHoverAccountID = hovering
+                                        ? account.id
+                                        : (transferHoverAccountID == account.id ? nil : transferHoverAccountID)
+                                },
+                                springLoadAction: {
+                                    springLoad(.cloudAccount(account))
+                                }
+                            )
+                        }
                         .help(cloudAccountTooltip(for: account))
                         .contextMenu {
                             Button(L10n.text("Rename...")) {
@@ -479,6 +576,27 @@ struct SidebarView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            L10n.text("Copy or move?"),
+            isPresented: Binding(
+                get: { appState.pendingSidebarDrop != nil },
+                set: { if !$0 { appState.pendingSidebarDrop = nil } }
+            ),
+            presenting: appState.pendingSidebarDrop
+        ) { drop in
+            Button(L10n.format("Copy to %@", drop.destinationName)) {
+                appState.resolvePendingSidebarDrop(isMove: false)
+            }
+            Button(L10n.format("Move to %@", drop.destinationName)) {
+                appState.resolvePendingSidebarDrop(isMove: true)
+            }
+            Button(L10n.text("Cancel"), role: .cancel) {
+                appState.pendingSidebarDrop = nil
+            }
+        } message: { drop in
+            let count = drop.localURLs.count + drop.cloudURLs.count
+            Text(L10n.format("%d item(s) dropped on \"%@\".", count, drop.destinationName))
         }
         .listStyle(.sidebar)
         // Both sidebars live in a plain HStack, not a NavigationSplitView,

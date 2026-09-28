@@ -440,6 +440,8 @@ final class AppState {
     // Cloud drag source tracking (for cross-panel drag from cloud to local
     // or between same-account panels). The side identifies which panel
     // initiated the drag so the source VM can be looked up correctly.
+    /// Set when a sidebar drop needs the user to choose copy or move.
+    var pendingSidebarDrop: PendingSidebarDrop?
     var cloudDragSourceItems: [CloudFileItem] = []
     var cloudDragSourceAccountId: UUID?
     var cloudDragSourceSide: PanelSide?
@@ -1145,7 +1147,8 @@ final class AppState {
     /// upload landed cleanly so a partial failure never silently destroys
     /// data.
     @MainActor
-    private func runCloudToCloudPaste(
+    /// Also called from `AppState+Transfer`, which is why this is not private.
+    func runCloudToCloudPaste(
         sourceAccountId: UUID,
         destAccountId: UUID,
         destPath: String,

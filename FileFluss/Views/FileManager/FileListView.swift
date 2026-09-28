@@ -466,6 +466,12 @@ struct FileListView: View {
                             if item.isDirectory { appState.requestActivePanelFocus() }
                         }
                     },
+                    onSpringLoadFolder: { folder in
+                        // Navigate only — no focus request: taking first
+                        // responder in the middle of a drag would fight the
+                        // drag session for it.
+                        Task { await fm.openItem(folder) }
+                    },
                     onDrop: { droppedItems, targetURL in
                         let drop = FileManagerViewModel.PendingDrop(
                             items: droppedItems,
