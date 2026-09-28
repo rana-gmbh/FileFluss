@@ -604,20 +604,22 @@ struct FileListView: View {
     }
 
     private var statusFooter: some View {
-        let items = fm.filteredItems
-        let fileCount = items.filter { !$0.isDirectory }.count
-        let folderCount = items.filter { $0.isDirectory }.count
-        let totalSize = items.filter { !$0.isDirectory }.reduce(Int64(0)) { $0 + $1.size }
-        let selected = fm.selectedItems
+        let summary = fm.listingSummary
+        let fileCount = summary.fileCount
+        let folderCount = summary.folderCount
+        let totalSize = summary.totalSize
+        // Only the count is needed here; `selectedItems` filters the whole
+        // listing, and this footer re-renders on every selection change.
+        let selectedCount = fm.selectedItemIDs.count
 
         return HStack(spacing: 4) {
             Text(L10n.format("%d files, %d folders — %@", fileCount, folderCount, ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)))
-            if !selected.isEmpty {
+            if selectedCount > 0 {
                 Text("·")
                 if fm.isCalculatingSelectionSize {
-                    Text(L10n.format("Selected: %d items, calculating…", selected.count))
+                    Text(L10n.format("Selected: %d items, calculating…", selectedCount))
                 } else if let size = fm.selectionSize {
-                    Text(L10n.format("Selected: %d items, %@", selected.count, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
+                    Text(L10n.format("Selected: %d items, %@", selectedCount, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
                 }
             }
             if let cap = volumeCapacity {

@@ -29,10 +29,31 @@ struct FolderCompareEntry: Identifiable, Hashable, Sendable {
 struct FolderComparisonResult: Sendable {
     let entries: [FolderCompareEntry]
 
-    var identicalCount: Int { entries.lazy.filter { $0.status == .identical }.count }
-    var onlyLeftCount: Int { entries.lazy.filter { $0.status == .onlyLeft }.count }
-    var onlyRightCount: Int { entries.lazy.filter { $0.status == .onlyRight }.count }
-    var differsCount: Int { entries.lazy.filter { $0.status == .differs }.count }
+    // Counted once at construction. As computed properties these were four
+    // full passes over the entries *per read*, and the filter chips read
+    // all four on every redraw of the compare window — so expanding a row
+    // in a 10k-file comparison re-counted everything five times over.
+    let identicalCount: Int
+    let onlyLeftCount: Int
+    let onlyRightCount: Int
+    let differsCount: Int
+
+    init(entries: [FolderCompareEntry]) {
+        self.entries = entries
+        var identical = 0, onlyLeft = 0, onlyRight = 0, differs = 0
+        for entry in entries {
+            switch entry.status {
+            case .identical: identical += 1
+            case .onlyLeft: onlyLeft += 1
+            case .onlyRight: onlyRight += 1
+            case .differs: differs += 1
+            }
+        }
+        self.identicalCount = identical
+        self.onlyLeftCount = onlyLeft
+        self.onlyRightCount = onlyRight
+        self.differsCount = differs
+    }
 }
 
 enum FolderComparison {

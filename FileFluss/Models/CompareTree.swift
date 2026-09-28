@@ -12,6 +12,19 @@ final class CompareTreeNode: Identifiable {
     let isDirectory: Bool
     var entry: FolderCompareEntry?
     var children: [CompareTreeNode]
+    /// Children by name, so building the tree doesn't rescan a folder's
+    /// siblings for every path component. A directory holding 10k files
+    /// otherwise costs ~50M string comparisons to build.
+    private var childrenByName: [String: CompareTreeNode] = [:]
+
+    func child(named name: String) -> CompareTreeNode? {
+        childrenByName[name]
+    }
+
+    func addChild(_ node: CompareTreeNode) {
+        children.append(node)
+        childrenByName[node.name] = node
+    }
 
     init(path: String, name: String, isDirectory: Bool, entry: FolderCompareEntry? = nil, children: [CompareTreeNode] = []) {
         self.path = path
@@ -58,7 +71,7 @@ enum CompareTreeBuilder {
                 let isLast = i == parts.count - 1
                 pathSoFar = pathSoFar.isEmpty ? p : "\(pathSoFar)/\(p)"
 
-                if let existing = node.children.first(where: { $0.name == p }) {
+                if let existing = node.child(named: p) {
                     if isLast { existing.entry = entry }
                     node = existing
                 } else {
@@ -68,7 +81,7 @@ enum CompareTreeBuilder {
                         isDirectory: isLast ? entry.isDirectory : true,
                         entry: isLast ? entry : nil
                     )
-                    node.children.append(new)
+                    node.addChild(new)
                     node = new
                 }
             }

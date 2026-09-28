@@ -2,19 +2,31 @@ import SwiftUI
 import FileFlussCore
 import QuickLookUI
 
+
+/// Counts and total size of a listing, computed in one pass and cached.
+/// The panel footer reads all three on every redraw — including every
+/// arrow-key press, since it also depends on the selection — and three
+/// separate filters over a 10k-file folder per redraw is what made
+/// holding arrow-down feel heavy.
+struct ListingSummary: Equatable {
+    var fileCount: Int = 0
+    var folderCount: Int = 0
+    var totalSize: Int64 = 0
+}
+
 @Observable @MainActor
 final class FileManagerViewModel {
     var currentDirectory: URL
-    var items: [FileItem] = [] { didSet { _filteredItemsCache = nil } }
+    var items: [FileItem] = [] { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     var selectedItemIDs: Set<String> = []
-    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil } }
-    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil } }
+    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
+    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     var showHiddenFiles: Bool = false
     var isLoading: Bool = false
     var error: String?
     var pathHistory: [URL] = []
     var pathHistoryIndex: Int = -1
-    var searchText: String = "" { didSet { _filteredItemsCache = nil } }
+    var searchText: String = "" { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
 
     /// Memoised result of `filteredItems`. Recomputed lazily and invalidated
     /// (via `didSet` above) only when an input that affects it changes —
@@ -23,6 +35,24 @@ final class FileManagerViewModel {
     /// `@ObservationIgnored` so writing the cache never itself triggers a
     /// SwiftUI invalidation.
     @ObservationIgnored private var _filteredItemsCache: [FileItem]?
+    @ObservationIgnored private var _listingSummaryCache: ListingSummary?
+
+    /// One pass over the listing, cached alongside `filteredItems`.
+    var listingSummary: ListingSummary {
+        let items = filteredItems
+        if let cached = _listingSummaryCache { return cached }
+        var summary = ListingSummary()
+        for item in items {
+            if item.isDirectory {
+                summary.folderCount += 1
+            } else {
+                summary.fileCount += 1
+                summary.totalSize += item.size
+            }
+        }
+        _listingSummaryCache = summary
+        return summary
+    }
     /// Toggled by the Edit → Quick Filter… command; when true, the panel
     /// shows an inline filter bar bound to `searchText`.
     var isFilterBarVisible: Bool = false

@@ -10,7 +10,7 @@ final class CloudFileManagerViewModel {
     let accountId: UUID
     let providerType: CloudProviderType?
     var currentPath: String = "/"
-    var items: [CloudFileItem] = [] { didSet { _filteredItemsCache = nil } }
+    var items: [CloudFileItem] = [] { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     var selectedItemIDs: Set<String> = []
     var isLoading = false
     var error: String?
@@ -18,17 +18,17 @@ final class CloudFileManagerViewModel {
     /// longer valid (`CloudProviderError.notAuthenticated`/`.unauthorized`).
     /// The panel's error view uses this to surface a "Sign In Again" button.
     var needsReAuth: Bool = false
-    var searchText: String = "" { didSet { _filteredItemsCache = nil } }
+    var searchText: String = "" { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     /// Toggled by the Edit → Quick Filter… command; when true, the panel
     /// shows an inline filter bar bound to `searchText`.
     var isFilterBarVisible: Bool = false
-    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil } }
-    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil } }
+    var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
+    var sortAscending: Bool = true { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     /// When false (default), dot-prefixed entries (`.gitignore`, `.ssh`,
     /// SFTP server-side `lost+found`-style dotfiles) are hidden from the
     /// listing. Mirrored to the local `FileManagerViewModel.showHiddenFiles`
     /// flag by the toolbar toggle.
-    var showHiddenFiles: Bool = false { didSet { _filteredItemsCache = nil } }
+    var showHiddenFiles: Bool = false { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
 
     /// Memoised result of `filteredItems` — recomputed lazily and invalidated
     /// (via the `didSet`s above) only when an input that affects it changes:
@@ -37,6 +37,24 @@ final class CloudFileManagerViewModel {
     /// `@ObservationIgnored` so writing the cache never triggers a SwiftUI
     /// invalidation on its own.
     @ObservationIgnored private var _filteredItemsCache: [CloudFileItem]?
+    @ObservationIgnored private var _listingSummaryCache: ListingSummary?
+
+    /// See `FileManagerViewModel.listingSummary` — same reasoning.
+    var listingSummary: ListingSummary {
+        let items = filteredItems
+        if let cached = _listingSummaryCache { return cached }
+        var summary = ListingSummary()
+        for item in items {
+            if item.isDirectory {
+                summary.folderCount += 1
+            } else {
+                summary.fileCount += 1
+                summary.totalSize += item.size
+            }
+        }
+        _listingSummaryCache = summary
+        return summary
+    }
     /// Cached storage quota snapshot for the panel's status bar. nil
     /// either because the provider doesn't support quota (S3, SFTP,
     /// WordPress) or because the first probe hasn't completed.

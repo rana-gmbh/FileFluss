@@ -369,20 +369,20 @@ struct CloudFileListView: View {
     }
 
     private var cloudStatusFooter: some View {
-        let items = vm.filteredItems
-        let fileCount = items.filter { !$0.isDirectory }.count
-        let folderCount = items.filter { $0.isDirectory }.count
-        let totalSize = items.filter { !$0.isDirectory }.reduce(Int64(0)) { $0 + $1.size }
-        let selected = vm.selectedItems
+        let summary = vm.listingSummary
+        let fileCount = summary.fileCount
+        let folderCount = summary.folderCount
+        let totalSize = summary.totalSize
+        let selectedCount = vm.selectedItemIDs.count
 
         return HStack(spacing: 4) {
             Text(L10n.format("%d files, %d folders — %@", fileCount, folderCount, ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)))
-            if !selected.isEmpty {
+            if selectedCount > 0 {
                 Text("·")
                 if vm.isCalculatingSelectionSize {
-                    Text(L10n.format("Selected: %d items, calculating…", selected.count))
+                    Text(L10n.format("Selected: %d items, calculating…", selectedCount))
                 } else if let size = vm.selectionSize {
-                    Text(L10n.format("Selected: %d items, %@", selected.count, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
+                    Text(L10n.format("Selected: %d items, %@", selectedCount, ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))
                 }
             }
             if let quota = vm.storageQuota {

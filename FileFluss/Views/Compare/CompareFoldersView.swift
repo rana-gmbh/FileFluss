@@ -18,6 +18,14 @@ struct CompareFoldersView: View {
     /// the displayed paths.
     @State private var snapshotLeft: SyncEndpoint?
     @State private var snapshotRight: SyncEndpoint?
+    /// Built once per comparison rather than on every redraw: the builder
+    /// walks every entry, and the view body runs again for each disclosure
+    /// toggle, filter change and window resize.
+    @State private var tree: CompareTreeNode?
+    /// Ids of the nodes the active filter keeps. Computed in one pass when
+    /// the filter or the tree changes; asking each node to re-walk its
+    /// subtree meant every ancestor re-walked the same descendants.
+    @State private var visibleNodeIDs: Set<UUID> = []
 
     enum Filter: String, CaseIterable, Hashable {
         case all = "All"
@@ -47,6 +55,23 @@ struct CompareFoldersView: View {
         .task(id: appState.compareTrigger) {
             await calculate()
         }
+        // Visibility depends on the tree and the filter; the tree itself is
+        // rebuilt where the result is assigned, which is the only thing that
+        // changes it.
+        .onChange(of: filter) { _, _ in
+            if let tree { recomputeVisibleNodes(in: tree) }
+        }
+    }
+
+    private func rebuildTree() {
+        guard let result else {
+            tree = nil
+            visibleNodeIDs = []
+            return
+        }
+        let built = CompareTreeBuilder.build(from: result.entries)
+        tree = built
+        recomputeVisibleNodes(in: built)
     }
 
     // MARK: - Header
@@ -183,10 +208,8 @@ struct CompareFoldersView: View {
     }
 
     private func resultsView(_ result: FolderComparisonResult) -> some View {
-        let tree = CompareTreeBuilder.build(from: result.entries)
-        let visibleTopLevel = tree.children.filter { node in
-            nodeMatchesCurrentFilter(node)
-        }
+        let tree = self.tree ?? CompareTreeBuilder.build(from: result.entries)
+        let visibleTopLevel = tree.children.filter { visibleNodeIDs.contains($0.id) }
         return VStack(spacing: 0) {
             filterChips(result: result)
                 .padding(.bottom, 10)
@@ -211,11 +234,24 @@ struct CompareFoldersView: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// True if `node` itself matches the active filter, or any descendant
-    /// does (so folders containing matching items remain visible).
-    private func nodeMatchesCurrentFilter(_ node: CompareTreeNode) -> Bool {
-        if let entry = node.entry, entryMatchesFilter(entry) { return true }
-        return node.children.contains { nodeMatchesCurrentFilter($0) }
+    /// Marks every node the active filter keeps — a node matches itself, or
+    /// keeps a matching descendant, so folders containing matches stay
+    /// visible. One bottom-up pass over the tree; the previous predicate
+    /// re-walked a subtree once per ancestor asking about it.
+    private func recomputeVisibleNodes(in tree: CompareTreeNode) {
+        var visible: Set<UUID> = []
+
+        @discardableResult
+        func mark(_ node: CompareTreeNode) -> Bool {
+            var keep = false
+            if let entry = node.entry, entryMatchesFilter(entry) { keep = true }
+            for child in node.children where mark(child) { keep = true }
+            if keep { visible.insert(node.id) }
+            return keep
+        }
+
+        for child in tree.children { mark(child) }
+        visibleNodeIDs = visible
     }
 
     private func entryMatchesFilter(_ entry: FolderCompareEntry) -> Bool {
@@ -231,7 +267,7 @@ struct CompareFoldersView: View {
     /// Returns AnyView because the body recurses on itself, and SwiftUI's
     /// opaque-return-type inference would otherwise reject it.
     private func nodeView(_ node: CompareTreeNode, depth: Int) -> AnyView {
-        let visibleChildren = node.children.filter { nodeMatchesCurrentFilter($0) }
+        let visibleChildren = node.children.filter { visibleNodeIDs.contains($0.id) }
         if node.isDirectory && !visibleChildren.isEmpty {
             return AnyView(
                 DisclosureGroup {
@@ -576,6 +612,7 @@ struct CompareFoldersView: View {
             leftEntries = l
             rightEntries = r
             result = FolderComparison.compare(left: l, right: r, compareDates: compareDates)
+            rebuildTree()
         } catch {
             errorMessage = "Could not read folders: \(error.localizedDescription)"
             result = nil
@@ -591,5 +628,6 @@ struct CompareFoldersView: View {
             right: rightEntries,
             compareDates: compareDates
         )
+        rebuildTree()
     }
 }
