@@ -198,7 +198,10 @@ public actor GoogleDriveAPIClient {
             throw CloudProviderError.invalidCredentials
         }
 
-        googleLog.info("[Google] Token exchange response: \(bodyStr.prefix(200))")
+        // The body of a token exchange IS the access and refresh token;
+        // logging any prefix of it puts a live credential in the
+        // system log, where a sysdiagnose would collect it.
+        googleLog.info("[Google] Token exchange returned HTTP \(http.statusCode)")
 
         let tokenResponse = try JSONDecoder().decode(GoogleTokenResponse.self, from: data)
         let expiresAt = Date().addingTimeInterval(TimeInterval(tokenResponse.expires_in))

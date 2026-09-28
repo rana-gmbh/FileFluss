@@ -59,7 +59,7 @@ public actor GoProAPIClient {
         config.waitsForConnectivity = false
         self.session = URLSession(
             configuration: config,
-            delegate: GoProTLSDelegate(),
+            delegate: GoProTLSDelegate(host: ipAddress),
             delegateQueue: nil
         )
     }
@@ -250,11 +250,23 @@ private extension CharacterSet {
 /// reached by the IP the user provisioned via the GoPro app on their own LAN,
 /// and the camera presents a self-signed cert — the same trust model the
 /// Synology/Seafile/FTP providers already use for user-entered local servers.
+/// Trusts the self-signed certificate a GoPro presents for COHN — but only
+/// for the camera address the user configured. Accepting any certificate
+/// from any host would let anyone on the same network impersonate the
+/// camera and collect the Basic credentials this session sends with every
+/// request. Scoped the same way the Seafile and Synology delegates are.
 private final class GoProTLSDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+    private let host: String
+
+    init(host: String) {
+        self.host = host
+    }
+
     func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              challenge.protectionSpace.host == host,
               let trust = challenge.protectionSpace.serverTrust else {
             completionHandler(.performDefaultHandling, nil)
             return

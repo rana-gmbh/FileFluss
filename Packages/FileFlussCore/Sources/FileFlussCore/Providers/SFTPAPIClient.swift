@@ -103,6 +103,19 @@ public actor SFTPAPIClient {
         }
     }
 
+    deinit {
+        // The askpass script contains the account's SSH password (or key
+        // passphrase) in clear text, and the key file the private key
+        // itself. Leaving them in the temp directory downgrades keychain-
+        // protected secrets to files any process running as this user can
+        // read, for as long as the temp directory survives. `deinit` can't
+        // touch actor state, so both paths are captured as plain values.
+        let leftovers = [askPassScriptPath, privateKeyPath].compactMap { $0 }
+        for path in leftovers {
+            try? Foundation.FileManager.default.removeItem(atPath: path)
+        }
+    }
+
     // MARK: - Authentication
 
     public static func authenticate(

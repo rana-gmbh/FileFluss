@@ -487,7 +487,15 @@ final class CloudFileManagerViewModel {
                 }
                 return
             }
-            var base = localDirectory.appendingPathComponent(item.name)
+            // Server-supplied name: sanitise and confine before writing. A
+            // name that escapes the target directory is refused rather than
+            // downloaded; the rest of the batch continues.
+            guard var base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
+                let msg = "Unsafe file name from the server — download refused."
+                self.error = msg
+                progress?.recordFailure(item.name, error: msg)
+                continue
+            }
             let existingURL = Self.findExistingFile(base: base, convertedExtensions: convertedExtensions)
             let exists = existingURL != nil
 
@@ -533,7 +541,7 @@ final class CloudFileManagerViewModel {
                         try FileManager.default.removeItem(at: existing)
                     }
                     for ext in convertedExtensions {
-                        let converted = localDirectory.appendingPathComponent(item.name).appendingPathExtension(ext)
+                        let converted = base.appendingPathExtension(ext)
                         if FileManager.default.fileExists(atPath: converted.path) { try FileManager.default.removeItem(at: converted) }
                     }
                 }
@@ -566,14 +574,14 @@ final class CloudFileManagerViewModel {
 
     private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int) async throws {
         if item.isDirectory {
-            let folderURL = localDirectory.appendingPathComponent(item.name)
+            let folderURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
             let contents = try await provider.listDirectory(at: item.path)
             for child in contents {
                 try await downloadRecursively(item: child, to: folderURL, provider: provider, progress: progress, downloadedCount: &downloadedCount)
             }
         } else {
-            let localURL = localDirectory.appendingPathComponent(item.name)
+            let localURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
             progress?.currentFileName = item.name
             let progressRef = progress
             try await provider.downloadFile(remotePath: item.path, to: localURL, onBytes: { bytes in
@@ -630,7 +638,12 @@ final class CloudFileManagerViewModel {
             return link
         }
         linksAreNotPublic = true
-        cloudFileVMLog.info("[Share] Link is not publicly reachable: \(result.detail ?? "no detail", privacy: .public)")
+        // Deliberately not logging `result.detail`: it carries the final
+        // URL, and for S3-style accounts that is a presigned URL — a
+        // working download credential. It reaches the user in the banner
+        // instead, which is where it is useful and where it doesn't end up
+        // in a sysdiagnose.
+        cloudFileVMLog.info("[Share] Link is not publicly reachable for account \(self.accountId, privacy: .public)")
         return CloudShareLink(
             url: link.url,
             directDownloadURL: link.directDownloadURL,
@@ -905,7 +918,8 @@ final class CloudFileManagerViewModel {
             .replacingOccurrences(of: ":", with: "_")
         let cacheDir = tempDownloadDir.appendingPathComponent(safeParent, isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-        let localURL = cacheDir.appendingPathComponent(item.name)
+        // Quick Look / Open staging: same untrusted name, same guard.
+        guard let localURL = try? SafeLocalPath.destination(for: item.name, in: cacheDir) else { return nil }
 
         // Use cached version if size AND modification date match — size alone
         // isn't enough, since a re-uploaded file with identical bytes would
@@ -1222,7 +1236,7 @@ final class CloudFileManagerViewModel {
         // from the source afterwards.
         var downloadedNames: Set<String> = []
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            let expected = tempDir.appendingPathComponent(item.name)
+            guard let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
             var localURL: URL?
             if FileManager.default.fileExists(atPath: expected.path) {
                 localURL = expected

@@ -50,7 +50,9 @@ public actor SyncEngine {
         let remoteItems = try await provider.listDirectory(at: rule.remotePath)
 
         for item in remoteItems where !item.isDirectory {
-            let localURL = rule.localPath.appendingPathComponent(item.name)
+            // The remote side names these files; confine them to the
+            // rule's local folder.
+            let localURL = try SafeLocalPath.destination(for: item.name, in: rule.localPath)
             try await provider.downloadFile(remotePath: item.path, to: localURL)
         }
     }

@@ -1250,7 +1250,13 @@ final class AppState {
                 if Task.isCancelled { break }
                 await MainActor.run { transfer.currentFileName = item.name }
 
-                let tempURL = tempDir.appendingPathComponent(item.name)
+                guard let tempURL = try? SafeLocalPath.destination(for: item.name, in: tempDir) else {
+                    await MainActor.run {
+                        transfer.recordFailure(item.name, error: "Unsafe file name from the server — transfer refused.")
+                        transfer.completedItems += 1
+                    }
+                    continue
+                }
                 try? FileManager.default.removeItem(at: tempURL)
 
                 // --- Apply .replace: delete the existing item at the

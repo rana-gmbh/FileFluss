@@ -1132,7 +1132,7 @@ struct CloudFileListView: View {
         // Build local URLs for upload, renaming "keepBoth" items
         let existingNames = Set(conflictPool.map(\.name))
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            let expected = tempDir.appendingPathComponent(item.name)
+            guard let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
             var localURL: URL?
             if FileManager.default.fileExists(atPath: expected.path) {
                 localURL = expected

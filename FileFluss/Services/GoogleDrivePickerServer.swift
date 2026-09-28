@@ -22,9 +22,23 @@ struct GoogleDrivePickerServer {
     /// Opens the Picker in the browser and returns the folders the user chose.
     /// An empty array means the user cancelled.
     func pickFolders(accessToken: String) async throws -> [GoogleDrivePickedRoot] {
-        let listener = try NWListener(using: .tcp, on: .any)
+        // Loopback only. This page embeds the account's live Google access
+        // token, so a listener on 0.0.0.0 hands that token to anyone who can
+        // reach this machine — a GET from the same Wi-Fi is enough. Same
+        // binding the app's WebDAV server uses, for the same reason.
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.requiredLocalEndpoint = NWEndpoint.hostPort(
+            host: .ipv4(IPv4Address("127.0.0.1")!),
+            port: .any
+        )
+        let listener = try NWListener(using: params)
         let guard_ = PickerContinuationGuard()
         let apiKey = GoogleDrivePickerAPIClient.pickerAPIKey
+        // Unguessable path, so a local process that merely knows the port
+        // still can't fetch the token page, and a browser page that guesses
+        // at localhost ports gets a 404.
+        let secretPath = "/" + UUID().uuidString.lowercased()
 
         return try await withCheckedThrowingContinuation { continuation in
             guard_.setContinuation(continuation)
@@ -33,7 +47,7 @@ struct GoogleDrivePickerServer {
                 switch state {
                 case .ready:
                     guard let port = listener.port?.rawValue else { return }
-                    let url = URL(string: "http://localhost:\(port)/")!
+                    let url = URL(string: "http://127.0.0.1:\(port)\(secretPath)")!
                     DispatchQueue.main.async { NSWorkspace.shared.open(url) }
                 case .failed(let error):
                     guard_.resume(throwing: CloudProviderError.networkError(error))
@@ -43,6 +57,13 @@ struct GoogleDrivePickerServer {
             }
 
             listener.newConnectionHandler = { connection in
+                // Defence in depth: the binding above should make this
+                // unreachable from off-machine, so anything that isn't
+                // loopback is refused rather than served.
+                guard Self.isLoopback(connection.endpoint) else {
+                    connection.cancel()
+                    return
+                }
                 connection.start(queue: .global())
                 connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, _, _ in
                     guard let data, let request = String(data: data, encoding: .utf8),
@@ -52,7 +73,7 @@ struct GoogleDrivePickerServer {
                     }
                     let path = String(pathPart)
 
-                    if path.hasPrefix("/result") {
+                    if path.hasPrefix(secretPath + "/result") {
                         let components = URLComponents(string: "http://localhost\(path)")
                         let action = components?.queryItems?.first(where: { $0.name == "action" })?.value
                         var roots: [GoogleDrivePickedRoot] = []
@@ -68,8 +89,12 @@ struct GoogleDrivePickerServer {
                         return
                     }
 
-                    if path == "/" || path.hasPrefix("/?") || path == "/index.html" {
-                        Self.respond(connection, html: Self.pickerPage(accessToken: accessToken, apiKey: apiKey))
+                    if path == secretPath || path.hasPrefix(secretPath + "?") {
+                        Self.respond(connection, html: Self.pickerPage(
+                            accessToken: accessToken,
+                            apiKey: apiKey,
+                            resultPath: secretPath + "/result"
+                        ))
                         return  // keep listening for /result
                     }
 
@@ -84,6 +109,16 @@ struct GoogleDrivePickerServer {
                 listener.cancel()
                 guard_.resume(returning: [])   // treat a timeout as a cancel
             }
+        }
+    }
+
+    /// True only for 127.0.0.0/8 and ::1.
+    private static func isLoopback(_ endpoint: NWEndpoint) -> Bool {
+        guard case .hostPort(let host, _) = endpoint else { return false }
+        switch host {
+        case .ipv4(let addr): return addr.rawValue.first == 127
+        case .ipv6(let addr): return addr == .loopback
+        default: return false
         }
     }
 
@@ -102,8 +137,9 @@ struct GoogleDrivePickerServer {
     <h2>All set</h2><p>You can close this tab and return to FileFluss.</p></body></html>
     """
 
-    private static func pickerPage(accessToken: String, apiKey: String) -> String {
+    private static func pickerPage(accessToken: String, apiKey: String, resultPath: String) -> String {
         let tokenJSON = "\"\(accessToken)\""
+        let resultPathJSON = "\"\(resultPath)\""
         let keyJSON = "\"\(apiKey)\""
         let appIdJSON = "\"\(GoogleDrivePickerAPIClient.pickerAppId)\""
         return """
@@ -115,13 +151,14 @@ struct GoogleDrivePickerServer {
         <script src="https://apis.google.com/js/api.js"></script>
         <script>
           const TOKEN = \(tokenJSON);
+          const RESULT_PATH = \(resultPathJSON);
           const APIKEY = \(keyJSON);
           const APPID = \(appIdJSON);
           function report(action, docs){
             const p = new URLSearchParams();
             p.set('action', action);
             if (docs) p.set('data', JSON.stringify(docs));
-            fetch('/result?' + p.toString()).then(function(){
+            fetch(RESULT_PATH + '?' + p.toString()).then(function(){
               document.getElementById('status').textContent = 'Done — you can close this tab and return to FileFluss.';
             });
           }

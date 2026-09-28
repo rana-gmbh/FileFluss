@@ -142,7 +142,10 @@ public actor DropboxAPIClient {
             throw CloudProviderError.invalidCredentials
         }
 
-        dropboxLog.info("[Dropbox] Token exchange response: \(bodyStr.prefix(200))")
+        // The body of a token exchange IS the access and refresh token;
+        // logging any prefix of it puts a live credential in the
+        // system log, where a sysdiagnose would collect it.
+        dropboxLog.info("[Dropbox] Token exchange returned HTTP \(http.statusCode)")
 
         let tokenResponse = try JSONDecoder().decode(DropboxTokenResponse.self, from: data)
         let expiresAt = Date().addingTimeInterval(TimeInterval(tokenResponse.expires_in))
