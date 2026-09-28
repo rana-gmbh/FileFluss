@@ -352,17 +352,6 @@ public actor GoogleDrivePickerAPIClient {
         return Resolved(id: currentId, mimeType: currentMime)
     }
 
-    private func resolveParentId(of path: String) async throws -> String {
-        let parent = (path as NSString).deletingLastPathComponent
-        if parent == "/" || parent.isEmpty {
-            // Parent is a picked root itself.
-            let name = (path as NSString).lastPathComponent
-            _ = name
-            throw CloudProviderError.notImplemented // handled by callers via resolve of parent path
-        }
-        return try await resolve(parent).id
-    }
-
     /// Returns the Drive parent ID for a remote path, treating a top-level
     /// component as "inside the matching picked root".
     private func parentFolderId(for remotePath: String) async throws -> String {

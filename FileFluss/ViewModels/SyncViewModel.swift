@@ -892,23 +892,6 @@ final class SyncViewModel {
         }
     }
 
-    func addAccount(type: CloudProviderType) async {
-        let account = CloudAccount(providerType: type)
-        let provider = await syncEngine.createProvider(for: type)
-        authError = nil
-
-        do {
-            try await provider.authenticate()
-            var connectedAccount = account
-            connectedAccount.isConnected = true
-            accounts.append(connectedAccount)
-            await syncEngine.registerProvider(for: account.id, provider: provider)
-            saveAccounts()
-        } catch {
-            authError = error.localizedDescription
-        }
-    }
-
     func removeAccount(_ account: CloudAccount) async {
         accounts.removeAll { $0.id == account.id }
         syncRules.removeAll { $0.accountId == account.id }

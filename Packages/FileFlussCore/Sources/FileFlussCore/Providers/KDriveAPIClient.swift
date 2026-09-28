@@ -732,10 +732,6 @@ struct KDriveDriveInfo: Decodable {
     }
 }
 
-struct KDriveFolderSize: Decodable {
-    let size: Int64
-}
-
 /// `data` payload of `POST /2/drive/{driveId}/files/{fileId}/link`.
 /// `valid_until` is null for a link that never expires, and `capabilities`
 /// reports what the created link actually permits.

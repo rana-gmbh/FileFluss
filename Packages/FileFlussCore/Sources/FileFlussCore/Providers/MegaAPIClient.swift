@@ -15,8 +15,6 @@ public actor MegaAPIClient {
 
     private(set) var credentials: MegaCredentials
     private let session: URLSession
-    private var sequenceNumber: Int = Int.random(in: 0..<0x100000000)
-
     /// Cached node tree: handle → node
     private var nodes: [String: MegaNode] = [:]
     /// Root folder handle

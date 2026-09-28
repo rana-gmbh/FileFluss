@@ -966,12 +966,6 @@ final class CloudFileManagerViewModel {
         }
     }
 
-    /// Clears the temp download cache for this account.
-    func clearTempCache() {
-        try? FileManager.default.removeItem(at: tempDownloadDir)
-        try? FileManager.default.createDirectory(at: tempDownloadDir, withIntermediateDirectories: true)
-    }
-
     // MARK: - Upload
 
     func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {

@@ -13,11 +13,6 @@ public struct GoogleDriveCredentials: Codable, Sendable {
     public let displayName: String
 }
 
-struct GoogleDriveDeviceAuth: Sendable {
-    let authURL: URL
-    let port: UInt16
-}
-
 public actor GoogleDriveAPIClient {
     // Google requires a separate OAuth client per platform. The macOS
     // client is a "Desktop application" type which only accepts loopback

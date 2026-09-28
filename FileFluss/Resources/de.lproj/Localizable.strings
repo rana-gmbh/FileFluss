@@ -4,7 +4,6 @@
 "Language" = "Sprache";
 "System Default" = "Systemstandard";
 "System Default follows the language selected in macOS." = "„Systemstandard“ folgt der in macOS eingestellten Sprache.";
-"The menu bar and window titles switch fully after a relaunch." = "Menüleiste und Fenstertitel werden erst nach einem Neustart vollständig umgestellt.";
 "Relaunch" = "Neu starten";
 
 /* Window titles */
@@ -59,13 +58,7 @@
 "Buy me a coffee ↗" = "spendier mir einen Kaffee ↗";
 "Released under the" = "Veröffentlicht unter der";
 "Check for Updates" = "Nach Updates suchen";
-"Checking for updates…" = "Suche nach Updates …";
-"You're up to date" = "Du bist auf dem neuesten Stand";
-"Check Again" = "Erneut suchen";
-"FileFluss %@ is available!" = "FileFluss %@ ist verfügbar!";
-"Release Page ↗" = "Release-Seite ↗";
 "Download" = "Laden";
-"Could not check for updates" = "Suche nach Updates fehlgeschlagen";
 "Try Again" = "Erneut versuchen";
 
 /* Welcome / onboarding */
@@ -586,7 +579,6 @@
 "For new Google Drive accounts — no user limit" = "Für neue Google-Drive-Konten – ohne Nutzerlimit";
 "Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick." = "Melden Sie sich bei Google an und wählen Sie die Ordner aus, die FileFluss verwenden darf. Sie können in diesen Ordnern Dateien hinzufügen und verwalten. Bereits vorhandene Dateien werden nicht aufgelistet – dieser Zugriffsmodus zeigt nur, was FileFluss hinzufügt oder Sie auswählen.";
 "To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." = "Um zu ändern, auf welche Ordner FileFluss zugreifen kann, entfernen Sie dieses Konto und fügen Sie es erneut hinzu, und wählen Sie dann die gewünschten Ordner aus.";
-"Choose the folders FileFluss may access" = "Wählen Sie die Ordner, auf die FileFluss zugreifen darf";
 "Open Jottacloud token page" = "Jottacloud-Token-Seite öffnen";
 "Personal Login Token" = "Persönliches Login-Token";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die in Ihrem Schlüsselbund gespeichert wird.";
@@ -661,7 +653,6 @@
 "%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?" = "%1$@ von %2$@ nach %3$@ würde den verfügbaren Speicher überschreiten (nur %4$@ frei). Trotzdem fortfahren?";
 "%@ Anyway" = "Trotzdem %@";
 "/path/to/folder" = "/pfad/zum/ordner";
-"A newer version is available on GitHub. Open the latest release page to download it." = "Auf GitHub ist eine neuere Version verfügbar. Öffne die neueste Release-Seite, um sie herunterzuladen.";
 "Add Rule" = "Regel hinzufügen";
 "Add Sync Rule" = "Sync-Regel hinzufügen";
 "Browse..." = "Durchsuchen …";
@@ -684,7 +675,6 @@
 "New Sync Rule" = "Neue Sync-Regel";
 "No Sync Rules" = "Keine Sync-Regeln";
 "Not enough space" = "Nicht genügend Speicher";
-"Open Release Page" = "Release-Seite öffnen";
 "Recording support log — reproduce the issue now" = "Support-Log wird aufgezeichnet — reproduziere das Problem jetzt";
 "Select a folder..." = "Ordner auswählen …";
 "Select account..." = "Konto auswählen …";

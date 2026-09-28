@@ -461,11 +461,6 @@ final class AppState {
         }
     }
 
-    func startTransfer(_ transfer: TransferProgress, panel: PanelSide, operation: @escaping @Sendable () async -> Void) {
-        addTransfer(transfer, panel: panel)
-        transfer.task = Task { await operation() }
-    }
-
     func removeTransfer(id: UUID, panel: PanelSide) {
         if panel == .left {
             leftTransfers.removeAll { $0.id == id }
@@ -1617,15 +1612,6 @@ struct FolderSizeEntry: Identifiable {
         guard let size else { return "Calculating…" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
-}
-
-struct CloudFavorite: Identifiable {
-    let id = UUID()
-    let accountId: UUID
-    let path: String
-    var displayName: String
-    let providerType: CloudProviderType
-    let icon: String = "cloud.fill"
 }
 
 struct TransferItemResult: Identifiable, Hashable {

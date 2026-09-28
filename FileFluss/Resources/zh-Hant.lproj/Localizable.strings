@@ -4,7 +4,6 @@
 "Language" = "語言";
 "System Default" = "跟隨系統";
 "System Default follows the language selected in macOS." = "「跟隨系統」會使用 macOS 中設定的語言。";
-"The menu bar and window titles switch fully after a relaunch." = "選單列與視窗標題會在重新啟動後完全切換。";
 "Relaunch" = "重新啟動";
 
 /* Window titles */
@@ -59,13 +58,7 @@
 "Buy me a coffee ↗" = "請我喝杯咖啡 ↗";
 "Released under the" = "依據以下授權發佈：";
 "Check for Updates" = "檢查更新";
-"Checking for updates…" = "正在檢查更新…";
-"You're up to date" = "已是最新版本";
-"Check Again" = "再次檢查";
-"FileFluss %@ is available!" = "FileFluss %@ 已發佈！";
-"Release Page ↗" = "發佈頁面 ↗";
 "Download" = "下載";
-"Could not check for updates" = "無法檢查更新";
 "Try Again" = "重試";
 
 /* Welcome / onboarding */
@@ -586,7 +579,6 @@
 "For new Google Drive accounts — no user limit" = "適用於新的 Google Drive 帳戶 — 無使用者上限";
 "Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren't listed — this access mode only exposes what FileFluss adds or you pick." = "使用 Google 登入並選擇允許 FileFluss 使用的資料夾。您可以在這些資料夾中新增和管理檔案。其中已有的檔案不會被列出 — 此存取模式僅顯示 FileFluss 新增或您選擇的內容。";
 "To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." = "若要變更 FileFluss 可存取的資料夾，請移除此帳戶並重新新增，然後選擇您想要的資料夾。";
-"Choose the folders FileFluss may access" = "選擇允許 FileFluss 存取的資料夾";
 "Open Jottacloud token page" = "開啟 Jottacloud 權杖頁面";
 "Personal Login Token" = "個人登入權杖";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證並儲存在您的鑰匙圈中。";
@@ -661,7 +653,6 @@
 "%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?" = "%1$@ %2$@ 到 %3$@ 將超出可用空間（僅剩 %4$@）。仍要繼續嗎？";
 "%@ Anyway" = "仍然%@";
 "/path/to/folder" = "/路徑/到/資料夾";
-"A newer version is available on GitHub. Open the latest release page to download it." = "GitHub 上有更新的版本。打開最新的發佈頁面即可下載。";
 "Add Rule" = "加入規則";
 "Add Sync Rule" = "加入同步規則";
 "Browse..." = "瀏覽…";
@@ -684,7 +675,6 @@
 "New Sync Rule" = "新增同步規則";
 "No Sync Rules" = "沒有同步規則";
 "Not enough space" = "空間不足";
-"Open Release Page" = "打開發佈頁面";
 "Recording support log — reproduce the issue now" = "正在錄製支援記錄——請立即重現問題";
 "Select a folder..." = "選擇資料夾…";
 "Select account..." = "選擇帳戶…";

@@ -2,8 +2,6 @@ import Foundation
 import Security
 import os
 
-private let keychainLog = Logger(subsystem: "com.rana.FileFluss", category: "keychain")
-
 #if DEBUG
 /// Dev-only credential store: a 0600-permissions JSON-per-key folder
 /// under `~/Library/Application Support/com.rana-gmbh.FileFluss/dev-credentials/`.

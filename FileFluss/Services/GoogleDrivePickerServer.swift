@@ -4,8 +4,6 @@ import Network
 import os
 import FileFlussCore
 
-private let pickerServerLog = Logger(subsystem: "com.rana.FileFluss", category: "gdrivePickerServer")
-
 /// Hosts the Google Picker in the user's **real browser** rather than an
 /// embedded `WKWebView`. The Picker needs the user's signed-in Google session
 /// (cookies); a `WKWebView` has none and macOS blocks the Picker iframe's

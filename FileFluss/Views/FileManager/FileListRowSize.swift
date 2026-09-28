@@ -49,15 +49,6 @@ enum FileListRowSizePrefs {
         NotificationCenter.default.post(name: .fileListRowSizeChanged, object: nil)
     }
 
-    /// Bumps the size up to `.large` when at `.regular`; otherwise no-op.
-    static func increase() {
-        if current == .regular { set(.large) }
-    }
-
-    /// Bumps the size down to `.regular` when at `.large`; otherwise no-op.
-    static func decrease() {
-        if current == .large { set(.regular) }
-    }
 }
 
 extension Notification.Name {

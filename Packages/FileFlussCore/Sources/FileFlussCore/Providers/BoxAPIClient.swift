@@ -1079,37 +1079,6 @@ public actor BoxAPIClient {
 
 // MARK: - Thread-safe continuation wrapper
 
-private final class BoxContinuationGuard<T: Sendable>: Sendable {
-    private let state = OSAllocatedUnfairLock(initialState: State())
-
-    private struct State {
-        var continuation: CheckedContinuation<T, Error>?
-        var resumed = false
-    }
-
-    public func setContinuation(_ continuation: CheckedContinuation<T, Error>) {
-        state.withLock { $0.continuation = continuation }
-    }
-
-    public func resume(returning value: T) {
-        state.withLock { state in
-            guard !state.resumed, let cont = state.continuation else { return }
-            state.resumed = true
-            state.continuation = nil
-            cont.resume(returning: value)
-        }
-    }
-
-    public func resume(throwing error: Error) {
-        state.withLock { state in
-            guard !state.resumed, let cont = state.continuation else { return }
-            state.resumed = true
-            state.continuation = nil
-            cont.resume(throwing: error)
-        }
-    }
-}
-
 // MARK: - Box API response types
 
 private struct BoxTokenResponse: Decodable {

@@ -23,8 +23,6 @@ private final class WebDAVXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
 
     private var currentElement = ""
     private var currentText = ""
-    private var isCollecting = false
-
     // Current item properties being built
     private var href: String?
     private var displayName: String?

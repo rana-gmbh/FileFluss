@@ -105,10 +105,6 @@ public final class LoopbackMountService {
         mounts.first { $0.accountId == accountId && $0.providerRoot == providerRoot }
     }
 
-    public func isMounted(accountId: UUID, providerRoot: String = "/") -> Bool {
-        mount(for: accountId, providerRoot: providerRoot) != nil
-    }
-
     /// Called on app quit so we don't leave orphan Volumes entries pointing
     /// at a server that's about to disappear.
     public func unmountAll() async {

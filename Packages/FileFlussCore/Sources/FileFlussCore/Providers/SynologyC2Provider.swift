@@ -193,17 +193,3 @@ public final class SynologyC2Provider: CloudProvider, @unchecked Sendable {
         }
     }
 }
-
-/// Static catalog of Synology C2 regions surfaced in the add-account picker.
-enum SynologyC2RegionList {
-    struct Region: Sendable {
-        let code: String
-        let displayName: String
-    }
-
-    static let allRegions: [Region] = [
-        Region(code: "eu-001", displayName: "Europe (Frankfurt)"),
-        Region(code: "us-001", displayName: "Americas (Seattle)"),
-        Region(code: "tw-001", displayName: "Asia (Taipei)"),
-    ]
-}

@@ -392,21 +392,6 @@ struct AddCloudAccountView: View {
         }
     }
 
-    private var credentialFields: some View {
-        VStack(spacing: 12) {
-            TextField(L10n.text("Email"), text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .disabled(isAuthenticating)
-
-            SecureField(L10n.text("Password"), text: $password)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.password)
-                .disabled(isAuthenticating)
-                .onSubmit { login() }
-        }
-    }
-
     private var pCloudFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             LText("pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token.")
