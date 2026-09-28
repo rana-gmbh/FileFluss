@@ -327,6 +327,18 @@ final class FileManagerViewModel {
             var dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
 
+            // Pasting into the folder the file already lives in: source and
+            // destination are the same file. "Replace" would delete it and
+            // then copy from a path that no longer exists, destroying it for
+            // good (deletion here is permanent, not Trash).
+            if dest.standardizedFileURL == item.url.standardizedFileURL {
+                let msg = "\"\(item.name)\" is already in this folder."
+                self.error = msg
+                progress?.recordSkip(item.name)
+                progress?.completedItems = index + 1
+                continue
+            }
+
             if FileManager.default.fileExists(atPath: dest.path) {
                 let choice: ConflictChoice
                 if let saved = applyToAllChoice {
@@ -387,6 +399,18 @@ final class FileManagerViewModel {
         for (index, item) in items.enumerated() {
             var dest = folder.appendingPathComponent(item.name)
             progress?.currentFileName = item.name
+
+            // Pasting into the folder the file already lives in: source and
+            // destination are the same file. "Replace" would delete it and
+            // then copy from a path that no longer exists, destroying it for
+            // good (deletion here is permanent, not Trash).
+            if dest.standardizedFileURL == item.url.standardizedFileURL {
+                let msg = "\"\(item.name)\" is already in this folder."
+                self.error = msg
+                progress?.recordSkip(item.name)
+                progress?.completedItems = index + 1
+                continue
+            }
 
             if FileManager.default.fileExists(atPath: dest.path) {
                 let choice: ConflictChoice

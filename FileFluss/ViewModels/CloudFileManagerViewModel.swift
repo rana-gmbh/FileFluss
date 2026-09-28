@@ -1034,7 +1034,18 @@ final class CloudFileManagerViewModel {
                     let uniqueName = Self.uniqueCloudName(for: name, existing: Set(existingByName.keys))
                     let tempCopy = StagingLocation.base().appendingPathComponent(uniqueName)
                     try? FileManager.default.removeItem(at: tempCopy)
-                    do { try FileManager.default.copyItem(at: url, to: tempCopy) } catch { break }
+                    do {
+                        try FileManager.default.copyItem(at: url, to: tempCopy)
+                    } catch {
+                        // `break` here would only leave the switch and then
+                        // upload under the ORIGINAL name — overwriting the
+                        // very file the user asked to keep. Skip the item
+                        // and say so instead.
+                        let msg = "Couldn't stage a copy for \"Keep Both\": \(error.localizedDescription)"
+                        self.error = msg
+                        progress?.recordFailure(name, error: msg)
+                        continue
+                    }
                     uploadURL = tempCopy
                 case .replace:
                     do { try await provider.deleteItem(at: existing.path) } catch {
@@ -1206,6 +1217,10 @@ final class CloudFileManagerViewModel {
         }
 
         let existingNames = Set(targetSiblings.map(\.name))
+        // Names of the items that actually reached the staging directory.
+        // Anything missing here failed to download, and must not be deleted
+        // from the source afterwards.
+        var downloadedNames: Set<String> = []
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
             let expected = tempDir.appendingPathComponent(item.name)
             var localURL: URL?
@@ -1221,6 +1236,7 @@ final class CloudFileManagerViewModel {
                 }
             }
             guard let url = localURL else { return nil }
+            downloadedNames.insert(item.name)
 
             if resolutionByName[item.name] == .keepBoth {
                 let uniqueName = Self.uniqueCloudName(for: url.lastPathComponent, existing: existingNames)
@@ -1243,9 +1259,11 @@ final class CloudFileManagerViewModel {
         }
 
         var uploadedCount = 0
+        var uploadFailed = false
         do {
             try await uploadRecursively(urls: localURLs, toRemotePath: targetPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
         } catch {
+            uploadFailed = true
             self.error = error.localizedDescription
             progress?.errorMessage = error.localizedDescription
         }
@@ -1254,7 +1272,22 @@ final class CloudFileManagerViewModel {
         progress?.totalBytes = (progress?.downloadBytes ?? 0) + (progress?.uploadBytes ?? 0)
 
         if deleteFromSource {
-            await deleteItems(itemsToTransfer)
+            // A move may only delete what arrived. `uploadRecursively`
+            // throws on the first failure, so a failed upload means the
+            // remainder never landed — delete nothing in that case — and
+            // items that failed to download aren't in `downloadedNames`.
+            if uploadFailed {
+                SupportLogger.shared.log(
+                    "Move kept the source files: the upload to \(targetPath) failed",
+                    category: "transfer",
+                    level: .error
+                )
+            } else {
+                let transferred = itemsToTransfer.filter { downloadedNames.contains($0.name) }
+                if !transferred.isEmpty {
+                    await deleteItems(transferred)
+                }
+            }
         }
 
         await loadDirectory()

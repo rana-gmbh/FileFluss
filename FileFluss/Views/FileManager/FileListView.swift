@@ -428,7 +428,15 @@ struct FileListView: View {
                     cloudVM.conflictDirection = incomingDirection
                     await cloudVM.downloadItems(sourceItems, to: targetDir, progress: transfer)
                     if isMove {
-                        await cloudVM.deleteItems(sourceItems)
+                        // Only the items that actually downloaded. Per-item
+                        // failures are deliberately swallowed to keep the
+                        // batch going, and the user can skip or cancel — so
+                        // the source list is not proof anything arrived.
+                        let landed = transfer.succeededNames
+                        let transferred = sourceItems.filter { landed.contains($0.name) }
+                        if !transferred.isEmpty {
+                            await cloudVM.deleteItems(transferred)
+                        }
                     }
                     await fm.refresh()
                 }

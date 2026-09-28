@@ -1182,8 +1182,16 @@ struct CloudFileListView: View {
         }
 
         if deleteFromSource {
-            await sourceVM.deleteItems(itemsToTransfer)
-            await sourceVM.loadDirectory()
+            // Only what actually arrived at the destination: the loop above
+            // records per-item outcomes, and a failure, a skip or a cancel
+            // all leave sources that were never transferred.
+            let landed = progress?.succeededNames
+            let transferred = landed.map { names in itemsToTransfer.filter { names.contains($0.name) } }
+                ?? itemsToTransfer
+            if !transferred.isEmpty {
+                await sourceVM.deleteItems(transferred)
+                await sourceVM.loadDirectory()
+            }
         }
 
         if let progress {

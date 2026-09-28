@@ -354,7 +354,17 @@ final class AppState {
         saveFavorites()
     }
 
+    /// Set when stored favourites existed but couldn't be decoded. The list
+    /// is then empty through no fault of the user, and writing that back
+    /// would destroy it — the same failure that once wiped the cloud
+    /// accounts (see `SyncViewModel.accountsLoadFailed`).
+    private var favoritesLoadFailed = false
+
     private func saveFavorites() {
+        if favoritesLoadFailed && leftFavorites.isEmpty && rightFavorites.isEmpty {
+            NSLog("[FileFluss] saveFavorites skipped: stored favourites couldn't be decoded, refusing to overwrite them")
+            return
+        }
         let defaults = UserDefaults.standard
         let encoder = JSONEncoder()
         if let leftData = try? encoder.encode(leftFavorites) {
@@ -370,13 +380,22 @@ final class AppState {
         let decoder = JSONDecoder()
 
         if defaults.bool(forKey: Self.favoritesInitializedKey) {
-            if let data = defaults.data(forKey: Self.leftFavoritesKey),
-               let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                leftFavorites = decoded
+            if let data = defaults.data(forKey: Self.leftFavoritesKey) {
+                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
+                    leftFavorites = decoded
+                } else {
+                    favoritesLoadFailed = true
+                }
             }
-            if let data = defaults.data(forKey: Self.rightFavoritesKey),
-               let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                rightFavorites = decoded
+            if let data = defaults.data(forKey: Self.rightFavoritesKey) {
+                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
+                    rightFavorites = decoded
+                } else {
+                    favoritesLoadFailed = true
+                }
+            }
+            if favoritesLoadFailed {
+                NSLog("[FileFluss] loadFavorites: stored favourites could not be decoded — they will not be overwritten")
             }
             return
         }
@@ -991,10 +1010,13 @@ final class AppState {
                     self.addTransfer(transfer, panel: self.activePanel)
                     transfer.task = Task { [destVM] in
                         await destVM.uploadFiles(from: localURLs, progress: transfer)
-                        if isCut && !transfer.hasErrors {
-                            // Only remove originals after a clean upload, so
-                            // a partial failure never silently destroys data.
-                            for url in localURLs {
+                        if isCut {
+                            // Only the files that actually uploaded. Deleting
+                            // is permanent (no Trash), and a batch can end
+                            // with failures, with items skipped in the
+                            // conflict dialog, or cancelled part-way.
+                            let landed = transfer.succeededNames
+                            for url in localURLs where landed.contains(url.lastPathComponent) {
                                 try? await FileSystemService.shared.deleteItem(at: url)
                             }
                             // Refresh whichever local panel(s) held the source.
@@ -1082,11 +1104,18 @@ final class AppState {
                     let destDir = destFM.currentDirectory
                     transfer.task = Task { [sourceVM, destFM] in
                         await sourceVM.downloadItems(items, to: destDir, progress: transfer)
-                        if isCut, !transfer.hasErrors {
-                            // Only remove originals once the download
-                            // landed cleanly — otherwise we'd lose data.
-                            await sourceVM.deleteItems(items)
-                            await sourceVM.refresh()
+                        if isCut {
+                            // Delete only what actually downloaded. A batch
+                            // can end with failures, with items skipped in
+                            // the conflict dialog, or cancelled part-way —
+                            // deleting the lot would destroy files that were
+                            // never copied anywhere.
+                            let landed = transfer.succeededNames
+                            let transferred = items.filter { landed.contains($0.name) }
+                            if !transferred.isEmpty {
+                                await sourceVM.deleteItems(transferred)
+                                await sourceVM.refresh()
+                            }
                         }
                         await destFM.refresh()
                     }
@@ -1642,6 +1671,22 @@ final class TransferProgress: Identifiable {
     /// both fatal `errorMessage` failures and per-item failures recorded via
     /// `recordFailure`.
     var hasErrors: Bool { errorMessage != nil || failureCount > 0 }
+
+    /// Names of the top-level items that actually made it. The only safe
+    /// basis for deleting a source after a move: a batch can end with
+    /// failures, skips *or* a cancellation, and in each case some sources
+    /// were never transferred.
+    var succeededNames: Set<String> {
+        Set(itemResults.lazy.filter { $0.status == .succeeded }.map(\.name))
+    }
+
+    /// True only when every attempted item succeeded and nothing was
+    /// skipped or cancelled. `hasErrors` alone is not enough — it counts
+    /// neither skips nor cancellation, and treating those as success is how
+    /// a "move" deletes files it never copied.
+    var completedCleanly: Bool {
+        !hasErrors && !isCancelled && skippedCount == 0
+    }
 
     // Byte-weighted progress
     /// Expected bytes for the download phase (local→cloud uploads: 0; cloud→cloud: source bytes).

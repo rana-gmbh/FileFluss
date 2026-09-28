@@ -203,8 +203,14 @@ struct NativeFileList: NSViewRepresentable {
             coordinator.applyNameColumnAutoResize()
         }
 
-        // Sync selection from SwiftUI → NSTableView (only if they differ)
-        let currentNSSelection = Set(tableView.selectedRowIndexes.map { items[$0].id })
+        // Sync selection from SwiftUI → NSTableView (only if they differ).
+        // Bounds-checked: a refresh that shrinks the listing while rows are
+        // selected would otherwise index past the end and crash. The cloud
+        // list already guards this the same way.
+        let currentNSSelection = Set(tableView.selectedRowIndexes.compactMap { idx -> String? in
+            guard idx < items.count else { return nil }
+            return items[idx].id
+        })
         if currentNSSelection != selectedIDs {
             let indexSet = NSMutableIndexSet()
             for (index, item) in items.enumerated() {
