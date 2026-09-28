@@ -26,11 +26,20 @@ public final class S3Provider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
-    public func authenticate(accessKeyId: String, secretAccessKey: String, region: String) async throws {
+    /// `rootPath` is the optional bucket the user named. Passing it through
+    /// means the connection check probes that bucket rather than the
+    /// account's bucket list, which a bucket-scoped key may not read.
+    public func authenticate(
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        rootPath: String? = nil
+    ) async throws {
         let creds = try await S3APIClient.authenticate(
             accessKeyId: accessKeyId,
             secretAccessKey: secretAccessKey,
-            region: region
+            region: region,
+            rootPath: rootPath
         )
         self.apiClient = S3APIClient(credentials: creds)
         try KeychainService.save(key: keychainKey, value: creds)

@@ -266,6 +266,10 @@ enum VersionTestRunner {
 
         // Phase 2 — upload
         var uploads: [StepResult] = []
+        /// Files that actually uploaded. Deleting one that never arrived
+        /// reports "item not found", which turns a single server error into
+        /// a cascade of failures and buries the real cause.
+        var uploadedFiles: Set<String> = []
         for local in localFiles {
             let destPath = testFolderPath + "/" + local.relativePath
             let parentPath = (destPath as NSString).deletingLastPathComponent
@@ -282,6 +286,7 @@ enum VersionTestRunner {
                 try await verifyPresent(destPath: destPath, on: provider, expectedDirectory: false)
             }
             uploads.append(step)
+            if step.ok { uploadedFiles.insert(local.relativePath) }
         }
 
         // Cancelling stops new work but never skips phases 4 and 5 — the
@@ -290,7 +295,7 @@ enum VersionTestRunner {
 
         // Phase 3 — replace (upload again)
         var replaces: [StepResult] = []
-        for local in localFiles where !cancelled() {
+        for local in localFiles where !cancelled() && uploadedFiles.contains(local.relativePath) {
             let destPath = testFolderPath + "/" + local.relativePath
             let parentPath = (destPath as NSString).deletingLastPathComponent
             let filename = (destPath as NSString).lastPathComponent
@@ -371,6 +376,13 @@ enum VersionTestRunner {
         // Phase 4 — delete
         var deletes: [StepResult] = []
         for local in localFiles {
+            guard uploadedFiles.contains(local.relativePath) else {
+                deletes.append(StepResult(
+                    label: "delete \(local.relativePath) — skipped, upload had failed",
+                    ok: true, durationMs: 0, error: nil, diagnostics: nil
+                ))
+                continue
+            }
             let destPath = testFolderPath + "/" + local.relativePath
             let parentPath = (destPath as NSString).deletingLastPathComponent
             let filename = (destPath as NSString).lastPathComponent
@@ -486,6 +498,12 @@ enum VersionTestRunner {
         // nest the test inside the first existing container instead.
         let bucketRooted: Set<CloudProviderType> = [.s3, .s3Compatible, .synologyC2, .seafile]
         guard bucketRooted.contains(account.providerType) else { return "/" }
+        // An account scoped to one bucket already says which: use it rather
+        // than listing the account's buckets, which such a key may not be
+        // allowed to do (see issue #53).
+        if account.rootPath != "/" && !account.rootPath.isEmpty {
+            return account.rootPath
+        }
         do {
             let buckets = try await provider.listDirectory(at: "/")
                 .filter { $0.isDirectory }

@@ -711,7 +711,22 @@ public actor SeafileAPIClient {
         guard (200...299).contains(http.statusCode) else {
             let bodyStr = String(data: data, encoding: .utf8) ?? ""
             seafileLog.error("[Seafile] share-links failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
-            if let message = (try? JSONDecoder().decode(SeafileErrorBody.self, from: data))?.message {
+            let message = (try? JSONDecoder().decode(SeafileErrorBody.self, from: data))?.message
+
+            // "Share link … already exists" is not a failure: the caller
+            // asked for a link to this file and one exists, so hand that
+            // one back. Seafile keeps a link record even after the file at
+            // that path is deleted, so this is reached routinely — a new
+            // file at a previously shared path gets the refusal.
+            if (message ?? bodyStr).localizedCaseInsensitiveContains("already exists"),
+               let existing = try await firstShareLink(at: path) {
+                return try Self.shareLink(
+                    from: existing,
+                    note: L10n.text("This file already had a share link, so that one was returned.")
+                )
+            }
+
+            if let message {
                 throw CloudProviderError.commandFailed(message)
             }
             throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)

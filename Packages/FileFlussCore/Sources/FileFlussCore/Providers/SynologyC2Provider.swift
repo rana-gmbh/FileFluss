@@ -31,7 +31,12 @@ public final class SynologyC2Provider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
-    public func authenticate(accessKeyId: String, secretAccessKey: String, region: String) async throws {
+    public func authenticate(
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        rootPath: String? = nil
+    ) async throws {
         // Accept either a region code (`eu-005`), a bare hostname, or a
         // full URL — whatever the user copied out of the C2 console.
         let endpointHost = SynologyC2Provider.endpoint(forRegion: region)
@@ -42,11 +47,13 @@ public final class SynologyC2Provider: CloudProvider, @unchecked Sendable {
             secretAccessKey: secretAccessKey,
             region: signingRegion,
             displayName: displayName,
-            endpointHost: endpointHost
+            endpointHost: endpointHost,
+            rootPath: rootPath
         )
         let probe = S3APIClient(credentials: creds)
-        // Validate by issuing ListBuckets — same shape AWS expects.
-        _ = try await probe.listBuckets()
+        // Probes the configured bucket when there is one, and the bucket
+        // list otherwise — a key scoped to one bucket can't read the list.
+        try await probe.verifyAccess(rootPath: rootPath)
 
         self.apiClient = probe
         try KeychainService.save(key: keychainKey, value: creds)

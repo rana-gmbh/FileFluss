@@ -13,19 +13,26 @@ public struct S3Credentials: Codable, Sendable {
     /// Synology C2 Storage, Cloudflare R2, MinIO, Wasabi, etc. (e.g.
     /// `eu-001.s3.synologyc2.net`). When nil the client uses AWS S3 defaults.
     let endpointHost: String?
+    /// Bucket (optionally bucket/folder) this account is scoped to, as the
+    /// user typed it in the Path field. Kept with the credentials so the
+    /// client knows not to ask for the account's bucket list — a key scoped
+    /// to one bucket has no permission to see the others.
+    public let rootPath: String?
 
     public init(
         accessKeyId: String,
         secretAccessKey: String,
         region: String,
         displayName: String,
-        endpointHost: String? = nil
+        endpointHost: String? = nil,
+        rootPath: String? = nil
     ) {
         self.accessKeyId = accessKeyId
         self.secretAccessKey = secretAccessKey
         self.region = region
         self.displayName = displayName
         self.endpointHost = endpointHost
+        self.rootPath = rootPath
     }
 
     public init(from decoder: Decoder) throws {
@@ -36,6 +43,9 @@ public struct S3Credentials: Codable, Sendable {
         displayName = try c.decode(String.self, forKey: .displayName)
         // Older v1.0.x AWS-only entries don't have this key — default to nil.
         endpointHost = try c.decodeIfPresent(String.self, forKey: .endpointHost)
+        // Accounts stored before bucket scoping existed decode as nil, which
+        // keeps their previous behaviour (list the account's buckets).
+        rootPath = try c.decodeIfPresent(String.self, forKey: .rootPath)
     }
 }
 
@@ -111,21 +121,77 @@ public actor S3APIClient {
 
     // MARK: - Authentication / connectivity check
 
-    /// Validates the credentials by issuing a minimal `ListBuckets` request
-    /// (`GET /`). On success, returns a `S3Credentials` with a sensible
-    /// display name so the account label can show the access-key id.
-    public static func authenticate(accessKeyId: String, secretAccessKey: String, region: String) async throws -> S3Credentials {
+    /// Validates the credentials. On success, returns `S3Credentials` with a
+    /// sensible display name so the account label can show the access-key id.
+    ///
+    /// `rootPath` is the optional bucket (or bucket/folder) the user typed.
+    /// When it is present the check lists *that* bucket rather than the
+    /// account's buckets: `ListBuckets` needs `s3:ListAllMyBuckets`, which is
+    /// account-wide, and a key scoped to one bucket — the ordinary
+    /// least-privilege setup — is denied it. Probing what the user actually
+    /// asked for needs only `s3:ListBucket` on that bucket.
+    public static func authenticate(
+        accessKeyId: String,
+        secretAccessKey: String,
+        region: String,
+        rootPath: String? = nil
+    ) async throws -> S3Credentials {
         let displayName = "AWS S3 (\(maskedAccessKey(accessKeyId)))"
         let creds = S3Credentials(
             accessKeyId: accessKeyId,
             secretAccessKey: secretAccessKey,
             region: region,
-            displayName: displayName
+            displayName: displayName,
+            rootPath: rootPath
         )
         let client = S3APIClient(credentials: creds)
-        _ = try await client.listBuckets()
+        try await client.verifyAccess(rootPath: rootPath)
         s3Log.info("[S3] Authenticated for region \(region)")
         return creds
+    }
+
+    /// Connectivity + credentials check. Uses the configured bucket when
+    /// there is one, and the bucket list otherwise.
+    public func verifyAccess(rootPath: String?) async throws {
+        guard let scope = Self.bucketAndPrefix(from: rootPath) else {
+            do {
+                _ = try await listBuckets()
+            } catch let error as CloudProviderError {
+                throw Self.listBucketsDenialHint(error)
+            }
+            return
+        }
+        // One object is enough to prove the key can read this bucket, and the
+        // prefix matters: policies commonly restrict s3:ListBucket to a
+        // prefix condition, so probing the bucket root would be refused for
+        // a key that can perfectly well read the folder the user named.
+        _ = try await listObjectsPage(bucket: scope.bucket, prefix: scope.prefix, maxKeys: 1)
+    }
+
+    /// Splits "/bucket/some/folder" into its bucket and key prefix. Nil when
+    /// no bucket is configured (the panel then starts at the bucket list).
+    public static func bucketAndPrefix(from rootPath: String?) -> (bucket: String, prefix: String)? {
+        guard let rootPath else { return nil }
+        let cleaned = rootPath.trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !cleaned.isEmpty else { return nil }
+        let parts = cleaned.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        let bucket = parts[0]
+        guard !bucket.isEmpty else { return nil }
+        var prefix = parts.count > 1 ? parts[1] : ""
+        if !prefix.isEmpty && !prefix.hasSuffix("/") { prefix += "/" }
+        return (bucket, prefix)
+    }
+
+    /// Turns a refused ListBuckets into advice the user can act on: the fix
+    /// is the Path field, which is easy to miss because it says "optional".
+    private static func listBucketsDenialHint(_ error: CloudProviderError) -> CloudProviderError {
+        switch error {
+        case .unauthorized, .notAuthenticated:
+            return .commandFailed(L10n.text("This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions."))
+        default:
+            return error
+        }
     }
 
     public func userDisplayName() -> String { credentials.displayName }
@@ -139,7 +205,25 @@ public actor S3APIClient {
     public func listFolder(path: String) async throws -> [CloudFileItem] {
         let cleaned = path.hasPrefix("/") ? String(path.dropFirst()) : path
         if cleaned.isEmpty {
-            return try await listBuckets()
+            // A key scoped to one bucket can't list the account's buckets,
+            // so when the user named one, present just that bucket instead
+            // of asking for a permission they deliberately didn't grant.
+            if let scope = Self.bucketAndPrefix(from: credentials.rootPath) {
+                return [CloudFileItem(
+                    id: "/" + scope.bucket,
+                    name: scope.bucket,
+                    path: "/" + scope.bucket,
+                    isDirectory: true,
+                    size: 0,
+                    modificationDate: .distantPast,
+                    checksum: nil
+                )]
+            }
+            do {
+                return try await listBuckets()
+            } catch let error as CloudProviderError {
+                throw Self.listBucketsDenialHint(error)
+            }
         }
         let parts = cleaned.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
         let bucket = parts[0]
@@ -176,6 +260,33 @@ public actor S3APIClient {
                 modificationDate: creationDate ?? .distantPast,
                 checksum: nil
             )
+        }
+    }
+
+    /// Single ListObjectsV2 page, used as a permission probe rather than for
+    /// its contents — an empty bucket answers 200 with no keys, which is a
+    /// pass. Region redirects are resolved the same way as a real listing.
+    @discardableResult
+    func listObjectsPage(bucket: String, prefix: String, maxKeys: Int) async throws -> Bool {
+        try await withResolvedRegion(bucket: bucket) {
+            let region = regionFor(bucket: bucket)
+            var components = URLComponents()
+            components.scheme = "https"
+            components.host = bucketHost(bucket, region: region)
+            components.path = "/"
+            components.queryItems = [
+                URLQueryItem(name: "list-type", value: "2"),
+                URLQueryItem(name: "delimiter", value: "/"),
+                URLQueryItem(name: "prefix", value: prefix),
+                URLQueryItem(name: "max-keys", value: String(maxKeys))
+            ]
+            guard let url = components.url else { throw CloudProviderError.invalidResponse }
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            try sign(&request, host: components.host!, payloadHash: emptyPayloadHash, service: "s3", region: region)
+            let (data, response) = try await session.data(for: request)
+            try validate(response, body: data)
+            return true
         }
     }
 

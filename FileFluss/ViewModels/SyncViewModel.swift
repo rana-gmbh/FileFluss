@@ -662,7 +662,8 @@ final class SyncViewModel {
                 secretAccessKey: secretAccessKey,
                 endpoint: endpoint,
                 region: region,
-                displayName: displayName
+                displayName: displayName,
+                rootPath: Self.normalizeS3RootPath(rootPath)
             )
 
             let normalizedRoot = Self.normalizeS3RootPath(rootPath)
@@ -757,18 +758,20 @@ final class SyncViewModel {
         authError = nil
 
         do {
+            // The path goes in first: with a bucket named, the connection
+            // check probes that bucket instead of the account's bucket list,
+            // which a key scoped to one bucket is not allowed to read.
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
             try await provider.authenticate(
                 accessKeyId: accessKeyId,
                 secretAccessKey: secretAccessKey,
-                region: region
+                region: region,
+                rootPath: normalizedRoot
             )
 
-            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
             if let normalizedRoot {
-                // Probe the chosen bucket/prefix once so a typo or missing
-                // ListBucket permission surfaces as a clear connect-time
-                // error instead of producing an account that silently
-                // opens to an empty folder.
+                // Also list it once, so a typo in the folder part surfaces
+                // now rather than as an empty panel later.
                 _ = try await provider.listDirectory(at: normalizedRoot)
             }
 
@@ -1380,12 +1383,13 @@ final class SyncViewModel {
         authError = nil
         do {
             let provider = S3Provider(accountId: accountId)
+            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
             try await provider.authenticate(
                 accessKeyId: accessKeyId,
                 secretAccessKey: secretAccessKey,
-                region: region
+                region: region,
+                rootPath: normalizedRoot
             )
-            let normalizedRoot = Self.normalizeS3RootPath(rootPath)
             if let normalizedRoot {
                 _ = try await provider.listDirectory(at: normalizedRoot)
             }

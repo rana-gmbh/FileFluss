@@ -41,7 +41,8 @@ public final class S3CompatibleProvider: CloudProvider, @unchecked Sendable {
         secretAccessKey: String,
         endpoint: String,
         region: String,
-        displayName: String?
+        displayName: String?,
+        rootPath: String? = nil
     ) async throws {
         let host = S3CompatibleProvider.host(fromEndpoint: endpoint)
         let resolvedRegion = region.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -55,10 +56,13 @@ public final class S3CompatibleProvider: CloudProvider, @unchecked Sendable {
             secretAccessKey: secretAccessKey,
             region: resolvedRegion,
             displayName: name,
-            endpointHost: host
+            endpointHost: host,
+            rootPath: rootPath
         )
         let probe = S3APIClient(credentials: creds)
-        _ = try await probe.listBuckets()
+        // Probes the configured bucket when there is one; a key scoped to a
+        // single bucket cannot list the account's buckets.
+        try await probe.verifyAccess(rootPath: rootPath)
 
         self.apiClient = probe
         try KeychainService.save(key: keychainKey, value: creds)
