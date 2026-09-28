@@ -64,6 +64,8 @@ struct GeneralSettingsView: View {
     @AppStorage("confirmDelete") private var confirmDelete = true
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
+    @AppStorage("showSidebarTransfers") private var showSidebarTransfers = true
+    @AppStorage("showSidebarFolderSizes") private var showSidebarFolderSizes = true
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
     @AppStorage("shareLinkPreferDirectDownload") private var shareLinkPreferDirectDownload = true
     @AppStorage("automaticUpdateChecksEnabled") private var automaticUpdateChecks = true
@@ -121,6 +123,11 @@ struct GeneralSettingsView: View {
             Toggle(isOn: $confirmDelete) { LText("Confirm before deleting") }
             Toggle(isOn: $showSidebarAddAccount) { LText("Show \"Add Cloud Account\" in sidebars") }
             Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
+            Toggle(isOn: $showSidebarTransfers) { LText("Show transfers in sidebars") }
+            LText("Transfers are always available from the Transfers button in the toolbar.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Toggle(isOn: $showSidebarFolderSizes) { LText("Show calculated folder sizes in sidebars") }
 
             Section {
                 Picker(selection: $panelStartupMode) {

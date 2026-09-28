@@ -692,3 +692,19 @@
 "Camera IP address" = "Camera IP address";
 "COHN Username" = "COHN Username";
 "COHN Password" = "COHN Password";
+
+/* Transfers toolbar popover and sidebar section toggles */
+"Finished transfers" = "Finished transfers";
+"No transfers" = "No transfers";
+"1 transfer — %d%%" = "1 transfer — %d%%";
+"%d transfers — %d%%" = "%d transfers — %d%%";
+"%d transfers running" = "%d transfers running";
+"Clear Finished" = "Clear Finished";
+"Remove transfers that have finished. Running transfers are left alone." = "Remove transfers that have finished. Running transfers are left alone.";
+"Nothing is being transferred." = "Nothing is being transferred.";
+"Copies, moves, uploads and downloads show up here." = "Copies, moves, uploads and downloads show up here.";
+"Left panel" = "Left panel";
+"Right panel" = "Right panel";
+"Show transfers in sidebars" = "Show transfers in sidebars";
+"Transfers are always available from the Transfers button in the toolbar." = "Transfers are always available from the Transfers button in the toolbar.";
+"Show calculated folder sizes in sidebars" = "Show calculated folder sizes in sidebars";

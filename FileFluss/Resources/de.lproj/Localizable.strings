@@ -692,3 +692,19 @@
 "Camera IP address" = "IP-Adresse der Kamera";
 "COHN Username" = "COHN-Benutzername";
 "COHN Password" = "COHN-Passwort";
+
+/* Transfers toolbar popover and sidebar section toggles */
+"Finished transfers" = "Abgeschlossene Übertragungen";
+"No transfers" = "Keine Übertragungen";
+"1 transfer — %d%%" = "1 Übertragung – %d %%";
+"%d transfers — %d%%" = "%d Übertragungen – %d %%";
+"%d transfers running" = "%d laufende Übertragungen";
+"Clear Finished" = "Abgeschlossene entfernen";
+"Remove transfers that have finished. Running transfers are left alone." = "Entfernt abgeschlossene Übertragungen. Laufende bleiben unberührt.";
+"Nothing is being transferred." = "Es wird gerade nichts übertragen.";
+"Copies, moves, uploads and downloads show up here." = "Kopier-, Verschiebe-, Upload- und Download-Vorgänge erscheinen hier.";
+"Left panel" = "Linker Bereich";
+"Right panel" = "Rechter Bereich";
+"Show transfers in sidebars" = "Übertragungen in Seitenleisten anzeigen";
+"Transfers are always available from the Transfers button in the toolbar." = "Übertragungen sind immer über die Schaltfläche „Übertragungen“ in der Symbolleiste erreichbar.";
+"Show calculated folder sizes in sidebars" = "Berechnete Ordnergrößen in Seitenleisten anzeigen";

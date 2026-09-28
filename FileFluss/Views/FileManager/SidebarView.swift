@@ -55,6 +55,10 @@ struct SidebarView: View {
     @Environment(AppState.self) private var appState
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
+    /// Both default to on, so nobody's sidebar changes under them. Turning
+    /// transfers off costs nothing now that the toolbar shows them.
+    @AppStorage("showSidebarTransfers") private var showSidebarTransfers = true
+    @AppStorage("showSidebarFolderSizes") private var showSidebarFolderSizes = true
 
     // Section expansion is tracked per panel side so users can have different
     // sections collapsed on left vs right. The chooser between the two
@@ -501,7 +505,7 @@ struct SidebarView: View {
                     }
                 }
 
-            if !appState.transfers(for: panelSide).isEmpty {
+            if showSidebarTransfers, !appState.transfers(for: panelSide).isEmpty {
                 if collapsed {
                     Section {
                         collapsedInfoRow(
@@ -539,7 +543,7 @@ struct SidebarView: View {
                 }
             }
 
-            if !appState.folderSizes(for: panelSide).isEmpty {
+            if showSidebarFolderSizes, !appState.folderSizes(for: panelSide).isEmpty {
                 if collapsed {
                     Section {
                         collapsedInfoRow(

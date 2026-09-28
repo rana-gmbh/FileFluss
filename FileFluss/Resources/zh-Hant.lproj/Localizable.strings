@@ -681,3 +681,19 @@
 "Sync All" = "全部同步";
 "Sync Rules" = "同步規則";
 "Upload" = "上傳";
+
+/* Transfers toolbar popover and sidebar section toggles */
+"Finished transfers" = "已完成的傳輸";
+"No transfers" = "沒有傳輸";
+"1 transfer — %d%%" = "1 項傳輸——%d%%";
+"%d transfers — %d%%" = "%d 項傳輸——%d%%";
+"%d transfers running" = "%d 項傳輸進行中";
+"Clear Finished" = "清除已完成";
+"Remove transfers that have finished. Running transfers are left alone." = "移除已完成的傳輸，進行中的傳輸維持不變。";
+"Nothing is being transferred." = "目前沒有傳輸。";
+"Copies, moves, uploads and downloads show up here." = "複製、移動、上傳和下載會顯示在這裡。";
+"Left panel" = "左面板";
+"Right panel" = "右面板";
+"Show transfers in sidebars" = "在側邊欄顯示傳輸";
+"Transfers are always available from the Transfers button in the toolbar." = "傳輸隨時可從工具列的「傳輸」按鈕查看。";
+"Show calculated folder sizes in sidebars" = "在側邊欄顯示已計算的資料夾大小";
