@@ -473,6 +473,67 @@ final class AppState {
         }
     }
 
+    /// A transfer that hasn't finished yet. Cancelling counts as running: the
+    /// task is still winding down and the user can still watch it.
+    static func isRunning(_ transfer: TransferProgress) -> Bool {
+        !transfer.isComplete
+    }
+
+    /// Both panels' transfers, running ones first and newest first within
+    /// each group, each paired with the panel it belongs to.
+    ///
+    /// A transfer's progress used to be visible only in its destination
+    /// panel's sidebar, which is exactly where it can't be seen: the sidebar
+    /// may be icon-only, or scrolled past a long list of accounts. The
+    /// toolbar shows this combined list instead.
+    var allTransfers: [PanelTransfer] {
+        Self.ordered(left: leftTransfers, right: rightTransfers)
+    }
+
+    /// Pure so it can be tested without standing up an `AppState`, which on
+    /// init reconnects cloud accounts.
+    static func ordered(
+        left: [TransferProgress],
+        right: [TransferProgress]
+    ) -> [PanelTransfer] {
+        let combined = left.map { PanelTransfer(panel: .left, transfer: $0) }
+            + right.map { PanelTransfer(panel: .right, transfer: $0) }
+        return combined.sorted { lhs, rhs in
+            let lhsRunning = isRunning(lhs.transfer)
+            let rhsRunning = isRunning(rhs.transfer)
+            if lhsRunning != rhsRunning { return lhsRunning }
+            return lhs.transfer.startTime > rhs.transfer.startTime
+        }
+    }
+
+    var runningTransfers: [TransferProgress] {
+        (leftTransfers + rightTransfers).filter(Self.isRunning)
+    }
+
+    var hasFinishedTransfers: Bool {
+        (leftTransfers + rightTransfers).contains { !Self.isRunning($0) }
+    }
+
+    /// Mean progress of everything still running, for the toolbar's ring.
+    /// Nil when nothing is running, which is how the toolbar knows to show
+    /// a plain icon rather than a ring stuck at zero.
+    var runningTransferFraction: Double? {
+        Self.meanFraction(of: runningTransfers)
+    }
+
+    static func meanFraction(of transfers: [TransferProgress]) -> Double? {
+        guard !transfers.isEmpty else { return nil }
+        let total = transfers.reduce(0.0) { $0 + max(0, min(1, $1.fraction)) }
+        return total / Double(transfers.count)
+    }
+
+    /// Clears out everything that has finished, in both panels. The running
+    /// ones are left alone — this is a tidy-up, not a cancel.
+    func clearFinishedTransfers() {
+        leftTransfers.removeAll { !Self.isRunning($0) }
+        rightTransfers.removeAll { !Self.isRunning($0) }
+    }
+
     // Folder size calculations per panel
     var leftFolderSizes: [FolderSizeEntry] = []
     var rightFolderSizes: [FolderSizeEntry] = []
@@ -1710,6 +1771,25 @@ struct TransferItemResult: Identifiable, Hashable {
     let name: String
     let status: Status
     let errorMessage: String?
+}
+
+/// A transfer together with the panel it belongs to. Needed because the
+/// toolbar's list mixes both panels and still has to tell the sidebar-side
+/// row which panel to remove a finished transfer from.
+struct PanelTransfer: Identifiable {
+    let panel: PanelSide
+    let transfer: TransferProgress
+    /// Copied at construction rather than read through `transfer`, which is
+    /// main-actor isolated — `Identifiable` has to be satisfiable from
+    /// anywhere.
+    let id: UUID
+
+    @MainActor
+    init(panel: PanelSide, transfer: TransferProgress) {
+        self.panel = panel
+        self.transfer = transfer
+        self.id = transfer.id
+    }
 }
 
 @Observable @MainActor

@@ -58,6 +58,10 @@ struct FileToolbar: CustomizableToolbarContent {
             .keyboardShortcut("f", modifiers: .command)
         }
 
+        ToolbarItem(id: "transfers", placement: .primaryAction) {
+            TransfersToolbarButton()
+        }
+
         ToolbarItem(id: "singlePane", placement: .primaryAction) {
             Toggle(isOn: Binding(
                 get: { appState.singlePaneMode },
