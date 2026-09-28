@@ -517,7 +517,30 @@ final class FileManagerViewModel {
     }
 
     private func sorted(_ items: [FileItem]) -> [FileItem] {
-        items.sorted { a, b in
+        // See the cloud twin: `kind` is a type-database lookup, and a
+        // comparator calls it ~2·n·log n times. Resolve once per item,
+        // memoised by extension.
+        if sortOrder == .kind {
+            var kindByExtension: [String: String] = [:]
+            let decorated: [(item: FileItem, kind: String)] = items.map { item in
+                if item.isDirectory { return (item, item.kind) }
+                let ext = item.url.pathExtension.lowercased()
+                if let cached = kindByExtension[ext] { return (item, cached) }
+                let kind = item.kind
+                kindByExtension[ext] = kind
+                return (item, kind)
+            }
+            let sortedItems = decorated.sorted { a, b in
+                if a.item.isDirectory != b.item.isDirectory {
+                    return a.item.isDirectory
+                }
+                let result = a.kind.localizedStandardCompare(b.kind) == .orderedAscending
+                return sortAscending ? result : !result
+            }
+            return sortedItems.map(\.item)
+        }
+
+        return items.sorted { a, b in
             if a.isDirectory != b.isDirectory {
                 return a.isDirectory
             }

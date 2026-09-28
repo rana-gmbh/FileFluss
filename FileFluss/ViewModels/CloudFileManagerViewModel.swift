@@ -1500,7 +1500,33 @@ final class CloudFileManagerViewModel {
     }
 
     private func sorted(_ items: [CloudFileItem]) -> [CloudFileItem] {
-        items.sorted { a, b in
+        // `kind` resolves a UTType from the extension and asks for its
+        // localized description — a type-database lookup. Inside a
+        // comparator that runs ~n·log n times with two accesses each, a
+        // 10k-file listing means hundreds of thousands of lookups on the
+        // main actor. Resolve it once per item instead, and memoise by
+        // extension so a folder of 10k photos does one lookup, not 10k.
+        if sortOrder == .kind {
+            var kindByExtension: [String: String] = [:]
+            let decorated: [(item: CloudFileItem, kind: String)] = items.map { item in
+                let ext = (item.name as NSString).pathExtension.lowercased()
+                if item.isDirectory { return (item, item.kind) }
+                if let cached = kindByExtension[ext] { return (item, cached) }
+                let kind = item.kind
+                kindByExtension[ext] = kind
+                return (item, kind)
+            }
+            let sorted = decorated.sorted { a, b in
+                if a.item.isDirectory != b.item.isDirectory {
+                    return a.item.isDirectory
+                }
+                let result = a.kind.localizedStandardCompare(b.kind) == .orderedAscending
+                return sortAscending ? result : !result
+            }
+            return sorted.map(\.item)
+        }
+
+        return items.sorted { a, b in
             if a.isDirectory != b.isDirectory {
                 return a.isDirectory
             }

@@ -118,14 +118,19 @@ final class StorageScanner {
         }
 
         var entries: [StorageTreeBuilder.Entry] = []
+        // Index cursor rather than removeFirst(): shifting a 100k-entry
+        // array on every folder is O(n) each time.
         var pending: [String] = [rootPath]
+        var nextIndex = 0
         var processed = 0
         var lastReport = 0
+        var lastPartialReport = Date.distantPast
         var cancelled = false
 
-        while !pending.isEmpty {
+        while nextIndex < pending.count {
             if Task.isCancelled { cancelled = true; break }
-            let path = pending.removeFirst()
+            let path = pending[nextIndex]
+            nextIndex += 1
             let items: [CloudFileItem]
             do {
                 items = try await provider.listDirectory(at: path)
@@ -157,8 +162,15 @@ final class StorageScanner {
                 }
             }
 
-            if processed - lastReport >= 100 {
+            // Rebuilding the tree is O(n log n) over everything seen so
+            // far, so doing it every 100 files makes the whole scan
+            // quadratic — and on the main actor, which is where the UI
+            // lives. Throttle by wall clock instead: the user cannot read
+            // updates faster than this anyway.
+            let now = Date()
+            if processed - lastReport >= 100, now.timeIntervalSince(lastPartialReport) >= 0.75 {
                 lastReport = processed
+                lastPartialReport = now
                 filesSeen = processed
                 currentPath = path
                 // Hand the window something to look at while the walk runs.

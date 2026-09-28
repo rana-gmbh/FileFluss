@@ -124,6 +124,7 @@ final class SearchViewModel {
 
             let stream = await SearchCoordinator.shared.search(request: request)
             var completedSources = 0
+            var seenResultIds = Set<String>()
             var totalSources = 0
             var seenSourceNames = Set<String>()
 
@@ -136,8 +137,11 @@ final class SearchViewModel {
                         totalSources += 1
                         seenSourceNames.insert(batch.source)
                     }
-                    let existingIds = Set(results.map(\.id))
-                    let newItems = batch.items.filter { !existingIds.contains($0.id) }
+                    // Kept across batches: rebuilding this per batch meant
+                    // re-deriving an id string for every result already on
+                    // screen, so the list stalled exactly while it was
+                    // filling — which is when the user is reading it.
+                    let newItems = batch.items.filter { seenResultIds.insert($0.id).inserted }
                     results.append(contentsOf: newItems)
                 }
                 status = .searching(

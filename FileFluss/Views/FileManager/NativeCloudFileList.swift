@@ -493,11 +493,36 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     /// Cloud-list counterpart of the local file list helper. Pins the
     /// Name column's minimum width to the widest visible filename when
     /// the Auto Resize preference is on for cloud panels.
+    /// Cached widest-name measurement, keyed by the listing it was taken
+    /// from. Scrolling posts a bounds change on every tick, and measuring
+    /// every filename in a 10k-file folder per tick is what turns a scroll
+    /// into a judder — the answer only changes when the items do.
+    private var cachedNameFloor: CGFloat?
+    private var cachedNameFloorCount: Int = -1
+    private var cachedNameFloorFirst: String?
+    private var cachedNameFloorLast: String?
+
     func applyNameColumnAutoResize() {
         guard let tableView else { return }
-        let floor: CGFloat? = FileListColumnPrefs.nameAutoResize(forCloud: true)
-            ? FileListNameColumn.widestRequiredWidth(forNames: items.map(\.name))
-            : nil
+        var floor: CGFloat?
+        if FileListColumnPrefs.nameAutoResize(forCloud: true) {
+            // Cheap identity check on the listing: count plus first and last
+            // name. A rename that changes neither can't change the widest
+            // name enough to matter, and the next real reload refreshes it.
+            if cachedNameFloorCount == items.count,
+               cachedNameFloorFirst == items.first?.name,
+               cachedNameFloorLast == items.last?.name,
+               let cached = cachedNameFloor {
+                floor = cached
+            } else {
+                let measured = FileListNameColumn.widestRequiredWidth(forNames: items.map(\.name))
+                cachedNameFloor = measured
+                cachedNameFloorCount = items.count
+                cachedNameFloorFirst = items.first?.name
+                cachedNameFloorLast = items.last?.name
+                floor = measured
+            }
+        }
         FileListNameColumn.resizeNameColumn(in: tableView, nameColumnID: .cloudNameColumn, floor: floor)
     }
 
