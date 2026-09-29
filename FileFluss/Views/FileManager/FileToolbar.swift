@@ -17,7 +17,17 @@ struct FileToolbar: CustomizableToolbarContent {
         activeCloudVM?.canGoForward ?? appState.activeFileManager.canGoForward
     }
 
+    // Split in two because `ToolbarContentBuilder` takes at most ten items
+    // per block. Xcode 27 accepts more, Xcode 26 — which builds the release —
+    // does not, so the eleventh item compiled here and failed in CI with
+    // "extra argument in call". Keep each group under ten.
     var body: some CustomizableToolbarContent {
+        navigationItems
+        actionItems
+    }
+
+    @ToolbarContentBuilder
+    private var navigationItems: some CustomizableToolbarContent {
         // Navigation buttons stay pinned — they're effectively a back/forward
         // pair, not a customizable widget.
         ToolbarItem(id: "navigation.back", placement: .navigation) {
@@ -47,7 +57,10 @@ struct FileToolbar: CustomizableToolbarContent {
             .disabled(!canGoForward)
         }
         .customizationBehavior(.disabled)
+    }
 
+    @ToolbarContentBuilder
+    private var actionItems: some CustomizableToolbarContent {
         ToolbarItem(id: "search", placement: .primaryAction) {
             OpenWindowToolbarButton(
                 windowId: "search",
