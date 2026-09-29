@@ -657,6 +657,25 @@ final class CloudFileManagerViewModel {
             if linksAreNotPublic { linksAreNotPublic = false }
             return link
         }
+        if result.couldNotCheck {
+            // The check never reached the server — a self-signed
+            // certificate on a self-hosted box, a blocked port, no network.
+            // Declaring the link private on that basis would be a guess,
+            // and `linksAreNotPublic` would make it a sticky one, so the
+            // link is handed over as the provider described it with a note
+            // saying plainly what didn't happen.
+            cloudFileVMLog.info("[Share] Link could not be checked for account \(self.accountId, privacy: .public)")
+            return CloudShareLink(
+                url: link.url,
+                directDownloadURL: link.directDownloadURL,
+                expiresAt: link.expiresAt,
+                hasPassword: link.hasPassword,
+                isPublic: link.isPublic,
+                note: [link.note, L10n.format("The link couldn't be checked from here: %@", result.detail ?? L10n.text("the server didn't answer."))]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+            )
+        }
         linksAreNotPublic = true
         // Deliberately not logging `result.detail`: it carries the final
         // URL, and for S3-style accounts that is a presigned URL — a
@@ -684,6 +703,11 @@ final class CloudFileManagerViewModel {
         }
 
         let result = await PublicURLCheck.isReachable(direct)
+        // An unanswered check is not evidence the provider refuses direct
+        // links, and this verdict is written to disk and never revisited —
+        // one certificate error would downgrade the account's links for
+        // good.
+        if result.couldNotCheck { return link }
         guard result.ok else {
             UserDefaults.standard.set(true, forKey: directLinkBlockedKey)
             cloudFileVMLog.info("[Share] Direct link rejected for account \(self.accountId, privacy: .public) — falling back to the share page")

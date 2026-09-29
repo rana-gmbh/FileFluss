@@ -118,6 +118,11 @@ enum VersionTestRunner {
         /// listing when a delete's verification failed). Rendered under the
         /// table in the Markdown report so we can diagnose without re-running.
         let diagnostics: String?
+        /// The step couldn't be carried out for a reason outside the app —
+        /// a server that wouldn't answer at all. Counted as passing, since
+        /// it says nothing about FileFluss, but reported as SKIP so it
+        /// isn't mistaken for a clean result.
+        var skipped: Bool = false
     }
 
     private struct AccountResult {
@@ -350,7 +355,9 @@ enum VersionTestRunner {
                     var candidate = link.preferredURL
                     if let direct = link.directDownloadURL, direct != link.url {
                         let directResult = await PublicURLCheck.isReachable(direct)
-                        if !directResult.ok {
+                        // Mirrors the app: a check that never reached the
+                        // server is not the provider refusing direct links.
+                        if !directResult.ok, !directResult.couldNotCheck {
                             candidate = link.url
                             let reason = directResult.detail ?? "no detail"
                             shareNote = [shareNote, "Direct download link rejected by the provider, fell back to the share page — \(reason)"]
@@ -360,10 +367,7 @@ enum VersionTestRunner {
                     }
                     shareURL = candidate.absoluteString
                     let fetchURL = candidate
-                    let fetchStep = await measure(name: "fetch share link anonymously", progress: progress) {
-                        try await verifyPublicURL(fetchURL)
-                    }
-                    shareSteps.append(fetchStep)
+                    shareSteps.append(await shareFetchStep(fetchURL, progress: progress))
                 }
             } else {
                 shareSteps.append(StepResult(
@@ -423,12 +427,31 @@ enum VersionTestRunner {
 
     /// Anonymous reachability check, shared with the app's own share action
     /// so the test exercises exactly what users get.
-    private static func verifyPublicURL(_ url: URL) async throws {
+    ///
+    /// Not built on `measure`, because this step has three outcomes rather
+    /// than two: a server that never answered — an untrusted certificate on
+    /// a self-hosted box, say — tells us nothing about the share link, and
+    /// reporting that as a failure is how a passing build looks broken.
+    private static func shareFetchStep(_ url: URL, progress: ProgressPanel?) async -> StepResult {
+        let name = "fetch share link anonymously"
+        progress?.beginStep(name)
+        defer { progress?.finishStep() }
+        let start = Date()
         let result = await PublicURLCheck.isReachable(url)
-        guard result.ok else {
-            throw VersionTestError.verificationFailed(
-                "share link is not reachable anonymously — \(result.detail ?? "no detail")"
-            )
+        let ms = Int(Date().timeIntervalSince(start) * 1000)
+
+        switch result.outcome {
+        case .reachable:
+            SupportLogger.shared.log("OK  \(name) [\(ms)ms]", category: logCategory)
+            return StepResult(label: name, ok: true, durationMs: ms, error: nil, diagnostics: nil)
+        case .unverified:
+            let msg = "not checked — \(result.detail ?? "the server could not be reached")"
+            SupportLogger.shared.log("SKIP \(name) — \(msg) [\(ms)ms]", category: logCategory)
+            return StepResult(label: name, ok: true, durationMs: ms, error: msg, diagnostics: nil, skipped: true)
+        case .notPublic:
+            let msg = "share link is not reachable anonymously — \(result.detail ?? "no detail")"
+            SupportLogger.shared.log("FAIL \(name) — \(msg) [\(ms)ms]", category: logCategory, level: .error)
+            return StepResult(label: name, ok: false, durationMs: ms, error: msg, diagnostics: nil)
         }
     }
 
@@ -621,7 +644,7 @@ enum VersionTestRunner {
             out += "|-------|------|--------|----------|-------|\n"
 
             func row(phase: String, step: StepResult) -> String {
-                let res = step.ok ? "OK" : "FAIL"
+                let res = step.skipped ? "SKIP" : (step.ok ? "OK" : "FAIL")
                 let err = (step.error ?? "").replacingOccurrences(of: "|", with: "\\|")
                 let label = step.label.replacingOccurrences(of: "|", with: "\\|")
                 return "| \(phase) | \(label) | \(res) | \(step.durationMs) ms | \(err) |\n"

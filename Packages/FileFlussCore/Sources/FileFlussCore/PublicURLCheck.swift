@@ -10,10 +10,31 @@ import Foundation
 public enum PublicURLCheck {
 
     public struct Result: Sendable {
-        public let ok: Bool
-        /// The server's own explanation when `ok` is false, condensed to one
-        /// readable line.
+        /// Three answers, not two. "The server said no" and "I never reached
+        /// the server" look the same to a caller that only has a Bool, and
+        /// treating the second as the first tells the user a working link
+        /// isn't public — on a self-hosted server with a self-signed
+        /// certificate, every single time.
+        public enum Outcome: Sendable {
+            /// Fetched anonymously and served.
+            case reachable
+            /// The server answered, and the answer means a stranger can't
+            /// use this link — an error status, an empty body, or a
+            /// redirect to a sign-in page.
+            case notPublic
+            /// No answer at all: an untrusted certificate, a host that
+            /// wouldn't resolve, no network. Nothing was learned about the
+            /// link, so nothing should be concluded about it.
+            case unverified
+        }
+
+        public let outcome: Outcome
+        /// The server's own explanation, or the transport error, condensed
+        /// to one readable line.
         public let detail: String?
+
+        public var ok: Bool { outcome == .reachable }
+        public var couldNotCheck: Bool { outcome == .unverified }
     }
 
     public static func isReachable(_ url: URL, timeout: TimeInterval = 20) async -> Result {
@@ -25,6 +46,10 @@ public enum PublicURLCheck {
         // and only a second failure counts.
         let first = await attempt(url, timeout: timeout, ranged: true, browserLike: false)
         if first.ok || first.isSignInRedirect { return first.result }
+        // A request that never got a response won't get one by wearing a
+        // different user agent, and the share action is waiting on this —
+        // no point spending a second timeout to be told the same thing.
+        if first.result.couldNotCheck { return first.result }
         let second = await attempt(url, timeout: timeout, ranged: false, browserLike: true)
         return second.result
     }
@@ -67,20 +92,20 @@ public enum PublicURLCheck {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return Attempt(result: Result(ok: false, detail: "no HTTP response"), isSignInRedirect: false)
+                return Attempt(result: Result(outcome: .notPublic, detail: "no HTTP response"), isSignInRedirect: false)
             }
             guard (200...299).contains(http.statusCode) else {
                 let landed = http.url?.absoluteString ?? url.absoluteString
                 return Attempt(
                     result: Result(
-                        ok: false,
+                        outcome: .notPublic,
                         detail: "HTTP \(http.statusCode) (final URL: \(landed)) — \(summarize(data))"
                     ),
                     isSignInRedirect: false
                 )
             }
             if data.isEmpty {
-                return Attempt(result: Result(ok: false, detail: "empty response body"), isSignInRedirect: false)
+                return Attempt(result: Result(outcome: .notPublic, detail: "empty response body"), isSignInRedirect: false)
             }
             // A sign-in page is served as a perfectly good HTTP 200, so the
             // status code alone can't tell a public link from one that
@@ -89,15 +114,21 @@ public enum PublicURLCheck {
                Self.signInHosts.contains(where: { host == $0 || host.hasSuffix(".\($0)") }) {
                 return Attempt(
                     result: Result(
-                        ok: false,
+                        outcome: .notPublic,
                         detail: "the link redirects to a sign-in page at \(host) — it is not public"
                     ),
                     isSignInRedirect: true
                 )
             }
-            return Attempt(result: Result(ok: true, detail: nil), isSignInRedirect: false)
+            return Attempt(result: Result(outcome: .reachable, detail: nil), isSignInRedirect: false)
         } catch {
-            return Attempt(result: Result(ok: false, detail: error.localizedDescription), isSignInRedirect: false)
+            // A throw means no HTTP response came back at all, so this says
+            // nothing about whether the link is public — only that we
+            // couldn't ask.
+            return Attempt(
+                result: Result(outcome: .unverified, detail: error.localizedDescription),
+                isSignInRedirect: false
+            )
         }
     }
 
