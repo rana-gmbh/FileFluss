@@ -52,6 +52,38 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
 
+### Share files with a link
+
+![Share files](Screenshots/FileFluss%20Share%20Files.webp)
+
+Right-click a file on a supported cloud account → **Share Link**. FileFluss asks the provider to make it shareable and puts the link straight on your clipboard.
+
+- Optional **password** and **expiry date**, offered only where that account can actually honour them.
+- Every link is fetched anonymously before you hand it out, so you find out here — not from the recipient — if it only works while signed in.
+- Copy an existing link again, change its password or expiry, or stop sharing entirely.
+- Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
+
+### Storage Analysis
+
+![Storage Analysis](Screenshots/FileFluss%20Storage%20Analysis.webp)
+
+A separate window that finds what is eating your space — on any cloud account or local folder.
+
+- Folder tree sorted by size, plus a list of the largest individual files.
+- Scan a whole account or target a single subfolder.
+- Results fill in progressively while the scan runs, so a 2 TB account is useful long before it finishes.
+- Jump straight from any row to that folder or file in the panel, and delete it there.
+
+### Transfer details
+
+![Transfer details](Screenshots/FileFluss%20Transfer%20Details.webp)
+
+Transfers say what they are doing: the file currently moving, the live speed, and the estimated time left.
+
+- **Details** during a transfer shows the current file's own progress bar, the download/upload phase on cloud-to-cloud copies, and the items finished so far.
+- A **Transfers** button in the toolbar carries overall progress and drops down every transfer in both panels — useful when the sidebar is icon-only or scrolled.
+- Figures appear only when they are genuinely measured; nothing is invented for operations that can't report progress.
+
 ### Mount cloud accounts in Finder
 
 ![Mount in Finder](Screenshots/FileFluss%20Mount%20in%20Finder.webp)
@@ -102,6 +134,8 @@ Settings → Storage shows a live cache size and offers a one-click *Clear*. Opt
 
 - Drop files between panels — a *Move or Copy?* prompt asks once.
 - Drop directly onto a folder row, the table background, or **any breadcrumb in the path bar** — files land where you expect.
+- Drop onto a **favourite or a cloud account in the sidebar** to send files there without opening it first.
+- **Spring-loaded folders**: rest a drag on a sidebar row or a folder for a moment and it opens, so you can carry on into a subfolder — the same as Finder.
 - Right-click → *Copy to Other Panel* / *Move to Other Panel* for the no-prompt version.
 - Side-by-side conflict resolution dialog with newer/older labels and Apply-to-All.
 
@@ -187,6 +221,10 @@ This auto-taps `rana-gmbh/filefluss` and installs the cask in one step. To upgra
 ### Manual
 
 Download the latest DMG from the [Releases](https://github.com/rana-gmbh/filefluss/releases) page and drag FileFluss.app into your Applications folder.
+
+### Updates
+
+FileFluss updates itself. It checks for new versions on launch and installs them with your confirmation; every update is signed and verified before it is applied. Turn it off in Settings → General.
 
 ## Building from source
 

@@ -1,68 +1,48 @@
-# FileFluss 1.4
+# FileFluss 1.5
 
-FileFluss 1.4 brings full multilanguage support, a configurable cache location so big transfers don't fill your internal disk, a focused single-pane view, much smoother keyboard navigation, and a new cloud provider.
+FileFluss 1.5 is about knowing what your storage is doing and getting things out of it: share links straight from the right-click menu, a Storage Analysis window that finds what's eating your space on every account, and transfers that tell you what they're actually doing.
 
 ## Highlights
 
-### Now in four languages
+### Sharing is caring
 
-![Multiple languages](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Multilanguage%20Chinese.webp)
+![Share files](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.5/Screenshots/FileFluss%20Share%20Files.webp)
 
-FileFluss is now fully localized in **English, German, Simplified Chinese, and Traditional Chinese**. Choose your language in Settings → General — the window switches instantly, and the menu bar follows after a quick relaunch. By default it follows your macOS system language.
+Right-click any file on a supported cloud account and choose **Share Link** — FileFluss asks the provider to make it shareable and puts the link straight on your clipboard. Where the provider allows it you can set a **password** and an **expiry date**, and only the options that account can actually honour are offered, so you don't get an error after the fact.
 
-### Put the cache on an external drive
+Links are checked before you hand them out: FileFluss fetches each one anonymously, the way the recipient will, and tells you if it only works while signed in. You can also copy an existing link again, change its password or expiry, and stop sharing entirely.
 
-![Cache location](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Cache%20Location.webp)
+Supported on Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
 
-Copying a large file from a cloud account stages it through a cache folder first — which can fill up a Mac with a small internal disk. In **Settings → Storage** you can now choose a cache folder on any drive. Point it at an external hard drive and big cloud-to-external transfers stay off your internal disk. Falls back to the system folder automatically if the chosen folder isn't available.
+### Find storage hogs with Storage Analysis
 
-### Single-pane view
+![Storage Analysis](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.5/Screenshots/FileFluss%20Storage%20Analysis.webp)
 
-![Single-pane mode](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.4/Screenshots/FileFluss%20Single%20Pane%20mode.webp)
+A new window shows **which folders and files use the most space**, on any cloud account or local folder. Scan a whole account or just one subfolder; results fill in progressively while the scan runs, so a 2 TB account is useful long before it's finished.
 
-A new toolbar toggle collapses the two panels into one, for focused navigation within a single cloud account or drive. You can still copy and move files within that pane; the two-panel-only actions (copy/move to the other panel, Compare, Sync) are hidden while it's on.
+You get a folder tree sorted by size and a list of the largest individual files. Jump straight from any row to that folder or file in the panel — and delete it there.
 
-### Much better keyboard navigation
+### More transfer details
 
-Moving through folders with the keyboard is far smoother now:
+![Transfer details](https://raw.githubusercontent.com/rana-gmbh/FileFluss/v1.5/Screenshots/FileFluss%20Transfer%20Details.webp)
 
-- **⌘↓ "Open Folder"** steps into the selected folder, and **⌘↑** goes to the parent — both customizable in Settings → Keyboard.
-- Focus now stays in the file list after you navigate, so the arrow keys keep working without clicking back into the pane.
-- A single click on a path-bar breadcrumb in the inactive pane navigates immediately (no more click-twice).
+Transfers now say what they're doing: the **file currently moving**, the **live transfer speed**, and an **estimated time left**. Open **Details** during a transfer for the current file's own progress bar, the download/upload phase on cloud-to-cloud copies, and the list of items finished so far.
 
-### New provider: Jottacloud
+Every figure appears only when it's genuinely measured — no invented speeds for operations that can't report them.
 
-FileFluss now connects to **Jottacloud** (jottacloud.com), alongside the 20+ services already supported. Browse, upload, download, sync, and compare just like any other account.
+## Also new
 
-### Google Drive: optional folder-picker connection
+- **Easier drag & drop across cloud providers.** Drop files onto a favourite or a cloud account in the sidebar to copy or move them there. Rest a drag on a sidebar row or a folder and it opens, so you can carry on into a subfolder — Finder's spring-loaded folders.
+- **A Transfers button in the toolbar.** A ring that fills with overall progress, and a drop-down listing every transfer in both panels, with speed, time left and Details for each. Both sidebar sections (Transfers and Folder Sizes) can now be switched off in Settings → General.
+- **Automatic updates**, built on the Sparkle framework. FileFluss checks for new versions and installs them itself; updates are signed and verified. Turn it off in Settings → General.
+- **macOS 27 fixes**, including icon flickering in the file lists and cleaner separation between the sidebars and the window title.
+- **More snappiness and stability.** Big transfers no longer pay a main-thread hop for every network chunk, the compare tree stops being rebuilt on every redraw, and window size and position are remembered again across updates. Optionally reopen the folders from your last session.
+- **AWS S3 and Box fixes.** S3 no longer needs account-wide bucket listing when a bucket is named, presigned links work with mixed-case bucket hosts, and Box stops asking you to sign in again every few days.
 
-Google limits how many apps can have full Drive access. FileFluss now also offers an alternative **folder-picker** connection: you pick specific folders inside Google Drive to grant access to. FileFluss can read and write the files and folders you create through it, but it **can't see files and folders that already existed** in your Drive. Use it if the standard full Google Drive connection isn't available to you.
-
-## Other improvements
-
-- **Rename cloud accounts** directly in Settings → Cloud Accounts (now between Edit and Remove).
-- **Smarter inline rename** — only the file name is selected, not the extension, matching Finder.
-- **Open in Finder** added to the right-click menu (reveals local files, and offers to mount a cloud account first).
-- Local drives now show **free / total space**, and the optional copy/move space check no longer falsely warns on external drives.
-- A new toolbar **cloud button** jumps straight to Settings → Cloud Accounts.
-- Various UI polish and small reliability fixes.
-
-## Upgrading from 1.3
-
-Your cloud accounts carry over — no need to re-add them after upgrading.
-
-## Installation
-
-### Homebrew
+## Install
 
 ```bash
-brew upgrade --cask filefluss
+brew install --cask rana-gmbh/filefluss/filefluss
 ```
 
-### Manual
-
-Download the DMG below and drag FileFluss.app into your Applications folder.
-
-## Requirements
-
-- macOS 14.0 (Sonoma) or later
+Already have FileFluss? `brew upgrade --cask filefluss`, or just let the app update itself.
