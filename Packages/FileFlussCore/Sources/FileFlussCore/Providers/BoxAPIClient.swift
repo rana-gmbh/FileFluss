@@ -3,6 +3,7 @@ import Network
 import os
 import Security
 import CommonCrypto
+import CryptoKit
 
 private let boxLog = Logger(subsystem: "com.rana.FileFluss", category: "box")
 
@@ -46,11 +47,14 @@ public actor BoxAPIClient {
     private static let apiURL = "https://api.box.com/2.0"
     private static let uploadURL = "https://upload.box.com/api/2.0"
 
-    /// Single-PUT cap; Box requires chunked upload (`/files/upload_sessions`)
-    /// for anything larger. Not implemented in v1 — the upload pre-flight
-    /// in the transfer paths rejects files above this size with a clear
-    /// error.
+    /// Single-request cap. Anything larger goes through the chunked upload
+    /// session API (`/files/upload_sessions`).
     private static let singlePutMaxBytes: Int64 = 50 * 1024 * 1024
+
+    /// Box's documented ceiling for a chunked upload. The account's own
+    /// per-file limit (250 MB on free plans) is enforced server-side when
+    /// the session is created and surfaces as `.fileTooLarge`.
+    static let maxChunkedUploadBytes: Int64 = 50 * 1024 * 1024 * 1024
 
     private(set) var credentials: BoxCredentials
     /// Called whenever the credentials change, so the new ones reach the
@@ -592,8 +596,8 @@ public actor BoxAPIClient {
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
-        guard fileSize <= Self.singlePutMaxBytes else {
-            throw CloudProviderError.fileTooLarge(fileBytes: fileSize, providerLimitBytes: Self.singlePutMaxBytes)
+        guard fileSize <= Self.maxChunkedUploadBytes else {
+            throw CloudProviderError.fileTooLarge(fileBytes: fileSize, providerLimitBytes: Self.maxChunkedUploadBytes)
         }
 
         let parentPath = (remotePath as NSString).deletingLastPathComponent
@@ -608,11 +612,26 @@ public actor BoxAPIClient {
         let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
         let modDate = attrs?[.modificationDate] as? Date
         let createdDate = attrs?[.creationDate] as? Date
-        let fileData = try Data(contentsOf: localURL)
 
-        do {
-            let uploaded = try await performMultipartUpload(
-                fileData: fileData,
+        // Small files go up in one request (held in memory); big ones are
+        // streamed from disk part by part so memory stays flat.
+        let fileData: Data? = fileSize <= Self.singlePutMaxBytes ? try Data(contentsOf: localURL) : nil
+
+        func attempt(existingId: String?) async throws -> BoxItem {
+            if let fileData {
+                return try await performMultipartUpload(
+                    fileData: fileData,
+                    fileName: fileName,
+                    parentId: parentId,
+                    existingId: existingId,
+                    modDate: modDate,
+                    createdDate: createdDate,
+                    onBytes: onBytes
+                )
+            }
+            return try await performChunkedUpload(
+                localURL: localURL,
+                fileSize: fileSize,
                 fileName: fileName,
                 parentId: parentId,
                 existingId: existingId,
@@ -620,23 +639,17 @@ public actor BoxAPIClient {
                 createdDate: createdDate,
                 onBytes: onBytes
             )
-            pathIdCache[remotePath] = uploaded.id
+        }
+
+        do {
+            pathIdCache[remotePath] = try await attempt(existingId: existingId).id
         } catch CloudProviderError.serverError(409) {
             // Already exists — query for the file id and retry as a
             // version upload so we replace cleanly.
             guard let foundId = try? await findFileId(parentId: parentId, name: fileName) else {
                 throw CloudProviderError.serverError(409)
             }
-            let uploaded = try await performMultipartUpload(
-                fileData: fileData,
-                fileName: fileName,
-                parentId: parentId,
-                existingId: foundId,
-                modDate: modDate,
-                createdDate: createdDate,
-                onBytes: onBytes
-            )
-            pathIdCache[remotePath] = uploaded.id
+            pathIdCache[remotePath] = try await attempt(existingId: foundId).id
         }
     }
 
@@ -698,6 +711,263 @@ public actor BoxAPIClient {
         let bodyStr = String(data: data, encoding: .utf8) ?? ""
         boxLog.error("[Box] Upload failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
         throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+    }
+
+    // MARK: - Chunked upload sessions
+
+    private struct UploadSession: Decodable {
+        struct Endpoints: Decodable {
+            let upload_part: String
+            let commit: String
+            let abort: String
+        }
+        let id: String
+        let part_size: Int64
+        let session_endpoints: Endpoints
+    }
+
+    private struct UploadedPart: Decodable {
+        struct Part: Decodable {
+            let part_id: String
+            let offset: Int64
+            let size: Int64
+        }
+        let part: Part
+    }
+
+    /// Forwards byte progress for one part, but never reports the same
+    /// bytes twice when the part is retried.
+    private final class PartProgress: @unchecked Sendable {
+        private let lock = NSLock()
+        private let onBytes: ByteProgressHandler?
+        private var high: Int64 = 0
+        private var current: Int64 = 0
+
+        init(_ onBytes: ByteProgressHandler?) { self.onBytes = onBytes }
+
+        func beginAttempt() { lock.lock(); current = 0; lock.unlock() }
+
+        var handler: ByteProgressHandler? {
+            guard let onBytes else { return nil }
+            return { [self] delta in
+                lock.lock()
+                current += delta
+                let forward = max(0, current - high)
+                high = max(high, current)
+                lock.unlock()
+                if forward > 0 { onBytes(forward) }
+            }
+        }
+    }
+
+    private static func sha1Header(_ digest: Insecure.SHA1.Digest) -> String {
+        "sha=" + Data(digest).base64EncodedString()
+    }
+
+    private func performChunkedUpload(
+        localURL: URL,
+        fileSize: Int64,
+        fileName: String,
+        parentId: String,
+        existingId: String?,
+        modDate: Date?,
+        createdDate: Date?,
+        onBytes: ByteProgressHandler?
+    ) async throws -> BoxItem {
+        // 1. Open the session.
+        var sessionBody: [String: Any] = ["file_size": fileSize, "file_name": fileName]
+        let sessionPath: String
+        if let existingId {
+            sessionPath = "/files/\(existingId)/upload_sessions"
+        } else {
+            sessionPath = "/files/upload_sessions"
+            sessionBody["folder_id"] = parentId
+        }
+        guard let sessionURL = URL(string: "\(Self.uploadURL)\(sessionPath)") else { throw CloudProviderError.invalidResponse }
+        let (sessionData, sessionHTTP) = try await sendToUploadHost(
+            url: sessionURL,
+            method: "POST",
+            headers: ["Content-Type": "application/json"],
+            body: try JSONSerialization.data(withJSONObject: sessionBody)
+        )
+        guard (200...299).contains(sessionHTTP.statusCode) else {
+            let bodyStr = String(data: sessionData, encoding: .utf8) ?? ""
+            boxLog.error("[Box] Create upload session failed: HTTP \(sessionHTTP.statusCode): \(bodyStr.prefix(500))")
+            if sessionHTTP.statusCode == 413 || bodyStr.contains("file_size_limit_exceeded") {
+                // The account's plan caps single-file size (e.g. 250 MB on free).
+                throw CloudProviderError.fileTooLarge(fileBytes: fileSize, providerLimitBytes: nil)
+            }
+            throw Self.mapHTTPError(statusCode: sessionHTTP.statusCode, responseBody: sessionData)
+        }
+        let uploadSession = try JSONDecoder().decode(UploadSession.self, from: sessionData)
+        guard uploadSession.part_size > 0,
+              let partURL = URL(string: uploadSession.session_endpoints.upload_part),
+              let commitURL = URL(string: uploadSession.session_endpoints.commit) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        do {
+            // 2. Stream the file up part by part, hashing as we go.
+            let handle = try FileHandle(forReadingFrom: localURL)
+            defer { try? handle.close() }
+
+            var fileHasher = Insecure.SHA1()
+            var parts: [[String: Any]] = []
+            var offset: Int64 = 0
+
+            while offset < fileSize {
+                try Task.checkCancellation()
+                let want = Int(min(uploadSession.part_size, fileSize - offset))
+                guard let chunk = try handle.read(upToCount: want), chunk.count == want else {
+                    // File shrank or became unreadable mid-upload.
+                    throw CloudProviderError.invalidResponse
+                }
+                fileHasher.update(data: chunk)
+
+                let partHeaders = [
+                    "Content-Type": "application/octet-stream",
+                    "Content-Range": "bytes \(offset)-\(offset + Int64(want) - 1)/\(fileSize)",
+                    "Digest": Self.sha1Header(Insecure.SHA1.hash(data: chunk)),
+                ]
+                let progress = PartProgress(onBytes)
+                let (partData, partHTTP) = try await sendWithRetry {
+                    progress.beginAttempt()
+                    return try await self.sendToUploadHost(
+                        url: partURL,
+                        method: "PUT",
+                        headers: partHeaders,
+                        body: chunk,
+                        onBytes: progress.handler
+                    )
+                }
+                guard (200...299).contains(partHTTP.statusCode) else {
+                    let bodyStr = String(data: partData, encoding: .utf8) ?? ""
+                    boxLog.error("[Box] Upload part @\(offset) failed: HTTP \(partHTTP.statusCode): \(bodyStr.prefix(500))")
+                    throw Self.mapHTTPError(statusCode: partHTTP.statusCode, responseBody: partData)
+                }
+                let uploaded = try JSONDecoder().decode(UploadedPart.self, from: partData).part
+                parts.append(["part_id": uploaded.part_id, "offset": uploaded.offset, "size": uploaded.size])
+                offset += Int64(want)
+            }
+
+            // 3. Commit. Box may answer 202 + Retry-After while it assembles
+            // the parts; poll the same endpoint until it returns the file.
+            var commitBody: [String: Any] = ["parts": parts]
+            let attributes = Self.commitAttributes(contentModifiedAt: modDate, contentCreatedAt: createdDate)
+            if !attributes.isEmpty { commitBody["attributes"] = attributes }
+            let commitPayload = try JSONSerialization.data(withJSONObject: commitBody)
+            let commitHeaders = [
+                "Content-Type": "application/json",
+                "Digest": Self.sha1Header(fileHasher.finalize()),
+            ]
+
+            for _ in 0..<30 {
+                try Task.checkCancellation()
+                let (commitData, commitHTTP) = try await sendWithRetry {
+                    try await self.sendToUploadHost(url: commitURL, method: "POST", headers: commitHeaders, body: commitPayload)
+                }
+                if commitHTTP.statusCode == 202 {
+                    let wait = Double(commitHTTP.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 1
+                    try await Task.sleep(nanoseconds: UInt64(min(max(wait, 1), 10) * 1_000_000_000))
+                    continue
+                }
+                guard (200...299).contains(commitHTTP.statusCode) else {
+                    let bodyStr = String(data: commitData, encoding: .utf8) ?? ""
+                    boxLog.error("[Box] Commit upload session failed: HTTP \(commitHTTP.statusCode): \(bodyStr.prefix(500))")
+                    throw Self.mapHTTPError(statusCode: commitHTTP.statusCode, responseBody: commitData)
+                }
+                let parsed = try JSONDecoder().decode(BoxFolderItems.self, from: commitData)
+                guard let first = parsed.entries.first else { throw CloudProviderError.invalidResponse }
+                return first
+            }
+            throw CloudProviderError.invalidResponse
+        } catch {
+            await abortUploadSession(uploadSession.session_endpoints.abort)
+            throw error
+        }
+    }
+
+    /// Runs `operation`, retrying transient failures (network errors, 429, 5xx)
+    /// with a short backoff. Non-transient results are returned as-is for the
+    /// caller to map.
+    private func sendWithRetry(
+        _ operation: () async throws -> (Data, HTTPURLResponse)
+    ) async throws -> (Data, HTTPURLResponse) {
+        var delay: UInt64 = 1_000_000_000
+        for attempt in 1... {
+            do {
+                let result = try await operation()
+                let code = result.1.statusCode
+                if attempt < 4, code == 429 || (500...599).contains(code) {
+                    boxLog.info("[Box] Upload request → HTTP \(code), retrying (attempt \(attempt))")
+                } else {
+                    return result
+                }
+            } catch let error as URLError where attempt < 4 && error.code != .cancelled {
+                boxLog.info("[Box] Upload request failed (\(error.code.rawValue)), retrying (attempt \(attempt))")
+            }
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: delay)
+            delay *= 2
+        }
+        throw CloudProviderError.invalidResponse // unreachable
+    }
+
+    /// Authorized request to `upload.box.com`. Refreshes the token first, and
+    /// once more if Box answers 401 — a multi-gigabyte upload can outlive an
+    /// access token.
+    private func sendToUploadHost(
+        url: URL,
+        method: String,
+        headers: [String: String],
+        body: Data,
+        onBytes: ByteProgressHandler? = nil
+    ) async throws -> (Data, HTTPURLResponse) {
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+            let (data, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+        var result = try await send(forceRefreshFirst: false)
+        if result.1.statusCode == 401 {
+            boxLog.info("[Box] \(method) upload request → 401, force-refreshing and retrying once")
+            result = try await send(forceRefreshFirst: true)
+        }
+        return result
+    }
+
+    /// Best-effort cleanup so a failed or cancelled upload doesn't leave a
+    /// half-assembled session behind. Detached so it still runs when the
+    /// calling task has been cancelled.
+    private func abortUploadSession(_ endpoint: String) async {
+        guard let url = URL(string: endpoint),
+              let creds = try? await refreshTokenIfNeeded() else { return }
+        let session = self.session
+        let userAgent = Self.userAgent
+        await Task.detached {
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            _ = try? await session.data(for: request)
+        }.value
+    }
+
+    private static func commitAttributes(contentModifiedAt: Date?, contentCreatedAt: Date?) -> [String: String] {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        var attrs: [String: String] = [:]
+        if let contentModifiedAt { attrs["content_modified_at"] = formatter.string(from: contentModifiedAt) }
+        if let contentCreatedAt { attrs["content_created_at"] = formatter.string(from: contentCreatedAt) }
+        return attrs
     }
 
     private static func buildUploadAttributes(

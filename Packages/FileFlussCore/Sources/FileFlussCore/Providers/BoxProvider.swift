@@ -13,11 +13,11 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
         get async { apiClient != nil }
     }
 
-    /// Single-PUT cap. Box requires the chunked upload session API for
-    /// anything larger, which isn't implemented yet — the upload path
-    /// rejects oversized files pre-flight with a clear message.
+    /// Box's documented ceiling for chunked uploads. The account's own plan
+    /// limit (e.g. 250 MB on free) is enforced by Box when the upload
+    /// session is opened.
     public var maxUploadFileSize: Int64? {
-        get async { 50 * 1024 * 1024 }
+        get async { BoxAPIClient.maxChunkedUploadBytes }
     }
 
     public init(accountId: UUID = UUID()) {
