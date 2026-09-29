@@ -559,6 +559,9 @@ public actor BoxAPIClient {
             let childPath = joinedPath(parent: path, name: entry.name)
             pathIdCache[childPath] = entry.id
         }
+        // The listing is the truth for this level: anything cached here that
+        // Box no longer lists is gone, whoever deleted it.
+        pathIdCache.retainPathChildren(of: path, named: Set(allEntries.map(\.name)))
         return allEntries.map { $0.toCloudFileItem(parentPath: path) }
     }
 

@@ -22,11 +22,43 @@ public extension Dictionary where Key == String {
     /// alone. The root key is kept: its id is a constant the client seeds
     /// itself with and the walk starts from it.
     mutating func removePathSubtree(_ path: String) {
-        let trimmed = path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+        let trimmed = Self.trimmedPath(path)
         if trimmed != "/" { removeValue(forKey: trimmed) }
         let prefix = trimmed == "/" ? "/" : trimmed + "/"
         for key in keys where key != "/" && key.hasPrefix(prefix) {
             removeValue(forKey: key)
         }
+    }
+
+    /// Makes a completed listing authoritative for its own level: anything
+    /// cached directly under `path` that the listing didn't contain is
+    /// dropped, along with its subtree.
+    ///
+    /// These caches are filled from listings but were only ever added to, so
+    /// an entry that disappeared — deleted from another device, or deleted
+    /// here while the provider's listing still briefly showed it — stayed
+    /// cached for the life of the session. `createFolder` asks the cache
+    /// first and treats a hit as "already there", so the next folder of that
+    /// name was never created and everything written into it failed. Seen on
+    /// Internxt in the version test: run one cleaned up, run two created
+    /// nothing and reported the folder missing from the listing.
+    ///
+    /// Only ever call this after a listing has completed. A listing that
+    /// threw part-way through is not evidence that anything is gone.
+    mutating func retainPathChildren(of path: String, named names: Set<String>) {
+        let parent = Self.trimmedPath(path)
+        let prefix = parent == "/" ? "/" : parent + "/"
+        let stale = keys.filter { key in
+            guard key != "/", key.hasPrefix(prefix) else { return false }
+            let remainder = key.dropFirst(prefix.count)
+            // Direct children only; the grandchildren go with their parent.
+            guard !remainder.isEmpty, !remainder.contains("/") else { return false }
+            return !names.contains(String(remainder))
+        }
+        for key in stale { removePathSubtree(key) }
+    }
+
+    private static func trimmedPath(_ path: String) -> String {
+        path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 }

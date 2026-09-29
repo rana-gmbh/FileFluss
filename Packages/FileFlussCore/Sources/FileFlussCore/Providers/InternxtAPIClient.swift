@@ -149,6 +149,9 @@ public actor InternxtAPIClient {
         guard node.isFolder else { throw CloudProviderError.notFound(path) }
 
         var items: [CloudFileItem] = []
+        // Names seen in this listing, used at the end to drop cached
+        // children that have since gone.
+        var listedNames: Set<String> = []
 
         // Subfolders (paginated).
         struct FolderPage: Decodable {
@@ -162,6 +165,7 @@ public actor InternxtAPIClient {
             for f in page.folders {
                 let name = f.plainName ?? f.name ?? "Untitled"
                 let childPath = path == "/" ? "/\(name)" : "\(path)/\(name)"
+                listedNames.insert(name)
                 nodeCache[childPath] = Node(uuid: f.uuid, isFolder: true, fileId: nil, bucket: nil, size: 0, type: nil)
                 items.append(CloudFileItem(id: "d\(f.uuid)", name: name, path: childPath, isDirectory: true,
                                            size: 0, modificationDate: Self.parseDate(f.updatedAt), checksum: nil))
@@ -193,6 +197,7 @@ public actor InternxtAPIClient {
                 let ext = f.type ?? ""
                 let name = ext.isEmpty ? base : "\(base).\(ext)"
                 let childPath = path == "/" ? "/\(name)" : "\(path)/\(name)"
+                listedNames.insert(name)
                 let size = f.size?.int64Value ?? 0
                 nodeCache[childPath] = Node(uuid: f.uuid, isFolder: false, fileId: f.fileId, bucket: f.bucket, size: size, type: ext)
                 items.append(CloudFileItem(id: "f\(f.uuid)", name: name, path: childPath, isDirectory: false,
@@ -201,6 +206,11 @@ public actor InternxtAPIClient {
             if page.files.count < 50 { break }
             offset += 50
         }
+
+        // Both pages are in, so this listing is complete and authoritative
+        // for this level: whatever is still cached here and wasn't listed
+        // no longer exists.
+        nodeCache.retainPathChildren(of: path, named: listedNames)
 
         return items
     }

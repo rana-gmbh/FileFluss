@@ -78,6 +78,50 @@ struct PathCacheEvictionTests {
         #expect(c["/Test"] == "10")
     }
 
+    /// The Internxt failure: these caches were only ever added to, so an
+    /// entry that vanished stayed cached for the life of the session — and
+    /// `createFolder`, which asks the cache first, then reported a folder as
+    /// already there and created nothing.
+    @Test("A listing drops cached children it no longer contains")
+    func listingIsAuthoritativeForItsLevel() {
+        var c = cache()
+
+        // "/Test" is gone from the root listing; "/Other" is still there.
+        c.retainPathChildren(of: "/", named: ["Testing", "Other"])
+
+        #expect(c["/Test"] == nil)
+        #expect(c["/Test/Documents"] == nil)
+        #expect(c["/Test/Documents/a.txt"] == nil)
+        #expect(c["/Testing"] == "20")
+        #expect(c["/Other"] == "30")
+        #expect(c["/"] == "0")
+    }
+
+    @Test("A listing says nothing about levels below it")
+    func listingLeavesGrandchildrenAlone() {
+        var c = cache()
+
+        // Listing /Test: Documents is still there, Immobilien is not.
+        c.retainPathChildren(of: "/Test", named: ["Documents"])
+
+        #expect(c["/Test/Documents"] == "11")
+        #expect(c["/Test/Documents/a.txt"] == "12")
+        #expect(c["/Test/Immobilien"] == nil)
+        #expect(c["/Test"] == "10")
+        #expect(c["/Testing"] == "20")
+    }
+
+    @Test("An empty listing empties that level")
+    func emptyListingClearsTheLevel() {
+        var c = cache()
+
+        c.retainPathChildren(of: "/Test", named: [])
+
+        #expect(c["/Test"] == "10")
+        #expect(c["/Test/Documents"] == nil)
+        #expect(c["/Test/Immobilien"] == nil)
+    }
+
     @Test("Evicting a path that was never cached changes nothing")
     func unknownPathIsHarmless() {
         var c = cache()
