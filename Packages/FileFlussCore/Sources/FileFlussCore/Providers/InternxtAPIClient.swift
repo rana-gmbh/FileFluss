@@ -335,24 +335,39 @@ public actor InternxtAPIClient {
             if let c = attrs[.creationDate] as? Date { entry["creationTime"] = f.string(from: c) }
         }
         let entryBody = try JSONSerialization.data(withJSONObject: entry)
-        let createData: Data
+        // Worth retrying like the transfer steps above, and for a sharper
+        // reason: by this point the ciphertext is already in the bucket, so
+        // a gateway failure here loses a file that was fully uploaded. A
+        // retry that turns out to be a duplicate lands in the 409 branch
+        // below, which resolves it against the live listing.
+        let createData: Data = try await retryingTransient {
+            try await self.registerDriveEntry(
+                body: entryBody, remotePath: remotePath, parentPath: parentPath
+            )
+        }
+
+        struct Created: Decodable { let uuid: String }
+        if let created = try? JSONDecoder().decode(Created.self, from: createData) {
+            nodeCache[remotePath] = Node(uuid: created.uuid, isFolder: false, fileId: finish.id, bucket: bucket, size: Int64(plaintext.count), type: ext)
+        }
+    }
+
+    /// Registers the uploaded file in Drive, resolving the one conflict the
+    /// API raises: a file whose plainName+type already exists in the folder
+    /// is rejected with 409, either because the step-5 delete hasn't
+    /// propagated or because `existing` was a stale cache entry pointing at
+    /// an already-gone uuid. Re-list the parent for the *live* entry, delete
+    /// it, and create once more.
+    private func registerDriveEntry(body: Data, remotePath: String, parentPath: String) async throws -> Data {
         do {
-            createData = try await driveSend("/files", method: "POST", body: entryBody)
+            return try await driveSend("/files", method: "POST", body: body)
         } catch CloudProviderError.serverError(409) {
-            // The name still collides: either the step-5 delete hasn't
-            // propagated yet, or `existing` was a stale cache entry pointing at
-            // an already-gone uuid. Re-list the parent to get the *live* entry,
-            // delete it, and retry the create once.
             _ = try? await listFolder(path: parentPath.isEmpty ? "/" : parentPath)
             if let conflict = nodeCache[remotePath], !conflict.isFolder {
                 _ = try? await driveSend("/files/\(conflict.uuid)", method: "DELETE", body: nil)
                 nodeCache.removeValue(forKey: remotePath)
             }
-            createData = try await driveSend("/files", method: "POST", body: entryBody)
-        }
-        struct Created: Decodable { let uuid: String }
-        if let created = try? JSONDecoder().decode(Created.self, from: createData) {
-            nodeCache[remotePath] = Node(uuid: created.uuid, isFolder: false, fileId: finish.id, bucket: bucket, size: Int64(plaintext.count), type: ext)
+            return try await driveSend("/files", method: "POST", body: body)
         }
     }
 
@@ -368,6 +383,32 @@ public actor InternxtAPIClient {
                 lastError = error
                 if attempt < attempts - 1 {
                     try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 600_000_000) // 0.6s, 1.2s
+                }
+            }
+        }
+        throw lastError
+    }
+
+    /// A delete through the same transient failures. Retrying one is safe
+    /// in a way a create isn't: if the first attempt landed and only its
+    /// answer was lost, the retry finds the item already gone — which is the
+    /// outcome that was asked for. A `notFound` is only swallowed after a
+    /// transient failure, so a delete of something that genuinely isn't
+    /// there still says so.
+    private func deleteRetryingTransient(_ endpoint: String, attempts: Int = 3) async throws {
+        var sawTransient = false
+        var lastError: Error = CloudProviderError.invalidResponse
+        for attempt in 0..<attempts {
+            do {
+                _ = try await driveSend(endpoint, method: "DELETE", body: nil)
+                return
+            } catch CloudProviderError.notFound where sawTransient {
+                return
+            } catch let error as CloudProviderError where Self.isTransient(error) {
+                sawTransient = true
+                lastError = error
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 600_000_000)
                 }
             }
         }
@@ -412,7 +453,7 @@ public actor InternxtAPIClient {
     public func deleteItem(at path: String) async throws {
         let node = try await resolve(path)
         let endpoint = node.isFolder ? "/folders/\(node.uuid)" : "/files/\(node.uuid)"
-        _ = try await driveSend(endpoint, method: "DELETE", body: nil)
+        try await deleteRetryingTransient(endpoint)
         // Its children went with it — see `removePathSubtree`. Without
         // this, `createFolder` is answered from the cache for a folder
         // that no longer exists and silently creates nothing.
