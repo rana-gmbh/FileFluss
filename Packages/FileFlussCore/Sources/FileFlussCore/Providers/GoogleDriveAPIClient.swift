@@ -796,11 +796,7 @@ public actor GoogleDriveAPIClient {
     /// a dead ID and Drive answers `File not found: <id>`. Evicting the subtree
     /// forces those paths to re-resolve against the live tree.
     private func evictCacheSubtree(_ path: String) {
-        pathIdCache.removeValue(forKey: path)
-        let prefix = path.hasSuffix("/") ? path : path + "/"
-        for key in pathIdCache.keys where key.hasPrefix(prefix) {
-            pathIdCache.removeValue(forKey: key)
-        }
+        pathIdCache.removePathSubtree(path)
     }
 
     public func createFolder(at path: String) async throws {

@@ -227,7 +227,8 @@ public actor KDriveAPIClient {
     public func deleteFile(path: String) async throws {
         let fileId = try await resolvePathToId(path)
         try await deleteFile(fileId: fileId)
-        pathToId.removeValue(forKey: path)
+        // Everything below it is gone too — see `removePathSubtree`.
+        pathToId.removePathSubtree(path)
     }
 
     public func renameFile(fileId: Int, to newName: String) async throws {
@@ -250,8 +251,9 @@ public actor KDriveAPIClient {
     public func renameFile(path: String, to newName: String) async throws {
         let fileId = try await resolvePathToId(path)
         try await renameFile(fileId: fileId, to: newName)
-        // Update cache: remove old path, add new path
-        pathToId.removeValue(forKey: path)
+        // Update cache: the old path and its subtree are gone, the new
+        // path points at the same file id.
+        pathToId.removePathSubtree(path)
         let parentPath = (path as NSString).deletingLastPathComponent
         let newPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
         pathToId[newPath] = fileId
@@ -309,9 +311,9 @@ public actor KDriveAPIClient {
 
         try await moveFile(fileId: fileId, toDirectoryId: destParentId, newName: renameDuringMove)
 
-        // Refresh cache: source path no longer valid, new path now points
-        // at the same file id.
-        pathToId.removeValue(forKey: path)
+        // Refresh cache: the source path and everything under it are no
+        // longer valid; the new path points at the same file id.
+        pathToId.removePathSubtree(path)
         pathToId[newPath] = fileId
     }
 

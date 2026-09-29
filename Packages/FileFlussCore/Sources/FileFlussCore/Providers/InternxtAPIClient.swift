@@ -403,7 +403,10 @@ public actor InternxtAPIClient {
         let node = try await resolve(path)
         let endpoint = node.isFolder ? "/folders/\(node.uuid)" : "/files/\(node.uuid)"
         _ = try await driveSend(endpoint, method: "DELETE", body: nil)
-        nodeCache.removeValue(forKey: path)
+        // Its children went with it — see `removePathSubtree`. Without
+        // this, `createFolder` is answered from the cache for a folder
+        // that no longer exists and silently creates nothing.
+        nodeCache.removePathSubtree(path)
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
@@ -413,7 +416,7 @@ public actor InternxtAPIClient {
         let endpoint = node.isFolder ? "/folders/\(node.uuid)/meta" : "/files/\(node.uuid)/meta"
         let body = try JSONSerialization.data(withJSONObject: ["plainName": base])
         _ = try await driveSend(endpoint, method: "PUT", body: body)
-        nodeCache.removeValue(forKey: path)
+        nodeCache.removePathSubtree(path)
         let parent = (path as NSString).deletingLastPathComponent
         let newPath = parent == "/" ? "/\(newName)" : "\(parent)/\(newName)"
         nodeCache[newPath] = node
@@ -425,7 +428,7 @@ public actor InternxtAPIClient {
         let endpoint = node.isFolder ? "/folders/\(node.uuid)" : "/files/\(node.uuid)"
         let body = try JSONSerialization.data(withJSONObject: ["destinationFolder": destParent.uuid])
         _ = try await driveSend(endpoint, method: "PATCH", body: body)
-        nodeCache.removeValue(forKey: path)
+        nodeCache.removePathSubtree(path)
     }
 
     // MARK: - Quota

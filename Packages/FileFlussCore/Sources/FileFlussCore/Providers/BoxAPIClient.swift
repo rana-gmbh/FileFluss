@@ -1002,7 +1002,8 @@ public actor BoxAPIClient {
         let entry = try await resolvePathToEntry(path)
         let suffix = entry.isFolder ? "/folders/\(entry.id)?recursive=true" : "/files/\(entry.id)"
         try await apiRequestVoid(.delete, path: suffix)
-        pathIdCache.removeValue(forKey: path)
+        // The whole subtree went with it — see `removePathSubtree`.
+        pathIdCache.removePathSubtree(path)
     }
 
     public func createFolder(at path: String) async throws {
@@ -1029,7 +1030,7 @@ public actor BoxAPIClient {
         struct RenameBody: Encodable { let name: String }
         let _: BoxItem = try await apiRequest(.put, path: suffix, body: RenameBody(name: newName))
 
-        pathIdCache.removeValue(forKey: path)
+        pathIdCache.removePathSubtree(path)
         let parentPath = (path as NSString).deletingLastPathComponent
         let newPath = joinedPath(parent: parentPath, name: newName)
         pathIdCache[newPath] = entry.id
@@ -1056,7 +1057,7 @@ public actor BoxAPIClient {
         let suffix = entry.isFolder ? "/folders/\(entry.id)" : "/files/\(entry.id)"
         let _: BoxItem = try await apiRequest(.put, path: suffix, body: MoveBody(parent: .init(id: newParentId), name: newName.isEmpty ? nil : newName))
 
-        pathIdCache.removeValue(forKey: path)
+        pathIdCache.removePathSubtree(path)
         pathIdCache[newPath] = entry.id
     }
 
