@@ -708,3 +708,19 @@
 "Show transfers in sidebars" = "Übertragungen in Seitenleisten anzeigen";
 "Transfers are always available from the Transfers button in the toolbar." = "Übertragungen sind immer über die Schaltfläche „Übertragungen“ in der Symbolleiste erreichbar.";
 "Show calculated folder sizes in sidebars" = "Berechnete Ordnergrößen in Seitenleisten anzeigen";
+
+/* Live transfer details (issue #50) */
+"Current file" = "Aktuelle Datei";
+"Preparing…" = "Wird vorbereitet …";
+"Speed" = "Geschwindigkeit";
+"Transferred" = "Übertragen";
+"Time Left" = "Restzeit";
+"Elapsed" = "Vergangen";
+"Operation" = "Vorgang";
+"Finished" = "Abgeschlossen";
+"Total Size" = "Gesamtgröße";
+"Download Speed" = "Download-Geschwindigkeit";
+"Upload Speed" = "Upload-Geschwindigkeit";
+"Avg. Speed" = "Ø Geschwindigkeit";
+"Finished so far (%d)" = "Bisher abgeschlossen (%d)";
+"Show the current file, speed and per-file progress" = "Aktuelle Datei, Geschwindigkeit und Fortschritt je Datei anzeigen";

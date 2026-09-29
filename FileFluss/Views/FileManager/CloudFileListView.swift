@@ -1174,7 +1174,7 @@ struct CloudFileListView: View {
         if let progress {
             progress.currentPhase = .uploading
             progress.completedItems = 0
-            progress.currentFileName = ""
+            progress.clearCurrentFile()
             progress.uploadStartTime = Date()
         }
 

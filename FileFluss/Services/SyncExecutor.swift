@@ -23,18 +23,21 @@ enum SyncExecutor {
             progress.expectedBytesSingle = 0
         }
 
-        let progressRef = progress
+        // Posted straight to the inbox, which the transfer drains a few
+        // times a second — one main-actor hop per network chunk was costing
+        // more than the number is worth.
+        let inbox = progress.byteInbox
         let onDownloadBytes: @Sendable (Int64) -> Void = { bytes in
-            Task { @MainActor in progressRef.addDownloadBytes(bytes) }
+            inbox.addDownload(bytes)
         }
         let onUploadBytes: @Sendable (Int64) -> Void = { bytes in
-            Task { @MainActor in progressRef.addUploadBytes(bytes) }
+            inbox.addUpload(bytes)
         }
 
         for op in plan.operations {
             if progress.isCancelled || Task.isCancelled { break }
             let opName = displayName(for: op)
-            progress.currentFileName = opName
+            progress.beginFile(opName)
             do {
                 try await perform(op, source: source, destination: destination,
                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
@@ -59,7 +62,7 @@ enum SyncExecutor {
         }
 
         progress.completedItems = plan.operations.count
-        progress.currentFileName = ""
+        progress.clearCurrentFile()
         progress.endTime = Date()
         progress.isComplete = true
     }

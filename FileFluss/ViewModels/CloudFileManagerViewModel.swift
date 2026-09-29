@@ -600,10 +600,12 @@ final class CloudFileManagerViewModel {
             }
         } else {
             let localURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
-            progress?.currentFileName = item.name
-            let progressRef = progress
+            progress?.beginFile(item.name, size: item.size)
+            // Straight into the inbox: this fires per network chunk, and a
+            // main-actor hop each time costs more than the figure is worth.
+            let inbox = progress?.byteInbox
             try await provider.downloadFile(remotePath: item.path, to: localURL, onBytes: { bytes in
-                Task { @MainActor in progressRef?.addDownloadBytes(bytes) }
+                inbox?.addDownload(bytes)
             })
             // Preserve original cloud modification date on the local file
             // so conflict dialogs and file listings show the correct date
@@ -1143,9 +1145,9 @@ final class CloudFileManagerViewModel {
                 cloudFileVMLog.debug("Upload: directory \(url.lastPathComponent, privacy: .public) has \(contents.count) items")
                 try await uploadRecursively(urls: contents, toRemotePath: itemRemotePath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
             } else {
-                progress?.currentFileName = url.lastPathComponent
                 let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 let fileBytes = Int64(fileSize)
+                progress?.beginFile(url.lastPathComponent, size: fileBytes)
 
                 // Pre-flight: reject oversized files locally before sending
                 // any bytes. Saves the user from a multi-gigabyte upload that
@@ -1153,9 +1155,9 @@ final class CloudFileManagerViewModel {
                 try await CloudProviderError.enforceUploadSizeLimit(url, provider: provider)
 
                 cloudFileVMLog.debug("Upload: \(url.lastPathComponent, privacy: .public) (\(fileSize) bytes) → \(itemRemotePath, privacy: .public)")
-                let progressRef = progress
+                let inbox = progress?.byteInbox
                 try await provider.uploadFile(from: url, to: itemRemotePath, onBytes: { bytes in
-                    Task { @MainActor in progressRef?.addUploadBytes(bytes) }
+                    inbox?.addUpload(bytes)
                 })
                 cloudFileVMLog.debug("Upload: success \(url.lastPathComponent, privacy: .public)")
                 // Preserve the source file's modification date on the
@@ -1292,7 +1294,7 @@ final class CloudFileManagerViewModel {
         if let progress {
             progress.currentPhase = .uploading
             progress.completedItems = 0
-            progress.currentFileName = ""
+            progress.clearCurrentFile()
             progress.uploadStartTime = Date()
         }
 
@@ -1412,7 +1414,7 @@ final class CloudFileManagerViewModel {
 
         for (index, item) in items.enumerated() {
             if progress?.isCancelled == true || Task.isCancelled { return providerSupports }
-            progress?.currentFileName = item.name
+            progress?.beginFile(item.name, size: item.size)
 
             // Determine the destination path. KeepBoth → unique name, Replace → delete first.
             let resolution = resolutionByName[item.name] ?? .transfer

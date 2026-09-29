@@ -355,7 +355,7 @@ final class FileManagerViewModel {
         var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
             var dest = folder.appendingPathComponent(item.name)
-            progress?.currentFileName = item.name
+            progress?.beginFile(item.name, size: item.size)
 
             // Pasting into the folder the file already lives in: source and
             // destination are the same file. "Replace" would delete it and
@@ -428,7 +428,7 @@ final class FileManagerViewModel {
         var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
             var dest = folder.appendingPathComponent(item.name)
-            progress?.currentFileName = item.name
+            progress?.beginFile(item.name, size: item.size)
 
             // Pasting into the folder the file already lives in: source and
             // destination are the same file. "Replace" would delete it and

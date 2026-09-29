@@ -697,3 +697,19 @@
 "Show transfers in sidebars" = "在边栏中显示传输";
 "Transfers are always available from the Transfers button in the toolbar." = "传输始终可通过工具栏中的“传输”按钮查看。";
 "Show calculated folder sizes in sidebars" = "在边栏中显示已计算的文件夹大小";
+
+/* Live transfer details (issue #50) */
+"Current file" = "当前文件";
+"Preparing…" = "正在准备……";
+"Speed" = "速度";
+"Transferred" = "已传输";
+"Time Left" = "剩余时间";
+"Elapsed" = "已用时间";
+"Operation" = "操作";
+"Finished" = "完成时间";
+"Total Size" = "总大小";
+"Download Speed" = "下载速度";
+"Upload Speed" = "上传速度";
+"Avg. Speed" = "平均速度";
+"Finished so far (%d)" = "已完成 (%d)";
+"Show the current file, speed and per-file progress" = "显示当前文件、速度和每个文件的进度";

@@ -1309,7 +1309,7 @@ final class AppState {
             var successfulSources: [(path: String, name: String)] = []
             for item in toTransfer {
                 if Task.isCancelled { break }
-                await MainActor.run { transfer.currentFileName = item.name }
+                await MainActor.run { transfer.beginFile(item.name, size: item.size) }
 
                 guard let tempURL = try? SafeLocalPath.destination(for: item.name, in: tempDir) else {
                     await MainActor.run {
@@ -1773,6 +1773,35 @@ struct TransferItemResult: Identifiable, Hashable {
     let errorMessage: String?
 }
 
+/// Collects byte deltas off the main actor so a transfer can be measured
+/// without paying for a main-actor hop per network chunk.
+///
+/// `onBytes` fires once per chunk — thousands of times a second on a fast
+/// link — and each call used to spawn a `Task` onto the main actor just to
+/// add a number. The transfer drains this a few times a second instead,
+/// which is as often as any of it can be read.
+final class TransferByteInbox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var download: Int64 = 0
+    private var upload: Int64 = 0
+
+    func addDownload(_ bytes: Int64) {
+        guard bytes > 0 else { return }
+        lock.lock(); download += bytes; lock.unlock()
+    }
+
+    func addUpload(_ bytes: Int64) {
+        guard bytes > 0 else { return }
+        lock.lock(); upload += bytes; lock.unlock()
+    }
+
+    func drain() -> (download: Int64, upload: Int64) {
+        lock.lock()
+        defer { download = 0; upload = 0; lock.unlock() }
+        return (download, upload)
+    }
+}
+
 /// A transfer together with the panel it belongs to. Needed because the
 /// toolbar's list mixes both panels and still has to tell the sidebar-side
 /// row which panel to remove a finished transfer from.
@@ -1865,6 +1894,7 @@ final class TransferProgress: Identifiable {
     func cancel() {
         isCancelled = true
         task?.cancel()
+        liveBytesPerSecond = nil
     }
 
     // Cloud-to-cloud phase tracking
@@ -1888,6 +1918,7 @@ final class TransferProgress: Identifiable {
     init(operation: String, totalItems: Int) {
         self.operation = operation
         self.totalItems = totalItems
+        startBytePump()
     }
 
     var fraction: Double {
@@ -1935,16 +1966,197 @@ final class TransferProgress: Identifiable {
         "\(Int((fraction * 100).rounded()))%"
     }
 
-    /// Thread-safe-ish byte accumulator for the current phase.
-    /// Call from @MainActor contexts only.
+    /// Where providers post byte deltas from whatever thread they are on.
+    /// Drained by the pump a few times a second (issue #50).
+    @ObservationIgnored nonisolated let byteInbox = TransferByteInbox()
+
+    /// Byte deltas land here first and are applied in batches; the display
+    /// can't show more than a few updates a second anyway.
     func addDownloadBytes(_ delta: Int64) {
         guard delta > 0 else { return }
         downloadBytes += delta
+        creditCurrentFile(delta)
     }
 
     func addUploadBytes(_ delta: Int64) {
         guard delta > 0 else { return }
         uploadBytes += delta
+        creditCurrentFile(delta)
+    }
+
+    // MARK: - Live figures (issue #50)
+
+    /// The file being transferred right now, and how much of it has moved.
+    /// `currentFileSize` is 0 when the size isn't known ahead of time, which
+    /// is how the UI knows not to draw a per-file bar.
+    var currentFileSize: Int64 = 0
+    var currentFileBytes: Int64 = 0
+
+    /// Bytes per second over the last few seconds — what "current speed"
+    /// means to someone watching. `averageSpeed` covers the whole transfer
+    /// and never recovers from a slow start, so it can't answer "is it
+    /// moving now?".
+    var liveBytesPerSecond: Double?
+
+    /// True once any byte has been reported. A local copy reports none —
+    /// `FileManager.copyItem` has nothing to report — so speed and per-file
+    /// progress stay hidden there rather than showing a bar that can't move.
+    var hasByteReporting: Bool { downloadBytes + uploadBytes > 0 }
+
+    private struct ByteSample {
+        let time: Date
+        let bytes: Int64
+    }
+
+    /// Kept out of observation: it changes on every tick and nothing reads
+    /// it directly — `liveBytesPerSecond` is the published result.
+    @ObservationIgnored private var samples: [ByteSample] = []
+    @ObservationIgnored private var pump: Task<Void, Never>?
+
+    /// Long enough to smooth out a chunky provider, short enough to notice a
+    /// transfer slowing down.
+    private static let speedWindow: TimeInterval = 4
+    private static let pumpInterval = Duration.milliseconds(120)
+
+    /// Starts a new file, resetting its byte count. Callers pass the size
+    /// when they know it — `item.size` on a download, the file's own size on
+    /// an upload — and 0 when they don't.
+    func beginFile(_ name: String, size: Int64 = 0) {
+        currentFileName = name
+        currentFileSize = size
+        currentFileBytes = 0
+    }
+
+    func clearCurrentFile() {
+        currentFileName = ""
+        currentFileSize = 0
+        currentFileBytes = 0
+    }
+
+    private func creditCurrentFile(_ delta: Int64) {
+        guard !currentFileName.isEmpty else { return }
+        currentFileBytes += delta
+    }
+
+    /// How far through the current file, or nil when its size is unknown or
+    /// nothing has been reported for it yet.
+    var currentFileFraction: Double? {
+        guard currentFileSize > 0, currentFileBytes > 0 else { return nil }
+        return min(1, Double(currentFileBytes) / Double(currentFileSize))
+    }
+
+    /// Total bytes this transfer expects to move, counting a cloud-to-cloud
+    /// transfer's two phases separately, since every byte really does travel
+    /// twice.
+    var expectedTotalBytes: Int64 {
+        if isCloudToCloud { return expectedBytesDownload + expectedBytesUpload }
+        return expectedBytesSingle
+    }
+
+    var movedBytes: Int64 { downloadBytes + uploadBytes }
+
+    /// Seconds left at the current speed. Nil whenever that would be a guess
+    /// dressed up as a number — nothing measured yet, no expected total, or
+    /// the transfer already over.
+    var secondsRemaining: TimeInterval? {
+        guard !isComplete, !isCancelled else { return nil }
+        guard let speed = liveBytesPerSecond, speed > 0 else { return nil }
+        let expected = expectedTotalBytes
+        guard expected > 0 else { return nil }
+        let remaining = expected - movedBytes
+        guard remaining > 0 else { return nil }
+        return Double(remaining) / speed
+    }
+
+    private func startBytePump() {
+        pump = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.pumpInterval)
+                // The transfer being gone is the usual way out: a released
+                // TransferProgress takes its pump with it.
+                guard let self else { return }
+                let moved = self.flushBytes()
+                if self.isComplete { return }
+                // A cancelled transfer keeps draining until its last chunk
+                // has landed, then stops rather than ticking forever while
+                // it sits in the list waiting to be dismissed.
+                if self.isCancelled, !moved { return }
+            }
+        }
+    }
+
+    /// Applies whatever arrived since the last tick and re-measures the
+    /// speed. Runs even when nothing arrived, so a stalled transfer stops
+    /// claiming the speed it had a minute ago.
+    @discardableResult
+    func flushBytes() -> Bool {
+        let batch = byteInbox.drain()
+        if batch.download > 0 { addDownloadBytes(batch.download) }
+        if batch.upload > 0 { addUploadBytes(batch.upload) }
+
+        let now = Date()
+        samples.append(ByteSample(time: now, bytes: movedBytes))
+        samples.removeAll { now.timeIntervalSince($0.time) > Self.speedWindow }
+
+        guard let first = samples.first, let last = samples.last else {
+            liveBytesPerSecond = nil
+            return batch.download + batch.upload > 0
+        }
+        let seconds = last.time.timeIntervalSince(first.time)
+        let moved = last.bytes - first.bytes
+        guard seconds >= 0.5, moved > 0 else {
+            liveBytesPerSecond = nil
+            return batch.download + batch.upload > 0
+        }
+        liveBytesPerSecond = Double(moved) / seconds
+        return batch.download + batch.upload > 0
+    }
+
+    // MARK: - Live figures, as text
+
+    private static func speedText(_ bytesPerSecond: Double) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file) + "/s"
+    }
+
+    var liveSpeedText: String? {
+        guard let liveBytesPerSecond else { return nil }
+        return Self.speedText(liveBytesPerSecond)
+    }
+
+    /// "340 MB of 1,2 GB" — nil when there is no total to measure against.
+    var movedOfExpectedText: String? {
+        let expected = expectedTotalBytes
+        guard expected > 0, hasByteReporting else { return nil }
+        let moved = ByteCountFormatter.string(fromByteCount: min(movedBytes, expected), countStyle: .file)
+        let total = ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)
+        return "\(moved) of \(total)"
+    }
+
+    var etaText: String? {
+        guard let seconds = secondsRemaining else { return nil }
+        return "~\(Self.durationText(seconds)) left"
+    }
+
+    /// Rounded the way someone reads a countdown: seconds below a minute,
+    /// whole minutes below an hour, hours and minutes above.
+    static func durationText(_ seconds: TimeInterval) -> String {
+        if seconds < 60 { return "\(max(1, Int(seconds.rounded()))) s" }
+        if seconds < 3600 { return "\(Int((seconds / 60).rounded())) min" }
+        let hours = Int(seconds / 3600)
+        let minutes = Int((seconds - Double(hours) * 3600) / 60)
+        return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
+    }
+
+    /// The one-line summary under the progress bar: speed, how much of how
+    /// much, and how long is left — each part only when it is actually
+    /// known, so nothing here is ever invented.
+    var liveDetailLine: String? {
+        guard !isComplete else { return nil }
+        var parts: [String] = []
+        if let liveSpeedText { parts.append(liveSpeedText) }
+        if let movedOfExpectedText { parts.append(movedOfExpectedText) }
+        if let etaText { parts.append(etaText) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     var statusText: String {

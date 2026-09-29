@@ -708,3 +708,19 @@
 "Show transfers in sidebars" = "Show transfers in sidebars";
 "Transfers are always available from the Transfers button in the toolbar." = "Transfers are always available from the Transfers button in the toolbar.";
 "Show calculated folder sizes in sidebars" = "Show calculated folder sizes in sidebars";
+
+/* Live transfer details (issue #50) */
+"Current file" = "Current file";
+"Preparing…" = "Preparing…";
+"Speed" = "Speed";
+"Transferred" = "Transferred";
+"Time Left" = "Time Left";
+"Elapsed" = "Elapsed";
+"Operation" = "Operation";
+"Finished" = "Finished";
+"Total Size" = "Total Size";
+"Download Speed" = "Download Speed";
+"Upload Speed" = "Upload Speed";
+"Avg. Speed" = "Avg. Speed";
+"Finished so far (%d)" = "Finished so far (%d)";
+"Show the current file, speed and per-file progress" = "Show the current file, speed and per-file progress";

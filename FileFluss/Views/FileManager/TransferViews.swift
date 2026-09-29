@@ -27,13 +27,18 @@ struct TransferRow: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                // Details is available while the transfer runs, not only
+                // afterwards: what is happening right now — which file, how
+                // fast — is exactly what it is wanted for (issue #50).
+                Button(L10n.text("Details")) {
+                    showDetails = true
+                }
+                .font(.caption2)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(L10n.text("Show the current file, speed and per-file progress"))
+
                 if transfer.isComplete {
-                    Button(L10n.text("Details")) {
-                        showDetails = true
-                    }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                     Button {
                         appState.removeTransfer(id: transfer.id, panel: panelSide)
                     } label: {
@@ -62,6 +67,21 @@ struct TransferRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(transfer.currentFileName)
+            }
+
+            // Speed · moved of total · time left. Each part appears only
+            // when it is known, so a path that reports no bytes — a local
+            // copy — simply shows nothing rather than zeroes.
+            if let line = transfer.liveDetailLine {
+                Text(line)
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(line)
             }
         }
         .popover(isPresented: $showDetails) {
@@ -112,8 +132,24 @@ struct CapsuleProgressBar: View {
     }
 
     var body: some View {
+        ProgressCapsule(
+            fraction: transfer.fraction,
+            gradient: tintGradient,
+            label: transfer.percentText
+        )
+    }
+}
+
+/// The bar itself, without knowing what it is measuring — the overall
+/// transfer in a row, a single file in the details popover.
+struct ProgressCapsule: View {
+    let fraction: Double
+    let gradient: LinearGradient
+    let label: String?
+
+    var body: some View {
         GeometryReader { geo in
-            let fraction = max(0, min(1, transfer.fraction))
+            let fraction = max(0, min(1, fraction))
             let filledWidth = geo.size.width * fraction
 
             ZStack(alignment: .leading) {
@@ -127,17 +163,19 @@ struct CapsuleProgressBar: View {
 
                 // Fill
                 Capsule()
-                    .fill(tintGradient)
+                    .fill(gradient)
                     .frame(width: filledWidth)
                     .animation(.easeOut(duration: 0.15), value: fraction)
 
                 // Percentage label, centered in the bar
-                Text(transfer.percentText)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(fraction > 0.55 ? Color.white : Color.primary.opacity(0.75))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .shadow(color: fraction > 0.55 ? .black.opacity(0.15) : .clear, radius: 0.5, y: 0.5)
+                if let label {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(fraction > 0.55 ? Color.white : Color.primary.opacity(0.75))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .shadow(color: fraction > 0.55 ? .black.opacity(0.15) : .clear, radius: 0.5, y: 0.5)
+                }
             }
         }
     }
@@ -181,13 +219,23 @@ struct TransferDetailsView: View {
                 .font(.caption)
             }
 
+            if !transfer.isComplete {
+                liveSection
+            }
+
             Divider()
 
             LabeledContent("Operation") {
                 Text(L10n.text(transfer.operation))
             }
-            LabeledContent("Finished") {
-                Text(transfer.formattedEndTime)
+            if transfer.isComplete {
+                LabeledContent("Finished") {
+                    Text(transfer.formattedEndTime)
+                }
+            } else {
+                LabeledContent("Elapsed") {
+                    Text(TransferProgress.durationText(transfer.duration))
+                }
             }
             if transfer.totalBytes > 0 {
                 LabeledContent("Total Size") {
@@ -223,10 +271,84 @@ struct TransferDetailsView: View {
         .frame(width: 340)
     }
 
+    /// What is happening right now: the file in flight, how far into it we
+    /// are, how fast, and how long is left. Only the parts that are actually
+    /// measured appear — a local copy reports no bytes, and inventing a
+    /// speed for it would be worse than saying nothing.
+    @ViewBuilder
+    private var liveSection: some View {
+        Divider()
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                LText("Current file")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if transfer.isCloudToCloud {
+                    Text(transfer.currentPhase == .downloading
+                         ? L10n.text("Downloading")
+                         : L10n.text("Uploading"))
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.15), in: Capsule())
+                }
+            }
+
+            if transfer.currentFileName.isEmpty {
+                LText("Preparing…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(transfer.currentFileName)
+                    .font(.callout)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+
+            if let fileFraction = transfer.currentFileFraction {
+                ProgressCapsule(
+                    fraction: fileFraction,
+                    gradient: LinearGradient(
+                        colors: [Color.blue.opacity(0.85), Color.cyan],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    label: nil
+                )
+                .frame(height: 8)
+
+                Text("\(ByteCountFormatter.string(fromByteCount: min(transfer.currentFileBytes, transfer.currentFileSize), countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: transfer.currentFileSize, countStyle: .file))")
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        if transfer.liveSpeedText != nil || transfer.movedOfExpectedText != nil || transfer.etaText != nil {
+            Divider()
+
+            if let speed = transfer.liveSpeedText {
+                LabeledContent("Speed") { Text(speed).monospacedDigit() }
+            }
+            if let moved = transfer.movedOfExpectedText {
+                LabeledContent("Transferred") { Text(moved).monospacedDigit() }
+            }
+            if let seconds = transfer.secondsRemaining {
+                LabeledContent("Time Left") {
+                    Text(TransferProgress.durationText(seconds)).monospacedDigit()
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var itemsList: some View {
         if !transfer.itemResults.isEmpty {
-            Text(L10n.format("Items (%d)", transfer.itemResults.count))
+            Text(transfer.isComplete
+                 ? L10n.format("Items (%d)", transfer.itemResults.count)
+                 : L10n.format("Finished so far (%d)", transfer.itemResults.count))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
