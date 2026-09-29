@@ -1891,6 +1891,17 @@ final class TransferProgress: Identifiable {
     }
 
     var fraction: Double {
+        // A finished transfer reads its outcome, not its counters. Copying
+        // an empty folder moves no bytes and no files, so every counter
+        // below stays where it started however well the copy went — for a
+        // cloud-to-cloud transfer that is the halfway mark between the
+        // download and upload phases, which is why an empty folder arrived
+        // safely and still reported 50%.
+        //
+        // Cancelled is deliberately not included: it stopped where it
+        // stopped, and the bar should go on saying so.
+        if isComplete, !isCancelled { return 1 }
+
         if isCloudToCloud {
             let totalExpected = expectedBytesDownload + expectedBytesUpload
             if totalExpected > 0 {
