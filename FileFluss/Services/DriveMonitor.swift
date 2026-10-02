@@ -28,9 +28,21 @@ final class DriveMonitor {
     /// Mount points to *exclude* from the drives list. The boot volume,
     /// VM/disk image overlays, and Time Machine snapshots are not useful
     /// to expose as user-managed drives.
+    ///
+    /// `/System/Volumes/` covers the parts of the startup disk macOS mounts
+    /// for itself — the Data volume, Preboot, Recovery, VM — which is what
+    /// keeps internal volumes safe to show now that they are shown at all.
     private static let excludedPrefixes: [String] = [
         "/System/Volumes/",
         "/private/var/folders/"
+    ]
+
+    /// Mounts that are internal volumes by every API measure but aren't a
+    /// place to put files: Time Machine's local snapshots, which macOS
+    /// mounts under /Volumes with a generated name.
+    private static let excludedNamePrefixes: [String] = [
+        "com.apple.TimeMachine",
+        ".timemachine"
     ]
 
     private init() {
@@ -194,46 +206,63 @@ final class DriveMonitor {
     }
 
     /// Inspects a mounted volume URL and returns a `Drive` if it's one we
-    /// want to expose (external local, or network). Returns nil for the
-    /// boot volume, internal disks, and excluded system mounts.
-    private func classify(_ url: URL, keys: [URLResourceKey]) -> Drive? {
-        let path = url.path
-        if Self.excludedPrefixes.contains(where: { path.hasPrefix($0) }) {
-            return nil
-        }
-        if path == "/" { return nil }
-
-        guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
-
-        let isBrowsable = values.volumeIsBrowsable ?? true
+    /// want to expose: an external drive, a network mount, or another
+    /// volume on a built-in disk. Returns nil for the startup volume, the
+    /// system's own mounts, and Time Machine snapshots.
+    /// What a mounted volume is, from the facts the file system reports
+    /// about it. Nil means "don't show this".
+    ///
+    /// Pure and `static` so it can be tested: this is the rule that decided
+    /// a user's second internal partition didn't exist, and it was
+    /// previously reachable only by plugging real disks into a real Mac.
+    static func kind(
+        mountPath: String,
+        name: String,
+        isBrowsable: Bool,
+        isRootFileSystem: Bool,
+        isLocal: Bool,
+        isInternal: Bool
+    ) -> Drive.Kind? {
+        if excludedPrefixes.contains(where: { mountPath.hasPrefix($0) }) { return nil }
+        // The startup volume, by either measure.
+        if mountPath == "/" || isRootFileSystem { return nil }
         guard isBrowsable else { return nil }
+        // Time Machine mounts its local snapshots under /Volumes with a
+        // generated name, and they look like ordinary internal volumes.
+        if excludedNamePrefixes.contains(where: { name.hasPrefix($0) }) { return nil }
 
-        let isRootFS = values.volumeIsRootFileSystem ?? false
-        if isRootFS { return nil }
-
-        let isLocal = values.volumeIsLocal ?? true
-        let isInternal = values.volumeIsInternal ?? false
-        let name = values.volumeName ?? url.lastPathComponent
-
-        // Classify:
         // - Non-local volume → network mount (SMB / AFP / NFS / WebDAV).
         // - Local + non-internal → external drive. We deliberately don't
         //   gate on `volumeIsRemovable` because many Thunderbolt/USB-C
         //   SSDs report `isRemovable == false` even though they are
         //   physically external.
-        let kind: Drive.Kind
-        if !isLocal {
-            kind = .network
-        } else if !isInternal {
-            kind = .external
-        } else {
-            return nil
-        }
+        // - Local + internal → another volume on a built-in disk: a second
+        //   partition, or a second APFS volume in the same container. The
+        //   startup volume never gets this far, and the system's own
+        //   volumes are excluded by mount path, so what is left is a place
+        //   the user keeps their own files — and until now had no way to
+        //   open from the sidebar.
+        if !isLocal { return .network }
+        return isInternal ? .internalVolume : .external
+    }
+
+    private func classify(_ url: URL, keys: [URLResourceKey]) -> Drive? {
+        guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
+
+        let name = values.volumeName ?? url.lastPathComponent
+        guard let kind = Self.kind(
+            mountPath: url.path,
+            name: name,
+            isBrowsable: values.volumeIsBrowsable ?? true,
+            isRootFileSystem: values.volumeIsRootFileSystem ?? false,
+            isLocal: values.volumeIsLocal ?? true,
+            isInternal: values.volumeIsInternal ?? false
+        ) else { return nil }
 
         let uuid = values.volumeUUIDString
         let id: String
         switch kind {
-        case .external:
+        case .external, .internalVolume:
             // Prefer volume UUID; fall back to a stable derivation of the name
             // for filesystems that don't expose one (e.g. exFAT on some setups).
             id = uuid.map { "vol:\($0)" } ?? "vol-name:\(name)"

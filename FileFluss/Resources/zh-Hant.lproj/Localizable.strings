@@ -713,3 +713,8 @@
 "Avg. Speed" = "平均速度";
 "Finished so far (%d)" = "已完成 (%d)";
 "Show the current file, speed and per-file progress" = "顯示目前檔案、速度與每個檔案的進度";
+
+/* Drives: volumes on a built-in disk */
+"Internal Volume" = "內置儲存空間";
+"External Drive" = "外接磁碟";
+"Network Drive" = "網路磁碟";

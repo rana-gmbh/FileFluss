@@ -724,3 +724,8 @@
 "Avg. Speed" = "Avg. Speed";
 "Finished so far (%d)" = "Finished so far (%d)";
 "Show the current file, speed and per-file progress" = "Show the current file, speed and per-file progress";
+
+/* Drives: volumes on a built-in disk */
+"Internal Volume" = "Internal Volume";
+"External Drive" = "External Drive";
+"Network Drive" = "Network Drive";

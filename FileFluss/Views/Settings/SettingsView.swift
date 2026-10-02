@@ -813,7 +813,9 @@ struct IndexStatusSettingsView: View {
             } else {
                 let drive = appState.driveMonitor.drives.first(where: { $0.id == src.sourceId })
                 icon = drive?.kind.sfSymbol ?? "externaldrive.fill"
-                kindLabel = drive?.kind.displayName ?? L10n.text("Drive")
+                // `displayName` is the English key, like every other string
+                // in the app; translate it here where it's shown.
+                kindLabel = drive.map { L10n.text($0.kind.displayName) } ?? L10n.text("Drive")
                 origin = .drive(id: src.sourceId)
                 let counts = await SearchIndex.shared.sourceCounts(src.sourceId) ?? (0, 0)
                 files = counts.files

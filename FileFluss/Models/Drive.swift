@@ -7,11 +7,17 @@ struct Drive: Identifiable, Hashable, Codable {
     enum Kind: String, Codable, Hashable {
         case external   // USB / Thunderbolt / SD card — removable local volumes
         case network    // SMB / AFP / NFS / WebDAV mounts
+        /// A second partition or APFS volume on a built-in disk. Reported by
+        /// a user who had one and no way to reach it: the Drives section was
+        /// written as "external and network", so every internal volume that
+        /// wasn't the startup disk fell through and was shown nowhere.
+        case internalVolume
 
         var displayName: String {
             switch self {
             case .external: return "External Drive"
             case .network: return "Network Drive"
+            case .internalVolume: return "Internal Volume"
             }
         }
 
@@ -19,6 +25,9 @@ struct Drive: Identifiable, Hashable, Codable {
             switch self {
             case .external: return "externaldrive.fill"
             case .network: return "server.rack"
+            // Distinct from the external drive's icon: the user needs to
+            // see at a glance that this one lives inside the Mac.
+            case .internalVolume: return "internaldrive.fill"
             }
         }
     }

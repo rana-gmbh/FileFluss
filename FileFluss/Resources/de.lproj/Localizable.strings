@@ -724,3 +724,8 @@
 "Avg. Speed" = "Ø Geschwindigkeit";
 "Finished so far (%d)" = "Bisher abgeschlossen (%d)";
 "Show the current file, speed and per-file progress" = "Aktuelle Datei, Geschwindigkeit und Fortschritt je Datei anzeigen";
+
+/* Drives: volumes on a built-in disk */
+"Internal Volume" = "Internes Volume";
+"External Drive" = "Externes Laufwerk";
+"Network Drive" = "Netzlaufwerk";

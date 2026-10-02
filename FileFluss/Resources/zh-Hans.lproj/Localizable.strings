@@ -713,3 +713,8 @@
 "Avg. Speed" = "平均速度";
 "Finished so far (%d)" = "已完成 (%d)";
 "Show the current file, speed and per-file progress" = "显示当前文件、速度和每个文件的进度";
+
+/* Drives: volumes on a built-in disk */
+"Internal Volume" = "内置宗卷";
+"External Drive" = "外置驱动器";
+"Network Drive" = "网络驱动器";
