@@ -30,6 +30,28 @@ struct PanelStartupStateTests {
         #expect(!PanelStartupState.isUsable(.local(path: file.path), connectedAccountIDs: []))
     }
 
+    /// The stored form has to carry a remote path back unchanged — issue
+    /// #60 was reported against SFTP, whose paths are plain POSIX ones and
+    /// easy to assume are something cleverer. Tested through Codable rather
+    /// than UserDefaults: a test has no business writing the app's own
+    /// preferences.
+    @Test("a remote path survives being stored and read back")
+    func cloudLocationRoundTrips() throws {
+        let account = UUID()
+        let original = PanelLocation.cloud(accountId: account, path: "/var/www/html/wp-content")
+
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(PanelLocation.self, from: data)
+
+        #expect(restored == original)
+        if case .cloud(let id, let path) = restored {
+            #expect(id == account)
+            #expect(path == "/var/www/html/wp-content")
+        } else {
+            Issue.record("expected a cloud location")
+        }
+    }
+
     @Test("a cloud panel is restored only while its account is connected")
     func cloudNeedsAConnectedAccount() {
         let account = UUID()

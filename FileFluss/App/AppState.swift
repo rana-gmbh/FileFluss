@@ -241,6 +241,38 @@ final class AppState {
         else { selectedRightSidebarItem = item }
     }
 
+    /// A panel being pointed at one specific folder of an account, rather
+    /// than at the account.
+    struct PendingCloudOpen {
+        let accountId: UUID
+        let path: String
+    }
+
+    /// Set just before a panel's selection is moved to a cloud account by
+    /// something other than a click — restoring last session's folders, so
+    /// far. Read once, by whoever acts on that selection change.
+    private var pendingCloudOpen: [PanelSide: PendingCloudOpen] = [:]
+
+    /// Takes the pending target for a panel, if any. Consumed on every
+    /// selection change for that panel, not only a matching one: an intent
+    /// that nobody acted on is stale, and a later click on the same account
+    /// must behave like a click.
+    func takePendingCloudOpen(for panel: PanelSide) -> PendingCloudOpen? {
+        pendingCloudOpen.removeValue(forKey: panel)
+    }
+
+    /// Where a panel should go when its selection becomes `account`: the
+    /// folder that was announced for it, or the account's root.
+    ///
+    /// Pure, so the rule that issue #60 turned on can be tested without a
+    /// window, two panels and a network.
+    static func cloudOpenTarget(for account: CloudAccount, pending: PendingCloudOpen?) -> String {
+        if let pending, pending.accountId == account.id, !pending.path.isEmpty {
+            return pending.path
+        }
+        return account.rootPath.isEmpty ? "/" : account.rootPath
+    }
+
     /// True when either panel is sitting on an offline source — an
     /// unmounted indexed drive, a disconnected cloud account, or an
     /// offline-folder selection opened from a search result. Used by the
@@ -1534,6 +1566,12 @@ final class AppState {
             Task { await fileManager(for: side).navigateTo(url) }
         case .cloud(let accountId, let path):
             guard let account = syncManager.accountFor(id: accountId) else { return }
+            // Selecting an account row is itself a navigation: the sidebar
+            // watches the selection and sends that panel to the account's
+            // root. Announce where this panel is really going first, so that
+            // navigation goes to the saved folder instead of racing this one
+            // to a different answer (issue #60 — the panel came back at /).
+            pendingCloudOpen[side] = PendingCloudOpen(accountId: accountId, path: path)
             setSidebarSelection(.cloudAccount(account), for: side)
             Task {
                 let vm = cloudFileManager(for: accountId, side: side)

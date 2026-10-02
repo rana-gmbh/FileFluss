@@ -619,6 +619,10 @@ struct SidebarView: View {
         // surfaces the full name as a hover tooltip in that mode.
         .labelStyle(CollapsibleSidebarLabelStyle(collapsed: collapsed))
         .onChange(of: appState.sidebarSelection(for: panelSide)) { _, newValue in
+            // Any selection change consumes a pending target: one that
+            // nobody acted on is stale, and a click has to behave like a
+            // click (issue #60).
+            let pending = appState.takePendingCloudOpen(for: panelSide)
             switch newValue {
             case .location(let url):
                 Task {
@@ -632,7 +636,11 @@ struct SidebarView: View {
             case .cloudAccount(let account):
                 Task {
                     let cloudFM = appState.cloudFileManager(for: account.id, side: panelSide)
-                    let target = account.rootPath.isEmpty ? "/" : account.rootPath
+                    // The account's root, unless this panel was pointed at a
+                    // particular folder — restoring last session's folders
+                    // is such a case, and sending it to the root here is
+                    // what put it back at / every launch.
+                    let target = AppState.cloudOpenTarget(for: account, pending: pending)
                     await cloudFM.navigateTo(target)
                 }
             case .drive(let driveId):
