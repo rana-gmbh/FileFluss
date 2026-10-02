@@ -729,3 +729,11 @@
 "Internal Volume" = "Internal Volume";
 "External Drive" = "External Drive";
 "Network Drive" = "Network Drive";
+
+/* Open in Terminal (issue #61) */
+"Open in Terminal" = "Open in Terminal";
+"Open in Terminal uses" = "Open in Terminal uses";
+"Couldn't open a terminal" = "Couldn't open a terminal";
+"No terminal application could be found." = "No terminal application could be found.";
+"%@ is not a folder." = "%@ is not a folder.";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Mount this account in Finder first — a cloud folder has no path a terminal can open.";

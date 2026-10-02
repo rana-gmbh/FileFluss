@@ -117,6 +117,18 @@ struct ContentView: View {
         } message: { warning in
             Text(SpaceImpactFormatter.warning(warning.impact, verb: warning.verb))
         }
+        .alert(
+            L10n.text("Couldn't open a terminal"),
+            isPresented: Binding(
+                get: { appState.terminalError != nil },
+                set: { if !$0 { appState.terminalError = nil } }
+            ),
+            presenting: appState.terminalError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { appState.terminalError = nil }
+        } message: { message in
+            Text(message)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .requestShowStorageWindow)) { _ in
             openWindow(id: "storage")
         }

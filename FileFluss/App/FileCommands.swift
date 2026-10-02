@@ -82,6 +82,13 @@ struct FileCommands: Commands {
             })
             .disabled(!appState.hasSelection)
 
+            // No selection needed: with nothing selected this opens the
+            // folder the panel is showing.
+            applyShortcut(.openInTerminal, to: Button(L10n.text("Open in Terminal")) {
+                NotificationCenter.default.post(name: KeyboardCommand.openInTerminal.notification, object: nil)
+            })
+            .disabled(appState.terminalDirectory(for: appState.activePanel) == nil)
+
             Divider()
 
             applyShortcut(.deleteToTrash, to: Button(L10n.text("Move to Trash")) {

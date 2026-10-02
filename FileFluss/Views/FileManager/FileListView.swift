@@ -590,6 +590,19 @@ struct FileListView: View {
                         guard !urls.isEmpty else { return }
                         NSWorkspace.shared.activateFileViewerSelecting(urls)
                     },
+                    onOpenInTerminal: { items in
+                        // The clicked folder, or the folder on screen — the
+                        // same rule the menu command uses.
+                        let directory = TerminalLauncher.targetDirectory(
+                            selection: items,
+                            currentDirectory: fm.currentDirectory
+                        )
+                        do {
+                            try TerminalLauncher.open(directory: directory)
+                        } catch {
+                            appState.terminalError = error.localizedDescription
+                        }
+                    },
                     focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                     singlePaneMode: appState.singlePaneMode
                 )

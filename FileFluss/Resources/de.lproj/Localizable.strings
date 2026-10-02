@@ -729,3 +729,11 @@
 "Internal Volume" = "Internes Volume";
 "External Drive" = "Externes Laufwerk";
 "Network Drive" = "Netzlaufwerk";
+
+/* Open in Terminal (issue #61) */
+"Open in Terminal" = "Im Terminal öffnen";
+"Open in Terminal uses" = "„Im Terminal öffnen“ verwendet";
+"Couldn't open a terminal" = "Terminal konnte nicht geöffnet werden";
+"No terminal application could be found." = "Es wurde keine Terminal-App gefunden.";
+"%@ is not a folder." = "%@ ist kein Ordner.";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Binde dieses Konto zuerst im Finder ein — ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";

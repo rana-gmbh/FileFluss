@@ -474,6 +474,9 @@ final class AppState {
     // initiated the drag so the source VM can be looked up correctly.
     /// Set when a sidebar drop needs the user to choose copy or move.
     var pendingSidebarDrop: PendingSidebarDrop?
+    /// Surfaces a failure to open a terminal — there is no other feedback
+    /// when an app simply doesn't launch.
+    var terminalError: String?
     var cloudDragSourceItems: [CloudFileItem] = []
     var cloudDragSourceAccountId: UUID?
     var cloudDragSourceSide: PanelSide?
@@ -726,6 +729,7 @@ final class AppState {
 
         // --- File operations / clipboard
         on(.copyPath) { [weak self] in self?.copyActiveSelectionPath() }
+        on(.openInTerminal) { [weak self] in self?.openActiveFolderInTerminal() }
         on(.duplicate) { [weak self] in
             guard let self else { return }
             Task { await self.duplicateActiveSelection() }
@@ -968,6 +972,47 @@ final class AppState {
         guard !paths.isEmpty else { return }
         pb.clearContents()
         pb.setString(paths.joined(separator: "\n"), forType: .string)
+    }
+
+    /// Opens a terminal at the folder the active panel means (issue #61).
+    ///
+    /// A cloud panel has no path a shell can reach — unless the account is
+    /// mounted in Finder, in which case its mount point is a perfectly real
+    /// directory and that is what gets opened.
+    func openActiveFolderInTerminal() {
+        guard let directory = terminalDirectory(for: activePanel) else {
+            // Nothing to open: a cloud panel that isn't mounted. The menu
+            // item is disabled in that case, so this is only reachable by
+            // the shortcut.
+            terminalError = L10n.text("Mount this account in Finder first — a cloud folder has no path a terminal can open.")
+            return
+        }
+        do {
+            try TerminalLauncher.open(directory: directory)
+        } catch {
+            terminalError = error.localizedDescription
+        }
+    }
+
+    /// The real directory a panel stands for, or nil when it has none.
+    func terminalDirectory(for panel: PanelSide) -> URL? {
+        guard let accountId = cloudAccountId(for: panel) else {
+            let fm = fileManager(for: panel)
+            return TerminalLauncher.targetDirectory(
+                selection: fm.selectedItems,
+                currentDirectory: fm.currentDirectory
+            )
+        }
+        // Mounted cloud account: translate the panel's remote path into the
+        // matching path inside the mounted volume.
+        guard let mount = mountService.mount(for: accountId) else { return nil }
+        let vm = cloudFileManager(for: accountId, side: panel)
+        let remote = TerminalLauncher.targetDirectory(
+            selection: vm.selectedItems.map { ($0.path, $0.isDirectory) },
+            currentPath: vm.currentPath
+        )
+        let relative = remote.hasPrefix("/") ? String(remote.dropFirst()) : remote
+        return relative.isEmpty ? mount.mountPoint : mount.mountPoint.appending(path: relative)
     }
 
     private func duplicateActiveSelection() async {

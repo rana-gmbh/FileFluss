@@ -718,3 +718,11 @@
 "Internal Volume" = "内置宗卷";
 "External Drive" = "外置驱动器";
 "Network Drive" = "网络驱动器";
+
+/* Open in Terminal (issue #61) */
+"Open in Terminal" = "在终端中打开";
+"Open in Terminal uses" = "“在终端中打开”使用";
+"Couldn't open a terminal" = "无法打开终端";
+"No terminal application could be found." = "未找到终端应用。";
+"%@ is not a folder." = "%@ 不是文件夹。";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "请先在访达中装载此账户——云端文件夹没有终端可以打开的路径。";

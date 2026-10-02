@@ -67,6 +67,7 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
     // Misc
     case openSettings
     case indexCurrentSource
+    case openInTerminal
 
     var id: String { rawValue }
 
@@ -91,6 +92,7 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
         case .cutFiles: return "Cut"
         case .pasteFiles: return "Paste"
         case .copyPath: return "Copy Path"
+        case .openInTerminal: return "Open in Terminal"
         case .selectAll: return "Select All"
         case .deselectAll: return "Deselect All"
         case .invertSelection: return "Invert Selection"
@@ -142,7 +144,7 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
             return .crossPanelTools
         case .openSearch, .quickFilter:
             return .search
-        case .openSettings, .indexCurrentSource:
+        case .openSettings, .indexCurrentSource, .openInTerminal:
             return .misc
         }
     }

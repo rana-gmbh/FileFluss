@@ -30,6 +30,9 @@ struct NativeFileList: NSViewRepresentable {
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
+    /// Right-click → Open in Terminal. Empty when the click wasn't on a
+    /// row, which means "the folder on screen".
+    var onOpenInTerminal: (([FileItem]) -> Void)?
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel. A change drives `updateNSView` to re-take first responder,
     /// which survives the table being rebuilt during navigation.
@@ -183,6 +186,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.onOpenInTerminal = onOpenInTerminal
         coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.selectedIDs = _selectedIDs
@@ -396,6 +400,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
+    var onOpenInTerminal: (([FileItem]) -> Void)?
     var onSpringLoadFolder: ((FileItem) -> Void)?
     var singlePaneMode = false
     weak var tableView: FileTableView?
@@ -704,6 +709,13 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         openInFinderItem.target = self
         openInFinderItem.representedObject = contextItems
         menu.addItem(openInFinderItem)
+
+        // Opens the clicked folder, or the folder on screen when the click
+        // wasn't on one (issue #61).
+        let terminalItem = NSMenuItem(title: L10n.text("Open in Terminal"), action: #selector(handleOpenInTerminal(_:)), keyEquivalent: "")
+        terminalItem.target = self
+        terminalItem.representedObject = contextItems
+        menu.addItem(terminalItem)
         menu.addItem(.separator())
 
         // Standard clipboard ops first so they line up with where users
@@ -793,6 +805,11 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleOpenInFinder(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [FileItem] else { return }
         onOpenInFinder?(contextItems)
+    }
+
+    @objc func handleOpenInTerminal(_ sender: NSMenuItem) {
+        let contextItems = sender.representedObject as? [FileItem] ?? []
+        onOpenInTerminal?(contextItems)
     }
 
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {

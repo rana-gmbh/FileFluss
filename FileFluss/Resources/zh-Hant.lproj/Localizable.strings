@@ -718,3 +718,11 @@
 "Internal Volume" = "內置儲存空間";
 "External Drive" = "外接磁碟";
 "Network Drive" = "網路磁碟";
+
+/* Open in Terminal (issue #61) */
+"Open in Terminal" = "在終端機中開啟";
+"Open in Terminal uses" = "「在終端機中開啟」使用";
+"Couldn't open a terminal" = "無法開啟終端機";
+"No terminal application could be found." = "找不到終端機 App。";
+"%@ is not a folder." = "%@ 不是資料夾。";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "請先在 Finder 中掛載此帳戶——雲端資料夾沒有終端機可以開啟的路徑。";

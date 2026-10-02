@@ -64,6 +64,10 @@ struct GeneralSettingsView: View {
     @AppStorage("confirmDelete") private var confirmDelete = true
     @AppStorage("showSidebarAddAccount") private var showSidebarAddAccount = true
     @AppStorage("allowSidebarRemoveAccount") private var allowSidebarRemoveAccount = false
+    @AppStorage(TerminalLauncher.bundleIDKey) private var terminalBundleID = TerminalLauncher.defaultBundleID
+    /// A terminal the user picked with "Choose…" that isn't one of the
+    /// known ones; kept so the picker can show its name.
+    @State private var customTerminalName: String?
     @AppStorage("showSidebarTransfers") private var showSidebarTransfers = true
     @AppStorage("showSidebarFolderSizes") private var showSidebarFolderSizes = true
     @AppStorage(SpaceCheck.enabledKey) private var checkSpaceBeforeTransfer = false
@@ -123,6 +127,8 @@ struct GeneralSettingsView: View {
             Toggle(isOn: $confirmDelete) { LText("Confirm before deleting") }
             Toggle(isOn: $showSidebarAddAccount) { LText("Show \"Add Cloud Account\" in sidebars") }
             Toggle(isOn: $allowSidebarRemoveAccount) { LText("Allow removing cloud accounts from sidebar context menu") }
+            terminalPicker
+
             Toggle(isOn: $showSidebarTransfers) { LText("Show transfers in sidebars") }
             LText("Transfers are always available from the Transfers button in the toolbar.")
                 .font(.caption)
@@ -189,6 +195,61 @@ struct GeneralSettingsView: View {
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
             Task { @MainActor in NSApp.terminate(nil) }
         }
+    }
+
+    // MARK: - Open in Terminal (issue #61)
+
+    /// Which terminal "Open in Terminal" uses. Lists the terminals actually
+    /// installed, plus whatever the user picked by hand (issue #61).
+    @ViewBuilder
+    private var terminalPicker: some View {
+        let installed = TerminalLauncher.installedTerminals()
+        Picker(selection: Binding(
+            get: { terminalBundleID },
+            set: { newValue in
+                if newValue == Self.chooseTerminalTag {
+                    chooseTerminalApp()
+                } else {
+                    terminalBundleID = newValue
+                }
+            }
+        )) {
+            ForEach(installed) { terminal in
+                Text(terminal.name).tag(terminal.bundleID)
+            }
+            // A terminal chosen by hand, or one that has since been removed:
+            // either way the stored choice stays visible rather than the
+            // picker silently showing something else.
+            if !installed.contains(where: { $0.bundleID == terminalBundleID }) {
+                Text(customTerminalName ?? terminalBundleID).tag(terminalBundleID)
+            }
+            Divider()
+            Text(L10n.text("Choose…")).tag(Self.chooseTerminalTag)
+        } label: {
+            LText("Open in Terminal uses")
+        }
+        .onAppear { customTerminalName = Self.terminalName(for: terminalBundleID) }
+    }
+
+    private static let chooseTerminalTag = "filefluss.choose-terminal"
+
+    private static func terminalName(for bundleID: String) -> String? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        return url.deletingPathExtension().lastPathComponent
+    }
+
+    private func chooseTerminalApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundle = Bundle(url: url),
+              let id = bundle.bundleIdentifier else { return }
+        terminalBundleID = id
+        customTerminalName = url.deletingPathExtension().lastPathComponent
     }
 
     // MARK: - Startup folders (issue #49)

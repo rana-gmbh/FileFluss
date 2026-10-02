@@ -611,6 +611,27 @@ struct CloudFileListView: View {
     /// Right-click → Open in Finder. If the account is already mounted as a
     /// WebDAV drive, reveal the item inside that volume. Otherwise ask the
     /// user whether to mount it first, then reveal once the mount succeeds.
+    /// Opens a terminal inside the mounted volume, at the folder this panel
+    /// means (issue #61). Only reachable while the account is mounted —
+    /// a remote path is not something a shell can change into.
+    private func openInTerminal(_ items: [CloudFileItem]) {
+        guard let mount = appState.mountService.mount(for: accountId) else {
+            appState.terminalError = L10n.text("Mount this account in Finder first — a cloud folder has no path a terminal can open.")
+            return
+        }
+        let remote = TerminalLauncher.targetDirectory(
+            selection: items.map { (path: $0.path, isDirectory: $0.isDirectory) },
+            currentPath: vm.currentPath
+        )
+        let relative = remote.hasPrefix("/") ? String(remote.dropFirst()) : remote
+        let directory = relative.isEmpty ? mount.mountPoint : mount.mountPoint.appending(path: relative)
+        do {
+            try TerminalLauncher.open(directory: directory)
+        } catch {
+            appState.terminalError = error.localizedDescription
+        }
+    }
+
     // MARK: - Share links
 
     /// Preference set in Settings: copy the direct-download URL where the
@@ -1002,6 +1023,10 @@ struct CloudFileListView: View {
                 onOpenInFinder: { items in
                     openInFinder(items)
                 },
+                onOpenInTerminal: { items in
+                    openInTerminal(items)
+                },
+                isMountedInFinder: appState.mountService.mount(for: accountId) != nil,
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
                 shareCapabilities: vm.shareCapabilities,
                 onCreateShareLink: { item, wantsOptions in

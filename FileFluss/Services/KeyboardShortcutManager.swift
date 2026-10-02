@@ -187,6 +187,10 @@ final class KeyboardShortcutManager {
         // Misc
         .openSettings:       .cmd("comma"),
         .indexCurrentSource: .cmdControl("i"),
+        // ⌃⌘T rather than ⌥⌘T: macOS spends the latter on Show/Hide
+        // Toolbar, and a default that fights a system convention is a
+        // default nobody keeps.
+        .openInTerminal:     .cmdControl("t"),
     ]
 
     /// Total Commander-style defaults — preserves the iconic F-key bindings
@@ -245,5 +249,9 @@ final class KeyboardShortcutManager {
         // Misc
         .openSettings:       .cmd("comma"),
         .indexCurrentSource: .cmdControl("i"),
+        // ⌃⌘T rather than ⌥⌘T: macOS spends the latter on Show/Hide
+        // Toolbar, and a default that fights a system convention is a
+        // default nobody keeps.
+        .openInTerminal:     .cmdControl("t"),
     ]
 }

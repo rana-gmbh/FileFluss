@@ -33,6 +33,11 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
+    /// Right-click → Open in Terminal, for a mounted account.
+    var onOpenInTerminal: (([CloudFileItem]) -> Void)?
+    /// Whether this account is mounted in Finder; gates the item above,
+    /// because without a mount there is no path a shell could open.
+    var isMountedInFinder: Bool = false
     var canCreateFolder: Bool = true
     /// What the account's provider can do with public share links; decides
     /// whether the "Copy Share Link" entries appear at all.
@@ -179,6 +184,8 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onCreateFolder = onCreateFolder
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
+        coordinator.onOpenInTerminal = onOpenInTerminal
+        coordinator.isMountedInFinder = isMountedInFinder
         coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
@@ -375,6 +382,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
+    var onOpenInTerminal: (([CloudFileItem]) -> Void)?
+    var isMountedInFinder = false
     var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
@@ -687,6 +696,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             openInFinderItem.target = self
             openInFinderItem.representedObject = contextItems
             menu.addItem(openInFinderItem)
+
+            // Only when the account is mounted in Finder: without a mount
+            // there is no path a shell could change into, and an entry that
+            // opened a terminal somewhere else would be worse than none.
+            if isMountedInFinder {
+                let terminalItem = NSMenuItem(title: L10n.text("Open in Terminal"), action: #selector(handleOpenInTerminal(_:)), keyEquivalent: "")
+                terminalItem.target = self
+                terminalItem.representedObject = contextItems
+                menu.addItem(terminalItem)
+            }
             menu.addItem(.separator())
         }
 
@@ -885,6 +904,11 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     @objc func handleOpenInFinder(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
         onOpenInFinder?(contextItems)
+    }
+
+    @objc func handleOpenInTerminal(_ sender: NSMenuItem) {
+        let contextItems = sender.representedObject as? [CloudFileItem] ?? []
+        onOpenInTerminal?(contextItems)
     }
 
     @objc func handleCreateFolder(_ sender: NSMenuItem) {
