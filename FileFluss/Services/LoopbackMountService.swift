@@ -212,25 +212,22 @@ public final class LoopbackMountService {
                           userInfo: [NSLocalizedDescriptionKey: "Couldn't build the loopback URL."])
         }
         // `kNetFSUseGuestKey=true` short-circuits the auth prompt.
-        // `AllowLoopback=true` separately suppresses the unsecured-HTTP
-        // warning. We deliberately do NOT set `kNetFSMountAtMountDirKey` —
-        // it's broken on Tahoe for WebDAV (errno 2 on any mount path we
-        // propose). Letting NetFS pick a mount point under /Volumes from
-        // the URL host is the only path that works; the URL host above is
-        // already the account name + .localhost so the name flows through.
-        let openOptions: NSMutableDictionary = [
-            kNetFSNoUserPreferencesKey as String: true,
-            kNetFSUseGuestKey as String: true,
-            "AllowLoopback": true,
-            "NoUI": true,
-        ]
-        let mountOptions: NSMutableDictionary = [:]
-
+        // `AllowLoopback=true` allows the loopback mount at all. We
+        // deliberately do NOT set `kNetFSMountAtMountDirKey` — it's broken
+        // on Tahoe for WebDAV (errno 2 on any mount path we propose).
+        // Letting NetFS pick a mount point under /Volumes from the URL host
+        // is the only path that works; the URL host above is already the
+        // account name + .localhost so the name flows through.
         // NetFSMountURLSync blocks the calling thread; run it off the main
-        // actor so the UI's `isWorking` spinner stays responsive.
+        // actor so the UI's `isWorking` spinner stays responsive. The option
+        // dictionaries are built in here rather than passed in: they are
+        // reference types, and handing one across isolation makes it shared
+        // state the compiler has to reason about.
         let mountedURL: URL
         let status: Int32
         (status, mountedURL) = await Task.detached { () -> (Int32, URL) in
+            let openOptions = Self.mountOpenOptions()
+            let mountOptions: NSMutableDictionary = [:]
             var mountedPaths: Unmanaged<CFArray>?
             let s = NetFSMountURLSync(
                 url as CFURL,
@@ -264,14 +261,61 @@ public final class LoopbackMountService {
     }
 
 
-    private static func netfsErrorMessage(status: Int32) -> String {
-        // Most NetFS errors come back as POSIX errno values. Translate via
+    /// The options handed to NetFS for a loopback WebDAV mount.
+    ///
+    /// Pulled out as a pure value because the exact spelling is the whole
+    /// story (issue #59): suppressing NetFS's dialogs takes the key
+    /// `kNAUIOptionKey` — the string "UIOption" — carrying the *value*
+    /// `kNAUIOptionNoUI`, the string "NoUI". This used to pass `"NoUI":
+    /// true`: the value used as a key, with a boolean. NetFS ignored it and
+    /// went on showing its own UI, which is why every mount raised macOS's
+    /// "Unsecured Connection" alert — our bridge to Finder speaks plain HTTP
+    /// on 127.0.0.1, and NetFS warns about that before sending credentials.
+    ///
+    /// Suppressing the UI is safe here: the loopback server binds to
+    /// 127.0.0.1 and asks for no credentials, so there is nothing NetFS
+    /// would need to prompt for. If it ever does need to ask, it now fails
+    /// with `EAUTH` instead, which `netfsErrorMessage` explains.
+    ///
+    /// The constants are `CFSTR` macros in `NetFS.h`, which Swift doesn't
+    /// import, so the strings are written out — and pinned by a test.
+    nonisolated static func mountOpenOptions() -> NSMutableDictionary {
+        [
+            kNetFSNoUserPreferencesKey as String: true,
+            kNetFSUseGuestKey as String: true,
+            // kNetFSAllowLoopbackKey
+            "AllowLoopback": true,
+            // kNAUIOptionKey: kNAUIOptionNoUI
+            "UIOption": "NoUI",
+        ]
+    }
+
+    nonisolated static func netfsErrorMessage(status: Int32) -> String {
+        // Now that NetFS is told not to put up its own dialogs, a mount it
+        // can't complete without asking something comes back as an error
+        // instead of a prompt. Say what that means, since there is nothing
+        // on screen explaining it.
+        switch status {
+        case EAUTH:
+            return "the mount needed credentials (errno \(EAUTH)). The internal server asks for none, so this shouldn't happen — please report it."
+        case ENETFSNOAUTHMECHSUPP:
+            return "macOS and the internal server couldn't agree on an authentication method (NetFS status \(ENETFSNOAUTHMECHSUPP)). Please report it."
+        case ENETFSNOSHARESAVAIL:
+            return "macOS found nothing to mount at the internal server (NetFS status \(ENETFSNOSHARESAVAIL))."
+        default:
+            break
+        }
+        // Everything else comes back as a POSIX errno. Translate via
         // strerror so the user gets something readable instead of a code.
         if status > 0, let str = String(validatingUTF8: strerror(status)) {
             return "\(str) (errno \(status))"
         }
         return "NetFS status \(status)"
     }
+
+    // NetFS.h defines these as C macros, which Swift doesn't import.
+    nonisolated static let ENETFSNOSHARESAVAIL: Int32 = -5998
+    nonisolated static let ENETFSNOAUTHMECHSUPP: Int32 = -5997
 
     /// HTTP probe against the just-started WebDAV server. Throws on failure
     /// with a message the user can act on — almost always "the listener
