@@ -93,6 +93,32 @@ struct TerminalLauncherTests {
         #expect(TerminalLauncher.targetDirectory(selection: [], currentPath: "/Backups") == "/Backups")
     }
 
+    // MARK: Inside a mounted volume
+
+    /// A mount serves its `providerRoot` at the volume's root, so that
+    /// prefix has to come off — otherwise a mount rooted at /Backups sends
+    /// the terminal to <mount>/Backups/2026, which doesn't exist.
+    @Test("A remote path maps into the mounted volume, minus the mount's own root")
+    func mapsRemotePathIntoMount() {
+        let mount = URL(fileURLWithPath: "/Volumes/Server.localhost", isDirectory: true)
+
+        #expect(TerminalLauncher.mountedURL(
+            forRemotePath: "/Backups/2026", mountPoint: mount, providerRoot: "/Backups"
+        ) == mount.appendingPathComponent("2026"))
+
+        #expect(TerminalLauncher.mountedURL(
+            forRemotePath: "/Photos/2026", mountPoint: mount, providerRoot: "/"
+        ) == mount.appendingPathComponent("Photos/2026"))
+    }
+
+    @Test("The account root maps to the volume itself")
+    func rootMapsToMountPoint() {
+        let mount = URL(fileURLWithPath: "/Volumes/Server.localhost", isDirectory: true)
+
+        #expect(TerminalLauncher.mountedURL(forRemotePath: "/", mountPoint: mount, providerRoot: "/") == mount)
+        #expect(TerminalLauncher.mountedURL(forRemotePath: "/Backups", mountPoint: mount, providerRoot: "/Backups") == mount)
+    }
+
     // MARK: Which terminal
 
     @Test("The configured terminal is used when it is installed")

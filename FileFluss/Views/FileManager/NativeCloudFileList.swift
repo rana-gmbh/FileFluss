@@ -33,11 +33,10 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
-    /// Right-click → Open in Terminal, for a mounted account.
+    /// Right-click → Open in Terminal. Offered whether or not the account
+    /// is mounted: without a mount the handler offers to mount it, which is
+    /// more use than a missing entry.
     var onOpenInTerminal: (([CloudFileItem]) -> Void)?
-    /// Whether this account is mounted in Finder; gates the item above,
-    /// because without a mount there is no path a shell could open.
-    var isMountedInFinder: Bool = false
     var canCreateFolder: Bool = true
     /// What the account's provider can do with public share links; decides
     /// whether the "Copy Share Link" entries appear at all.
@@ -185,7 +184,6 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onRename = onRename
         coordinator.onOpenInFinder = onOpenInFinder
         coordinator.onOpenInTerminal = onOpenInTerminal
-        coordinator.isMountedInFinder = isMountedInFinder
         coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
@@ -383,7 +381,6 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onRename: ((CloudFileItem) -> Void)?
     var onOpenInFinder: (([CloudFileItem]) -> Void)?
     var onOpenInTerminal: (([CloudFileItem]) -> Void)?
-    var isMountedInFinder = false
     var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
@@ -697,15 +694,12 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             openInFinderItem.representedObject = contextItems
             menu.addItem(openInFinderItem)
 
-            // Only when the account is mounted in Finder: without a mount
-            // there is no path a shell could change into, and an entry that
-            // opened a terminal somewhere else would be worse than none.
-            if isMountedInFinder {
-                let terminalItem = NSMenuItem(title: L10n.text("Open in Terminal"), action: #selector(handleOpenInTerminal(_:)), keyEquivalent: "")
-                terminalItem.target = self
-                terminalItem.representedObject = contextItems
-                menu.addItem(terminalItem)
-            }
+            // Offered even when the account isn't mounted — the handler
+            // then offers to mount it, which is what the user wants anyway.
+            let terminalItem = NSMenuItem(title: L10n.text("Open in Terminal"), action: #selector(handleOpenInTerminal(_:)), keyEquivalent: "")
+            terminalItem.target = self
+            terminalItem.representedObject = contextItems
+            menu.addItem(terminalItem)
             menu.addItem(.separator())
         }
 

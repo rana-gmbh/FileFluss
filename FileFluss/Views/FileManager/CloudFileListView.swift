@@ -32,6 +32,10 @@ struct CloudFileListView: View {
     @State private var renameCloudItem: CloudFileItem?
     @State private var showMountPrompt = false
     @State private var pendingFinderItems: [CloudFileItem] = []
+    /// Separate from the Finder pair above: the same account can be asked
+    /// about for either reason, and the answer leads somewhere different.
+    @State private var showTerminalMountPrompt = false
+    @State private var pendingTerminalItems: [CloudFileItem] = []
     @State private var mountErrorMessage: String?
     /// File awaiting the share-options sheet, and the result banner shown
     /// after a link was copied.
@@ -108,6 +112,10 @@ struct CloudFileListView: View {
             .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
                 triggerDelete()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.openInTerminal.notification)) { _ in
+                guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                openInTerminal(vm.selectedItems)
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
@@ -287,6 +295,23 @@ struct CloudFileListView: View {
             }
         } message: {
             Text(L10n.text("This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there."))
+        }
+        .confirmationDialog(
+            L10n.format("Do you want to mount “%@” in Finder?", accountDisplayName),
+            isPresented: $showTerminalMountPrompt,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.text("Mount and Open in Terminal")) {
+                let items = pendingTerminalItems
+                pendingTerminalItems = []
+                mountThenOpenTerminal(items)
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(L10n.text("Cancel"), role: .cancel) {
+                pendingTerminalItems = []
+            }
+        } message: {
+            Text(L10n.text("A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it."))
         }
         .alert(L10n.text("Could not mount in Finder"), isPresented: $showMountError, presenting: mountErrorMessage) { _ in
             Button(L10n.text("OK"), role: .cancel) {}
@@ -611,24 +636,56 @@ struct CloudFileListView: View {
     /// Right-click → Open in Finder. If the account is already mounted as a
     /// WebDAV drive, reveal the item inside that volume. Otherwise ask the
     /// user whether to mount it first, then reveal once the mount succeeds.
-    /// Opens a terminal inside the mounted volume, at the folder this panel
-    /// means (issue #61). Only reachable while the account is mounted —
-    /// a remote path is not something a shell can change into.
+    /// Opens a terminal at the folder this panel means (issue #61).
+    ///
+    /// A remote path is not something a shell can change into, so this needs
+    /// the account mounted as a Finder volume. When it isn't, the offer is
+    /// to mount it rather than to do nothing — the entry stays in the menu
+    /// and explains itself.
     private func openInTerminal(_ items: [CloudFileItem]) {
         guard let mount = appState.mountService.mount(for: accountId) else {
-            appState.terminalError = L10n.text("Mount this account in Finder first — a cloud folder has no path a terminal can open.")
+            pendingTerminalItems = items
+            showTerminalMountPrompt = true
             return
         }
+        openTerminal(items, mount: mount)
+    }
+
+    private func openTerminal(_ items: [CloudFileItem], mount: LoopbackMountService.ActiveMount) {
         let remote = TerminalLauncher.targetDirectory(
             selection: items.map { (path: $0.path, isDirectory: $0.isDirectory) },
             currentPath: vm.currentPath
         )
-        let relative = remote.hasPrefix("/") ? String(remote.dropFirst()) : remote
-        let directory = relative.isEmpty ? mount.mountPoint : mount.mountPoint.appending(path: relative)
+        let directory = TerminalLauncher.mountedURL(
+            forRemotePath: remote,
+            mountPoint: mount.mountPoint,
+            providerRoot: mount.providerRoot
+        )
         do {
             try TerminalLauncher.open(directory: directory)
         } catch {
             appState.terminalError = error.localizedDescription
+        }
+    }
+
+    private func mountThenOpenTerminal(_ items: [CloudFileItem]) {
+        Task {
+            guard let provider = await appState.syncManager.providerFor(accountId: accountId) else {
+                mountErrorMessage = L10n.text("The account isn't connected — sign in first.")
+                showMountError = true
+                return
+            }
+            do {
+                let mount = try await appState.mountService.mount(
+                    provider: provider,
+                    accountId: accountId,
+                    displayName: accountDisplayName
+                )
+                openTerminal(items, mount: mount)
+            } catch {
+                mountErrorMessage = error.localizedDescription
+                showMountError = true
+            }
         }
     }
 
@@ -749,17 +806,13 @@ struct CloudFileListView: View {
     }
 
     /// Maps a cloud item's remote path to its location inside the mounted
-    /// volume. The mount serves `mount.providerRoot` at its root, so strip
-    /// that prefix (and any leading slash) before appending to the mount point.
+    /// volume. Shared with "Open in Terminal", which needs the same answer.
     private func finderURL(for item: CloudFileItem, mount: LoopbackMountService.ActiveMount) -> URL {
-        var relative = item.path
-        let root = mount.providerRoot
-        if root != "/", relative.hasPrefix(root) {
-            relative = String(relative.dropFirst(root.count))
-        }
-        while relative.hasPrefix("/") { relative.removeFirst() }
-        guard !relative.isEmpty else { return mount.mountPoint }
-        return mount.mountPoint.appendingPathComponent(relative)
+        TerminalLauncher.mountedURL(
+            forRemotePath: item.path,
+            mountPoint: mount.mountPoint,
+            providerRoot: mount.providerRoot
+        )
     }
 
     private func mountThenReveal(_ items: [CloudFileItem]) {
@@ -1026,7 +1079,6 @@ struct CloudFileListView: View {
                 onOpenInTerminal: { items in
                     openInTerminal(items)
                 },
-                isMountedInFinder: appState.mountService.mount(for: accountId) != nil,
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
                 shareCapabilities: vm.shareCapabilities,
                 onCreateShareLink: { item, wantsOptions in

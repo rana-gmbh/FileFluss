@@ -980,13 +980,10 @@ final class AppState {
     /// mounted in Finder, in which case its mount point is a perfectly real
     /// directory and that is what gets opened.
     func openActiveFolderInTerminal() {
-        guard let directory = terminalDirectory(for: activePanel) else {
-            // Nothing to open: a cloud panel that isn't mounted. The menu
-            // item is disabled in that case, so this is only reachable by
-            // the shortcut.
-            terminalError = L10n.text("Mount this account in Finder first — a cloud folder has no path a terminal can open.")
-            return
-        }
+        // A cloud panel answers this itself: it may have to offer mounting
+        // the account first, which needs a dialog this layer has no business
+        // putting on screen.
+        guard let directory = localTerminalDirectory(for: activePanel) else { return }
         do {
             try TerminalLauncher.open(directory: directory)
         } catch {
@@ -994,25 +991,15 @@ final class AppState {
         }
     }
 
-    /// The real directory a panel stands for, or nil when it has none.
-    func terminalDirectory(for panel: PanelSide) -> URL? {
-        guard let accountId = cloudAccountId(for: panel) else {
-            let fm = fileManager(for: panel)
-            return TerminalLauncher.targetDirectory(
-                selection: fm.selectedItems,
-                currentDirectory: fm.currentDirectory
-            )
-        }
-        // Mounted cloud account: translate the panel's remote path into the
-        // matching path inside the mounted volume.
-        guard let mount = mountService.mount(for: accountId) else { return nil }
-        let vm = cloudFileManager(for: accountId, side: panel)
-        let remote = TerminalLauncher.targetDirectory(
-            selection: vm.selectedItems.map { ($0.path, $0.isDirectory) },
-            currentPath: vm.currentPath
+    /// The folder a *local* panel means, or nil when the panel is showing a
+    /// cloud account.
+    func localTerminalDirectory(for panel: PanelSide) -> URL? {
+        guard cloudAccountId(for: panel) == nil else { return nil }
+        let fm = fileManager(for: panel)
+        return TerminalLauncher.targetDirectory(
+            selection: fm.selectedItems,
+            currentDirectory: fm.currentDirectory
         )
-        let relative = remote.hasPrefix("/") ? String(remote.dropFirst()) : remote
-        return relative.isEmpty ? mount.mountPoint : mount.mountPoint.appending(path: relative)
     }
 
     private func duplicateActiveSelection() async {

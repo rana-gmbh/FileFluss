@@ -82,12 +82,12 @@ struct FileCommands: Commands {
             })
             .disabled(!appState.hasSelection)
 
-            // No selection needed: with nothing selected this opens the
-            // folder the panel is showing.
+            // Never disabled: with nothing selected this opens the folder
+            // the panel is showing, and on an unmounted cloud account it
+            // offers to mount it first.
             applyShortcut(.openInTerminal, to: Button(L10n.text("Open in Terminal")) {
                 NotificationCenter.default.post(name: KeyboardCommand.openInTerminal.notification, object: nil)
             })
-            .disabled(appState.terminalDirectory(for: appState.activePanel) == nil)
 
             Divider()
 

@@ -70,6 +70,21 @@ enum TerminalLauncher {
         return only.path
     }
 
+    /// Maps a remote path to its counterpart inside a mounted volume.
+    ///
+    /// The mount serves `providerRoot` at its root, so that prefix comes off
+    /// before the rest is appended — a mount rooted at `/Backups` makes
+    /// `/Backups/2026` into `<mount>/2026`, not `<mount>/Backups/2026`.
+    static func mountedURL(forRemotePath remotePath: String, mountPoint: URL, providerRoot: String) -> URL {
+        var relative = remotePath
+        if providerRoot != "/", relative.hasPrefix(providerRoot) {
+            relative = String(relative.dropFirst(providerRoot.count))
+        }
+        while relative.hasPrefix("/") { relative.removeFirst() }
+        guard !relative.isEmpty else { return mountPoint }
+        return mountPoint.appendingPathComponent(relative)
+    }
+
     // MARK: - Which terminal
 
     /// Resolves the configured terminal, falling back to Terminal.app when

@@ -737,3 +737,5 @@
 "No terminal application could be found." = "Es wurde keine Terminal-App gefunden.";
 "%@ is not a folder." = "%@ ist kein Ordner.";
 "Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Binde dieses Konto zuerst im Finder ein — ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";
+"Mount and Open in Terminal" = "Einbinden und im Terminal öffnen";
+"A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "Ein Terminal kann nur Ordner öffnen, die es auf diesem Mac gibt. Beim Einbinden erscheint dieses Konto als Laufwerk im Finder, und das Terminal öffnet darin.";

@@ -737,3 +737,5 @@
 "No terminal application could be found." = "No terminal application could be found.";
 "%@ is not a folder." = "%@ is not a folder.";
 "Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Mount this account in Finder first — a cloud folder has no path a terminal can open.";
+"Mount and Open in Terminal" = "Mount and Open in Terminal";
+"A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.";
