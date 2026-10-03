@@ -213,10 +213,18 @@ Search the active local folder and every connected cloud account at once.
 ### Homebrew (recommended)
 
 ```bash
-brew install --cask rana-gmbh/filefluss/filefluss
+brew trust rana-gmbh/filefluss && brew install --cask rana-gmbh/filefluss/filefluss
 ```
 
 This auto-taps `rana-gmbh/filefluss` and installs the cask in one step. To upgrade later: `brew upgrade --cask filefluss`.
+
+Homebrew asks you to trust a tap that isn't one of its own before it will load anything from it, which is what the first half does — once per machine, stored in `~/.homebrew/trust.json`. On **Homebrew older than 5.1.15** there is no `brew trust` command and none is needed; install with the second half on its own:
+
+```bash
+brew install --cask rana-gmbh/filefluss/filefluss
+```
+
+That form also works on newer Homebrew, because naming the cask in full counts as permission for that one command — but `brew upgrade --cask filefluss` later uses the short name and can be refused, so trusting the tap once is worth it.
 
 ### Manual
 

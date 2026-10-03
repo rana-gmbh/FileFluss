@@ -21,7 +21,7 @@ It works on cloud accounts too. A terminal can only open a folder that exists on
 ## Install
 
 ```bash
-brew install --cask rana-gmbh/filefluss/filefluss
+brew trust rana-gmbh/filefluss && brew install --cask rana-gmbh/filefluss/filefluss
 ```
 
 Already have FileFluss? `brew upgrade --cask filefluss`, or let the app update itself.
