@@ -154,6 +154,27 @@ public actor SearchIndex {
             ON indexed_files(source_id, parent_path)
         """)
 
+        // Where an index being built lands until it is complete. Separate
+        // table rather than a reserved source_id so nothing else — search,
+        // offline browsing, the sources list — can see a half-written index
+        // in the meantime.
+        try execute("""
+            CREATE TABLE IF NOT EXISTS indexed_files_staging (
+                source_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                parent_path TEXT NOT NULL,
+                name TEXT NOT NULL,
+                is_directory INTEGER NOT NULL,
+                size INTEGER NOT NULL,
+                modification_date REAL NOT NULL,
+                PRIMARY KEY (source_id, path)
+            )
+        """)
+
+        // Anything still staged belongs to a run that didn't finish — a
+        // crash, a quit mid-index. It is not an index, so it goes.
+        try execute("DELETE FROM indexed_files_staging")
+
         try execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS indexed_files_fts USING fts5(
                 source_id UNINDEXED,
@@ -377,81 +398,100 @@ public actor SearchIndex {
     /// Replace this source's stored file rows with `files`. Caller is
     /// responsible for providing a fully-walked snapshot; partial updates
     /// would corrupt the index. Runs in a single transaction.
-    /// Replaces everything stored for a source.
+    /// Adds a batch of rows to the index being built for `sourceId`.
     ///
-    /// Throws when the index can't be written — which it could not do
-    /// before: every sqlite result here was discarded, including the
-    /// COMMIT, so a failed write was indistinguishable from a successful
-    /// one and the caller went on to record "indexed N files". A user
-    /// indexed 179,000 files from an SMB share and ended up with an empty
-    /// database and no indication anything had gone wrong.
+    /// Staged rows are invisible to search, browsing and the sources list
+    /// until `promoteStagedFiles` swaps them in, so an index under
+    /// construction is never half-shown — and an interrupted one leaves the
+    /// previous index exactly where it was.
     ///
-    /// Rows rejected individually — a duplicate path against the
-    /// (source_id, path) key, say — don't fail the run; they are counted
-    /// and reported, so a shortfall is visible rather than inferred.
+    /// Returns how many rows the table refused: a duplicate path against the
+    /// (source_id, path) key is counted, not fatal.
     @discardableResult
-    public func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) throws -> IndexWriteResult {
+    public func stageFiles(_ files: [IndexedFile], sourceId: String) throws -> Int {
+        guard !files.isEmpty else { return 0 }
         let db = try writeHandle()
         try exec(db, "BEGIN TRANSACTION")
-
         do {
-            // Wipe prior rows for this source.
-            var del: OpaquePointer?
-            try prepare(db, "DELETE FROM indexed_files WHERE source_id = ?", into: &del)
-            sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            try step(db, del, "delete previous rows")
-            sqlite3_finalize(del)
-
-            var delFts: OpaquePointer?
-            try prepare(db, "DELETE FROM indexed_files_fts WHERE source_id = ?", into: &delFts)
-            sqlite3_bind_text(delFts, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            try step(db, delFts, "delete previous search rows")
-            sqlite3_finalize(delFts)
-
-            // Insert rows.
             let insSQL = """
-                INSERT INTO indexed_files (source_id, path, parent_path, name, is_directory, size, modification_date)
+                INSERT INTO indexed_files_staging (source_id, path, parent_path, name, is_directory, size, modification_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             var ins: OpaquePointer?
             try prepare(db, insSQL, into: &ins)
+            defer { sqlite3_finalize(ins) }
 
-            let ftsSQL = "INSERT INTO indexed_files_fts (source_id, name, path) VALUES (?, ?, ?)"
-            var fts: OpaquePointer?
-            try prepare(db, ftsSQL, into: &fts)
-
-            var totalFiles = 0
-            var totalBytes: Int64 = 0
             var rejected = 0
-
             for f in files {
-            sqlite3_bind_text(ins, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(ins, 2, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(ins, 3, (f.parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(ins, 4, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(ins, 5, f.isDirectory ? 1 : 0)
-            sqlite3_bind_int64(ins, 6, f.size)
+                sqlite3_bind_text(ins, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(ins, 2, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(ins, 3, (f.parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(ins, 4, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int(ins, 5, f.isDirectory ? 1 : 0)
+                sqlite3_bind_int64(ins, 6, f.size)
                 sqlite3_bind_double(ins, 7, f.modificationDate.timeIntervalSince1970)
-                // A row the table refuses — a duplicate path against the
-                // (source_id, path) key — is counted, not fatal.
                 if sqlite3_step(ins) != SQLITE_DONE { rejected += 1 }
                 sqlite3_reset(ins)
-
-                sqlite3_bind_text(fts, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-                sqlite3_bind_text(fts, 2, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
-                sqlite3_bind_text(fts, 3, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
-                sqlite3_step(fts)
-                sqlite3_reset(fts)
-
-                if !f.isDirectory {
-                    totalFiles += 1
-                    totalBytes += f.size
-                }
             }
-            sqlite3_finalize(ins)
-            sqlite3_finalize(fts)
+            try exec(db, "COMMIT")
+            return rejected
+        } catch {
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
 
-            // Upsert source metadata.
+    /// Swaps the staged rows in as the index for `sourceId`.
+    ///
+    /// One short transaction, however large the index: the rows move with
+    /// `INSERT ... SELECT`, so nothing is read back into memory to be
+    /// written again. Until this succeeds the previous index is intact; if
+    /// it throws, it is still intact.
+    @discardableResult
+    public func promoteStagedFiles(sourceId: String, kind: String, displayName: String, requested: Int, rejected: Int) throws -> IndexWriteResult {
+        let db = try writeHandle()
+        try exec(db, "BEGIN TRANSACTION")
+        do {
+            for sql in [
+                "DELETE FROM indexed_files WHERE source_id = ?",
+                "DELETE FROM indexed_files_fts WHERE source_id = ?"
+            ] {
+                var del: OpaquePointer?
+                try prepare(db, sql, into: &del)
+                sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                try step(db, del, "clear the previous index")
+                sqlite3_finalize(del)
+            }
+
+            var move: OpaquePointer?
+            try prepare(db, """
+                INSERT INTO indexed_files (source_id, path, parent_path, name, is_directory, size, modification_date)
+                SELECT source_id, path, parent_path, name, is_directory, size, modification_date
+                FROM indexed_files_staging WHERE source_id = ?
+            """, into: &move)
+            sqlite3_bind_text(move, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            try step(db, move, "store the index")
+            sqlite3_finalize(move)
+
+            var moveFts: OpaquePointer?
+            try prepare(db, """
+                INSERT INTO indexed_files_fts (source_id, name, path)
+                SELECT source_id, name, path FROM indexed_files_staging WHERE source_id = ?
+            """, into: &moveFts)
+            sqlite3_bind_text(moveFts, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            try step(db, moveFts, "store the search index")
+            sqlite3_finalize(moveFts)
+
+            var clear: OpaquePointer?
+            try prepare(db, "DELETE FROM indexed_files_staging WHERE source_id = ?", into: &clear)
+            sqlite3_bind_text(clear, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            try step(db, clear, "clear the staging area")
+            sqlite3_finalize(clear)
+
+            // Counted from what is now in the index rather than from what
+            // the caller believes it sent.
+            let counts = countsInTransaction(db, sourceId: sourceId)
+
             let upSrc = """
                 INSERT INTO indexed_sources (source_id, kind, display_name, last_indexed, total_files, total_bytes)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -468,27 +508,71 @@ public actor SearchIndex {
             sqlite3_bind_text(up, 2, (kind as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(up, 3, (displayName as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_double(up, 4, Date().timeIntervalSince1970)
-            sqlite3_bind_int(up, 5, Int32(totalFiles))
-            sqlite3_bind_int64(up, 6, totalBytes)
+            sqlite3_bind_int(up, 5, Int32(counts.files))
+            sqlite3_bind_int64(up, 6, counts.bytes)
             try step(db, up, "record the source")
             sqlite3_finalize(up)
 
             try exec(db, "COMMIT")
 
-            // Read back what actually landed. The caller logs both numbers,
-            // so a shortfall shows up in a support log instead of being
-            // discovered months later by someone reading the database.
-            let stored = sourceCounts(sourceId) ?? (files: 0, folders: 0)
             return IndexWriteResult(
-                requested: files.count,
+                requested: requested,
                 rejected: rejected,
-                storedFiles: stored.files,
-                storedFolders: stored.folders
+                storedFiles: counts.files,
+                storedFolders: counts.folders
             )
         } catch {
-            // Leave no half-written index behind, and leave the previous
-            // one intact.
             sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
+
+    /// Throws away a half-built index — the run was cancelled or failed.
+    /// The previous index is untouched by this.
+    public func discardStagedFiles(sourceId: String) {
+        guard let db = handle() else { return }
+        var del: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "DELETE FROM indexed_files_staging WHERE source_id = ?", -1, &del, nil) == SQLITE_OK else { return }
+        sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_step(del)
+        sqlite3_finalize(del)
+    }
+
+    private func countsInTransaction(_ db: OpaquePointer, sourceId: String) -> (files: Int, folders: Int, bytes: Int64) {
+        let sql = """
+            SELECT SUM(CASE WHEN is_directory=0 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN is_directory=1 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN is_directory=0 THEN size ELSE 0 END)
+            FROM indexed_files WHERE source_id = ?
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return (0, 0, 0) }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return (0, 0, 0) }
+        return (Int(sqlite3_column_int(stmt, 0)), Int(sqlite3_column_int(stmt, 1)), sqlite3_column_int64(stmt, 2))
+    }
+
+    /// Replaces everything stored for a source in one call — the staged
+    /// path above, for callers small enough not to need batching.
+    ///
+    /// Throws when the index can't be written, which it could not do
+    /// before: every sqlite result was discarded, including the COMMIT, so
+    /// a write that never happened was indistinguishable from one that did,
+    /// and the caller went on to record "indexed N files". A user indexed
+    /// 179,000 files from an SMB share and ended up with an empty database
+    /// and no indication anything had gone wrong.
+    @discardableResult
+    public func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) throws -> IndexWriteResult {
+        discardStagedFiles(sourceId: sourceId)
+        do {
+            let rejected = try stageFiles(files, sourceId: sourceId)
+            return try promoteStagedFiles(
+                sourceId: sourceId, kind: kind, displayName: displayName,
+                requested: files.count, rejected: rejected
+            )
+        } catch {
+            discardStagedFiles(sourceId: sourceId)
             throw error
         }
     }

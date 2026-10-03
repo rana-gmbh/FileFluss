@@ -11,6 +11,11 @@ import FileFlussCore
 final class IndexingService {
     static let shared = IndexingService()
 
+    /// Rows per write. Large enough that the per-transaction cost is noise
+    /// against a million-file drive, small enough that memory stays flat
+    /// however big the source is.
+    static let writeBatchSize = 10_000
+
     @Observable @MainActor
     final class Job: Identifiable {
         let id = UUID()
@@ -112,9 +117,18 @@ final class IndexingService {
         service: IndexingService?
     ) async {
         let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
-        var collected: [SearchIndex.IndexedFile] = []
-        // Pre-allocate to keep insert cost down for million-file drives.
-        collected.reserveCapacity(50_000)
+        // Rows go to the index in batches as the walk finds them, rather
+        // than being held until the end: a 179,000-file share was keeping
+        // every entry in memory for eight minutes before any of it was
+        // written. Staged rows are invisible until the whole walk is in,
+        // so an interrupted index never replaces a good one.
+        var batch: [SearchIndex.IndexedFile] = []
+        batch.reserveCapacity(Self.writeBatchSize)
+        var requested = 0
+        var rejected = 0
+        var writeFailure: String?
+
+        await SearchIndex.shared.discardStagedFiles(sourceId: sourceId)
 
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isPackageKey
@@ -146,7 +160,7 @@ final class IndexingService {
             let parent = (rel as NSString).deletingLastPathComponent
             let name = (rel as NSString).lastPathComponent
 
-            collected.append(SearchIndex.IndexedFile(
+            batch.append(SearchIndex.IndexedFile(
                 sourceId: sourceId,
                 path: rel,
                 parentPath: parent.isEmpty ? "/" : parent,
@@ -156,6 +170,18 @@ final class IndexingService {
                 modificationDate: modDate
             ))
             processed += 1
+
+            if batch.count >= Self.writeBatchSize {
+                let toWrite = batch
+                batch.removeAll(keepingCapacity: true)
+                do {
+                    rejected += try await SearchIndex.shared.stageFiles(toWrite, sourceId: sourceId)
+                    requested += toWrite.count
+                } catch {
+                    writeFailure = error.localizedDescription
+                    break
+                }
+            }
             if processed - lastReport >= 250 {
                 lastReport = processed
                 let snapshot = processed
@@ -170,19 +196,30 @@ final class IndexingService {
         }
 
         let cancelled = Task.isCancelled
-        var writeFailure: String?
         var stored: Int?
 
-        if !cancelled {
-            // Persist root entry so the offline browser has something to
-            // list at "/" when the user enters the source.
-            let snapshot = collected
+        // Whatever the walk ended with, still unwritten.
+        if !cancelled, writeFailure == nil, !batch.isEmpty {
             do {
-                let result = try await SearchIndex.shared.replaceFiles(
+                rejected += try await SearchIndex.shared.stageFiles(batch, sourceId: sourceId)
+                requested += batch.count
+            } catch {
+                writeFailure = error.localizedDescription
+            }
+        }
+
+        if cancelled || writeFailure != nil {
+            // Nothing staged becomes the index: a cancelled or failed run
+            // leaves the previous one exactly as it was.
+            await SearchIndex.shared.discardStagedFiles(sourceId: sourceId)
+        } else {
+            do {
+                let result = try await SearchIndex.shared.promoteStagedFiles(
                     sourceId: sourceId,
                     kind: kind,
                     displayName: displayName,
-                    files: snapshot
+                    requested: requested,
+                    rejected: rejected
                 )
                 stored = result.stored
                 SupportLogger.shared.log(
@@ -202,12 +239,16 @@ final class IndexingService {
                 }
             } catch {
                 writeFailure = error.localizedDescription
-                SupportLogger.shared.log(
-                    "Indexing \(displayName) failed to write: \(error.localizedDescription)",
-                    category: "Indexing",
-                    level: .error
-                )
+                await SearchIndex.shared.discardStagedFiles(sourceId: sourceId)
             }
+        }
+
+        if let writeFailure {
+            SupportLogger.shared.log(
+                "Indexing \(displayName) failed to write: \(writeFailure)",
+                category: "Indexing",
+                level: .error
+            )
         }
 
         let finalCount = processed

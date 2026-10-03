@@ -150,6 +150,100 @@ struct SearchIndexWriteTests {
         #expect(await index.listIndexedSources().count == 1)
     }
 
+    // MARK: Batched writes
+
+    /// The walk feeds rows in batches instead of holding a whole drive in
+    /// memory. The result has to be the same index either way.
+    @Test("Rows written in batches land as one index")
+    func batchedWriteMatchesOneShot() async throws {
+        let path = temporaryIndexPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let index = SearchIndex(path: path)
+        let all = files(250, sourceId: "vol:TEST", folders: 10)
+
+        var rejected = 0
+        for chunk in stride(from: 0, to: all.count, by: 60).map({ Array(all[$0..<min($0 + 60, all.count)]) }) {
+            rejected += try await index.stageFiles(chunk, sourceId: "vol:TEST")
+        }
+        let result = try await index.promoteStagedFiles(
+            sourceId: "vol:TEST", kind: "drive-network", displayName: "Share",
+            requested: all.count, rejected: rejected
+        )
+
+        #expect(result.stored == 250)
+        #expect(result.isComplete)
+        #expect(await index.sourceCounts("vol:TEST")?.files == 240)
+    }
+
+    /// Half a walk is not an index. Until it is promoted, nothing can see
+    /// it — and what was there before is still what everything sees.
+    @Test("A half-written index is invisible, and doesn't disturb the old one")
+    func stagedRowsAreInvisible() async throws {
+        let path = temporaryIndexPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let index = SearchIndex(path: path)
+
+        try await index.replaceFiles(
+            sourceId: "vol:TEST", kind: "drive-network", displayName: "Share",
+            files: files(10, sourceId: "vol:TEST")
+        )
+
+        // A new run starts and gets part way.
+        try await index.stageFiles(files(400, sourceId: "vol:TEST"), sourceId: "vol:TEST")
+
+        // Everything still reports the index from before.
+        #expect(await index.sourceCounts("vol:TEST")?.files == 10)
+        #expect(await index.listIndexedSources().count == 1)
+        #expect(await index.listChildren(sourceId: "vol:TEST", parentPath: "/dir").count == 10)
+    }
+
+    /// A cancelled or failed run throws its staged rows away, and the
+    /// previous index survives it untouched.
+    @Test("Discarding a half-written index leaves the previous one")
+    func discardKeepsPreviousIndex() async throws {
+        let path = temporaryIndexPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let index = SearchIndex(path: path)
+
+        try await index.replaceFiles(
+            sourceId: "vol:TEST", kind: "drive-network", displayName: "Share",
+            files: files(10, sourceId: "vol:TEST")
+        )
+        try await index.stageFiles(files(400, sourceId: "vol:TEST"), sourceId: "vol:TEST")
+        await index.discardStagedFiles(sourceId: "vol:TEST")
+
+        #expect(await index.sourceCounts("vol:TEST")?.files == 10)
+
+        // And the discarded rows are really gone — promoting now would
+        // otherwise resurrect them.
+        let promoted = try await index.promoteStagedFiles(
+            sourceId: "vol:TEST", kind: "drive-network", displayName: "Share",
+            requested: 0, rejected: 0
+        )
+        #expect(promoted.stored == 0)
+    }
+
+    /// A quit in the middle of indexing leaves rows staged. They are not an
+    /// index and must not become one on the next launch.
+    @Test("Rows staged by a run that never finished are dropped at open")
+    func staleStagingIsClearedOnOpen() async throws {
+        let path = temporaryIndexPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        let crashed = SearchIndex(path: path)
+        try await crashed.stageFiles(files(50, sourceId: "vol:TEST"), sourceId: "vol:TEST")
+        await crashed.close()
+
+        let next = SearchIndex(path: path)
+        let promoted = try await next.promoteStagedFiles(
+            sourceId: "vol:TEST", kind: "drive-network", displayName: "Share",
+            requested: 0, rejected: 0
+        )
+
+        #expect(promoted.stored == 0)
+        #expect(await next.sourceCounts("vol:TEST")?.files == 0)
+    }
+
     /// Survives a quit: the point of an index is that it is still there next
     /// time, which is exactly what the reporter found it wasn't.
     @Test("An index written in one session is there in the next")
