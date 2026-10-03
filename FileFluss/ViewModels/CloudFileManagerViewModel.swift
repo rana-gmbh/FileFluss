@@ -269,7 +269,7 @@ final class CloudFileManagerViewModel {
             // Feed into search index (fire-and-forget)
             let accId = self.accountId
             Task.detached(priority: .utility) {
-                await SearchIndex.shared.upsertItems(loadedItems, accountId: accId)
+                await SearchIndex.shared.upsertItemsLogging(loadedItems, accountId: accId, context: "browsing")
             }
 
             self.items = loadedItems

@@ -1,5 +1,8 @@
 import Foundation
+import OSLog
 import SQLite3
+
+let searchIndexLog = Logger(subsystem: "com.rana-gmbh.FileFluss", category: "SearchIndex")
 
 /// `SQLITE_TRANSIENT` instructs sqlite3 to make its own copy of the bound
 /// bytes before returning. The C macro doesn't import to Swift, so we
@@ -22,10 +25,59 @@ public actor SearchIndex {
         self.dbPath = dir.appendingPathComponent("search_index.db").path
     }
 
+    /// An index at a path of the caller's choosing. Exists so tests can work
+    /// against a temporary database: with only the shared instance and a
+    /// hard-coded Application Support path, none of this code could be
+    /// tested, which is how a write path that reported success it never
+    /// checked survived as long as it did.
+    public init(path: String) {
+        self.dbPath = path
+    }
+
+    /// Opens the database if it isn't open yet.
+    ///
+    /// Every entry point calls this, so nothing depends on someone else
+    /// having opened it first. It used to be opened once at launch, behind
+    /// reconnecting the cloud accounts — and a reconnect that was slow,
+    /// or an open that failed, left the handle nil for the rest of the
+    /// session while every write silently did nothing.
+    private func ensureOpen() throws {
+        guard db == nil else { return }
+        try open()
+    }
+
+    /// The open database, or nil after logging why it couldn't be opened.
+    /// For everything whose failure is survivable — reads, and the small
+    /// maintenance writes — where throwing would mean changing every
+    /// caller. Silence is what it replaces: these used to return as if
+    /// nothing had been asked of them.
+    private func handle(_ caller: String = #function) -> OpaquePointer? {
+        do {
+            try ensureOpen()
+        } catch {
+            searchIndexLog.error("[index] \(caller, privacy: .public) could not open the index: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        return db
+    }
+
+    /// The open database for a write, or a thrown error naming the problem.
+    private func writeHandle() throws -> OpaquePointer {
+        try ensureOpen()
+        guard let db else { throw SearchIndexError.openFailed("the index is not open") }
+        return db
+    }
+
     public func open() throws {
         guard db == nil else { return }
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
-            throw SearchIndexError.openFailed(String(cString: sqlite3_errmsg(db)))
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "could not open \(dbPath)"
+            // sqlite3_open hands back a handle even when it fails, so that
+            // the error can be read off it. Close it: leaving it in place
+            // would look open to everything downstream.
+            if let db { sqlite3_close(db) }
+            db = nil
+            throw SearchIndexError.openFailed(message)
         }
 
         try execute("""
@@ -133,8 +185,13 @@ public actor SearchIndex {
         db = nil
     }
 
-    public func upsertItems(_ items: [CloudFileItem], accountId: UUID) {
-        guard let db else { return }
+    /// Adds or refreshes cloud entries.
+    ///
+    /// Throws for the same reason `replaceFiles` does: this is how a cloud
+    /// account's index is built, and a failure here was as silent as the
+    /// drive one — the same bug, one table over, simply not reported yet.
+    public func upsertItems(_ items: [CloudFileItem], accountId: UUID) throws {
+        let db = try writeHandle()
         let accountStr = accountId.uuidString
         let now = Date().timeIntervalSince1970
 
@@ -145,10 +202,10 @@ public actor SearchIndex {
         """
 
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        try prepare(db, sql, into: &stmt)
         defer { sqlite3_finalize(stmt) }
 
-        sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
+        try exec(db, "BEGIN TRANSACTION")
         for item in items {
             sqlite3_bind_text(stmt, 1, (accountStr as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 2, (item.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
@@ -162,14 +219,41 @@ public actor SearchIndex {
                 sqlite3_bind_null(stmt, 7)
             }
             sqlite3_bind_double(stmt, 8, now)
-            sqlite3_step(stmt)
+            do {
+                try step(db, stmt, "store \(item.name)")
+            } catch {
+                sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+                throw error
+            }
             sqlite3_reset(stmt)
         }
-        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        do {
+            try exec(db, "COMMIT")
+        } catch {
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
+
+    /// For the opportunistic feeds — browsing a folder, running a search,
+    /// scanning storage — where the user asked for something else and a
+    /// failed index write must not interrupt it. Logged rather than thrown,
+    /// so it is still on the record: swallowing it was the original sin.
+    public func upsertItemsLogging(_ items: [CloudFileItem], accountId: UUID, context: String) {
+        do {
+            try upsertItems(items, accountId: accountId)
+        } catch {
+            searchIndexLog.error("[index] \(context, privacy: .public) could not cache \(items.count) entries: \(error.localizedDescription, privacy: .public)")
+            SupportLogger.shared.log(
+                "Index write failed during \(context): \(error.localizedDescription)",
+                category: "Indexing",
+                level: .error
+            )
+        }
     }
 
     public func removeItems(accountId: UUID, paths: [String]) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         let accountStr = accountId.uuidString
         for path in paths {
             let sql = "DELETE FROM cloud_files WHERE account_id = ? AND path = ?"
@@ -183,7 +267,7 @@ public actor SearchIndex {
     }
 
     public func removeAllItems(accountId: UUID) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         let sql = "DELETE FROM cloud_files WHERE account_id = ?"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -193,7 +277,7 @@ public actor SearchIndex {
     }
 
     public func search(query: String, accountId: UUID?, limit: Int = 500) -> [IndexedCloudFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
 
         let ftsQuery = Self.makeFTSQuery(from: query)
         guard !ftsQuery.isEmpty else { return [] }
@@ -293,91 +377,140 @@ public actor SearchIndex {
     /// Replace this source's stored file rows with `files`. Caller is
     /// responsible for providing a fully-walked snapshot; partial updates
     /// would corrupt the index. Runs in a single transaction.
-    public func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) {
-        guard let db else { return }
-        sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
+    /// Replaces everything stored for a source.
+    ///
+    /// Throws when the index can't be written — which it could not do
+    /// before: every sqlite result here was discarded, including the
+    /// COMMIT, so a failed write was indistinguishable from a successful
+    /// one and the caller went on to record "indexed N files". A user
+    /// indexed 179,000 files from an SMB share and ended up with an empty
+    /// database and no indication anything had gone wrong.
+    ///
+    /// Rows rejected individually — a duplicate path against the
+    /// (source_id, path) key, say — don't fail the run; they are counted
+    /// and reported, so a shortfall is visible rather than inferred.
+    @discardableResult
+    public func replaceFiles(sourceId: String, kind: String, displayName: String, files: [IndexedFile]) throws -> IndexWriteResult {
+        let db = try writeHandle()
+        try exec(db, "BEGIN TRANSACTION")
 
-        // Wipe prior rows for this source.
-        var del: OpaquePointer?
-        sqlite3_prepare_v2(db, "DELETE FROM indexed_files WHERE source_id = ?", -1, &del, nil)
-        sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_step(del)
-        sqlite3_finalize(del)
+        do {
+            // Wipe prior rows for this source.
+            var del: OpaquePointer?
+            try prepare(db, "DELETE FROM indexed_files WHERE source_id = ?", into: &del)
+            sqlite3_bind_text(del, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            try step(db, del, "delete previous rows")
+            sqlite3_finalize(del)
 
-        var delFts: OpaquePointer?
-        sqlite3_prepare_v2(db, "DELETE FROM indexed_files_fts WHERE source_id = ?", -1, &delFts, nil)
-        sqlite3_bind_text(delFts, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_step(delFts)
-        sqlite3_finalize(delFts)
+            var delFts: OpaquePointer?
+            try prepare(db, "DELETE FROM indexed_files_fts WHERE source_id = ?", into: &delFts)
+            sqlite3_bind_text(delFts, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            try step(db, delFts, "delete previous search rows")
+            sqlite3_finalize(delFts)
 
-        // Insert rows.
-        let insSQL = """
-            INSERT INTO indexed_files (source_id, path, parent_path, name, is_directory, size, modification_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """
-        var ins: OpaquePointer?
-        sqlite3_prepare_v2(db, insSQL, -1, &ins, nil)
+            // Insert rows.
+            let insSQL = """
+                INSERT INTO indexed_files (source_id, path, parent_path, name, is_directory, size, modification_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+            var ins: OpaquePointer?
+            try prepare(db, insSQL, into: &ins)
 
-        let ftsSQL = "INSERT INTO indexed_files_fts (source_id, name, path) VALUES (?, ?, ?)"
-        var fts: OpaquePointer?
-        sqlite3_prepare_v2(db, ftsSQL, -1, &fts, nil)
+            let ftsSQL = "INSERT INTO indexed_files_fts (source_id, name, path) VALUES (?, ?, ?)"
+            var fts: OpaquePointer?
+            try prepare(db, ftsSQL, into: &fts)
 
-        var totalFiles = 0
-        var totalBytes: Int64 = 0
+            var totalFiles = 0
+            var totalBytes: Int64 = 0
+            var rejected = 0
 
-        for f in files {
+            for f in files {
             sqlite3_bind_text(ins, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(ins, 2, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(ins, 3, (f.parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(ins, 4, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(ins, 5, f.isDirectory ? 1 : 0)
             sqlite3_bind_int64(ins, 6, f.size)
-            sqlite3_bind_double(ins, 7, f.modificationDate.timeIntervalSince1970)
-            sqlite3_step(ins)
-            sqlite3_reset(ins)
+                sqlite3_bind_double(ins, 7, f.modificationDate.timeIntervalSince1970)
+                // A row the table refuses — a duplicate path against the
+                // (source_id, path) key — is counted, not fatal.
+                if sqlite3_step(ins) != SQLITE_DONE { rejected += 1 }
+                sqlite3_reset(ins)
 
-            sqlite3_bind_text(fts, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(fts, 2, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(fts, 3, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
-            sqlite3_step(fts)
-            sqlite3_reset(fts)
+                sqlite3_bind_text(fts, 1, (f.sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(fts, 2, (f.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(fts, 3, (f.path as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_step(fts)
+                sqlite3_reset(fts)
 
-            if !f.isDirectory {
-                totalFiles += 1
-                totalBytes += f.size
+                if !f.isDirectory {
+                    totalFiles += 1
+                    totalBytes += f.size
+                }
             }
+            sqlite3_finalize(ins)
+            sqlite3_finalize(fts)
+
+            // Upsert source metadata.
+            let upSrc = """
+                INSERT INTO indexed_sources (source_id, kind, display_name, last_indexed, total_files, total_bytes)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_id) DO UPDATE SET
+                    kind = excluded.kind,
+                    display_name = excluded.display_name,
+                    last_indexed = excluded.last_indexed,
+                    total_files = excluded.total_files,
+                    total_bytes = excluded.total_bytes
+            """
+            var up: OpaquePointer?
+            try prepare(db, upSrc, into: &up)
+            sqlite3_bind_text(up, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(up, 2, (kind as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(up, 3, (displayName as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_double(up, 4, Date().timeIntervalSince1970)
+            sqlite3_bind_int(up, 5, Int32(totalFiles))
+            sqlite3_bind_int64(up, 6, totalBytes)
+            try step(db, up, "record the source")
+            sqlite3_finalize(up)
+
+            try exec(db, "COMMIT")
+
+            // Read back what actually landed. The caller logs both numbers,
+            // so a shortfall shows up in a support log instead of being
+            // discovered months later by someone reading the database.
+            let stored = sourceCounts(sourceId) ?? (files: 0, folders: 0)
+            return IndexWriteResult(
+                requested: files.count,
+                rejected: rejected,
+                storedFiles: stored.files,
+                storedFolders: stored.folders
+            )
+        } catch {
+            // Leave no half-written index behind, and leave the previous
+            // one intact.
+            sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
         }
-        sqlite3_finalize(ins)
-        sqlite3_finalize(fts)
+    }
 
-        // Upsert source metadata.
-        let upSrc = """
-            INSERT INTO indexed_sources (source_id, kind, display_name, last_indexed, total_files, total_bytes)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(source_id) DO UPDATE SET
-                kind = excluded.kind,
-                display_name = excluded.display_name,
-                last_indexed = excluded.last_indexed,
-                total_files = excluded.total_files,
-                total_bytes = excluded.total_bytes
-        """
-        var up: OpaquePointer?
-        sqlite3_prepare_v2(db, upSrc, -1, &up, nil)
-        sqlite3_bind_text(up, 1, (sourceId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(up, 2, (kind as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(up, 3, (displayName as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_double(up, 4, Date().timeIntervalSince1970)
-        sqlite3_bind_int(up, 5, Int32(totalFiles))
-        sqlite3_bind_int64(up, 6, totalBytes)
-        sqlite3_step(up)
-        sqlite3_finalize(up)
+    /// What a write actually did.
+    public struct IndexWriteResult: Sendable, Equatable {
+        /// Rows handed to the index.
+        public let requested: Int
+        /// Rows the table refused, individually.
+        public let rejected: Int
+        public let storedFiles: Int
+        public let storedFolders: Int
 
-        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        public var stored: Int { storedFiles + storedFolders }
+
+        /// True when everything offered is now in the index.
+        public var isComplete: Bool { rejected == 0 && stored == requested }
     }
 
     /// Drop every indexed_files row for this source plus its source row.
     public func dropSource(sourceId: String) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for sql in [
             "DELETE FROM indexed_files WHERE source_id = ?",
@@ -395,7 +528,7 @@ public actor SearchIndex {
 
     /// Fetch source metadata (used to render "last indexed N days ago").
     public func source(_ sourceId: String) -> IndexedSource? {
-        guard let db else { return nil }
+        guard let db = handle() else { return nil }
         let sql = "SELECT source_id, kind, display_name, last_indexed, total_files, total_bytes FROM indexed_sources WHERE source_id = ?"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -422,7 +555,7 @@ public actor SearchIndex {
     /// in SQL so the offline cloud browser can drill folder by folder
     /// without changing the schema.
     public func listCloudChildren(accountId: UUID, parentPath: String) -> [IndexedFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         // `path` is always "/foo/bar"; the parent path is everything up
         // to (but not including) the last "/". Special-case root because
         // rfind('/') in a top-level path like "/file.txt" returns position 1,
@@ -464,7 +597,7 @@ public actor SearchIndex {
     /// List entries whose parent path equals `parentPath`. Used by the
     /// offline browser to walk an indexed source folder-by-folder.
     public func listChildren(sourceId: String, parentPath: String) -> [IndexedFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         let sql = """
             SELECT path, parent_path, name, is_directory, size, modification_date
             FROM indexed_files
@@ -495,7 +628,7 @@ public actor SearchIndex {
     /// Full-text search of indexed files. If `sourceIds` is non-nil, only
     /// those sources are queried; otherwise all sources are searched.
     public func searchIndexed(query: String, sourceIds: [String]? = nil, limit: Int = 500) -> [IndexedFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         let fts = Self.makeFTSQuery(from: query)
         guard !fts.isEmpty else { return [] }
 
@@ -621,7 +754,7 @@ public actor SearchIndex {
     }
 
     public func listIndexedSources() -> [IndexedSource] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         let sql = "SELECT source_id, kind, display_name, last_indexed, total_files, total_bytes FROM indexed_sources ORDER BY display_name COLLATE NOCASE"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
@@ -646,7 +779,7 @@ public actor SearchIndex {
     /// in Settings without keeping them in indexed_sources (which already
     /// has total_files counting only non-directories).
     public func sourceCounts(_ sourceId: String) -> (files: Int, folders: Int)? {
-        guard let db else { return nil }
+        guard let db = handle() else { return nil }
         let sql = "SELECT SUM(CASE WHEN is_directory=0 THEN 1 ELSE 0 END), SUM(CASE WHEN is_directory=1 THEN 1 ELSE 0 END) FROM indexed_files WHERE source_id = ?"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
@@ -660,7 +793,7 @@ public actor SearchIndex {
     /// account has no rows. Counts non-directory and directory entries
     /// separately, and uses the freshest `last_indexed` as the timestamp.
     public func cloudAccountSummary(accountId: UUID) -> IndexedAccountSummary? {
-        guard let db else { return nil }
+        guard let db = handle() else { return nil }
         let sql = """
             SELECT
                 MAX(last_indexed),
@@ -693,7 +826,7 @@ public actor SearchIndex {
     /// Bulk read for Compare: every indexed_files row whose absolute path
     /// is at or beneath `rootPath`. Caller computes relative paths.
     public func indexedFilesUnder(sourceId: String, rootPath: String) -> [IndexedFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
         let sql: String
         if rootPath == "/" {
@@ -746,7 +879,7 @@ public actor SearchIndex {
 
     /// Bulk read for Compare from `cloud_files` (the cloud index cache).
     public func cloudFilesUnder(accountId: UUID, rootPath: String) -> [CloudIndexedFile] {
-        guard let db else { return [] }
+        guard let db = handle() else { return [] }
         let prefix = rootPath == "/" ? "/" : (rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
         let sql: String
         if rootPath == "/" {
@@ -805,7 +938,7 @@ public actor SearchIndex {
     /// treat cloud and drive sources uniformly. Called after a successful
     /// walkCloud completes.
     public func recordCloudSource(accountId: UUID, displayName: String, summary: IndexedAccountSummary) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         // Update `kind` on conflict too — older builds had a bind bug that
         // wrote an empty string for `kind`, so re-indexing must be able to
         // self-heal the row (otherwise the cloud account stays mis-classified
@@ -837,7 +970,7 @@ public actor SearchIndex {
     /// removes the account — otherwise these rows stick around as orphans
     /// in Settings → Index Status with the captured display name.
     public func dropIndexedCloudSource(accountId: UUID) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         let uuid = accountId.uuidString
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for sql in [
@@ -860,7 +993,7 @@ public actor SearchIndex {
     /// left behind by earlier remove/re-add cycles, before this build
     /// started dropping them on account removal.
     public func purgeOrphanCloudSources(keepAccountIds: Set<UUID>) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         let keep = Set(keepAccountIds.map { $0.uuidString })
         // Collect candidate orphans first so we can then run the same
         // drop logic across all four tables — keeps the per-row teardown
@@ -900,7 +1033,7 @@ public actor SearchIndex {
     /// user renames a cloud account so Settings → Index Status shows the
     /// new name without waiting for a re-index.
     public func renameIndexedSource(sourceId: String, to newName: String) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "UPDATE indexed_sources SET display_name = ? WHERE source_id = ?", -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
@@ -912,7 +1045,7 @@ public actor SearchIndex {
     /// Drops the cloud cache rows for an account. Used by the "Erase All"
     /// action in Settings → Index Status.
     public func dropCloudAccount(accountId: UUID) {
-        guard let db else { return }
+        guard let db = handle() else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         var del: OpaquePointer?
         sqlite3_prepare_v2(db, "DELETE FROM cloud_files WHERE account_id = ?", -1, &del, nil)
@@ -924,7 +1057,7 @@ public actor SearchIndex {
 
     /// Wipes every indexed row across both unified and cloud-cache tables.
     public func wipeAll() {
-        guard let db else { return }
+        guard let db = handle() else { return }
         sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
         for sql in [
             "DELETE FROM indexed_files",
@@ -937,8 +1070,32 @@ public actor SearchIndex {
         sqlite3_exec(db, "COMMIT", nil, nil, nil)
     }
 
+    // MARK: - Checked sqlite helpers
+    //
+    // Thin wrappers that turn a return code into an error carrying SQLite's
+    // own message. The write paths used to discard every one of these.
+
+    private func exec(_ db: OpaquePointer, _ sql: String) throws {
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw SearchIndexError.executionFailed("\(sql): \(String(cString: sqlite3_errmsg(db)))")
+        }
+    }
+
+    private func prepare(_ db: OpaquePointer, _ sql: String, into stmt: inout OpaquePointer?) throws {
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw SearchIndexError.executionFailed("\(sql): \(String(cString: sqlite3_errmsg(db)))")
+        }
+    }
+
+    private func step(_ db: OpaquePointer, _ stmt: OpaquePointer?, _ what: String) throws {
+        let rc = sqlite3_step(stmt)
+        guard rc == SQLITE_DONE || rc == SQLITE_ROW else {
+            throw SearchIndexError.executionFailed("could not \(what): \(String(cString: sqlite3_errmsg(db)))")
+        }
+    }
+
     private func execute(_ sql: String) throws {
-        guard let db else { return }
+        guard let db = handle() else { return }
         var errMsg: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(db, sql, nil, nil, &errMsg) != SQLITE_OK {
             let msg = errMsg.map { String(cString: $0) } ?? "unknown error"

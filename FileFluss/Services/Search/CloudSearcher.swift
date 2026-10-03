@@ -25,7 +25,7 @@ actor CloudSearcher {
                 do {
                     if let apiResults = try await provider.searchFiles(query: query, path: rootPath) {
                         // Update index with fresh results
-                        await SearchIndex.shared.upsertItems(apiResults, accountId: accountId)
+                        await SearchIndex.shared.upsertItemsLogging(apiResults, accountId: accountId, context: "search")
 
                         let items = apiResults.map { item in
                             SearchResultItem.cloud(item, accountId: accountId, accountName: accountName)

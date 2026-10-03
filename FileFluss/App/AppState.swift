@@ -1703,8 +1703,21 @@ final class AppState {
         restoreStartupLocations(cloudOnly: false)
 
         Task {
+            // Warm the index up front. It opens itself on first use now, so
+            // nothing depends on this — it used to be the only open, and it
+            // sat behind the reconnect below, where a slow or failed
+            // reconnect left every index write in the session writing into
+            // a handle that was never opened.
+            do {
+                try await SearchIndex.shared.open()
+            } catch {
+                SupportLogger.shared.log(
+                    "Could not open the search index at launch: \(error.localizedDescription)",
+                    category: "Indexing",
+                    level: .error
+                )
+            }
             await syncManager.reconnectSavedAccounts()
-            try? await SearchIndex.shared.open()
             // Drop orphan indexed_sources rows from prior account incarnations
             // (remove-then-re-add cycles in earlier builds left behind rows
             // keyed by the old account UUID). Runs on every launch — cheap

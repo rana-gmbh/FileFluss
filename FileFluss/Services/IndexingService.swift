@@ -170,33 +170,71 @@ final class IndexingService {
         }
 
         let cancelled = Task.isCancelled
+        var writeFailure: String?
+        var stored: Int?
+
         if !cancelled {
             // Persist root entry so the offline browser has something to
             // list at "/" when the user enters the source.
             let snapshot = collected
-            await SearchIndex.shared.replaceFiles(
-                sourceId: sourceId,
-                kind: kind,
-                displayName: displayName,
-                files: snapshot
-            )
+            do {
+                let result = try await SearchIndex.shared.replaceFiles(
+                    sourceId: sourceId,
+                    kind: kind,
+                    displayName: displayName,
+                    files: snapshot
+                )
+                stored = result.stored
+                SupportLogger.shared.log(
+                    "Indexed \(displayName): \(result.stored) of \(result.requested) entries stored" +
+                    (result.rejected > 0 ? ", \(result.rejected) rejected" : ""),
+                    category: "Indexing"
+                )
+                // The count the index actually holds, not the count we
+                // walked. They differ when rows are rejected, and the
+                // sidebar should say what is searchable.
+                if !result.isComplete {
+                    SupportLogger.shared.log(
+                        "Index for \(displayName) is short of the walk: walked \(result.requested), stored \(result.stored)",
+                        category: "Indexing",
+                        level: .error
+                    )
+                }
+            } catch {
+                writeFailure = error.localizedDescription
+                SupportLogger.shared.log(
+                    "Indexing \(displayName) failed to write: \(error.localizedDescription)",
+                    category: "Indexing",
+                    level: .error
+                )
+            }
         }
 
         let finalCount = processed
+        let failure = writeFailure
+        let storedCount = stored
         await MainActor.run {
             guard let job = service?.jobs.first(where: { $0.id == jobId }) else { return }
             job.filesProcessed = finalCount
             job.isComplete = true
             if cancelled {
                 job.errorMessage = "Cancelled"
+                return
             }
-            // Update the drive's persisted metadata.
-            if !cancelled {
-                if var d = DriveMonitor.shared.drives.first(where: { $0.id == sourceId }) {
-                    d.lastIndexed = Date()
-                    d.totalFiles = finalCount
-                    DriveMonitor.shared.upsert(d)
-                }
+            if let failure {
+                // Nothing was stored, so nothing is claimed: the drive keeps
+                // whatever it said before. Reporting "indexed N files" after
+                // a failed write is what sent a user looking for a database
+                // that had never been written.
+                job.errorMessage = "Could not save the index: \(failure)"
+                return
+            }
+            // Update the drive's persisted metadata, with the number the
+            // index holds.
+            if var d = DriveMonitor.shared.drives.first(where: { $0.id == sourceId }) {
+                d.lastIndexed = Date()
+                d.totalFiles = storedCount ?? finalCount
+                DriveMonitor.shared.upsert(d)
             }
         }
     }
@@ -233,7 +271,22 @@ final class IndexingService {
                 continue
             }
             if items.isEmpty { continue }
-            await SearchIndex.shared.upsertItems(items, accountId: accountId)
+            do {
+                try await SearchIndex.shared.upsertItems(items, accountId: accountId)
+            } catch {
+                SupportLogger.shared.log(
+                    "Indexing failed to write \(items.count) entries: \(error.localizedDescription)",
+                    category: "Indexing",
+                    level: .error
+                )
+                await MainActor.run {
+                    if let job = service?.jobs.first(where: { $0.id == jobId }) {
+                        job.isComplete = true
+                        job.errorMessage = "Could not save the index: \(error.localizedDescription)"
+                    }
+                }
+                return
+            }
             for item in items {
                 if item.isDirectory { pending.append(item.path) }
                 processed += 1

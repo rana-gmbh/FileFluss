@@ -144,7 +144,7 @@ final class StorageScanner {
 
             // Feed the offline index while we're here: the walk costs the
             // same, and the next analysis of this account is then instant.
-            await SearchIndex.shared.upsertItems(items, accountId: accountId)
+            await SearchIndex.shared.upsertItemsLogging(items, accountId: accountId, context: "storage analysis")
 
             for item in items {
                 entries.append(StorageTreeBuilder.Entry(
