@@ -242,6 +242,15 @@ public sealed class SynologyDriveProvider : CloudProvider
         var destinationFolder = GetParentPath(newPath);
         var destinationName = GetName(newPath);
         var sourceName = GetName(path);
+        if (destinationName != sourceName && await LandingSpotTakenAsync(client, path, destinationFolder, sourceName, cancellationToken).ConfigureAwait(false))
+        {
+            // CopyMove runs with overwrite on and lands under the source name, so a renamed
+            // copy ("Keep both", "a (2).txt") would first overwrite the very file the user chose
+            // to keep — or the source itself, copying within its folder. Let the caller copy
+            // the bytes instead.
+            throw CloudProviderException.NotImplemented();
+        }
+
         await client.CopyMoveAsync(path, destinationFolder, removeSource, cancellationToken).ConfigureAwait(false);
         if (destinationName != sourceName)
         {
@@ -253,6 +262,24 @@ public sealed class SynologyDriveProvider : CloudProvider
             {
                 SupportLogger.Shared.Log($"[Synology] Rename after copy/move failed: {e.Message}", "Synology", LogLevel.Error);
             }
+        }
+    }
+
+    private async Task<bool> LandingSpotTakenAsync(SynologyDriveApiClient client, string path, string destinationFolder, string sourceName, CancellationToken cancellationToken)
+    {
+        if (string.Equals(IO.CloudPath.Normalize(GetParentPath(path)), IO.CloudPath.Normalize(destinationFolder), StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            await client.GetFileInfoAsync(CombinePath(destinationFolder, sourceName), cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+        {
+            return false;
         }
     }
 

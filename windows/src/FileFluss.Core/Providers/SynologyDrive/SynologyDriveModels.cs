@@ -57,7 +57,19 @@ internal sealed record SynologyListData([property: JsonPropertyName("files")] IR
 
 internal sealed record SynologyTaskStartData([property: JsonPropertyName("taskid")] string? TaskId);
 
-internal sealed record SynologyTaskStatusData([property: JsonPropertyName("finished")] bool? Finished);
+internal sealed record SynologyTaskStatusData(
+    [property: JsonPropertyName("finished")] bool? Finished,
+    [property: JsonPropertyName("error")] System.Text.Json.JsonElement? Error = null)
+{
+    /// <summary>The task's own failure code: DSM reports it as <c>{"code":…}</c> (or a bare number) beside <c>finished</c>.</summary>
+    public int? ErrorCode => Error switch
+    {
+        { ValueKind: System.Text.Json.JsonValueKind.Number } number when number.TryGetInt32(out var code) => code,
+        { ValueKind: System.Text.Json.JsonValueKind.Object } error
+            when error.TryGetProperty("code", out var value) && value.TryGetInt32(out var code) => code,
+        _ => null,
+    };
+}
 
 /// <summary>
 /// <c>SYNO.FileStation.Sharing</c> <c>create</c>: one entry per requested path, each with its

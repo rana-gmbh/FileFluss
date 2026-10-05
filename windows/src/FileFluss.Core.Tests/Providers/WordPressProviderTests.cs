@@ -54,6 +54,30 @@ public sealed class WordPressProviderTests : IDisposable
     private static string ExpectedBasic(string user, string password)
         => "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"));
 
+    [Fact]
+    public async Task AMonthListingThatFailsPartWayThrowsInsteadOfReturningHalf()
+    {
+        var pages = 0;
+        _http.On(HttpMethod.Get, "/wp/v2/media?after=2026-04", (_, _) => ++pages == 1
+            ? Paged("""[{ "id": 5, "date": "2026-04-08T10:00:00", "title": { "rendered": "a" }, "source_url": "https://example.com/a.jpg", "media_details": { "filesize": 1 } }]""", 3)
+            : new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var provider = SignedIn();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/2026/04"));
+    }
+
+    [Fact]
+    public async Task APagePastTheEndEndsTheListing()
+    {
+        var pages = 0;
+        _http.On(HttpMethod.Get, "/wp/v2/media?after=2026-04", (_, _) => ++pages == 1
+            ? Paged("""[{ "id": 5, "date": "2026-04-08T10:00:00", "title": { "rendered": "a" }, "source_url": "https://example.com/a.jpg", "media_details": { "filesize": 1 } }]""", 5)
+            : FakeHttpHandler.Json("""{"code":"rest_post_invalid_page_number"}""", HttpStatusCode.BadRequest));
+        var provider = SignedIn();
+
+        Assert.Single(await provider.ListDirectoryAsync("/2026/04"));
+    }
+
     // MARK: - Connect
 
     [Fact]
