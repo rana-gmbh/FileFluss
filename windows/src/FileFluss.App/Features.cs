@@ -22,6 +22,7 @@ internal static class Features
         WindowsRegistry.About = owner => Views.AboutWindow.Show(owner);
         WindowsRegistry.Help = owner => Views.HelpWindow.Show(owner);
         WindowsRegistry.Search = (owner, vm) => Views.Search.SearchWindow.Show(owner, vm);
+        WindowsRegistry.StorageAnalysis = (owner, vm, location) => Views.Storage.StorageAnalysisWindow.Show(owner, vm, location);
     }
 
     public static void AfterStartup(MainWindow window, MainViewModel vm, AppServices services)
@@ -30,6 +31,10 @@ internal static class Features
         SingleInstance.Forwarded += args => window.Dispatcher.Invoke(() => OpenArgument(vm, args));
         OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray());
         WireIndex(window, vm, services);
+
+        // First launch, or "Show Welcome Screen Again" in Settings.
+        Views.WelcomeWindow.ShowIfNeeded(window, services);
+        Views.Settings.SettingsWindow.WelcomeRequested += (_, _) => Views.WelcomeWindow.Show(window, services);
 
         // Updates: Help → Check for Updates…, and a quiet daily check (macOS Sparkle).
         var updates = new UpdateService(services);
