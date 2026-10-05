@@ -583,13 +583,14 @@ public sealed class SearchWindow : Window
 
             var icon = new Image
             {
-                Source = IconCache.For(item.Item, item.Kind == SearchResultKind.Local, 20),
                 Width = 20,
                 Height = 20,
                 Opacity = item.IsOffline ? 0.55 : 1,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
+            // Local folders' own icons are read off the UI thread; the generic one shows meanwhile.
+            icon.Source = IconCache.ForRow(item.Item, item.Kind == SearchResultKind.Local, isDrive: false, 20, loaded => icon.Source = loaded).Icon;
             RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
             grid.Children.Add(icon);
 

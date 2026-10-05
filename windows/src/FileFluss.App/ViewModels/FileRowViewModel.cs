@@ -82,8 +82,11 @@ public sealed class FileRowViewModel : Observable
 
             if (!_iconLoaded)
             {
-                _iconLoaded = true;
-                _icon = IsDrive ? IconCache.ForPath(Item.Path, true) : IconCache.For(Item, _isLocal);
+                // Folder, drive and program icons are read from the item itself on a background
+                // thread; the generic type icon shows meanwhile (never a blocked UI thread).
+                var (icon, isFinal) = IconCache.ForRow(Item, _isLocal, IsDrive, 16, OnIconLoaded);
+                _icon = icon ?? _icon;
+                _iconLoaded = isFinal;
             }
 
             if (ThumbnailCache.ShouldUseThumbnail(Item, _isLocal) && !IsDrive)
@@ -96,6 +99,16 @@ public sealed class FileRowViewModel : Observable
             }
 
             return _icon;
+        }
+    }
+
+    private void OnIconLoaded(ImageSource icon)
+    {
+        _iconLoaded = true;
+        if (!ReferenceEquals(icon, _icon))
+        {
+            _icon = icon;
+            OnPropertyChanged(nameof(Icon));
         }
     }
 

@@ -156,6 +156,17 @@ public sealed class PerformanceBenchmarks(ITestOutputHelper output)
                 ShellIcons.IconIndex(path, true, exists: true);
             }
         }, 3);
+        Bench.OnSta(() =>
+        {
+            var rows = Directory.GetDirectories(folder).Skip(200).Take(200).Select(p => LocalFileProvider.ToItem(new DirectoryInfo(p))).ToList();
+            Bench.Once(output, $"UI-thread cost of {rows.Count} folder row icons (IconCache.ForRow)", () =>
+            {
+                foreach (var row in rows)
+                {
+                    Services.IconCache.ForRow(row, isLocal: true, isDrive: false, 16, _ => { });
+                }
+            });
+        });
         Bench.Measure(output, "ShellIcons.IconIndex by extension x200 (cached)", () =>
         {
             for (var i = 0; i < 200; i++)
