@@ -1,0 +1,146 @@
+<UserControl x:Class="FileFluss.App.Views.SidebarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:u="clr-namespace:FileFluss.App.Services"
+             xmlns:vm="clr-namespace:FileFluss.App.ViewModels"
+             xmlns:t="clr-namespace:FileFluss.Core.Transfers;assembly=FileFluss.Core">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+
+        <DataTemplate x:Key="EntryTemplate" DataType="{x:Type vm:SidebarEntry}">
+            <Grid Margin="8,0,6,0" ToolTip="{Binding ToolTip}" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="Glyph" Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center"
+                           HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Image x:Name="Picture" Source="{Binding Image}" Width="16" Height="16" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
+                <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2" Text="{Binding Trailing}" FontSize="10.5" Margin="4,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Ellipse x:Name="Dot" Grid.Column="3" Width="7" Height="7" Margin="4,0,2,0" VerticalAlignment="Center" Visibility="Collapsed"
+                         Fill="{DynamicResource DisconnectedBrush}" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Image}" Value="{x:Null}">
+                    <Setter TargetName="Picture" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource ConnectedBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsConnected}" Value="False">
+                    <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Account">
+                    <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Drive">
+                    <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.IsCompact, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                    <Setter TargetName="Title" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="SidebarList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ItemTemplate" Value="{StaticResource EntryTemplate}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource SidebarItemStyle}" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="AllowDrop" Value="True" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <ItemsPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,4,0,8">
+            <StackPanel>
+                <!-- Favorites -->
+                <ToggleButton x:Name="FavoritesHeader" Style="{StaticResource SectionToggle}" Tag="favorites" Content="{u:Loc Favorites}"
+                              AllowDrop="True" DragOver="OnFavoritesHeaderDragOver" Drop="OnFavoritesHeaderDrop" Click="OnSectionToggled" />
+                <ListBox x:Name="FavoritesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Favorites}" Tag="favorites" />
+
+                <!-- Drives -->
+                <ToggleButton x:Name="DrivesHeader" Style="{StaticResource SectionToggle}" Tag="drives" Content="{u:Loc Drives}" Click="OnSectionToggled" />
+                <ListBox x:Name="DrivesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Drives}" Tag="drives" />
+
+                <!-- Cloud accounts -->
+                <ToggleButton x:Name="CloudHeader" Style="{StaticResource SectionToggle}" Tag="cloud" Content="{u:Loc 'Cloud Accounts'}" Click="OnSectionToggled" />
+                <StackPanel x:Name="CloudSection">
+                    <ListBox x:Name="AccountsList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Accounts}" Tag="cloud" />
+                    <Button x:Name="AddAccountButton" Style="{StaticResource SidebarAddButton}" Click="OnAddAccount"
+                            Visibility="{Binding ShowAddAccount, Converter={StaticResource Visible}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Width="20" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="AddAccountText" Text="{u:Loc 'Add Cloud Account…'}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Transfers -->
+                <StackPanel x:Name="TransfersSection">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="{u:Loc Transfers}" />
+                    <ItemsControl x:Name="TransfersList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type t:TransferProgress}">
+                                <Border Margin="8,2,8,4" Padding="8,6" CornerRadius="5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                        Cursor="Hand" MouseLeftButtonUp="OnTransferClicked">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
+                                                    Content="&#xE711;" Click="OnTransferDismiss" ToolTip="{u:Loc 'Cancel this transfer'}" />
+                                            <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" FontSize="11.5" VerticalAlignment="Center"
+                                                       ToolTip="{Binding StatusText}" />
+                                        </DockPanel>
+                                        <ProgressBar Height="4" Margin="0,5,0,3" Maximum="1" Value="{Binding Fraction, Mode=OneWay}" x:Name="Bar" />
+                                        <TextBlock Text="{Binding LiveDetailLine}" FontSize="10.5" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" x:Name="Detail" />
+                                    </StackPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsComplete}" Value="True">
+                                        <Setter TargetName="Bar" Property="Visibility" Value="Collapsed" />
+                                        <Setter TargetName="Detail" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Folder sizes -->
+                <StackPanel x:Name="FolderSizesSection" Visibility="{Binding ShowFolderSizes, Converter={StaticResource Visible}}">
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="{u:Loc 'Folder Sizes'}" />
+                    <ItemsControl ItemsSource="{Binding FolderSizes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:FolderSizeEntry}">
+                                <DockPanel Margin="14,2,8,2">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
+                                            Content="&#xE711;" Click="OnFolderSizeRemove" />
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" FontSize="11.5" Margin="6,0" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{Binding Name}" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

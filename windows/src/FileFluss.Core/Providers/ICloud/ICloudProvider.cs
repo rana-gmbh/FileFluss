@@ -56,6 +56,9 @@ public sealed class ICloudProvider : CloudProvider
 
     public override CloudProviderType ProviderType => CloudProviderType.ICloud;
 
+    /// <summary>Names are case-insensitive here ("a.txt" and "A.txt" are one file).</summary>
+    public override bool IsCaseSensitive => false;
+
     protected override string CredentialKeyPrefix => "icloud";
 
     /// <summary>True while the iCloud Drive folder exists — like macOS, the system sign-in is the credential.</summary>

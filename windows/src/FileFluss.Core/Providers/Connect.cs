@@ -121,7 +121,7 @@ public sealed class ConnectValues
     /// <summary>The <see cref="ConnectMode.Id"/> the user chose.</summary>
     public string Mode { get; }
 
-    /// <summary>Trimmed value, or empty. Passwords are returned untrimmed.</summary>
+    /// <summary>The value as entered (untrimmed — passwords may legitimately have spaces), or empty.</summary>
     public string this[string key] => Get(key);
 
     public string Get(string key, string fallback = "")

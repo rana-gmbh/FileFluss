@@ -11,7 +11,8 @@ public sealed record CloudStorageQuota(long UsedBytes, long? TotalBytes)
 {
     public DateTimeOffset FetchedAt { get; init; } = DateTimeOffset.Now;
 
-    public long? FreeBytes => TotalBytes is { } total ? Math.Max(0, total - UsedBytes) : null;
+    /// <summary>Null when there is no positive total — a zero total means "unlimited" (macOS).</summary>
+    public long? FreeBytes => TotalBytes is { } total && total > 0 ? Math.Max(0, total - UsedBytes) : null;
 }
 
 /// <summary>

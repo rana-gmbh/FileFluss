@@ -44,6 +44,9 @@ public sealed class LocalFileProvider : FileProvider
 
     public override bool IsLocal => true;
 
+    /// <summary>NTFS folds case.</summary>
+    public override bool IsCaseSensitive => false;
+
     /// <summary>"This PC".</summary>
     public override string RootPath => string.Empty;
 

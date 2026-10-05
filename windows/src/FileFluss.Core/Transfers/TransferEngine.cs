@@ -127,13 +127,13 @@ public static class TransferEngine
 
         // What is already at the destination, for conflict detection and unique naming.
         var existing = await ListOrEmptyAsync(destination, request.DestinationPath, ct).ConfigureAwait(false);
-        var existingByName = new Dictionary<string, CloudFileItem>(StringComparer.OrdinalIgnoreCase);
+        var existingByName = new Dictionary<string, CloudFileItem>(destination.NameComparer);
         foreach (var item in existing)
         {
             existingByName.TryAdd(item.Name, item);
         }
 
-        var takenNames = new HashSet<string>(existingByName.Keys, StringComparer.OrdinalIgnoreCase);
+        var takenNames = new HashSet<string>(existingByName.Keys, destination.NameComparer);
         var resolutions = await ResolveConflictsAsync(request, existingByName, ct).ConfigureAwait(false);
 
         // Plan the whole tree first: real totals for the progress bar, and one listing pass.
@@ -484,7 +484,7 @@ public static class TransferEngine
                     if (!existingChildren.TryGetValue(parentPath, out var names))
                     {
                         names = (await ListOrEmptyAsync(destination, parentPath, ct).ConfigureAwait(false))
-                            .Where(i => !i.IsDirectory).Select(i => i.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                            .Where(i => !i.IsDirectory).Select(i => i.Name).ToHashSet(destination.NameComparer);
                         existingChildren[parentPath] = names;
                     }
 
@@ -551,6 +551,9 @@ public static class TransferEngine
         {
             await source.DownloadFileAsync(item.Path, targetPath, d => { Interlocked.Add(ref reported, d); progress.AddDownloadBytes(d); }, ct).ConfigureAwait(false);
             progress.TopUp(upload: false, reported, item.Size);
+
+            // An exported Google document lands as "<name>.docx"; stamp that file.
+            targetPath = DownloadedFile.Locate(targetPath);
         }
         else if (ReferenceEquals(source, destination) && await TryServerSideFileCopyAsync(source, item, targetPath, ct).ConfigureAwait(false))
         {
@@ -559,12 +562,22 @@ public static class TransferEngine
         else
         {
             // Cloud → cloud: stage locally, then upload. Every byte travels twice.
-            var staged = SafeLocalPath.Destination(Guid.NewGuid().ToString("N") + "-" + item.Name, staging ?? StagingLocation.StagingDirectory("transfer"));
+            var requested = SafeLocalPath.Destination(Guid.NewGuid().ToString("N") + "-" + item.Name, staging ?? StagingLocation.StagingDirectory("transfer"));
+            var staged = requested;
             try
             {
                 progress.SetPhase(TransferPhase.Downloading);
-                await source.DownloadFileAsync(item.Path, staged, d => { Interlocked.Add(ref reported, d); progress.AddDownloadBytes(d); }, ct).ConfigureAwait(false);
+                await source.DownloadFileAsync(item.Path, requested, d => { Interlocked.Add(ref reported, d); progress.AddDownloadBytes(d); }, ct).ConfigureAwait(false);
                 progress.TopUp(upload: false, reported, item.Size);
+
+                // A Google document arrives exported ("<name>.docx"); it travels on under that name.
+                staged = DownloadedFile.Locate(requested);
+                var added = DownloadedFile.AddedExtension(requested, staged);
+                if (added.Length > 0 && !targetPath.EndsWith(added, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetPath += added;
+                }
+
                 if (item.HasKnownModificationDate)
                 {
                     // Some providers (Nextcloud's X-OC-Mtime) carry the local mtime through upload.
@@ -584,6 +597,7 @@ public static class TransferEngine
             finally
             {
                 TryDeleteFile(staged);
+                TryDeleteFile(requested);
                 progress.SetPhase(TransferPhase.Downloading);
             }
         }

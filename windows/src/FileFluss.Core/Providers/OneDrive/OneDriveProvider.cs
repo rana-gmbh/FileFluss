@@ -43,6 +43,9 @@ public sealed class OneDriveProvider : CloudProvider
 
     public override CloudProviderType ProviderType => CloudProviderType.OneDrive;
 
+    /// <summary>Names are case-insensitive here ("a.txt" and "A.txt" are one file).</summary>
+    public override bool IsCaseSensitive => false;
+
     protected override string CredentialKeyPrefix => "onedrive";
 
     public override bool IsAuthenticated => _client is not null;

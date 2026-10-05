@@ -1,32 +1,75 @@
 <Window x:Class="FileFluss.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FileFluss" Height="700" Width="1200">
+        xmlns:u="clr-namespace:FileFluss.App.Services"
+        xmlns:v="clr-namespace:FileFluss.App.Views"
+        Title="FileFluss" Width="1360" Height="820" MinWidth="760" MinHeight="420"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </Window.Resources>
     <DockPanel>
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File"><MenuItem Header="New Folder" InputGestureText="Ctrl+Shift+N"/><Separator/><MenuItem Header="Exit"/></MenuItem>
-            <MenuItem Header="_Edit"/><MenuItem Header="_View"/><MenuItem Header="_Go"/><MenuItem Header="_Help"/>
-        </Menu>
-        <ToolBar DockPanel.Dock="Top">
-            <Button Content="Refresh"/><Button Content="Search"/><ToggleButton Content="Hidden Files"/><ToggleButton Content="Copy Mode"/>
-        </ToolBar>
-        <Grid>
+        <Menu x:Name="MainMenu" DockPanel.Dock="Top" Padding="4,0" />
+
+        <!-- Toolbar -->
+        <Grid DockPanel.Dock="Top" Margin="8,2,8,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <ListBox Grid.Column="0">
-                <ListBoxItem>Home</ListBoxItem><ListBoxItem>Desktop</ListBoxItem><ListBoxItem>Documents</ListBoxItem>
-            </ListBox>
-            <DataGrid x:Name="LeftGrid" Grid.Column="1" AutoGenerateColumns="True" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="None"/>
-            <ListView x:Name="RightList" Grid.Column="2">
-                <ListView.View>
-                    <GridView>
-                        <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="200"/>
-                        <GridViewColumn Header="Size" DisplayMemberBinding="{Binding Size}" Width="80"/>
-                        <GridViewColumn Header="Kind" DisplayMemberBinding="{Binding Kind}" Width="120"/>
-                    </GridView>
-                </ListView.View>
-            </ListView>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="BackButton" Style="{StaticResource GlyphButton}" Content="&#xE72B;" Click="OnBack" ToolTip="{u:Loc Back}" />
+                <Button x:Name="ForwardButton" Style="{StaticResource GlyphButton}" Content="&#xE72A;" Click="OnForward" ToolTip="{u:Loc Forward}" />
+                <Button x:Name="UpButton" Style="{StaticResource GlyphButton}" Content="&#xE74A;" Click="OnUp" ToolTip="{u:Loc 'Parent Directory'}" />
+                <TextBlock x:Name="PanelTitle" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"
+                           TextTrimming="CharacterEllipsis" MaxWidth="360" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE72C;" Content="{u:Loc Refresh}" Click="OnRefresh" ToolTip="{u:Loc 'Refresh both panels'}" />
+                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE721;" Content="{u:Loc Search}" Click="OnSearch" x:Name="SearchButton" />
+                <ToggleButton x:Name="TransfersButton" Style="{StaticResource ToolbarButton}" Tag="&#xE8AB;" Content="{u:Loc Transfers}" Click="OnTransfers" />
+                <ToggleButton x:Name="PanesButton" Style="{StaticResource ToolbarButton}" Tag="&#xE89A;" Content="{u:Loc 'Single Pane'}"
+                              IsChecked="{Binding SinglePaneMode}" ToolTip="{u:Loc 'Show only the active panel'}" />
+                <Button x:Name="SyncButton" Style="{StaticResource ToolbarButton}" Tag="&#xE895;" Content="{u:Loc Sync}" Click="OnSync" />
+                <Button x:Name="CompareButton" Style="{StaticResource ToolbarButton}" Tag="&#xE8AB;" Content="{u:Loc Compare}" Click="OnCompare" />
+                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE753;" Content="{u:Loc Cloud}" Click="OnCloudAccounts" ToolTip="{u:Loc 'Cloud Accounts'}" />
+                <ToggleButton x:Name="HiddenButton" Style="{StaticResource ToolbarButton}" Tag="&#xE890;" Content="{u:Loc 'Hidden Files'}"
+                              Click="OnToggleHidden" ToolTip="{u:Loc 'Show hidden files'}" />
+                <ToggleButton Style="{StaticResource ToolbarButton}" Tag="&#xE8C8;" Content="{u:Loc 'Copy Mode'}" IsChecked="{Binding IsCopyMode}"
+                              ToolTip="{u:Loc 'Force all drag &amp; drop operations to copy (skips the Move/Copy prompt)'}" />
+                <ToggleButton Style="{StaticResource ToolbarButton}" Tag="&#xE8DE;" Content="{u:Loc 'Move Mode'}" IsChecked="{Binding IsMoveMode}"
+                              ToolTip="{u:Loc 'Force all drag &amp; drop operations to move (skips the Move/Copy prompt)'}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Panels -->
+        <Grid x:Name="PanelsGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftSidebarColumn" Width="220" MinWidth="44" MaxWidth="420" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="LeftPanelColumn" Width="*" MinWidth="200" />
+                <ColumnDefinition x:Name="MiddleSplitterColumn" Width="Auto" />
+                <ColumnDefinition x:Name="RightPanelColumn" Width="*" MinWidth="200" />
+                <ColumnDefinition x:Name="RightSplitterColumn" Width="Auto" />
+                <ColumnDefinition x:Name="RightSidebarColumn" Width="220" MinWidth="44" MaxWidth="420" />
+            </Grid.ColumnDefinitions>
+
+            <v:SidebarView x:Name="LeftSidebar" Grid.Column="0" />
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                          DragCompleted="OnSplitterMoved" />
+            <Border Grid.Column="2" x:Name="LeftCard" CornerRadius="8,8,0,0" Margin="0,0,1,0" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,1,0">
+                <v:PanelView x:Name="LeftPanel" />
+            </Border>
+            <GridSplitter x:Name="MiddleSplitter" Grid.Column="3" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext" />
+            <Border Grid.Column="4" x:Name="RightCard" CornerRadius="8,8,0,0" Margin="1,0,0,0" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,1,0">
+                <v:PanelView x:Name="RightPanel" />
+            </Border>
+            <GridSplitter x:Name="RightSplitter" Grid.Column="5" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                          DragCompleted="OnSplitterMoved" />
+            <v:SidebarView x:Name="RightSidebar" Grid.Column="6" />
         </Grid>
     </DockPanel>
 </Window>

@@ -43,6 +43,9 @@ public sealed class BoxProvider : CloudProvider
 
     public override CloudProviderType ProviderType => CloudProviderType.Box;
 
+    /// <summary>Names are case-insensitive here ("a.txt" and "A.txt" are one file).</summary>
+    public override bool IsCaseSensitive => false;
+
     protected override string CredentialKeyPrefix => "box";
 
     public override bool IsAuthenticated => _client is not null;

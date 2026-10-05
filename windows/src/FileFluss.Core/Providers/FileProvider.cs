@@ -34,6 +34,18 @@ public abstract class FileProvider
     /// <summary>Where "Jump to root" goes.</summary>
     public virtual string RootPath => "/";
 
+    /// <summary>
+    /// Whether "a.txt" and "A.txt" are two different files here. True by default for cloud
+    /// storage (S3, WebDAV, SFTP keep both); NTFS and the big consumer clouds (OneDrive,
+    /// Dropbox, Box) fold case and override this to false. Name clashes are matched with this
+    /// rule — matching case-insensitively on a case-sensitive store would make "replace"
+    /// delete a different file.
+    /// </summary>
+    public virtual bool IsCaseSensitive => true;
+
+    /// <summary>The comparer for names in one folder of this provider.</summary>
+    public StringComparer NameComparer => IsCaseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+
     // MARK: - Paths
 
     public virtual string CombinePath(string directory, string name)
