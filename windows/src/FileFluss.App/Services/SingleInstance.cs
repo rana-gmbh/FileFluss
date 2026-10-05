@@ -47,6 +47,8 @@ internal static class SingleInstance
             // Nobody listening: the running copy is on its way out. Take over once it is gone.
             if (!Acquire(mutex))
             {
+                // Still there and still not answering: hung. Leave a trace of why this launch ends.
+                CrashLog.Write("startup", new TimeoutException($"Another FileFluss in this session holds the single-instance lock but doesn't answer; this launch (process {Environment.ProcessId}) gives up."));
                 mutex.Dispose();
                 return false;
             }
@@ -88,6 +90,7 @@ internal static class SingleInstance
                 using var reader = new StreamReader(server, Encoding.UTF8);
                 var payload = await reader.ReadToEndAsync(token).ConfigureAwait(false);
                 var args = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(a => a.TrimEnd('\r')).Take(16).ToArray();
+                SupportLogger.Shared.Log($"Another launch handed over to this one ({args.Length} argument(s))", "App");
                 activate();
                 Forwarded?.Invoke(args);
             }
