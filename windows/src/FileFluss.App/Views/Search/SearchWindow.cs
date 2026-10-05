@@ -290,7 +290,7 @@ public sealed class SearchWindow : Window
     {
         Title = L("Search");
         _placeholder.Text = L("Search files across all sources...");
-        Rebuild();
+        Rebuild(force: true);
         UpdateHeader();
     }
 
@@ -307,8 +307,20 @@ public sealed class SearchWindow : Window
         }
     }
 
-    private void Rebuild()
+    /// <summary>What the list last showed; the 150 ms refresh skips a rebuild when nothing it depends on changed.</summary>
+    private (Task Run, int Count, SearchSourceFilter Filter, SearchStatus Status, bool HasQuery)? _shown;
+
+    private void Rebuild() => Rebuild(force: false);
+
+    private void Rebuild(bool force)
     {
+        var shown = (_search.Completion, _search.ResultCount, _search.SourceFilter, _search.Status, _search.SearchText.Length > 0);
+        if (!force && _shown == shown)
+        {
+            return;
+        }
+
+        _shown = shown;
         RebuildChips();
 
         var selected = (_results.SelectedItem as ResultRow)?.Item.Id;
