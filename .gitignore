@@ -26,3 +26,10 @@ Package.resolved
 
 # Secrets
 FileFluss/Resources/Secrets.xcconfig
+
+# Windows port (.NET) build output
+windows/**/bin/
+windows/**/obj/
+windows/artifacts/
+windows/**/*.user
+.vs/

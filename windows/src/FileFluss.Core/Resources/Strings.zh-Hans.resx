@@ -1,0 +1,2075 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="System Default" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="System Default follows the language selected in macOS." xml:space="preserve">
+    <value>“跟随系统”将使用 Windows 中设置的语言。</value>
+  </data>
+  <data name="Relaunch" xml:space="preserve">
+    <value>重新启动</value>
+  </data>
+  <data name="FileFluss Settings" xml:space="preserve">
+    <value>FileFluss 设置</value>
+  </data>
+  <data name="Search" xml:space="preserve">
+    <value>搜索</value>
+  </data>
+  <data name="Compare Folders" xml:space="preserve">
+    <value>比较文件夹</value>
+  </data>
+  <data name="FileFluss Help" xml:space="preserve">
+    <value>FileFluss 帮助</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>通用</value>
+  </data>
+  <data name="Cloud Accounts" xml:space="preserve">
+    <value>云账户</value>
+  </data>
+  <data name="Storage" xml:space="preserve">
+    <value>存储</value>
+  </data>
+  <data name="Index Status" xml:space="preserve">
+    <value>索引状态</value>
+  </data>
+  <data name="Keyboard Map" xml:space="preserve">
+    <value>键盘映射</value>
+  </data>
+  <data name="Show hidden files by default" xml:space="preserve">
+    <value>默认显示隐藏文件</value>
+  </data>
+  <data name="Confirm before deleting" xml:space="preserve">
+    <value>删除前确认</value>
+  </data>
+  <data name="Show &quot;Add Cloud Account&quot; in sidebars" xml:space="preserve">
+    <value>在边栏中显示“添加云账户”</value>
+  </data>
+  <data name="Allow removing cloud accounts from sidebar context menu" xml:space="preserve">
+    <value>允许通过边栏右键菜单移除云账户</value>
+  </data>
+  <data name="Check available space before copy or move" xml:space="preserve">
+    <value>复制或移动前检查可用空间</value>
+  </data>
+  <data name="Warns before a transfer that would exceed the destination&apos;s storage quota or free disk space. Calculating sizes can add a noticeable delay, so this is off by default for faster file operations." xml:space="preserve">
+    <value>在传输可能超出目标存储配额或可用磁盘空间时发出警告。计算大小可能会带来明显的延迟，因此默认关闭以保持文件操作的流畅。</value>
+  </data>
+  <data name="Show Welcome Screen Again" xml:space="preserve">
+    <value>再次显示欢迎界面</value>
+  </data>
+  <data name="Search all sources (⌘F)" xml:space="preserve">
+    <value>搜索所有来源（Ctrl+F）</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="Refresh both panels" xml:space="preserve">
+    <value>刷新两个面板</value>
+  </data>
+  <data name="Hidden Files" xml:space="preserve">
+    <value>隐藏文件</value>
+  </data>
+  <data name="Show hidden files" xml:space="preserve">
+    <value>显示隐藏文件</value>
+  </data>
+  <data name="Copy Mode" xml:space="preserve">
+    <value>复制模式</value>
+  </data>
+  <data name="Force all drag &amp; drop operations to copy (skips the Move/Copy prompt)" xml:space="preserve">
+    <value>强制所有拖放操作执行复制（跳过移动/复制提示）</value>
+  </data>
+  <data name="Move Mode" xml:space="preserve">
+    <value>移动模式</value>
+  </data>
+  <data name="Force all drag &amp; drop operations to move (skips the Move/Copy prompt)" xml:space="preserve">
+    <value>强制所有拖放操作执行移动（跳过移动/复制提示）</value>
+  </data>
+  <data name="Sync" xml:space="preserve">
+    <value>同步</value>
+  </data>
+  <data name="It&apos;s not possible to sync with an offline folder." xml:space="preserve">
+    <value>无法与离线文件夹同步。</value>
+  </data>
+  <data name="Sync left and right panels" xml:space="preserve">
+    <value>同步左右面板</value>
+  </data>
+  <data name="Compare" xml:space="preserve">
+    <value>比较</value>
+  </data>
+  <data name="Single Pane" xml:space="preserve">
+    <value>单窗格</value>
+  </data>
+  <data name="Show a single pane (hides the second panel)" xml:space="preserve">
+    <value>仅显示单个窗格（隐藏第二个面板）</value>
+  </data>
+  <data name="Compare the two folders side by side" xml:space="preserve">
+    <value>并排比较两个文件夹</value>
+  </data>
+  <data name="Filter visible items…" xml:space="preserve">
+    <value>筛选可见项目…</value>
+  </data>
+  <data name="Clear filter" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="Close filter (Esc)" xml:space="preserve">
+    <value>关闭筛选（Esc）</value>
+  </data>
+  <data name="Version {0}" xml:space="preserve">
+    <value>版本 {0}</value>
+  </data>
+  <data name="Release Notes ↗" xml:space="preserve">
+    <value>发行说明 ↗</value>
+  </data>
+  <data name="Made by Rana GmbH" xml:space="preserve">
+    <value>由 Rana GmbH 出品</value>
+  </data>
+  <data name="If you want to support this project," xml:space="preserve">
+    <value>如果你想支持本项目，</value>
+  </data>
+  <data name="please consider to " xml:space="preserve">
+    <value>欢迎</value>
+  </data>
+  <data name="Buy me a coffee ↗" xml:space="preserve">
+    <value>请我喝杯咖啡 ↗</value>
+  </data>
+  <data name="Released under the" xml:space="preserve">
+    <value>依据以下许可发布：</value>
+  </data>
+  <data name="Check for Updates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="Download" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Try Again" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Continue without granting Full Disk Access" xml:space="preserve">
+    <value>不授予完全磁盘访问权限并继续</value>
+  </data>
+  <data name="Done, Don&apos;t Relaunch" xml:space="preserve">
+    <value>完成，不重新启动</value>
+  </data>
+  <data name="Quit &amp; Relaunch" xml:space="preserve">
+    <value>退出并重新启动</value>
+  </data>
+  <data name="Open System Settings…" xml:space="preserve">
+    <value>打开系统设置…</value>
+  </data>
+  <data name="Welcome to FileFluss" xml:space="preserve">
+    <value>欢迎使用 FileFluss</value>
+  </data>
+  <data name="A few seconds of setup will make FileFluss feel instant." xml:space="preserve">
+    <value>只需几秒钟设置，就能让 FileFluss 用起来快如闪电。</value>
+  </data>
+  <data name="Grant Full Disk Access (recommended)" xml:space="preserve">
+    <value>授予完全磁盘访问权限（推荐）</value>
+  </data>
+  <data name="FileFluss can browse every folder instantly, with no per-folder permission prompts." xml:space="preserve">
+    <value>FileFluss 可以即时浏览每个文件夹，无需逐个文件夹授权。</value>
+  </data>
+  <data name="Or continue without it" xml:space="preserve">
+    <value>或不授予并继续</value>
+  </data>
+  <data name="macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." xml:space="preserve">
+    <value>Windows 会对每个受保护的文件夹（桌面、文稿、下载……）询问一次。每个文件夹首次打开可能需要几秒钟——但仅限首次。</value>
+  </data>
+  <data name="Add FileFluss to Full Disk Access" xml:space="preserve">
+    <value>将 FileFluss 添加到完全磁盘访问</value>
+  </data>
+  <data name="System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit &amp; Relaunch** so the new permission takes effect." xml:space="preserve">
+    <value>系统设置已打开。将下方的 FileFluss 图标拖入**完全磁盘访问**列表，然后点按**退出并重新启动**以使新权限生效。</value>
+  </data>
+  <data name="Or click the **+** button in System Settings and pick FileFluss from your Applications folder." xml:space="preserve">
+    <value>或在系统设置中点按 **+** 按钮，并从“应用程序”文件夹中选择 FileFluss。</value>
+  </data>
+  <data name="Drag into the Full Disk Access list" xml:space="preserve">
+    <value>拖入完全磁盘访问列表</value>
+  </data>
+  <data name="Drag me into the list" xml:space="preserve">
+    <value>把我拖入列表</value>
+  </data>
+  <data name="New Folder" xml:space="preserve">
+    <value>新建文件夹</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+  <data name="Rename…" xml:space="preserve">
+    <value>重命名…</value>
+  </data>
+  <data name="Rename Account" xml:space="preserve">
+    <value>重命名账户</value>
+  </data>
+  <data name="Open cloud accounts settings" xml:space="preserve">
+    <value>打开云账户设置</value>
+  </data>
+  <data name="Duplicate" xml:space="preserve">
+    <value>复制副本</value>
+  </data>
+  <data name="Get Info" xml:space="preserve">
+    <value>显示简介</value>
+  </data>
+  <data name="Copy to Other Panel" xml:space="preserve">
+    <value>复制到另一面板</value>
+  </data>
+  <data name="Move to Other Panel" xml:space="preserve">
+    <value>移动到另一面板</value>
+  </data>
+  <data name="Copy Path" xml:space="preserve">
+    <value>拷贝路径</value>
+  </data>
+  <data name="Move to Trash" xml:space="preserve">
+    <value>移到废纸篓</value>
+  </data>
+  <data name="Delete Immediately?" xml:space="preserve">
+    <value>立即删除？</value>
+  </data>
+  <data name="Delete Permanently" xml:space="preserve">
+    <value>永久删除</value>
+  </data>
+  <data name="&quot;{0}&quot; can&apos;t be moved to the Trash because its volume doesn&apos;t have one. Delete it permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>“{0}”无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。</value>
+  </data>
+  <data name="{0} items can&apos;t be moved to the Trash because their volume doesn&apos;t have one. Delete them permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} 个项目无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。</value>
+  </data>
+  <data name="Cut" xml:space="preserve">
+    <value>剪切</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>拷贝</value>
+  </data>
+  <data name="Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Select All" xml:space="preserve">
+    <value>全选</value>
+  </data>
+  <data name="Deselect All" xml:space="preserve">
+    <value>取消全选</value>
+  </data>
+  <data name="Invert Selection" xml:space="preserve">
+    <value>反向选择</value>
+  </data>
+  <data name="Search…" xml:space="preserve">
+    <value>搜索…</value>
+  </data>
+  <data name="Quick Filter…" xml:space="preserve">
+    <value>快速筛选…</value>
+  </data>
+  <data name="Go" xml:space="preserve">
+    <value>前往</value>
+  </data>
+  <data name="Open Folder" xml:space="preserve">
+    <value>打开文件夹</value>
+  </data>
+  <data name="Parent Directory" xml:space="preserve">
+    <value>上级目录</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>后退</value>
+  </data>
+  <data name="Forward" xml:space="preserve">
+    <value>前进</value>
+  </data>
+  <data name="Open in Other Panel" xml:space="preserve">
+    <value>在另一面板中打开</value>
+  </data>
+  <data name="Target → Source" xml:space="preserve">
+    <value>目标 → 来源</value>
+  </data>
+  <data name="Go to Folder…" xml:space="preserve">
+    <value>前往文件夹…</value>
+  </data>
+  <data name="Jump to Root" xml:space="preserve">
+    <value>跳到根目录</value>
+  </data>
+  <data name="Toggle Active Panel" xml:space="preserve">
+    <value>切换活动面板</value>
+  </data>
+  <data name="Refresh Both Panels~2" xml:space="preserve">
+    <value>刷新两个面板</value>
+  </data>
+  <data name="Refresh Active Panel" xml:space="preserve">
+    <value>刷新活动面板</value>
+  </data>
+  <data name="Sort by Name" xml:space="preserve">
+    <value>按名称排序</value>
+  </data>
+  <data name="Sort by Date" xml:space="preserve">
+    <value>按日期排序</value>
+  </data>
+  <data name="Sort by Size" xml:space="preserve">
+    <value>按大小排序</value>
+  </data>
+  <data name="Sort by Kind" xml:space="preserve">
+    <value>按种类排序</value>
+  </data>
+  <data name="Toggle Hidden Files" xml:space="preserve">
+    <value>切换隐藏文件</value>
+  </data>
+  <data name="Show Status Bar" xml:space="preserve">
+    <value>显示状态栏</value>
+  </data>
+  <data name="Hide File Extensions" xml:space="preserve">
+    <value>隐藏文件扩展名</value>
+  </data>
+  <data name="Increase Row Size" xml:space="preserve">
+    <value>增大行高</value>
+  </data>
+  <data name="Decrease Row Size" xml:space="preserve">
+    <value>减小行高</value>
+  </data>
+  <data name="Tools" xml:space="preserve">
+    <value>工具</value>
+  </data>
+  <data name="Sync Left and Right Panels…" xml:space="preserve">
+    <value>同步左右面板…</value>
+  </data>
+  <data name="Swap Panels" xml:space="preserve">
+    <value>交换面板</value>
+  </data>
+  <data name="Index Current Source" xml:space="preserve">
+    <value>索引当前来源</value>
+  </data>
+  <data name="About FileFluss" xml:space="preserve">
+    <value>关于 FileFluss</value>
+  </data>
+  <data name="FileFluss Homepage" xml:space="preserve">
+    <value>FileFluss 主页</value>
+  </data>
+  <data name="Check for Updates…" xml:space="preserve">
+    <value>检查更新…</value>
+  </data>
+  <data name="GitHub Repository" xml:space="preserve">
+    <value>GitHub 仓库</value>
+  </data>
+  <data name="Support the FileFluss Project" xml:space="preserve">
+    <value>支持 FileFluss 项目</value>
+  </data>
+  <data name="Run Version Test…" xml:space="preserve">
+    <value>运行版本测试…</value>
+  </data>
+  <data name="Settings…" xml:space="preserve">
+    <value>设置…</value>
+  </data>
+  <data name="Offline Source" xml:space="preserve">
+    <value>离线来源</value>
+  </data>
+  <data name="Never indexed" xml:space="preserve">
+    <value>从未索引</value>
+  </data>
+  <data name="Indexed today" xml:space="preserve">
+    <value>今天已索引</value>
+  </data>
+  <data name="Indexed 1 day ago" xml:space="preserve">
+    <value>1 天前索引</value>
+  </data>
+  <data name="Indexed {0} days ago" xml:space="preserve">
+    <value>{0} 天前索引</value>
+  </data>
+  <data name="Offline view — {0}" xml:space="preserve">
+    <value>离线视图 — {0}</value>
+  </data>
+  <data name="Read only" xml:space="preserve">
+    <value>只读</value>
+  </data>
+  <data name="Go back" xml:space="preserve">
+    <value>返回</value>
+  </data>
+  <data name="No indexed contents" xml:space="preserve">
+    <value>没有已索引的内容</value>
+  </data>
+  <data name="Re-index this source while it&apos;s online to populate offline contents." xml:space="preserve">
+    <value>在该来源在线时重新索引，以填充离线内容。</value>
+  </data>
+  <data name="Name" xml:space="preserve">
+    <value>名称</value>
+  </data>
+  <data name="Size" xml:space="preserve">
+    <value>大小</value>
+  </data>
+  <data name="Modified" xml:space="preserve">
+    <value>修改时间</value>
+  </data>
+  <data name="The menu bar and window titles change after relaunching FileFluss." xml:space="preserve">
+    <value>菜单栏和窗口标题将在重新启动 FileFluss 后更改。</value>
+  </data>
+  <data name="Relaunch to finish switching the language?" xml:space="preserve">
+    <value>重新启动以完成语言切换？</value>
+  </data>
+  <data name="Relaunch Now" xml:space="preserve">
+    <value>立即重新启动</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>稍后</value>
+  </data>
+  <data name="The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches." xml:space="preserve">
+    <value>应用窗口已立即更新。菜单栏和窗口标题将在 FileFluss 重新启动后切换。</value>
+  </data>
+  <data name="Overview" xml:space="preserve">
+    <value>概览</value>
+  </data>
+  <data name="Two‑Panel Layout" xml:space="preserve">
+    <value>双面板布局</value>
+  </data>
+  <data name="Adding Cloud Accounts" xml:space="preserve">
+    <value>添加云账户</value>
+  </data>
+  <data name="Copying and Moving Files" xml:space="preserve">
+    <value>复制和移动文件</value>
+  </data>
+  <data name="Copy Mode and Move Mode" xml:space="preserve">
+    <value>复制模式和移动模式</value>
+  </data>
+  <data name="Opening Files" xml:space="preserve">
+    <value>打开文件</value>
+  </data>
+  <data name="FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks." xml:space="preserve">
+    <value>FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需点按几下，即可在二者之间复制、移动、同步和比较文件。</value>
+  </data>
+  <data name="At a glance" xml:space="preserve">
+    <value>概要</value>
+  </data>
+  <data name="**Two independent panels**, each can show a local folder or a connected cloud account." xml:space="preserve">
+    <value>**两个独立的面板**，每个都可显示本地文件夹或已连接的云账户。</value>
+  </data>
+  <data name="**Drag &amp; drop** between panels to copy or move files." xml:space="preserve">
+    <value>在面板之间**拖放**以复制或移动文件。</value>
+  </data>
+  <data name="**Sync** to make the two sides match (mirror, newer, or additive)." xml:space="preserve">
+    <value>**同步**以使两侧保持一致（镜像、较新或追加）。</value>
+  </data>
+  <data name="**Compare** to see which files differ, are missing, or match between the two sides." xml:space="preserve">
+    <value>**比较**以查看两侧之间哪些文件有差异、缺失或一致。</value>
+  </data>
+  <data name="**Search** across local files and every connected cloud account at once." xml:space="preserve">
+    <value>同时在本地文件和每个已连接的云账户中**搜索**。</value>
+  </data>
+  <data name="Toolbar" xml:space="preserve">
+    <value>工具栏</value>
+  </data>
+  <data name="**Search** (⌘F) — open the search window." xml:space="preserve">
+    <value>**搜索**（Ctrl+F）——打开搜索窗口。</value>
+  </data>
+  <data name="**Sync** — open the Sync planner." xml:space="preserve">
+    <value>**同步**——打开同步规划器。</value>
+  </data>
+  <data name="**Compare** — open the Compare Folders window." xml:space="preserve">
+    <value>**比较**——打开“比较文件夹”窗口。</value>
+  </data>
+  <data name="**Refresh** — reload both panels." xml:space="preserve">
+    <value>**刷新**——重新加载两个面板。</value>
+  </data>
+  <data name="**Hidden Files** — toggle showing dotfiles in the active panel." xml:space="preserve">
+    <value>**隐藏文件**——在活动面板中切换显示点文件。</value>
+  </data>
+  <data name="**Copy Mode** / **Move Mode** — force every drag &amp; drop to that operation." xml:space="preserve">
+    <value>**复制模式** / **移动模式**——强制每次拖放都执行该操作。</value>
+  </data>
+  <data name="Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." xml:space="preserve">
+    <value>右键点按工具栏并选择 *自定工具栏…* 以重新排列或隐藏按钮。</value>
+  </data>
+  <data name="FileFluss shows a left panel and a right panel. The active panel is marked with a thin accent line at the top — most actions (toolbar buttons, keyboard shortcuts, the search target) apply to whichever panel is active." xml:space="preserve">
+    <value>FileFluss 显示一个左面板和一个右面板。活动面板顶部带有一条细的强调线标记——大多数操作（工具栏按钮、键盘快捷键、搜索目标）都作用于当前活动的面板。</value>
+  </data>
+  <data name="Switching panels" xml:space="preserve">
+    <value>切换面板</value>
+  </data>
+  <data name="Click anywhere inside a panel to make it active." xml:space="preserve">
+    <value>点按面板内任意位置即可将其激活。</value>
+  </data>
+  <data name="The sidebar of each panel is independent — choose a different favourite, location, or cloud account on each side." xml:space="preserve">
+    <value>每个面板的边栏都是独立的——可在每一侧选择不同的收藏、位置或云账户。</value>
+  </data>
+  <data name="The path bar" xml:space="preserve">
+    <value>路径栏</value>
+  </data>
+  <data name="The breadcrumb at the top of each panel shows the current folder path. Click any segment to navigate up." xml:space="preserve">
+    <value>每个面板顶部的路径面包屑显示当前文件夹路径。点按任一段即可向上导航。</value>
+  </data>
+  <data name="You can drop files onto a path‑bar segment to move/copy them into that folder." xml:space="preserve">
+    <value>你也可以将文件拖放到路径栏的某一段，以将其移动/复制到该文件夹中。</value>
+  </data>
+  <data name="Cloud accounts on both sides" xml:space="preserve">
+    <value>两侧的云账户</value>
+  </data>
+  <data name="If you open the same cloud account in both panels (e.g. kDrive on the left and on the right), the two panels behave **independently**: you can browse to different folders on each side and drag between them." xml:space="preserve">
+    <value>如果你在两个面板中打开同一个云账户（例如左右都是 kDrive），这两个面板将**独立**运作：你可以在每一侧浏览到不同的文件夹并在它们之间拖动。</value>
+  </data>
+  <data name="Dragging a file from the same cloud account on the left to a folder on the right does an **in‑cloud** move/copy — the data stays on the server, no re‑upload." xml:space="preserve">
+    <value>将左侧同一云账户中的文件拖到右侧的某个文件夹，会执行**云端内**移动/复制——数据保留在服务器上，无需重新上传。</value>
+  </data>
+  <data name="Cloud accounts are connected once and then appear in the sidebar of both panels." xml:space="preserve">
+    <value>云账户只需连接一次，随后会出现在两个面板的边栏中。</value>
+  </data>
+  <data name="Add an account" xml:space="preserve">
+    <value>添加账户</value>
+  </data>
+  <data name="Open **Settings → Cloud Accounts** (⌘,)." xml:space="preserve">
+    <value>打开 **设置 → 云账户**（Ctrl+,）。</value>
+  </data>
+  <data name="Click **Add Cloud Account** and pick the provider (kDrive, pCloud, OneDrive, Google Drive, Dropbox, MEGA, Koofr, NextCloud, WebDAV, SFTP, GMX Cloud, WordPress, …)." xml:space="preserve">
+    <value>点按 **添加云账户** 并选择服务商（kDrive、pCloud、OneDrive、Google Drive、Dropbox、MEGA、Koofr、NextCloud、WebDAV、SFTP、GMX Cloud、WordPress……）。</value>
+  </data>
+  <data name="Sign in via the provider&apos;s authentication flow. FileFluss stores the tokens securely in your macOS Keychain." xml:space="preserve">
+    <value>通过服务商的认证流程登录。FileFluss 会将令牌安全地存储在你的 Windows 钥匙串中。</value>
+  </data>
+  <data name="The new account immediately appears in both panels&apos; sidebars." xml:space="preserve">
+    <value>新账户会立即出现在两个面板的边栏中。</value>
+  </data>
+  <data name="Use an account" xml:space="preserve">
+    <value>使用账户</value>
+  </data>
+  <data name="Click the account in either sidebar to load it in that panel." xml:space="preserve">
+    <value>在任一边栏中点按该账户，即可在该面板中加载它。</value>
+  </data>
+  <data name="Navigate folders the same way as local — double‑click to enter, or click breadcrumbs to go back up." xml:space="preserve">
+    <value>像浏览本地一样浏览文件夹——双击进入，或点按面包屑返回上层。</value>
+  </data>
+  <data name="Remove an account" xml:space="preserve">
+    <value>移除账户</value>
+  </data>
+  <data name="In **Settings → Cloud Accounts**, click the trash icon next to the account." xml:space="preserve">
+    <value>在 **设置 → 云账户** 中，点按账户旁边的垃圾桶图标。</value>
+  </data>
+  <data name="FileFluss disconnects the account, removes the cached login, and clears its panels." xml:space="preserve">
+    <value>FileFluss 会断开该账户、移除缓存的登录信息并清空其面板。</value>
+  </data>
+  <data name="Some providers expose a sandboxed root (e.g. WordPress&apos; media library). Behaviour like *create folder* may be unavailable for those providers — FileFluss greys out the actions that don&apos;t apply." xml:space="preserve">
+    <value>某些服务商提供沙盒化的根目录（例如 WordPress 的媒体库）。对这些服务商，*新建文件夹* 等行为可能不可用——FileFluss 会将不适用的操作变灰。</value>
+  </data>
+  <data name="There are several ways to move or copy files between the two panels:" xml:space="preserve">
+    <value>在两个面板之间移动或复制文件有多种方式：</value>
+  </data>
+  <data name="Drag &amp; drop" xml:space="preserve">
+    <value>拖放</value>
+  </data>
+  <data name="Drag selected files from one panel and drop them on the other." xml:space="preserve">
+    <value>从一个面板拖动所选文件并放到另一个面板上。</value>
+  </data>
+  <data name="By default a prompt appears asking *Move or Copy?*." xml:space="preserve">
+    <value>默认情况下会出现一个询问 *移动还是复制？* 的提示。</value>
+  </data>
+  <data name="Drop directly onto a folder row to land inside that folder, or onto the table background to drop into the panel&apos;s current directory." xml:space="preserve">
+    <value>直接放到某个文件夹行上即可放入该文件夹，或放到表格背景上即可放入面板的当前目录。</value>
+  </data>
+  <data name="You can also drop onto a breadcrumb in the path bar to land in that ancestor folder." xml:space="preserve">
+    <value>你也可以放到路径栏的某个面包屑上，以放入该上级文件夹。</value>
+  </data>
+  <data name="Right‑click" xml:space="preserve">
+    <value>右键点按</value>
+  </data>
+  <data name="Select files, right‑click, and choose **Copy to Other Panel** or **Move to Other Panel**." xml:space="preserve">
+    <value>选择文件，右键点按，然后选择 **复制到另一面板** 或 **移动到另一面板**。</value>
+  </data>
+  <data name="Same effect as drag &amp; drop, but no prompt — the action is taken immediately." xml:space="preserve">
+    <value>效果与拖放相同，但没有提示——操作会立即执行。</value>
+  </data>
+  <data name="Conflicts" xml:space="preserve">
+    <value>冲突</value>
+  </data>
+  <data name="If a file with the same name already exists at the destination, FileFluss asks how to resolve the conflict (replace, keep both, skip)." xml:space="preserve">
+    <value>如果目标位置已存在同名文件，FileFluss 会询问如何解决冲突（替换、两者都保留、跳过）。</value>
+  </data>
+  <data name="If you find the *Move or Copy?* prompt repetitive, enable **Copy Mode** or **Move Mode** in the toolbar — see the next section." xml:space="preserve">
+    <value>如果你觉得 *移动还是复制？* 提示太频繁，可在工具栏中启用 **复制模式** 或 **移动模式**——见下一节。</value>
+  </data>
+  <data name="**Copy Mode** and **Move Mode** are two toolbar toggles that change how every drag &amp; drop is interpreted." xml:space="preserve">
+    <value>**复制模式** 和 **移动模式** 是工具栏中的两个开关，用于改变每次拖放的解释方式。</value>
+  </data>
+  <data name="When active, every drop is automatically a **copy** — the *Move or Copy?* prompt is skipped." xml:space="preserve">
+    <value>启用后，每次放下都会自动执行**复制**——会跳过 *移动还是复制？* 提示。</value>
+  </data>
+  <data name="Useful when you&apos;re duplicating a lot of files between folders or panels." xml:space="preserve">
+    <value>在文件夹或面板之间复制大量文件时很有用。</value>
+  </data>
+  <data name="When active, every drop is automatically a **move** — files are removed from the source." xml:space="preserve">
+    <value>启用后，每次放下都会自动执行**移动**——文件会从来源中移除。</value>
+  </data>
+  <data name="Useful when re‑organising a folder." xml:space="preserve">
+    <value>重新整理文件夹时很有用。</value>
+  </data>
+  <data name="Important" xml:space="preserve">
+    <value>重要</value>
+  </data>
+  <data name="The two toggles are **mutually exclusive** — turning one on turns the other off." xml:space="preserve">
+    <value>这两个开关**互斥**——开启其中一个会关闭另一个。</value>
+  </data>
+  <data name="Both reset to off when FileFluss relaunches, so a stuck *Move Mode* can&apos;t silently destroy files across sessions." xml:space="preserve">
+    <value>二者都会在 FileFluss 重新启动时重置为关闭，因此卡住的 *移动模式* 不会在多次会话中悄悄破坏文件。</value>
+  </data>
+  <data name="When neither mode is on, FileFluss falls back to the standard *Move or Copy?* prompt." xml:space="preserve">
+    <value>当两种模式都未开启时，FileFluss 会回退到标准的 *移动还是复制？* 提示。</value>
+  </data>
+  <data name="**Sync** makes the destination folder match the source folder according to the rule you choose. Use it for one‑shot replications between local and cloud, or between two cloud accounts." xml:space="preserve">
+    <value>**同步** 会根据你选择的规则使目标文件夹与来源文件夹一致。可用于本地与云、或两个云账户之间的一次性复制。</value>
+  </data>
+  <data name="Run a sync" xml:space="preserve">
+    <value>运行同步</value>
+  </data>
+  <data name="Open one folder on the left and one on the right." xml:space="preserve">
+    <value>在左侧打开一个文件夹，在右侧打开一个文件夹。</value>
+  </data>
+  <data name="Click **Sync** in the toolbar." xml:space="preserve">
+    <value>点按工具栏中的 **同步**。</value>
+  </data>
+  <data name="Choose the **direction** (Left → Right or Right → Left)." xml:space="preserve">
+    <value>选择**方向**（左 → 右 或 右 → 左）。</value>
+  </data>
+  <data name="Choose the **mode** (see below)." xml:space="preserve">
+    <value>选择**模式**（见下文）。</value>
+  </data>
+  <data name="FileFluss enumerates both sides and shows a plan: how many files will be added, replaced, deleted, and how many bytes will be transferred. Click **Start Sync**." xml:space="preserve">
+    <value>FileFluss 会枚举两侧并显示一个计划：将添加、替换、删除多少文件，以及将传输多少字节。点按 **开始同步**。</value>
+  </data>
+  <data name="Modes" xml:space="preserve">
+    <value>模式</value>
+  </data>
+  <data name="**Newer** — copy files from the source whose modification date is newer than the destination&apos;s. Existing files only get replaced if they&apos;re truly newer." xml:space="preserve">
+    <value>**较新**——从来源复制修改日期比目标更新的文件。仅当文件确实更新时才会替换现有文件。</value>
+  </data>
+  <data name="**Mirror** — make the destination an exact copy of the source. **Files at the destination that are not on the source are deleted.** This is destructive — FileFluss requires explicit confirmation." xml:space="preserve">
+    <value>**镜像**——使目标成为来源的精确副本。**目标中不存在于来源的文件将被删除。** 此操作具有破坏性——FileFluss 需要明确确认。</value>
+  </data>
+  <data name="**Additive** — only copy files that are missing on the destination. If a file already exists, the source is added next to it with a unique name. Nothing is overwritten or deleted." xml:space="preserve">
+    <value>**追加**——仅复制目标中缺失的文件。如果文件已存在，会以唯一名称将来源添加到其旁边。不会覆盖或删除任何内容。</value>
+  </data>
+  <data name="During sync, if a file with the same name exists on both sides but neither mode handles it cleanly, FileFluss asks per‑file how to resolve." xml:space="preserve">
+    <value>在同步过程中，如果两侧都存在同名文件，但没有任何模式能干净地处理它，FileFluss 会逐个文件询问如何解决。</value>
+  </data>
+  <data name="Sync runs in the background — you can keep working in either panel while it transfers. Progress shows in the destination panel&apos;s sidebar; click it to see details." xml:space="preserve">
+    <value>同步在后台运行——传输期间你可以继续在任一面板中工作。进度显示在目标面板的边栏中；点按即可查看详情。</value>
+  </data>
+  <data name="**Compare** shows you the differences between the two panels&apos; folders without changing anything." xml:space="preserve">
+    <value>**比较** 会在不更改任何内容的情况下向你显示两个面板文件夹之间的差异。</value>
+  </data>
+  <data name="Run a comparison" xml:space="preserve">
+    <value>运行比较</value>
+  </data>
+  <data name="Click **Compare** in the toolbar." xml:space="preserve">
+    <value>点按工具栏中的 **比较**。</value>
+  </data>
+  <data name="FileFluss enumerates both sides recursively and opens a window with the result." xml:space="preserve">
+    <value>FileFluss 会递归枚举两侧，并打开一个显示结果的窗口。</value>
+  </data>
+  <data name="Reading the result" xml:space="preserve">
+    <value>读取结果</value>
+  </data>
+  <data name="**Different** (red ⚠) — file exists on both sides but its size (or modification date, if enabled) differs." xml:space="preserve">
+    <value>**不同**（红色 ⚠）——文件在两侧都存在，但其大小（或修改日期，若启用）不同。</value>
+  </data>
+  <data name="**Only on Left** (← blue) — file exists only in the left folder." xml:space="preserve">
+    <value>**仅左侧**（← 蓝色）——文件仅存在于左侧文件夹中。</value>
+  </data>
+  <data name="**Only on Right** (→ orange) — file exists only in the right folder." xml:space="preserve">
+    <value>**仅右侧**（→ 橙色）——文件仅存在于右侧文件夹中。</value>
+  </data>
+  <data name="**Identical** (✓ green) — file matches on both sides." xml:space="preserve">
+    <value>**相同**（✓ 绿色）——文件在两侧一致。</value>
+  </data>
+  <data name="Folders are **collapsible** — click the disclosure arrow to expand and see what&apos;s inside. The folder header shows aggregate counts for the active filter." xml:space="preserve">
+    <value>文件夹**可折叠**——点按展开三角形即可展开并查看其中内容。文件夹标题会显示当前筛选条件的汇总计数。</value>
+  </data>
+  <data name="Use the **filter chips** at the top to narrow to one status, e.g. show only differences." xml:space="preserve">
+    <value>使用顶部的**筛选标签**以缩小到某一状态，例如仅显示差异。</value>
+  </data>
+  <data name="Compare Date" xml:space="preserve">
+    <value>比较日期</value>
+  </data>
+  <data name="Off by default — only file size is compared." xml:space="preserve">
+    <value>默认关闭——仅比较文件大小。</value>
+  </data>
+  <data name="When on, files with the same size but a different modification date count as **Different**, and each row shows both modify and create timestamps along with a *Left newer* / *Right newer* badge." xml:space="preserve">
+    <value>启用后，大小相同但修改日期不同的文件会计为**不同**，并且每一行都会显示修改和创建时间戳以及 *左侧较新* / *右侧较新* 标记。</value>
+  </data>
+  <data name="Compare Again" xml:space="preserve">
+    <value>再次比较</value>
+  </data>
+  <data name="The comparison only re‑runs when you click **Compare** in the toolbar or **Compare Again** in the window — browsing folders while the window is open does not trigger a fresh scan." xml:space="preserve">
+    <value>仅当你点按工具栏中的 **比较** 或窗口中的 **再次比较** 时，比较才会重新运行——在窗口打开时浏览文件夹不会触发新的扫描。</value>
+  </data>
+  <data name="The compare window stays open and is **movable** — drag it aside to see both panels behind it." xml:space="preserve">
+    <value>比较窗口会保持打开且**可移动**——将它拖到一旁即可看到后面的两个面板。</value>
+  </data>
+  <data name="**Search** queries the active local panel and every connected cloud account simultaneously." xml:space="preserve">
+    <value>**搜索** 会同时查询活动的本地面板和每个已连接的云账户。</value>
+  </data>
+  <data name="Run a search" xml:space="preserve">
+    <value>运行搜索</value>
+  </data>
+  <data name="Click **Search** in the toolbar, or press **⌘F**." xml:space="preserve">
+    <value>点按工具栏中的 **搜索**，或按 **Ctrl+F**。</value>
+  </data>
+  <data name="Type a query — results stream in as each source responds." xml:space="preserve">
+    <value>输入查询——结果会随着每个来源响应而陆续显示。</value>
+  </data>
+  <data name="Filter by source using the chips below the search field." xml:space="preserve">
+    <value>使用搜索框下方的标签按来源进行筛选。</value>
+  </data>
+  <data name="Acting on results" xml:space="preserve">
+    <value>对结果进行操作</value>
+  </data>
+  <data name="**Double‑click** a result to load its parent folder in the active panel." xml:space="preserve">
+    <value>**双击** 某个结果可在活动面板中加载其父文件夹。</value>
+  </data>
+  <data name="**Right‑click** to choose **Open in Left Panel** or **Open in Right Panel** explicitly." xml:space="preserve">
+    <value>**右键点按** 可明确选择 **在左面板中打开** 或 **在右面板中打开**。</value>
+  </data>
+  <data name="The search window stays open after picking a result, so you can pick more." xml:space="preserve">
+    <value>选择某个结果后，搜索窗口会保持打开，以便你继续选择更多。</value>
+  </data>
+  <data name="Closing" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Click the round X close button, press **Esc**, or click the red traffic‑light button." xml:space="preserve">
+    <value>点按圆形的 X 关闭按钮、按 **Esc**，或点按红色的交通灯按钮。</value>
+  </data>
+  <data name="The search window is movable and resizable — its size is remembered across launches." xml:space="preserve">
+    <value>搜索窗口可移动且可调整大小——其大小会在多次启动之间被记住。</value>
+  </data>
+  <data name="Files on local panels and on cloud accounts open the same way." xml:space="preserve">
+    <value>本地面板和云账户上的文件以相同方式打开。</value>
+  </data>
+  <data name="Open in the default app" xml:space="preserve">
+    <value>用默认应用打开</value>
+  </data>
+  <data name="**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." xml:space="preserve">
+    <value>**双击** 任意文件。Word 文档会在 Word 中打开，PDF 在“预览”中打开，图像在你的图像查看器中打开，依此类推。</value>
+  </data>
+  <data name="Cloud files are downloaded to a temporary cache the first time, so reopening the same file is instant." xml:space="preserve">
+    <value>云文件会在首次打开时下载到临时缓存，因此再次打开同一文件会很快。</value>
+  </data>
+  <data name="Edits made in the local app are **not** synced back to the cloud automatically — use Sync or drag the modified file back if you want it uploaded." xml:space="preserve">
+    <value>在本地应用中所做的编辑**不会**自动同步回云端——如果想上传，请使用“同步”或将修改后的文件拖回。</value>
+  </data>
+  <data name="Quick Look" xml:space="preserve">
+    <value>快速查看</value>
+  </data>
+  <data name="Select a file and press **Space** to preview it without opening it." xml:space="preserve">
+    <value>选择一个文件并按**空格键**即可在不打开的情况下预览它。</value>
+  </data>
+  <data name="File icons" xml:space="preserve">
+    <value>文件图标</value>
+  </data>
+  <data name="Local images and PDFs show a real preview thumbnail of the file content." xml:space="preserve">
+    <value>本地图像和 PDF 会显示文件内容的真实预览缩略图。</value>
+  </data>
+  <data name="Cloud files show a colourful generic icon based on the file extension." xml:space="preserve">
+    <value>云文件会根据文件扩展名显示彩色的通用图标。</value>
+  </data>
+  <data name="Move or Copy?" xml:space="preserve">
+    <value>移动还是复制？</value>
+  </data>
+  <data name="Copy Here" xml:space="preserve">
+    <value>复制到此处</value>
+  </data>
+  <data name="Move Here" xml:space="preserve">
+    <value>移动到此处</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="What would you like to do with &quot;{0}&quot; in &quot;{1}&quot;?" xml:space="preserve">
+    <value>你想对“{0}”中的“{1}”执行什么操作？</value>
+  </data>
+  <data name="What would you like to do with {0} items in &quot;{1}&quot;?" xml:space="preserve">
+    <value>你想对“{0}”中的 {1} 个项目执行什么操作？</value>
+  </data>
+  <data name="Are you sure you want to move &quot;{0}&quot; to the Trash?" xml:space="preserve">
+    <value>确定要将“{0}”移到废纸篓吗？</value>
+  </data>
+  <data name="Are you sure you want to move {0} items to the Trash?" xml:space="preserve">
+    <value>确定要将 {0} 个项目移到废纸篓吗？</value>
+  </data>
+  <data name="Folder name" xml:space="preserve">
+    <value>文件夹名称</value>
+  </data>
+  <data name="Create" xml:space="preserve">
+    <value>创建</value>
+  </data>
+  <data name="{0} files, {1} folders — {2}" xml:space="preserve">
+    <value>{0} 个文件，{1} 个文件夹 — {2}</value>
+  </data>
+  <data name="Selected: {0} items, calculating…" xml:space="preserve">
+    <value>已选择 {0} 个项目，正在计算…</value>
+  </data>
+  <data name="Selected: {0} items, {1}" xml:space="preserve">
+    <value>已选择 {0} 个项目，{1}</value>
+  </data>
+  <data name="No Files" xml:space="preserve">
+    <value>没有文件</value>
+  </data>
+  <data name="This folder is empty" xml:space="preserve">
+    <value>此文件夹为空</value>
+  </data>
+  <data name="Delete from Cloud" xml:space="preserve">
+    <value>从云端删除</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="Are you sure you want to delete &quot;{0}&quot; from {1}?" xml:space="preserve">
+    <value>确定要从 {0} 删除“{1}”吗？</value>
+  </data>
+  <data name="Are you sure you want to delete {0} items from {1}?" xml:space="preserve">
+    <value>确定要从 {0} 删除 {1} 个项目吗？</value>
+  </data>
+  <data name="Loading..." xml:space="preserve">
+    <value>正在加载…</value>
+  </data>
+  <data name="Sign-In Required" xml:space="preserve">
+    <value>需要登录</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Sign In Again" xml:space="preserve">
+    <value>重新登录</value>
+  </data>
+  <data name="Open Settings…" xml:space="preserve">
+    <value>打开设置…</value>
+  </data>
+  <data name="Open Settings to Re-Connect…" xml:space="preserve">
+    <value>打开设置以重新连接…</value>
+  </data>
+  <data name="Could not download file" xml:space="preserve">
+    <value>无法下载文件</value>
+  </data>
+  <data name="Empty Folder" xml:space="preserve">
+    <value>空文件夹</value>
+  </data>
+  <data name="This cloud folder is empty" xml:space="preserve">
+    <value>此云端文件夹为空</value>
+  </data>
+  <data name="Date Modified" xml:space="preserve">
+    <value>修改日期</value>
+  </data>
+  <data name="Date Created" xml:space="preserve">
+    <value>创建日期</value>
+  </data>
+  <data name="Kind" xml:space="preserve">
+    <value>种类</value>
+  </data>
+  <data name="Copy to {0} Panel" xml:space="preserve">
+    <value>复制到{0}面板</value>
+  </data>
+  <data name="Move to {0} Panel" xml:space="preserve">
+    <value>移动到{0}面板</value>
+  </data>
+  <data name="Add to Favorites" xml:space="preserve">
+    <value>添加到收藏</value>
+  </data>
+  <data name="Calculate Folder Size" xml:space="preserve">
+    <value>计算文件夹大小</value>
+  </data>
+  <data name="Auto Resize" xml:space="preserve">
+    <value>自动调整大小</value>
+  </data>
+  <data name="Left" xml:space="preserve">
+    <value>左侧</value>
+  </data>
+  <data name="Right" xml:space="preserve">
+    <value>右侧</value>
+  </data>
+  <data name="Calculating…" xml:space="preserve">
+    <value>正在计算…</value>
+  </data>
+  <data name="Change Icon" xml:space="preserve">
+    <value>更改图标</value>
+  </data>
+  <data name="{0} Logo" xml:space="preserve">
+    <value>{0} 徽标</value>
+  </data>
+  <data name="Remove from Favorites" xml:space="preserve">
+    <value>从收藏中移除</value>
+  </data>
+  <data name="Favorites" xml:space="preserve">
+    <value>收藏</value>
+  </data>
+  <data name="Drives" xml:space="preserve">
+    <value>驱动器</value>
+  </data>
+  <data name="Rename..." xml:space="preserve">
+    <value>重命名…</value>
+  </data>
+  <data name="Remove from FileFluss…" xml:space="preserve">
+    <value>从 FileFluss 中移除…</value>
+  </data>
+  <data name="Add Cloud Account…" xml:space="preserve">
+    <value>添加云账户…</value>
+  </data>
+  <data name="Transfers" xml:space="preserve">
+    <value>传输</value>
+  </data>
+  <data name="Folder Sizes" xml:space="preserve">
+    <value>文件夹大小</value>
+  </data>
+  <data name="Rename Favorite" xml:space="preserve">
+    <value>重命名收藏</value>
+  </data>
+  <data name="Enter a new name for this favorite." xml:space="preserve">
+    <value>为此收藏输入一个新名称。</value>
+  </data>
+  <data name="Rename Cloud Account" xml:space="preserve">
+    <value>重命名云账户</value>
+  </data>
+  <data name="Enter a new name for this cloud account." xml:space="preserve">
+    <value>为此云账户输入一个新名称。</value>
+  </data>
+  <data name="Remove" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="This disconnects {0} from FileFluss. Files in the cloud aren&apos;t deleted." xml:space="preserve">
+    <value>这会断开 {0} 与 FileFluss 的连接。云端的文件不会被删除。</value>
+  </data>
+  <data name="Could not mount in Finder" xml:space="preserve">
+    <value>无法在访达中装载</value>
+  </data>
+  <data name="OK" xml:space="preserve">
+    <value>好</value>
+  </data>
+  <data name="Indexed {0}" xml:space="preserve">
+    <value>已索引 {0}</value>
+  </data>
+  <data name="Not indexed yet" xml:space="preserve">
+    <value>尚未索引</value>
+  </data>
+  <data name="Cancel Indexing" xml:space="preserve">
+    <value>取消索引</value>
+  </data>
+  <data name="Remove Offline Index" xml:space="preserve">
+    <value>移除离线索引</value>
+  </data>
+  <data name="Forget Drive" xml:space="preserve">
+    <value>忘记驱动器</value>
+  </data>
+  <data name="Reveal in Finder" xml:space="preserve">
+    <value>在访达中显示</value>
+  </data>
+  <data name="Open this account as a drive in Finder" xml:space="preserve">
+    <value>在访达中将此账户作为驱动器打开</value>
+  </data>
+  <data name="Go Online" xml:space="preserve">
+    <value>上线</value>
+  </data>
+  <data name="Go Offline" xml:space="preserve">
+    <value>离线</value>
+  </data>
+  <data name="Browse and search this account&apos;s last-indexed contents without contacting the server." xml:space="preserve">
+    <value>无需连接服务器即可浏览和搜索此账户最近索引的内容。</value>
+  </data>
+  <data name="Index this account for offline use first." xml:space="preserve">
+    <value>请先为离线使用索引此账户。</value>
+  </data>
+  <data name="Not fully indexed yet" xml:space="preserve">
+    <value>尚未完全索引</value>
+  </data>
+  <data name="Offline" xml:space="preserve">
+    <value>离线</value>
+  </data>
+  <data name="Details" xml:space="preserve">
+    <value>详情</value>
+  </data>
+  <data name="Cancel this transfer" xml:space="preserve">
+    <value>取消此传输</value>
+  </data>
+  <data name="Cancel Transfer" xml:space="preserve">
+    <value>取消传输</value>
+  </data>
+  <data name="Keep Running" xml:space="preserve">
+    <value>继续运行</value>
+  </data>
+  <data name="Files already transferred will remain. Any partial file currently in flight will be discarded." xml:space="preserve">
+    <value>已传输的文件将保留。当前正在传输的部分文件将被丢弃。</value>
+  </data>
+  <data name="Transfer Details" xml:space="preserve">
+    <value>传输详情</value>
+  </data>
+  <data name="{0} succeeded" xml:space="preserve">
+    <value>{0} 个成功</value>
+  </data>
+  <data name="{0} failed" xml:space="preserve">
+    <value>{0} 个失败</value>
+  </data>
+  <data name="{0} skipped" xml:space="preserve">
+    <value>{0} 个跳过</value>
+  </data>
+  <data name="Items ({0})" xml:space="preserve">
+    <value>项目（{0}）</value>
+  </data>
+  <data name="just now" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="today" xml:space="preserve">
+    <value>今天</value>
+  </data>
+  <data name="yesterday" xml:space="preserve">
+    <value>昨天</value>
+  </data>
+  <data name="{0} days ago" xml:space="preserve">
+    <value>{0} 天前</value>
+  </data>
+  <data name="{0} · {1} files" xml:space="preserve">
+    <value>{0} · {1} 个文件</value>
+  </data>
+  <data name="No folder open" xml:space="preserve">
+    <value>未打开文件夹</value>
+  </data>
+  <data name="Direction" xml:space="preserve">
+    <value>方向</value>
+  </data>
+  <data name="Left → Right" xml:space="preserve">
+    <value>左 → 右</value>
+  </data>
+  <data name="Left ← Right" xml:space="preserve">
+    <value>左 ← 右</value>
+  </data>
+  <data name="Mode" xml:space="preserve">
+    <value>模式</value>
+  </data>
+  <data name="I understand files on the destination will be deleted." xml:space="preserve">
+    <value>我了解目标位置的文件将被删除。</value>
+  </data>
+  <data name="Plan" xml:space="preserve">
+    <value>计划</value>
+  </data>
+  <data name="Calculate" xml:space="preserve">
+    <value>计算</value>
+  </data>
+  <data name="Files to add:" xml:space="preserve">
+    <value>要添加的文件：</value>
+  </data>
+  <data name="Files to replace:" xml:space="preserve">
+    <value>要替换的文件：</value>
+  </data>
+  <data name="Files to delete:" xml:space="preserve">
+    <value>要删除的文件：</value>
+  </data>
+  <data name="Folders to add:" xml:space="preserve">
+    <value>要添加的文件夹：</value>
+  </data>
+  <data name="Folders to delete:" xml:space="preserve">
+    <value>要删除的文件夹：</value>
+  </data>
+  <data name="Download:" xml:space="preserve">
+    <value>下载：</value>
+  </data>
+  <data name="Upload:" xml:space="preserve">
+    <value>上传：</value>
+  </data>
+  <data name="Transfer:" xml:space="preserve">
+    <value>传输：</value>
+  </data>
+  <data name="Available:" xml:space="preserve">
+    <value>可用：</value>
+  </data>
+  <data name="After sync:" xml:space="preserve">
+    <value>同步后：</value>
+  </data>
+  <data name="This sync would exceed the available space at the destination." xml:space="preserve">
+    <value>此次同步将超出目标位置的可用空间。</value>
+  </data>
+  <data name="Press Calculate to compute how many files will be added, replaced, or deleted." xml:space="preserve">
+    <value>点按“计算”以统计将添加、替换或删除多少文件。</value>
+  </data>
+  <data name="Start Sync" xml:space="preserve">
+    <value>开始同步</value>
+  </data>
+  <data name="Mirror (replace all)" xml:space="preserve">
+    <value>镜像（全部替换）</value>
+  </data>
+  <data name="Update newer files" xml:space="preserve">
+    <value>更新较新的文件</value>
+  </data>
+  <data name="Add only (keep both on conflict)" xml:space="preserve">
+    <value>仅添加（冲突时保留两者）</value>
+  </data>
+  <data name="Destination will match source exactly. Extra files on the destination will be deleted." xml:space="preserve">
+    <value>目标将与来源完全一致。目标中多余的文件将被删除。</value>
+  </data>
+  <data name="Copies missing files and replaces files that are older than the source." xml:space="preserve">
+    <value>复制缺失的文件，并替换比来源更旧的文件。</value>
+  </data>
+  <data name="Copies missing files. When a file exists on both sides, the source copy is added with a unique name." xml:space="preserve">
+    <value>复制缺失的文件。当某个文件两侧都存在时，会以唯一名称添加来源副本。</value>
+  </data>
+  <data name="An item named &quot;{0}&quot; already exists in this location. What would you like to do?" xml:space="preserve">
+    <value>此位置已存在名为“{0}”的项目。你想怎么做？</value>
+  </data>
+  <data name="This file is newer." xml:space="preserve">
+    <value>此文件较新。</value>
+  </data>
+  <data name="This file is older." xml:space="preserve">
+    <value>此文件较旧。</value>
+  </data>
+  <data name="Same date." xml:space="preserve">
+    <value>日期相同。</value>
+  </data>
+  <data name="Apply to all" xml:space="preserve">
+    <value>应用于全部</value>
+  </data>
+  <data name="Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="Skip" xml:space="preserve">
+    <value>跳过</value>
+  </data>
+  <data name="Keep Both" xml:space="preserve">
+    <value>两者都保留</value>
+  </data>
+  <data name="Replace" xml:space="preserve">
+    <value>替换</value>
+  </data>
+  <data name="Search files across all sources..." xml:space="preserve">
+    <value>在所有来源中搜索文件…</value>
+  </data>
+  <data name="Clear search" xml:space="preserve">
+    <value>清除搜索</value>
+  </data>
+  <data name="Close (Esc)" xml:space="preserve">
+    <value>关闭（Esc）</value>
+  </data>
+  <data name="{0} results" xml:space="preserve">
+    <value>{0} 个结果</value>
+  </data>
+  <data name="Show offline results" xml:space="preserve">
+    <value>显示离线结果</value>
+  </data>
+  <data name="Includes indexed drives &amp; disconnected accounts" xml:space="preserve">
+    <value>包含已索引的驱动器和已断开的账户</value>
+  </data>
+  <data name="Search All Sources" xml:space="preserve">
+    <value>搜索所有来源</value>
+  </data>
+  <data name="Search across local files and all connected cloud accounts" xml:space="preserve">
+    <value>在本地文件和所有已连接的云账户中搜索</value>
+  </data>
+  <data name="Open in Left Panel" xml:space="preserve">
+    <value>在左面板中打开</value>
+  </data>
+  <data name="Open in Right Panel" xml:space="preserve">
+    <value>在右面板中打开</value>
+  </data>
+  <data name="Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates." xml:space="preserve">
+    <value>将大小相同但修改日期不同的文件视为不同。显示哪一侧更新，并列出修改和创建日期。</value>
+  </data>
+  <data name="Re-run the comparison against the panels&apos; current folders" xml:space="preserve">
+    <value>针对面板当前的文件夹重新运行比较</value>
+  </data>
+  <data name="Reading folders…" xml:space="preserve">
+    <value>正在读取文件夹…</value>
+  </data>
+  <data name="Open a folder on each side to compare" xml:space="preserve">
+    <value>在两侧各打开一个文件夹以进行比较</value>
+  </data>
+  <data name="Both panels need a folder selected to run a comparison." xml:space="preserve">
+    <value>两个面板都需要选择一个文件夹才能进行比较。</value>
+  </data>
+  <data name="Nothing matches this filter." xml:space="preserve">
+    <value>没有符合此筛选条件的项目。</value>
+  </data>
+  <data name="All" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="Differences" xml:space="preserve">
+    <value>差异</value>
+  </data>
+  <data name="Only Left" xml:space="preserve">
+    <value>仅左侧</value>
+  </data>
+  <data name="Only Right" xml:space="preserve">
+    <value>仅右侧</value>
+  </data>
+  <data name="Identical" xml:space="preserve">
+    <value>相同</value>
+  </data>
+  <data name="Folders are identical ({0} items)" xml:space="preserve">
+    <value>文件夹完全相同（{0} 个项目）</value>
+  </data>
+  <data name="{0} different • {1} only-left • {2} only-right • {3} same" xml:space="preserve">
+    <value>{0} 个不同 • {1} 个仅左 • {2} 个仅右 • {3} 个相同</value>
+  </data>
+  <data name="Modified — Left: {0}  •  Right: {1}" xml:space="preserve">
+    <value>修改 — 左：{0}  •  右：{1}</value>
+  </data>
+  <data name="Created  — Left: {0}  •  Right: {1}" xml:space="preserve">
+    <value>创建 — 左：{0}  •  右：{1}</value>
+  </data>
+  <data name="Left: {0}" xml:space="preserve">
+    <value>左：{0}</value>
+  </data>
+  <data name="Right: {0}" xml:space="preserve">
+    <value>右：{0}</value>
+  </data>
+  <data name="Same size: {0}" xml:space="preserve">
+    <value>相同大小：{0}</value>
+  </data>
+  <data name="Left: {0} • Right: {1} — different size" xml:space="preserve">
+    <value>左：{0} • 右：{1} — 大小不同</value>
+  </data>
+  <data name="{0} files" xml:space="preserve">
+    <value>{0} 个文件</value>
+  </data>
+  <data name="{0} folders" xml:space="preserve">
+    <value>{0} 个文件夹</value>
+  </data>
+  <data name="{0} MB" xml:space="preserve">
+    <value>{0} MB</value>
+  </data>
+  <data name="{0} days" xml:space="preserve">
+    <value>{0} 天</value>
+  </data>
+  <data name="1 day" xml:space="preserve">
+    <value>1 天</value>
+  </data>
+  <data name="Add Account…" xml:space="preserve">
+    <value>添加账户…</value>
+  </data>
+  <data name="Add a cloud account to get started." xml:space="preserve">
+    <value>添加一个云账户即可开始。</value>
+  </data>
+  <data name="All shortcuts will revert to the {0} preset." xml:space="preserve">
+    <value>所有快捷键都将恢复为“{0}”预设。</value>
+  </data>
+  <data name="Automatic Management" xml:space="preserve">
+    <value>自动管理</value>
+  </data>
+  <data name="Automatically manage cache" xml:space="preserve">
+    <value>自动管理缓存</value>
+  </data>
+  <data name="Cache Size Limit" xml:space="preserve">
+    <value>缓存大小上限</value>
+  </data>
+  <data name="Cache Usage" xml:space="preserve">
+    <value>缓存用量</value>
+  </data>
+  <data name="Clear Cache" xml:space="preserve">
+    <value>清除缓存</value>
+  </data>
+  <data name="Clear Cache…" xml:space="preserve">
+    <value>清除缓存…</value>
+  </data>
+  <data name="Clear shortcut" xml:space="preserve">
+    <value>清除快捷键</value>
+  </data>
+  <data name="Click a shortcut to record. Esc cancels." xml:space="preserve">
+    <value>点按某个快捷键以录制。Esc 取消。</value>
+  </data>
+  <data name="Click to record a new shortcut" xml:space="preserve">
+    <value>点按以录制新快捷键</value>
+  </data>
+  <data name="Cloud Account" xml:space="preserve">
+    <value>云账户</value>
+  </data>
+  <data name="Commander Style" xml:space="preserve">
+    <value>Commander 风格</value>
+  </data>
+  <data name="Current cache size" xml:space="preserve">
+    <value>当前缓存大小</value>
+  </data>
+  <data name="Currently used" xml:space="preserve">
+    <value>当前已用</value>
+  </data>
+  <data name="Delete files older than" xml:space="preserve">
+    <value>删除早于以下时间的文件</value>
+  </data>
+  <data name="Drive" xml:space="preserve">
+    <value>驱动器</value>
+  </data>
+  <data name="Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." xml:space="preserve">
+    <value>你在访达中装载的每个云账户会在本地保留最近下载的文件，上限为此大小，以便再次打开同一文件时即时完成。新值将在下次装载时生效。</value>
+  </data>
+  <data name="Edit…" xml:space="preserve">
+    <value>编辑…</value>
+  </data>
+  <data name="Eject this drive from Finder" xml:space="preserve">
+    <value>从访达中推出此驱动器</value>
+  </data>
+  <data name="Erase All Indexes" xml:space="preserve">
+    <value>清除所有索引</value>
+  </data>
+  <data name="Erase Everything" xml:space="preserve">
+    <value>全部清除</value>
+  </data>
+  <data name="Finder-Mount Read Cache" xml:space="preserve">
+    <value>访达装载读取缓存</value>
+  </data>
+  <data name="Index a drive or cloud account from its sidebar context menu to make its contents searchable while offline." xml:space="preserve">
+    <value>从驱动器或云账户的边栏右键菜单中将其索引，以便离线时可搜索其内容。</value>
+  </data>
+  <data name="MB" xml:space="preserve">
+    <value>MB</value>
+  </data>
+  <data name="Mount in Finder" xml:space="preserve">
+    <value>在访达中装载</value>
+  </data>
+  <data name="No Cloud Accounts" xml:space="preserve">
+    <value>没有云账户</value>
+  </data>
+  <data name="No Indexed Sources" xml:space="preserve">
+    <value>没有已索引的来源</value>
+  </data>
+  <data name="On launch, FileFluss removes cached previews older than the selected age and trims the cache to the size limit below." xml:space="preserve">
+    <value>启动时，FileFluss 会移除早于所选时间的缓存预览，并将缓存修剪到下方的大小上限。</value>
+  </data>
+  <data name="Pick a preset, then customise individual commands below." xml:space="preserve">
+    <value>选择一个预设，然后在下方自定各个命令。</value>
+  </data>
+  <data name="Press a key combo…" xml:space="preserve">
+    <value>按下一个组合键…</value>
+  </data>
+  <data name="Quick Filter" xml:space="preserve">
+    <value>快速筛选</value>
+  </data>
+  <data name="Re-index this source" xml:space="preserve">
+    <value>重新索引此来源</value>
+  </data>
+  <data name="Record Shortcut" xml:space="preserve">
+    <value>录制快捷键</value>
+  </data>
+  <data name="Refresh All" xml:space="preserve">
+    <value>全部刷新</value>
+  </data>
+  <data name="Reset" xml:space="preserve">
+    <value>重置</value>
+  </data>
+  <data name="Reset All to Preset Defaults" xml:space="preserve">
+    <value>全部重置为预设默认值</value>
+  </data>
+  <data name="Reset to preset default" xml:space="preserve">
+    <value>重置为预设默认值</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Show Hidden Files~2" xml:space="preserve">
+    <value>显示隐藏文件</value>
+  </data>
+  <data name="Sync Left and Right Panels~2" xml:space="preserve">
+    <value>同步左右面板</value>
+  </data>
+  <data name="The account isn&apos;t connected — sign in first." xml:space="preserve">
+    <value>该账户未连接——请先登录。</value>
+  </data>
+  <data name="This removes all cached cloud previews and downloaded files. Files will be re-downloaded on next preview." xml:space="preserve">
+    <value>这会移除所有缓存的云预览和已下载的文件。文件将在下次预览时重新下载。</value>
+  </data>
+  <data name="This removes the offline search index for every drive and cloud account. Indexing can be redone later." xml:space="preserve">
+    <value>这会移除每个驱动器和云账户的离线搜索索引。索引稍后可以重新建立。</value>
+  </data>
+  <data name="Unmount" xml:space="preserve">
+    <value>卸载</value>
+  </data>
+  <data name="When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes." xml:space="preserve">
+    <value>当缓存超过此大小时，会先移除最旧的文件。在启动时以及此值更改时应用。</value>
+  </data>
+  <data name="macOS / Finder Style" xml:space="preserve">
+    <value>Windows / 访达风格</value>
+  </data>
+  <data name="Open in Finder" xml:space="preserve">
+    <value>在访达中打开</value>
+  </data>
+  <data name="Do you want to mount “{0}” in Finder?" xml:space="preserve">
+    <value>是否要在访达中装载“{0}”？</value>
+  </data>
+  <data name="This account isn&apos;t mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." xml:space="preserve">
+    <value>此账户尚未装载。装载后会将其作为驱动器添加到访达中，以便您在那里打开此项目。</value>
+  </data>
+  <data name="Copying" xml:space="preserve">
+    <value>正在复制</value>
+  </data>
+  <data name="Moving" xml:space="preserve">
+    <value>正在移动</value>
+  </data>
+  <data name="Uploading" xml:space="preserve">
+    <value>正在上传</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>正在下载</value>
+  </data>
+  <data name="Opening" xml:space="preserve">
+    <value>正在打开</value>
+  </data>
+  <data name="Mirroring" xml:space="preserve">
+    <value>正在镜像</value>
+  </data>
+  <data name="Syncing newer" xml:space="preserve">
+    <value>正在同步较新文件</value>
+  </data>
+  <data name="Adding" xml:space="preserve">
+    <value>正在添加</value>
+  </data>
+  <data name="   Firefox: Storage tab → Cookies → https://my.pcloud.com" xml:space="preserve">
+    <value>   Firefox：存储标签 → Cookies → https://my.pcloud.com</value>
+  </data>
+  <data name="   Safari: Storage tab → Cookies → my.pcloud.com (enable Develop menu first)" xml:space="preserve">
+    <value>   Safari：存储标签 → Cookies → my.pcloud.com（需先启用“开发”菜单）</value>
+  </data>
+  <data name="1. Sign in at my.pcloud.com in your browser" xml:space="preserve">
+    <value>1. 在浏览器中登录 my.pcloud.com</value>
+  </data>
+  <data name="2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" xml:space="preserve">
+    <value>2. 打开开发者工具（Chrome/Safari/Firefox 中按 ⌥Ctrl+I）</value>
+  </data>
+  <data name="3. Chrome/Edge: Application tab → Storage → Cookies → https://my.pcloud.com" xml:space="preserve">
+    <value>3. Chrome/Edge：Application 标签 → Storage → Cookies → https://my.pcloud.com</value>
+  </data>
+  <data name="4. Copy the Value of the cookie named &quot;pcauth&quot; and paste it below" xml:space="preserve">
+    <value>4. 复制名为“pcauth”的 Cookie 的值并粘贴到下方</value>
+  </data>
+  <data name="API Token" xml:space="preserve">
+    <value>API 令牌</value>
+  </data>
+  <data name="Access Key ID" xml:space="preserve">
+    <value>Access Key ID</value>
+  </data>
+  <data name="Access Key ID (e.g. AKIA…)" xml:space="preserve">
+    <value>Access Key ID（例如 AKIA…）</value>
+  </data>
+  <data name="Access Token (pcauth cookie value)" xml:space="preserve">
+    <value>访问令牌（pcauth Cookie 值）</value>
+  </data>
+  <data name="Add Cloud Account" xml:space="preserve">
+    <value>添加云账户</value>
+  </data>
+  <data name="Allow self-signed certificate" xml:space="preserve">
+    <value>允许自签名证书</value>
+  </data>
+  <data name="App Password" xml:space="preserve">
+    <value>应用专用密码</value>
+  </data>
+  <data name="Application Password" xml:space="preserve">
+    <value>应用专用密码</value>
+  </data>
+  <data name="Authentication" xml:space="preserve">
+    <value>身份验证</value>
+  </data>
+  <data name="Browser Login" xml:space="preserve">
+    <value>浏览器登录</value>
+  </data>
+  <data name="Cancel Sign-In" xml:space="preserve">
+    <value>取消登录</value>
+  </data>
+  <data name="Choose a drive to add" xml:space="preserve">
+    <value>选择要添加的驱动器</value>
+  </data>
+  <data name="Click Connect to open your Nextcloud server&apos;s login page in the browser. Sign in there with your normal username and password (2FA supported); FileFluss receives an app-specific password back automatically." xml:space="preserve">
+    <value>点按“连接”以在浏览器中打开你的 Nextcloud 服务器登录页面。在那里使用你的常规用户名和密码登录（支持双重认证）；FileFluss 会自动收到一个应用专用密码。</value>
+  </data>
+  <data name="Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." xml:space="preserve">
+    <value>点按“连接”以登录你的 Box 账户。你的浏览器将打开以进行认证。此版本中每个文件的上传上限为 50 MB。</value>
+  </data>
+  <data name="Click Connect to sign in with your Dropbox account. Your browser will open for authentication." xml:space="preserve">
+    <value>点按“连接”以登录你的 Dropbox 账户。你的浏览器将打开以进行认证。</value>
+  </data>
+  <data name="Click Connect to sign in with your Google account. Your browser will open for authentication." xml:space="preserve">
+    <value>点按“连接”以登录你的 Google 账户。你的浏览器将打开以进行认证。</value>
+  </data>
+  <data name="Click Connect to sign in with your Microsoft account. Your browser will open for authentication." xml:space="preserve">
+    <value>点按“连接”以登录你的 Microsoft 账户。你的浏览器将打开以进行认证。</value>
+  </data>
+  <data name="Connect" xml:space="preserve">
+    <value>连接</value>
+  </data>
+  <data name="Could not read key file: {0}" xml:space="preserve">
+    <value>无法读取密钥文件：{0}</value>
+  </data>
+  <data name="Create an API token in your Infomaniak account, then paste it below." xml:space="preserve">
+    <value>在你的 Infomaniak 账户中创建一个 API 令牌，然后粘贴到下方。</value>
+  </data>
+  <data name="Create an app password at koofr.net → Preferences → Password, then enter your credentials below." xml:space="preserve">
+    <value>在 koofr.net → 偏好设置 → 密码 中创建一个应用专用密码，然后在下方输入你的凭据。</value>
+  </data>
+  <data name="Display name (optional, e.g. &quot;Hetzner FSN1&quot;)" xml:space="preserve">
+    <value>显示名称（可选，例如“Hetzner FSN1”）</value>
+  </data>
+  <data name="Email" xml:space="preserve">
+    <value>电子邮件</value>
+  </data>
+  <data name="Enable when the server presents a self-signed or LAN-only TLS certificate. Trust is scoped to the host you entered." xml:space="preserve">
+    <value>当服务器使用自签名或仅限局域网的 TLS 证书时启用。信任仅限于你输入的主机。</value>
+  </data>
+  <data name="Endpoint URL (e.g. https://eu-005.s3.synologyc2.net)" xml:space="preserve">
+    <value>端点 URL（例如 https://eu-005.s3.synologyc2.net）</value>
+  </data>
+  <data name="Endpoint URL (e.g. https://fsn1.your-objectstorage.com)" xml:space="preserve">
+    <value>端点 URL（例如 https://fsn1.your-objectstorage.com）</value>
+  </data>
+  <data name="Enter an AWS access key with S3 permissions and the region your buckets live in. You can create a key under IAM → Users → Security credentials → Access keys." xml:space="preserve">
+    <value>输入具有 S3 权限的 AWS 访问密钥以及你的存储桶所在的区域。你可以在 IAM → Users → Security credentials → Access keys 下创建密钥。</value>
+  </data>
+  <data name="Enter your NAS hostname (or QuickConnect URL) and DSM credentials. The default port is 5001 for HTTPS." xml:space="preserve">
+    <value>输入你的 NAS 主机名（或 QuickConnect URL）和 DSM 凭据。HTTPS 的默认端口为 5001。</value>
+  </data>
+  <data name="Enter your SFTP server details. You can authenticate with either a password or a private SSH key, and pin the panel to a specific remote folder on first open." xml:space="preserve">
+    <value>输入你的 SFTP 服务器详情。你可以使用密码或私有 SSH 密钥进行认证，并在首次打开时将面板固定到特定的远程文件夹。</value>
+  </data>
+  <data name="Enter your WebDAV server URL, username, and password." xml:space="preserve">
+    <value>输入你的 WebDAV 服务器 URL、用户名和密码。</value>
+  </data>
+  <data name="Enter your WordPress site URL and an Application Password. Create one in WordPress under Users → Profile → Application Passwords." xml:space="preserve">
+    <value>输入你的 WordPress 站点 URL 和应用专用密码。在 WordPress 的 用户 → 个人资料 → 应用专用密码 中创建一个。</value>
+  </data>
+  <data name="FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won&apos;t affect this account." xml:space="preserve">
+    <value>FileFluss 只读取一次密钥文件并将其内容存储在 Windows 钥匙串中——之后移动或删除原始文件不会影响此账户。</value>
+  </data>
+  <data name="FileFluss uses your Mac&apos;s existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." xml:space="preserve">
+    <value>FileFluss 使用你 Mac 上现有的 iCloud 登录——此处无需密码。必须在 系统设置 → Apple 账户 → iCloud → iCloud 云盘 中开启 iCloud 云盘。</value>
+  </data>
+  <data name="Filen is end-to-end encrypted, so there&apos;s no browser OAuth — the password is used locally to derive your master key, then discarded. Only v2 accounts are supported in this release; new Filen accounts default to v2." xml:space="preserve">
+    <value>Filen 是端到端加密的，因此没有浏览器 OAuth——密码在本地用于派生你的主密钥，然后被丢弃。此版本仅支持 v2 账户；新的 Filen 账户默认为 v2。</value>
+  </data>
+  <data name="Files that aren&apos;t currently downloaded show a small iCloud badge in the file list. Copying or syncing them triggers a transparent download first." xml:space="preserve">
+    <value>当前未下载的文件会在文件列表中显示一个小的 iCloud 标记。复制或同步它们时会先透明地下载。</value>
+  </data>
+  <data name="Find the exact endpoint in your C2 console on the bucket detail page. Pasting the full URL is fine; FileFluss extracts the hostname and region automatically." xml:space="preserve">
+    <value>在你的 C2 控制台的存储桶详情页查找确切的端点。粘贴完整 URL 也可以；FileFluss 会自动提取主机名和区域。</value>
+  </data>
+  <data name="GMX Email" xml:space="preserve">
+    <value>GMX 电子邮件</value>
+  </data>
+  <data name="Generic S3-compatible storage — Hetzner Object Storage, MinIO, Wasabi, Backblaze B2, Cloudflare R2, DigitalOcean Spaces, Linode, and the like. Paste the endpoint URL from your provider&apos;s console along with the access key it issued." xml:space="preserve">
+    <value>通用 S3 兼容存储——Hetzner Object Storage、MinIO、Wasabi、Backblaze B2、Cloudflare R2、DigitalOcean Spaces、Linode 等。粘贴你服务商控制台中的端点 URL 以及它签发的访问密钥。</value>
+  </data>
+  <data name="Hostname (e.g. server.example.com)" xml:space="preserve">
+    <value>主机名（例如 server.example.com）</value>
+  </data>
+  <data name="How to get your token:" xml:space="preserve">
+    <value>如何获取你的令牌：</value>
+  </data>
+  <data name="Initial path (optional)" xml:space="preserve">
+    <value>初始路径（可选）</value>
+  </data>
+  <data name="Internxt is end-to-end encrypted — there&apos;s no browser OAuth. Your password is used locally to unlock your account mnemonic and derive per-file keys, then discarded." xml:space="preserve">
+    <value>Internxt 是端到端加密的——没有浏览器 OAuth。你的密码在本地用于解锁你的账户助记词并派生每个文件的密钥，然后被丢弃。</value>
+  </data>
+  <data name="Key file is not a UTF-8 text PEM." xml:space="preserve">
+    <value>密钥文件不是 UTF-8 文本 PEM。</value>
+  </data>
+  <data name="Leave blank to see all buckets. Otherwise the panel opens directly at this bucket or sub-folder." xml:space="preserve">
+    <value>留空以查看所有存储桶。否则面板会直接在此存储桶或子文件夹中打开。</value>
+  </data>
+  <data name="Looking up your drives…" xml:space="preserve">
+    <value>正在查找你的驱动器…</value>
+  </data>
+  <data name="Most home Synology NAS units use a self-signed certificate. Turn this off only if you&apos;ve installed a real CA-signed cert (e.g. Let&apos;s Encrypt)." xml:space="preserve">
+    <value>大多数家用 Synology NAS 使用自签名证书。仅当你安装了真正的 CA 签名证书（例如 Let’s Encrypt）时才关闭此项。</value>
+  </data>
+  <data name="OTP Code (only if 2-factor auth is on)" xml:space="preserve">
+    <value>OTP 验证码（仅当启用双重认证时）</value>
+  </data>
+  <data name="Open Infomaniak token page" xml:space="preserve">
+    <value>打开 Infomaniak 令牌页面</value>
+  </data>
+  <data name="Generate a Personal Login Token in your Jottacloud account, then paste it below." xml:space="preserve">
+    <value>在您的 Jottacloud 帐户中生成个人登录令牌，然后将其粘贴到下方。</value>
+  </data>
+  <data name="This full-access Google Drive option has reached its user limit. New users should use “Google Drive (Selected Folders)” instead." xml:space="preserve">
+    <value>此完全访问的 Google Drive 选项已达到用户上限。新用户应改用“Google Drive（所选文件夹）”。</value>
+  </data>
+  <data name="For new Google Drive accounts — no user limit" xml:space="preserve">
+    <value>适用于新的 Google Drive 帐户 — 无用户上限</value>
+  </data>
+  <data name="Sign in with Google and select the folders FileFluss may use. You can add and manage files in those folders. Files already in them aren&apos;t listed — this access mode only exposes what FileFluss adds or you pick." xml:space="preserve">
+    <value>使用 Google 登录并选择允许 FileFluss 使用的文件夹。您可以在这些文件夹中添加和管理文件。其中已有的文件不会被列出 — 此访问模式仅显示 FileFluss 添加或您选择的内容。</value>
+  </data>
+  <data name="To change which folders FileFluss can access, remove this account and add it again, then pick the folders you want." xml:space="preserve">
+    <value>要更改 FileFluss 可访问的文件夹，请移除此帐户并重新添加，然后选择您想要的文件夹。</value>
+  </data>
+  <data name="Open Jottacloud token page" xml:space="preserve">
+    <value>打开 Jottacloud 令牌页面</value>
+  </data>
+  <data name="Personal Login Token" xml:space="preserve">
+    <value>个人登录令牌</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in your keychain." xml:space="preserve">
+    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据并存储在您的钥匙串中。</value>
+  </data>
+  <data name="To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." xml:space="preserve">
+    <value>要使用新的个人登录令牌重新连接 Jottacloud，请移除此帐户并重新添加。</value>
+  </data>
+  <data name="Open my.pcloud.com" xml:space="preserve">
+    <value>打开 my.pcloud.com</value>
+  </data>
+  <data name="Open the TeraBox app and scan this QR code to authorize." xml:space="preserve">
+    <value>打开 TeraBox 应用并扫描此二维码以授权。</value>
+  </data>
+  <data name="Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices &amp; sessions." xml:space="preserve">
+    <value>或手动输入你的用户名和应用专用密码。在 设置 → 安全 → 设备与会话 中创建一个。</value>
+  </data>
+  <data name="Or paste a pCloud access token" xml:space="preserve">
+    <value>或粘贴 pCloud 访问令牌</value>
+  </data>
+  <data name="Or type a custom region code" xml:space="preserve">
+    <value>或输入自定义区域代码</value>
+  </data>
+  <data name="Passphrase (leave empty if key has none)" xml:space="preserve">
+    <value>口令（如果密钥没有则留空）</value>
+  </data>
+  <data name="Password" xml:space="preserve">
+    <value>密码</value>
+  </data>
+  <data name="Path (optional, e.g. my-bucket or my-bucket/my-folder)" xml:space="preserve">
+    <value>路径（可选，例如 my-bucket 或 my-bucket/my-folder）</value>
+  </data>
+  <data name="Plain FTP sends credentials and data unencrypted. Enable FTPS when the server supports it." xml:space="preserve">
+    <value>普通 FTP 以未加密方式发送凭据和数据。当服务器支持时请启用 FTPS。</value>
+  </data>
+  <data name="Port" xml:space="preserve">
+    <value>端口</value>
+  </data>
+  <data name="Region" xml:space="preserve">
+    <value>区域</value>
+  </data>
+  <data name="Region (leave empty to auto-detect, e.g. fsn1, us-east-1, auto)" xml:space="preserve">
+    <value>区域（留空以自动检测，例如 fsn1、us-east-1、auto）</value>
+  </data>
+  <data name="Region tips: Hetzner uses the location code (fsn1, nbg1, hel1). Cloudflare R2 expects &quot;auto&quot;. MinIO and most Backblaze B2 setups want &quot;us-east-1&quot;." xml:space="preserve">
+    <value>区域提示：Hetzner 使用位置代码（fsn1、nbg1、hel1）。Cloudflare R2 需要“auto”。MinIO 和大多数 Backblaze B2 设置需要“us-east-1”。</value>
+  </data>
+  <data name="Remote Path (e.g. /home/me or leave as /)" xml:space="preserve">
+    <value>远程路径（例如 /home/me 或保留为 /）</value>
+  </data>
+  <data name="SSH Key" xml:space="preserve">
+    <value>SSH 密钥</value>
+  </data>
+  <data name="Seafile doesn&apos;t support browser OAuth — the password is exchanged once for a long-lived API token, then discarded. Self-hosted servers work too." xml:space="preserve">
+    <value>Seafile 不支持浏览器 OAuth——密码会被一次性换成一个长期有效的 API 令牌，然后被丢弃。自托管服务器同样可用。</value>
+  </data>
+  <data name="Secret Access Key" xml:space="preserve">
+    <value>Secret Access Key</value>
+  </data>
+  <data name="Select a cloud provider to connect:" xml:space="preserve">
+    <value>选择要连接的云服务商：</value>
+  </data>
+  <data name="Server (e.g. ftp.example.com)" xml:space="preserve">
+    <value>服务器（例如 ftp.example.com）</value>
+  </data>
+  <data name="Server URL (e.g. https://cloud.example.com)" xml:space="preserve">
+    <value>服务器 URL（例如 https://cloud.example.com）</value>
+  </data>
+  <data name="Server URL (e.g. https://dav.example.com/files)" xml:space="preserve">
+    <value>服务器 URL（例如 https://dav.example.com/files）</value>
+  </data>
+  <data name="Server URL (e.g. https://my-nas.local:5001)" xml:space="preserve">
+    <value>服务器 URL（例如 https://my-nas.local:5001）</value>
+  </data>
+  <data name="Server URL (e.g. https://seafile.example.com)" xml:space="preserve">
+    <value>服务器 URL（例如 https://seafile.example.com）</value>
+  </data>
+  <data name="Sign in to {0}" xml:space="preserve">
+    <value>登录到 {0}</value>
+  </data>
+  <data name="Sign in with your GMX email and password. GMX Cloud is accessed over WebDAV; this may not work with GMX accounts that have two-factor authentication enabled." xml:space="preserve">
+    <value>使用你的 GMX 电子邮件和密码登录。GMX Cloud 通过 WebDAV 访问；对于启用了双重认证的 GMX 账户可能无法使用。</value>
+  </data>
+  <data name="Sign in with your Mega email and password." xml:space="preserve">
+    <value>使用你的 Mega 电子邮件和密码登录。</value>
+  </data>
+  <data name="Sign-in method" xml:space="preserve">
+    <value>登录方式</value>
+  </data>
+  <data name="Site URL (e.g. https://example.com)" xml:space="preserve">
+    <value>站点 URL（例如 https://example.com）</value>
+  </data>
+  <data name="Solving security challenge — may take a moment…" xml:space="preserve">
+    <value>正在解决安全验证——可能需要片刻…</value>
+  </data>
+  <data name="Synology C2 Object Storage is S3-compatible. Generate an access key in the C2 console (Storage Account → Access Keys), then paste it below along with the endpoint URL the console shows for your storage." xml:space="preserve">
+    <value>Synology C2 对象存储是 S3 兼容的。在 C2 控制台（存储账户 → 访问密钥）中生成访问密钥，然后将其与控制台为你的存储显示的端点 URL 一起粘贴到下方。</value>
+  </data>
+  <data name="TeraBox uses device-code sign-in: tap Connect to get a QR code, then scan it with the TeraBox app to authorize. Access is limited to this app&apos;s folder on your TeraBox drive." xml:space="preserve">
+    <value>TeraBox 使用设备码登录：点按“连接”获取二维码，然后用 TeraBox 应用扫描以授权。访问仅限于此应用在你 TeraBox 云盘上的文件夹。</value>
+  </data>
+  <data name="That doesn&apos;t look like a PEM private key. Expected file to start with -----BEGIN." xml:space="preserve">
+    <value>这看起来不像 PEM 私钥。文件应以 -----BEGIN 开头。</value>
+  </data>
+  <data name="Tip: paste the exact region code (e.g. eu-central-1) from the AWS console URL if you don&apos;t see your region listed." xml:space="preserve">
+    <value>提示：如果未列出你的区域，请从 AWS 控制台 URL 中粘贴确切的区域代码（例如 eu-central-1）。</value>
+  </data>
+  <data name="To use more than one drive, add the kDrive account again with the same token and pick a different drive." xml:space="preserve">
+    <value>要使用多个驱动器，请用相同的令牌再次添加 kDrive 账户并选择不同的驱动器。</value>
+  </data>
+  <data name="Two-factor code (only if enabled)" xml:space="preserve">
+    <value>双重认证验证码（仅当启用时）</value>
+  </data>
+  <data name="Use FTPS (TLS)" xml:space="preserve">
+    <value>使用 FTPS (TLS)</value>
+  </data>
+  <data name="Username" xml:space="preserve">
+    <value>用户名</value>
+  </data>
+  <data name="Waiting for sign-in in browser…" xml:space="preserve">
+    <value>正在等待浏览器中的登录…</value>
+  </data>
+  <data name="pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token." xml:space="preserve">
+    <value>pCloud 不再通过密码登录为第三方应用签发认证令牌。你仍可在下方尝试电子邮件 + 密码，但大多数账户需要粘贴访问令牌。</value>
+  </data>
+  <data name="Choose Private Key…" xml:space="preserve">
+    <value>选择私钥…</value>
+  </data>
+  <data name="Click Re-authorize to open your server&apos;s login page in the browser. A new app password is issued and replaces the stored one." xml:space="preserve">
+    <value>点按“重新授权”以在浏览器中打开你服务器的登录页面。系统会签发一个新的应用专用密码并替换已存储的密码。</value>
+  </data>
+  <data name="Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow." xml:space="preserve">
+    <value>点按“重新授权”以重新登录。你的浏览器将打开，完成流程后现有令牌会被替换。</value>
+  </data>
+  <data name="Credentials (password or key) are not prefilled and must be re-entered." xml:space="preserve">
+    <value>凭据（密码或密钥）不会预填，必须重新输入。</value>
+  </data>
+  <data name="Display name (optional)" xml:space="preserve">
+    <value>显示名称（可选）</value>
+  </data>
+  <data name="Edit {0}" xml:space="preserve">
+    <value>编辑 {0}</value>
+  </data>
+  <data name="Endpoint URL" xml:space="preserve">
+    <value>端点 URL</value>
+  </data>
+  <data name="Hostname" xml:space="preserve">
+    <value>主机名</value>
+  </data>
+  <data name="Initial path" xml:space="preserve">
+    <value>初始路径</value>
+  </data>
+  <data name="Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens)." xml:space="preserve">
+    <value>或使用电子邮件和密码登录（pCloud 可能拒绝向第三方应用签发新令牌——如果发生这种情况，请在上方粘贴 pcauth Cookie）。</value>
+  </data>
+  <data name="Password is not stored locally and is re-entered each time you edit." xml:space="preserve">
+    <value>密码不会保存在本地，每次编辑时都需重新输入。</value>
+  </data>
+  <data name="Paste a new Infomaniak API token. The existing workspace selection is preserved." xml:space="preserve">
+    <value>粘贴一个新的 Infomaniak API 令牌。现有的工作区选择将保留。</value>
+  </data>
+  <data name="Path (optional)" xml:space="preserve">
+    <value>路径（可选）</value>
+  </data>
+  <data name="Re-authorize" xml:space="preserve">
+    <value>重新授权</value>
+  </data>
+  <data name="Remote Path" xml:space="preserve">
+    <value>远程路径</value>
+  </data>
+  <data name="Replace Private Key…" xml:space="preserve">
+    <value>替换私钥…</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="Server" xml:space="preserve">
+    <value>服务器</value>
+  </data>
+  <data name="Server URL" xml:space="preserve">
+    <value>服务器 URL</value>
+  </data>
+  <data name="Site URL" xml:space="preserve">
+    <value>站点 URL</value>
+  </data>
+  <data name="TeraBox signs in with a QR code scanned in the TeraBox app — there&apos;s nothing to edit here. To reconnect, remove this account and add it again." xml:space="preserve">
+    <value>TeraBox 通过在 TeraBox 应用中扫描二维码登录——此处无可编辑内容。若要重新连接，请移除此账户并重新添加。</value>
+  </data>
+  <data name="That doesn&apos;t look like a PEM private key." xml:space="preserve">
+    <value>这看起来不像 PEM 私钥。</value>
+  </data>
+  <data name="iCloud uses your Mac&apos;s system sign-in — there&apos;s nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." xml:space="preserve">
+    <value>iCloud 使用你 Mac 的系统登录——此处无可编辑内容。请在 系统设置 → Apple 账户 → iCloud 中管理 iCloud 云盘。</value>
+  </data>
+  <data name="{0} {1} into {2} may exceed the available space. Continue anyway?" xml:space="preserve">
+    <value>{0} {1} 到 {2} 可能会超出可用空间。仍要继续吗？</value>
+  </data>
+  <data name="{0} {1} into {2} would exceed the available space (only {3} free). Continue anyway?" xml:space="preserve">
+    <value>{0} {1} 到 {2} 将超出可用空间（仅剩 {3}）。仍要继续吗？</value>
+  </data>
+  <data name="{0} Anyway" xml:space="preserve">
+    <value>仍然{0}</value>
+  </data>
+  <data name="/path/to/folder" xml:space="preserve">
+    <value>/路径/到/文件夹</value>
+  </data>
+  <data name="Add Rule" xml:space="preserve">
+    <value>添加规则</value>
+  </data>
+  <data name="Add Sync Rule" xml:space="preserve">
+    <value>添加同步规则</value>
+  </data>
+  <data name="Browse..." xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Calculating the size of the items and the destination." xml:space="preserve">
+    <value>正在计算项目和目标的大小。</value>
+  </data>
+  <data name="Checking available space…" xml:space="preserve">
+    <value>正在检查可用空间…</value>
+  </data>
+  <data name="{0} free of {1}" xml:space="preserve">
+    <value>{0} 可用，共 {1}</value>
+  </data>
+  <data name="Cache Location" xml:space="preserve">
+    <value>缓存位置</value>
+  </data>
+  <data name="Location" xml:space="preserve">
+    <value>位置</value>
+  </data>
+  <data name="Default (system folder)" xml:space="preserve">
+    <value>默认（系统文件夹）</value>
+  </data>
+  <data name="Reset to Default" xml:space="preserve">
+    <value>恢复默认</value>
+  </data>
+  <data name="Choose…" xml:space="preserve">
+    <value>选择…</value>
+  </data>
+  <data name="Choose" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="Choose a folder for FileFluss to stage downloads and cache previews." xml:space="preserve">
+    <value>选择一个文件夹，供 FileFluss 暂存下载和缓存预览。</value>
+  </data>
+  <data name="Where downloads are staged and previews are cached. Choose a folder on an external drive to copy large files from a cloud account without filling your internal disk. If the folder is unavailable, the system folder is used." xml:space="preserve">
+    <value>用于暂存下载和缓存预览的位置。选择外部驱动器上的文件夹，即可从云账户复制大文件而不会占满内置磁盘。如果该文件夹不可用，将使用系统文件夹。</value>
+  </data>
+  <data name="Create Rule" xml:space="preserve">
+    <value>创建规则</value>
+  </data>
+  <data name="Create a sync rule to keep your local folders in sync with the cloud." xml:space="preserve">
+    <value>创建一个同步规则，让你的本地文件夹与云端保持同步。</value>
+  </data>
+  <data name="FileFluss {0} is available" xml:space="preserve">
+    <value>FileFluss {0} 已发布</value>
+  </data>
+  <data name="Go to Folder" xml:space="preserve">
+    <value>前往文件夹</value>
+  </data>
+  <data name="Move" xml:space="preserve">
+    <value>移动</value>
+  </data>
+  <data name="New Sync Rule" xml:space="preserve">
+    <value>新建同步规则</value>
+  </data>
+  <data name="No Sync Rules" xml:space="preserve">
+    <value>没有同步规则</value>
+  </data>
+  <data name="Not enough space" xml:space="preserve">
+    <value>空间不足</value>
+  </data>
+  <data name="Recording support log — reproduce the issue now" xml:space="preserve">
+    <value>正在录制支持日志——请立即重现问题</value>
+  </data>
+  <data name="Select a folder..." xml:space="preserve">
+    <value>选择文件夹…</value>
+  </data>
+  <data name="Select account..." xml:space="preserve">
+    <value>选择账户…</value>
+  </data>
+  <data name="Sync All" xml:space="preserve">
+    <value>全部同步</value>
+  </data>
+  <data name="Sync Rules" xml:space="preserve">
+    <value>同步规则</value>
+  </data>
+  <data name="Upload" xml:space="preserve">
+    <value>上传</value>
+  </data>
+  <data name="Finished transfers" xml:space="preserve">
+    <value>已完成的传输</value>
+  </data>
+  <data name="No transfers" xml:space="preserve">
+    <value>没有传输</value>
+  </data>
+  <data name="1 transfer — {0}%" xml:space="preserve">
+    <value>1 项传输——{0}%</value>
+  </data>
+  <data name="{0} transfers — {1}%" xml:space="preserve">
+    <value>{0} 项传输——{1}%</value>
+  </data>
+  <data name="{0} transfers running" xml:space="preserve">
+    <value>{0} 项传输进行中</value>
+  </data>
+  <data name="Clear Finished" xml:space="preserve">
+    <value>清除已完成</value>
+  </data>
+  <data name="Remove transfers that have finished. Running transfers are left alone." xml:space="preserve">
+    <value>移除已完成的传输，进行中的传输保持不变。</value>
+  </data>
+  <data name="Nothing is being transferred." xml:space="preserve">
+    <value>当前没有传输。</value>
+  </data>
+  <data name="Copies, moves, uploads and downloads show up here." xml:space="preserve">
+    <value>复制、移动、上传和下载会显示在这里。</value>
+  </data>
+  <data name="Left panel" xml:space="preserve">
+    <value>左面板</value>
+  </data>
+  <data name="Right panel" xml:space="preserve">
+    <value>右面板</value>
+  </data>
+  <data name="Show transfers in sidebars" xml:space="preserve">
+    <value>在边栏中显示传输</value>
+  </data>
+  <data name="Transfers are always available from the Transfers button in the toolbar." xml:space="preserve">
+    <value>传输始终可通过工具栏中的“传输”按钮查看。</value>
+  </data>
+  <data name="Show calculated folder sizes in sidebars" xml:space="preserve">
+    <value>在边栏中显示已计算的文件夹大小</value>
+  </data>
+  <data name="Current file" xml:space="preserve">
+    <value>当前文件</value>
+  </data>
+  <data name="Preparing…" xml:space="preserve">
+    <value>正在准备……</value>
+  </data>
+  <data name="Speed" xml:space="preserve">
+    <value>速度</value>
+  </data>
+  <data name="Transferred" xml:space="preserve">
+    <value>已传输</value>
+  </data>
+  <data name="Time Left" xml:space="preserve">
+    <value>剩余时间</value>
+  </data>
+  <data name="Elapsed" xml:space="preserve">
+    <value>已用时间</value>
+  </data>
+  <data name="Operation" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Finished" xml:space="preserve">
+    <value>完成时间</value>
+  </data>
+  <data name="Total Size" xml:space="preserve">
+    <value>总大小</value>
+  </data>
+  <data name="Download Speed" xml:space="preserve">
+    <value>下载速度</value>
+  </data>
+  <data name="Upload Speed" xml:space="preserve">
+    <value>上传速度</value>
+  </data>
+  <data name="Avg. Speed" xml:space="preserve">
+    <value>平均速度</value>
+  </data>
+  <data name="Finished so far ({0})" xml:space="preserve">
+    <value>已完成 ({0})</value>
+  </data>
+  <data name="Show the current file, speed and per-file progress" xml:space="preserve">
+    <value>显示当前文件、速度和每个文件的进度</value>
+  </data>
+  <data name="Internal Volume" xml:space="preserve">
+    <value>内置宗卷</value>
+  </data>
+  <data name="External Drive" xml:space="preserve">
+    <value>外置驱动器</value>
+  </data>
+  <data name="Network Drive" xml:space="preserve">
+    <value>网络驱动器</value>
+  </data>
+  <data name="Open in Terminal" xml:space="preserve">
+    <value>在终端中打开</value>
+  </data>
+  <data name="Open in Terminal uses" xml:space="preserve">
+    <value>“在终端中打开”使用</value>
+  </data>
+  <data name="Couldn&apos;t open a terminal" xml:space="preserve">
+    <value>无法打开终端</value>
+  </data>
+  <data name="No terminal application could be found." xml:space="preserve">
+    <value>未找到终端应用。</value>
+  </data>
+  <data name="{0} is not a folder." xml:space="preserve">
+    <value>{0} 不是文件夹。</value>
+  </data>
+  <data name="Mount this account in Finder first — a cloud folder has no path a terminal can open." xml:space="preserve">
+    <value>请先在访达中装载此账户——云端文件夹没有终端可以打开的路径。</value>
+  </data>
+  <data name="Mount and Open in Terminal" xml:space="preserve">
+    <value>装载并在终端中打开</value>
+  </data>
+  <data name="A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." xml:space="preserve">
+    <value>终端只能打开这台 Mac 上存在的文件夹。装载后，此账户会作为驱动器出现在访达中，终端将在其中打开。</value>
+  </data>
+  <data name="Not authenticated. Please sign in." xml:space="preserve">
+    <value>未认证。请登录。</value>
+  </data>
+  <data name="This feature is not yet implemented." xml:space="preserve">
+    <value>此功能尚未实现。</value>
+  </data>
+  <data name="Network error: {0}" xml:space="preserve">
+    <value>网络错误：{0}</value>
+  </data>
+  <data name="Authorization expired. Please sign in again." xml:space="preserve">
+    <value>授权已过期。请重新登录。</value>
+  </data>
+  <data name="Two-factor authentication required. Enter your 6-digit code and try again." xml:space="preserve">
+    <value>需要双重认证。请输入你的 6 位验证码后重试。</value>
+  </data>
+  <data name="Item not found: {0}" xml:space="preserve">
+    <value>未找到项目：{0}</value>
+  </data>
+  <data name="Storage quota exceeded." xml:space="preserve">
+    <value>已超出存储配额。</value>
+  </data>
+  <data name="Rate limited. Please try again later." xml:space="preserve">
+    <value>请求过于频繁。请稍后重试。</value>
+  </data>
+  <data name="Server error (HTTP {0})." xml:space="preserve">
+    <value>服务器错误（HTTP {0}）。</value>
+  </data>
+  <data name="Invalid response from server." xml:space="preserve">
+    <value>服务器返回了无效响应。</value>
+  </data>
+  <data name="Invalid email or password." xml:space="preserve">
+    <value>电子邮件或密码无效。</value>
+  </data>
+  <data name="File is too large to upload ({0}). This provider&apos;s limit is {1}." xml:space="preserve">
+    <value>文件过大，无法上传（{0}）。此服务商的上限为 {1}。</value>
+  </data>
+  <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
+    <value>文件过大，无法上传（{0}）。服务商已拒绝。请尝试拆分文件或改用其他云服务。</value>
+  </data>
+</root>

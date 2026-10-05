@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform-neutral layer: models, the cloud-provider contract and every provider, sync
+    planning, folder comparison, the search index, localization and settings. Plain net10.0
+    (not -windows) on purpose, so it builds and unit-tests without a Windows host — the same
+    split the NetFluss Windows port uses.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>FileFluss.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FileFluss.Core.Tests" />
+    <InternalsVisibleTo Include="FileFluss" />
+  </ItemGroup>
+
+  <!--
+    Dependencies, each one justified as the macOS CLAUDE.md asks:
+    - SSH.NET: SFTP. macOS shells out to /usr/bin/ssh; a library gives real progress,
+      server-side rename and host-key handling without parsing a TTY.
+    - FluentFTP: FTP/FTPS. macOS drives curl; same reasoning.
+    - Microsoft.Data.Sqlite: the search/offline index (macOS uses the system SQLite).
+  -->
+  <ItemGroup>
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="FluentFTP" Version="55.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

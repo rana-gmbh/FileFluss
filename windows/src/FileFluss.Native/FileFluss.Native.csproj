@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Win32 and shell interop: file icons and thumbnails, the Recycle Bin, DPAPI credential
+    storage, drive enumeration, terminals. Kept out of Core so Core stays platform-neutral.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>FileFluss.Native</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FileFluss.Core/FileFluss.Core.csproj" />
+  </ItemGroup>
+
+</Project>
