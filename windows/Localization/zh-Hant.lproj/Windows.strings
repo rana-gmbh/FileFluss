@@ -44,7 +44,6 @@
 "FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." = "FileFluss 使用 Windows 版 iCloud——此處無需密碼。請從 Microsoft Store 安裝 Windows 版 iCloud，使用你的 Apple 帳戶登入並開啟 iCloud 雲碟。";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用 Windows 版 iCloud 的登入——此處無可編輯內容。請在 Windows 版 iCloud 應用程式中管理 iCloud 雲碟。";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。";
-"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。";
 
 /* ---------------------------------------------------------------------------------------------
    Menus, toolbar, panels and sidebar
@@ -78,7 +77,6 @@
 "Videos" = "影片";
 "Retry" = "重試";
 "Show only the active panel" = "僅顯示使用中的面板";
-"Index for Offline Search" = "為離線搜尋建立索引";
 "Storage Analysis" = "儲存空間分析";
 "Storage Analysis…" = "儲存空間分析…";
 "Share Link…" = "共用連結…";
@@ -90,7 +88,6 @@
 "1 file" = "1 個檔案";
 "1 folder" = "1 個資料夾";
 "%@ items" = "%@ 個項目";
-"%@ free" = "可用 %@";
 "%@ used" = "已使用 %@";
 "%@ of %@ used" = "已使用 %@，共 %@";
 "%@ (offline)" = "%@（離線）";
@@ -235,7 +232,6 @@
 "Clear" = "清除";
 "Automatic management" = "自動管理";
 "At launch, delete old cached files and keep the cache under its size limit." = "啟動時刪除舊的快取檔案，並讓快取保持在大小上限以內。";
-"Maximum cache size" = "最大快取大小";
 "3 days" = "3 天";
 "1 week" = "1 週";
 "2 weeks" = "2 週";
@@ -332,7 +328,6 @@
 "The link is on the clipboard." = "連結已複製到剪貼簿。";
 "This file is shared. The link is on the clipboard." = "此檔案已共用。連結已複製到剪貼簿。";
 "This file is no longer shared." = "此檔案已不再共用。";
-"People with the link will no longer be able to open \"%@\"." = "擁有此連結的人將無法再開啟「%@」。";
 "Couldn't create the share link: %@" = "無法建立共用連結：%@";
 "Couldn't change sharing: %@" = "無法變更共用設定：%@";
 "Checked just now: %@" = "剛剛檢查：%@";
@@ -443,7 +438,6 @@
 "Invalid API method version." = "無效的 API 方法版本。";
 "Invalid parameter for the request." = "要求的參數無效。";
 "Request denied — too many connections." = "要求遭拒——連線過多。";
-"Connection time out." = "連線逾時。";
 
 /* ---------------------------------------------------------------------------------------------
    Welcome window
@@ -525,5 +519,53 @@
 "The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc)." = "Windows 的「WebClient」服務已停用，因此該帳戶無法顯示為磁碟機。系統管理員可以在「服務」（services.msc）中將其設為「手動」。";
 "Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Windows 的 WebDAV 重新導向器（「WebClient」服務）無法連線到 FileFluss。請確認 WebClient 服務未被原則或安全性軟體封鎖。";
 "Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "在此類磁碟機上，Windows 只能開啟和儲存不超過 %@ 的檔案。更大的檔案仍可透過 FileFluss 本身複製。系統管理員可以提高此限制（WebClient 服務的 FileSizeLimitInBytes）。";
+
+/* ---------------------------------------------------------------------------------------------
+   One-click share links
+   --------------------------------------------------------------------------------------------- */
+
+"Copy Share Link" = "複製共用連結";
+"Shared" = "已共用";
+"Change Sharing…" = "變更共用…";
+"Share link copied" = "共用連結已複製";
+"Link copied — not public" = "連結已複製——非公開";
+"Expires %@" = "%@ 到期";
+"Sharing failed" = "共用失敗";
+"Stop sharing this file?" = "要停止共用此檔案嗎？";
+"The link to \"%@\" stops working for everyone who has it. This can't be undone." = "指向「%@」的連結將對所有擁有它的人失效。此操作無法復原。";
+"Couldn't stop sharing: %@" = "無法停止共用：%@";
+"Couldn't read this file's share link: %@" = "無法讀取此檔案的共用連結：%@";
+"This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." = "此帳戶拒絕為連結設定%@。大多數服務商僅在付費方案中提供這些功能。不使用它們仍可共用，這些選項現已對此帳戶隱藏。";
+"a password and an expiry date" = "密碼和到期日";
+"a password" = "密碼";
+"an expiry date" = "到期日";
+
+/* ---------------------------------------------------------------------------------------------
+   Support log, cache, status bar
+   --------------------------------------------------------------------------------------------- */
+
+"Support Log" = "支援記錄";
+"Support Log (Recording…)" = "支援記錄（正在記錄…）";
+"Save FileFluss Support Log" = "儲存 FileFluss 支援記錄";
+"Last checked: %@" = "上次檢查：%@";
+"Clear the cache?" = "要清除快取嗎？";
+"1 transfer — click for details" = "1 個傳輸——按一下查看詳細資料";
+"%@ transfers — click for details" = "%@ 個傳輸——按一下查看詳細資料";
+"1 folder size — click for details" = "1 個資料夾大小——按一下查看詳細資料";
+"%@ folder sizes — click for details" = "%@ 個資料夾大小——按一下查看詳細資料";
+
+/* Favourite icons */
+"Document" = "文件";
+"Text Document" = "文字文件";
+"Star" = "星號";
+"Heart" = "愛心";
+"Flag" = "旗標";
+"Bookmark" = "書籤";
+"Tag" = "標籤";
+"Work" = "工作";
+"Archive" = "封存";
+"Inbox" = "收件匣";
+"Sent" = "已傳送";
+"Personal" = "個人";
 
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。";
