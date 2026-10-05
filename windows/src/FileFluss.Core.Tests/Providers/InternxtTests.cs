@@ -488,14 +488,18 @@ public class InternxtProviderTests
         Assert.Equal("up-1", (string?)shard["uuid"]);
         Assert.Equal(ToHex(InternxtCrypto.Ripemd160(SHA256.HashData(put.Body))), (string?)shard["hash"]);
 
-        // The old Drive entry goes before the new one is registered (Drive answers 409 otherwise).
+        // The replacement is registered under a temporary name (Drive answers 409 for a taken
+        // name), and only then does the old entry go and the new one take the name — so a
+        // failed registration never leaves the folder with neither file.
         var calls = h.Server.Calls.ToList();
         var deleteAt = calls.FindIndex(c => c.Method == HttpMethod.Delete && c.Path == "/drive/files/report-file-uuid");
         var registerAt = calls.FindIndex(c => c.Method == HttpMethod.Post && c.Path == "/files");
-        Assert.True(deleteAt >= 0 && deleteAt < registerAt);
+        var renameAt = calls.FindIndex(c => c.Method == HttpMethod.Put && c.Path == "/drive/files/new-file-uuid/meta");
+        Assert.True(registerAt >= 0 && registerAt < deleteAt && deleteAt < renameAt, string.Join(", ", calls.Select(c => $"{c.Method} {c.Path}")));
+        Assert.Equal("{\"plainName\":\"report\"}", calls[renameAt].Body);
 
         var entry = JsonNode.Parse(calls[registerAt].Body!)!.AsObject();
-        Assert.Equal("report", (string?)entry["plainName"]);
+        Assert.StartsWith("report.fileflusspart-", (string?)entry["plainName"], StringComparison.Ordinal);
         Assert.Equal("pdf", (string?)entry["type"]);
         Assert.Equal(content.Length, (long)entry["size"]!);
         Assert.Equal(InternxtTestServer.Root, (string?)entry["folderUuid"]);
@@ -516,6 +520,17 @@ public class InternxtProviderTests
 
         Assert.Equal(5000, reported);
         Assert.Equal(2, h.Capture.Matching(HttpMethod.Put, "s3.example/put/1").Count());
+    }
+
+    [Fact]
+    public async Task AReplacementThatFailsToRegisterKeepsTheOldFile()
+    {
+        using var h = WithRoute(HttpMethod.Post, "/drive/files", _ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        using var temp = new TempDirectory();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 44)), "/report.pdf"));
+
+        Assert.Empty(h.Capture.Matching(HttpMethod.Delete, "/drive/files/report-file-uuid"));
     }
 
     [Fact]

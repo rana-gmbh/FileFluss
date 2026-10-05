@@ -364,28 +364,17 @@ internal sealed class InternxtApiClient
             networkFileId = GetString(document.RootElement, "id") ?? throw CloudProviderException.InvalidResponse();
         }
 
-        // 5. Drop the previous version *before* registering the new one: Drive rejects a file
-        // whose plainName+type already exists in the folder with 409, so a replace must remove
-        // the old entry first. The new ciphertext is already uploaded, so the old data isn't
-        // the only copy when its Drive entry goes.
-        if (existing is { IsFolder: false })
-        {
-            try
-            {
-                await DriveSendAsync($"/files/{existing.Uuid}", HttpMethod.Delete, null, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException)
-            {
-            }
-
-            _nodeCache.TryRemove(remotePath, out _);
-        }
-
-        // 6. Register the file in Drive.
+        // 5. Register the file in Drive. Drive rejects a plainName+type that already exists in
+        // the folder (409), so a replacement is registered under a temporary name first; only
+        // once it exists does the old entry go, and the new one takes the name. Deleting first
+        // (as before) lost both whenever the registration then failed.
         var (baseName, extension) = SplitExtension(fileName);
+        var replacing = existing is { IsFolder: false };
+        var registeredBase = replacing ? $"{baseName}.fileflusspart-{Guid.NewGuid().ToString("N")[..8]}" : baseName;
+        var registeredPath = CloudPath.Combine(parentPath, extension.Length > 0 ? $"{registeredBase}.{extension}" : registeredBase);
         var entry = new JsonObject
         {
-            ["plainName"] = baseName,
+            ["plainName"] = registeredBase,
             ["type"] = extension,
             ["size"] = size,
             ["folderUuid"] = parent.Uuid,
@@ -408,19 +397,60 @@ internal sealed class InternxtApiClient
         // live listing.
         var entryBody = entry.ToJsonString();
         var created = await RetryingTransientAsync(
-            () => RegisterDriveEntryAsync(entryBody, remotePath, parentPath, cancellationToken),
+            () => RegisterDriveEntryAsync(entryBody, registeredPath, parentPath, cancellationToken),
             cancellationToken).ConfigureAwait(false);
 
+        string? createdUuid = null;
         try
         {
             using var document = ParseJson(created);
-            if (GetString(document.RootElement, "uuid") is { } uuid)
-            {
-                _nodeCache[remotePath] = new Node(uuid, false, networkFileId, bucket, size, extension);
-            }
+            createdUuid = GetString(document.RootElement, "uuid");
         }
         catch (CloudProviderException)
         {
+        }
+
+        if (replacing)
+        {
+            // Without the new entry's uuid it can't take the name; the old file stays as it was.
+            var newUuid = createdUuid ?? throw CloudProviderException.InvalidResponse();
+            try
+            {
+                await DriveSendAsync($"/files/{existing!.Uuid}", HttpMethod.Delete, null, cancellationToken).ConfigureAwait(false);
+            }
+            catch (CloudProviderException)
+            {
+            }
+
+            _nodeCache.TryRemove(remotePath, out _);
+            await TakeNameAsync(newUuid, baseName, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (createdUuid is not null)
+        {
+            _nodeCache[remotePath] = new Node(createdUuid, false, networkFileId, bucket, size, extension);
+        }
+    }
+
+    /// <summary>
+    /// Renames the freshly registered replacement to its real name. The old entry's delete can
+    /// take a moment to propagate (409 meanwhile), so a few tries; if it never works the file is
+    /// still there under its temporary name, which the error says.
+    /// </summary>
+    private async Task TakeNameAsync(string uuid, string plainName, CancellationToken cancellationToken)
+    {
+        var body = new JsonObject { ["plainName"] = plainName }.ToJsonString();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await DriveSendAsync($"/files/{uuid}/meta", HttpMethod.Put, body, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (CloudProviderException e) when (attempt < 4 && e.Kind is CloudErrorKind.ServerError or CloudErrorKind.RateLimited or CloudErrorKind.NetworkError)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
