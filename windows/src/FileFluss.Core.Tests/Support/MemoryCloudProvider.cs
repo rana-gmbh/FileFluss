@@ -40,6 +40,17 @@ public sealed class MemoryCloudProvider : CloudProvider
 
     public HashSet<string> FailingUploads { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Names whose upload "succeeds" but stores only half the bytes — a server that lost the tail.</summary>
+    public HashSet<string> TruncatingUploads { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>False to stand in for a store that files uploads elsewhere (WordPress).</summary>
+    public bool VerifiableArrivals { get; set; } = true;
+
+    public override bool CanVerifyArrivals => VerifiableArrivals;
+
+    /// <summary>Runs before each upload with the target path (to throw, or to change the world mid-transfer).</summary>
+    public Action<string>? OnUpload { get; set; }
+
     /// <summary>Set to give the account a sharing API; it builds the link for a path.</summary>
     public Func<string, CloudShareLink>? ShareLinkFactory { get; set; }
 
@@ -125,7 +136,13 @@ public sealed class MemoryCloudProvider : CloudProvider
             throw CloudProviderException.ServerError(500);
         }
 
+        OnUpload?.Invoke(remotePath);
         var bytes = await File.ReadAllBytesAsync(localPath, cancellationToken);
+        if (TruncatingUploads.Contains(CloudPath.Name(remotePath)))
+        {
+            bytes = bytes[..(bytes.Length / 2)];
+        }
+
         EnsureParents(remotePath);
         _nodes[CloudPath.Normalize(remotePath)] = new Node(false, bytes, DateTimeOffset.Now);
         onBytes?.Invoke(bytes.Length);

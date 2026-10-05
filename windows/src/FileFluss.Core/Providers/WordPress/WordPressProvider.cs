@@ -97,6 +97,9 @@ public sealed class WordPressProvider : CloudProvider
     public override Task UploadFileAsync(string localPath, string remotePath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
         => Client.UploadAsync(localPath, remotePath, onBytes, cancellationToken);
 
+    /// <summary>Uploads land under the upload month, not at the requested path, so a move can't look them up there.</summary>
+    public override bool CanVerifyArrivals => false;
+
     public override Task DeleteItemAsync(string path, CancellationToken cancellationToken = default)
         => Client.DeleteAsync(path, cancellationToken);
 
