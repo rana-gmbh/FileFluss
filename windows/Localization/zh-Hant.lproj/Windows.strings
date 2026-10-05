@@ -104,7 +104,7 @@
 "The folder \"%@\" can't be found." = "找不到資料夾「%@」。";
 "This location is read-only." = "此位置為唯讀。";
 "Loading preview…" = "正在載入預覽…";
-"Mount this account first — a cloud folder has no path a terminal can open." = "請先將此帳戶掛載為磁碟機——雲端資料夾沒有終端機可以開啟的路徑。";
+"Mount this account first — a cloud folder has no path a terminal can open." = "請先將此帳戶連線為網路磁碟機——雲端資料夾沒有終端機可以開啟的路徑。";
 "Transfers are still running" = "傳輸仍在進行";
 "Quitting cancels them. Files already transferred will remain." = "結束會取消這些傳輸。已傳輸的檔案會保留。";
 "Quit Anyway" = "仍要結束";
@@ -444,3 +444,86 @@
 "Invalid parameter for the request." = "要求的參數無效。";
 "Request denied — too many connections." = "要求遭拒——連線過多。";
 "Connection time out." = "連線逾時。";
+
+/* ---------------------------------------------------------------------------------------------
+   Welcome window
+   --------------------------------------------------------------------------------------------- */
+
+"Your files and your clouds, side by side." = "你的檔案和你的雲端，並排呈現。";
+"Two panels" = "雙面板";
+"Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." = "同時瀏覽兩個位置。F5 將選取的項目複製到另一個面板，F6 將其移動，Tab 切換面板。";
+"Every cloud in one place" = "所有雲端集中一處";
+"Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." = "加入 OneDrive、Google Drive、Dropbox、pCloud、WebDAV、SFTP 等眾多服務，像在資料夾之間一樣在它們之間複製。";
+"Find anything" = "尋找任何內容";
+"Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." = "同時搜尋本機資料夾和所有已連線的帳戶。為磁碟機或帳戶建立索引後，即使離線也能搜尋。";
+"Keyboard shortcuts" = "鍵盤快速鍵";
+"You can change every shortcut later in Settings → Keyboard Map." = "之後可以在「設定 → 鍵盤對應」中變更所有快速鍵。";
+"Get Started" = "開始使用";
+
+/* ---------------------------------------------------------------------------------------------
+   Search window and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Results" = "結果";
+"Searching..." = "正在搜尋…";
+"No Results for \"%@\"" = "沒有「%@」的結果";
+"Check the spelling or try a new search." = "請檢查拼字或嘗試新的搜尋。";
+"Index for Offline Search…" = "為離線搜尋建立索引…";
+"Re-index for Offline Search…" = "為離線搜尋重新建立索引…";
+"Erase all offline indexes?" = "要清除所有離線索引嗎？";
+"Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." = "可以為雲端帳戶以及 Windows 系統磁碟機以外的磁碟機建立離線搜尋索引。請在使用中的面板開啟其中一個，然後再試一次。";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis window
+   --------------------------------------------------------------------------------------------- */
+
+"Analyse" = "分析";
+"Analyse any folder on this PC" = "分析這台電腦上的任意資料夾";
+"Choose Folder…" = "選擇資料夾…";
+"Folders" = "資料夾";
+"Largest files" = "最大的檔案";
+"Reveal" = "在面板中顯示";
+"Expand" = "展開";
+"Collapse" = "摺疊";
+
+/* ---------------------------------------------------------------------------------------------
+   Compare window (screen-reader names)
+   --------------------------------------------------------------------------------------------- */
+
+"Different" = "不同";
+"Expanded" = "已展開";
+"Collapsed" = "已摺疊";
+"Delete from %@ Panel" = "從%@面板刪除";
+
+/* ---------------------------------------------------------------------------------------------
+   Updates
+   --------------------------------------------------------------------------------------------- */
+
+"FileFluss %@ is available — you have %@." = "FileFluss %@ 已推出——你目前的版本是 %@。";
+"FileFluss %@ is currently the newest version available." = "FileFluss %@ 是目前可用的最新版本。";
+"You're up to date!" = "你使用的是最新版本！";
+"FileFluss could not check for updates: %@" = "FileFluss 無法檢查更新：%@";
+"Install and Relaunch" = "安裝並重新啟動";
+"Skip This Version" = "略過此版本";
+"Open Release Page" = "開啟發行頁面";
+"Downloading FileFluss %@…" = "正在下載 FileFluss %@…";
+"The update could not be downloaded: %@" = "無法下載更新：%@";
+"The update could not be verified, so it was not installed." = "無法驗證更新，因此未安裝。";
+"This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page." = "此 FileFluss 複本不是透過 FileFluss 安裝程式安裝的，因此無法自行更新。請從發行頁面下載新版本。";
+
+/* ---------------------------------------------------------------------------------------------
+   Network drives
+   --------------------------------------------------------------------------------------------- */
+
+"Disconnect Network Drive (%@)" = "中斷網路磁碟機連線（%@）";
+"Only cloud accounts can be mounted as a drive." = "只有雲端帳戶可以連線為磁碟機。";
+"No free drive letter is available. Disconnect a network drive and try again." = "沒有可用的磁碟機代號。請中斷一個網路磁碟機的連線後再試一次。";
+"Could not mount in File Explorer: %@" = "無法連線為網路磁碟機：%@";
+"Could not reach the internal WebDAV server on 127.0.0.1:%@: %@" = "無法連線到 127.0.0.1:%@ 上的內部 WebDAV 伺服器：%@";
+"The internal WebDAV server didn't respond with 200 OK to OPTIONS." = "內部 WebDAV 伺服器未對 OPTIONS 回應 200 OK。";
+"Showing a cloud account as a drive needs the Windows \"WebClient\" service, which isn't installed on this PC. On Windows Server, add the \"WebDAV Redirector\" feature." = "將雲端帳戶顯示為磁碟機需要 Windows 的「WebClient」服務，但這台電腦上未安裝該服務。在 Windows Server 上，請新增「WebDAV 重新導向器」功能。";
+"The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc)." = "Windows 的「WebClient」服務已停用，因此該帳戶無法顯示為磁碟機。系統管理員可以在「服務」（services.msc）中將其設為「手動」。";
+"Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Windows 的 WebDAV 重新導向器（「WebClient」服務）無法連線到 FileFluss。請確認 WebClient 服務未被原則或安全性軟體封鎖。";
+"Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "在此類磁碟機上，Windows 只能開啟和儲存不超過 %@ 的檔案。更大的檔案仍可透過 FileFluss 本身複製。系統管理員可以提高此限制（WebClient 服務的 FileSizeLimitInBytes）。";
+
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。";

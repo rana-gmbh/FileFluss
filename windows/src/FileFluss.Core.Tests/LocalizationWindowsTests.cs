@@ -76,6 +76,8 @@ public partial class LocalizationWindowsTests
             Assert.Equal("Eigenschaften", Localization.L("Properties"));
             Assert.Equal("Möchtest du „a.txt“ wirklich in den Papierkorb verschieben?", Localization.L("Are you sure you want to move \"{0}\" to the Recycle Bin?", "a.txt"));
             Assert.Equal("Alle Quellen durchsuchen (Strg+F)", Localization.L("Search all sources (⌘F)"));
+            Assert.Equal("Netzlaufwerk trennen (Z:)", Localization.L("Disconnect Network Drive ({0})", "Z:"));
+            Assert.Equal("Als Netzlaufwerk verbinden", Localization.L("Mount in Finder"));
 
             Localization.Use(AppLanguage.SimplifiedChinese);
             Assert.Equal("移到回收站", Localization.L("Move to Recycle Bin"));

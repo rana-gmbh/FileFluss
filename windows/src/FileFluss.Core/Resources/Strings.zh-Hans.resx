@@ -2238,7 +2238,7 @@
     <value>正在加载预览…</value>
   </data>
   <data name="Mount this account first — a cloud folder has no path a terminal can open." xml:space="preserve">
-    <value>请先将此账户装载为驱动器——云端文件夹没有终端可以打开的路径。</value>
+    <value>请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。</value>
   </data>
   <data name="Transfers are still running" xml:space="preserve">
     <value>传输仍在进行</value>
@@ -3090,5 +3090,161 @@
   </data>
   <data name="Connection time out." xml:space="preserve">
     <value>连接超时。</value>
+  </data>
+  <data name="Your files and your clouds, side by side." xml:space="preserve">
+    <value>你的文件和你的云，并排呈现。</value>
+  </data>
+  <data name="Two panels" xml:space="preserve">
+    <value>双面板</value>
+  </data>
+  <data name="Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." xml:space="preserve">
+    <value>同时浏览两个位置。F5 将所选内容复制到另一个面板，F6 将其移动，Tab 切换面板。</value>
+  </data>
+  <data name="Every cloud in one place" xml:space="preserve">
+    <value>所有云集于一处</value>
+  </data>
+  <data name="Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." xml:space="preserve">
+    <value>添加 OneDrive、Google Drive、Dropbox、pCloud、WebDAV、SFTP 等众多服务，像在文件夹之间一样在它们之间复制。</value>
+  </data>
+  <data name="Find anything" xml:space="preserve">
+    <value>查找任何内容</value>
+  </data>
+  <data name="Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." xml:space="preserve">
+    <value>同时搜索本地文件夹和所有已连接的账户。为驱动器或账户编制索引后，即使离线也能搜索。</value>
+  </data>
+  <data name="Keyboard shortcuts" xml:space="preserve">
+    <value>键盘快捷键</value>
+  </data>
+  <data name="You can change every shortcut later in Settings → Keyboard Map." xml:space="preserve">
+    <value>之后可以在“设置 → 键盘映射”中更改所有快捷键。</value>
+  </data>
+  <data name="Get Started" xml:space="preserve">
+    <value>开始使用</value>
+  </data>
+  <data name="Results" xml:space="preserve">
+    <value>结果</value>
+  </data>
+  <data name="Searching..." xml:space="preserve">
+    <value>正在搜索…</value>
+  </data>
+  <data name="No Results for &quot;{0}&quot;" xml:space="preserve">
+    <value>没有“{0}”的结果</value>
+  </data>
+  <data name="Check the spelling or try a new search." xml:space="preserve">
+    <value>请检查拼写或尝试新的搜索。</value>
+  </data>
+  <data name="Index for Offline Search…" xml:space="preserve">
+    <value>为离线搜索编制索引…</value>
+  </data>
+  <data name="Re-index for Offline Search…" xml:space="preserve">
+    <value>为离线搜索重新编制索引…</value>
+  </data>
+  <data name="Erase all offline indexes?" xml:space="preserve">
+    <value>要清除所有离线索引吗？</value>
+  </data>
+  <data name="Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." xml:space="preserve">
+    <value>可以为云账户以及 Windows 系统驱动器以外的驱动器编制离线搜索索引。请在活动面板中打开其中一个，然后重试。</value>
+  </data>
+  <data name="Analyse" xml:space="preserve">
+    <value>分析</value>
+  </data>
+  <data name="Analyse any folder on this PC" xml:space="preserve">
+    <value>分析这台电脑上的任意文件夹</value>
+  </data>
+  <data name="Choose Folder…" xml:space="preserve">
+    <value>选择文件夹…</value>
+  </data>
+  <data name="Folders" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Largest files" xml:space="preserve">
+    <value>最大的文件</value>
+  </data>
+  <data name="Reveal" xml:space="preserve">
+    <value>在面板中显示</value>
+  </data>
+  <data name="Expand" xml:space="preserve">
+    <value>展开</value>
+  </data>
+  <data name="Collapse" xml:space="preserve">
+    <value>折叠</value>
+  </data>
+  <data name="Different" xml:space="preserve">
+    <value>不同</value>
+  </data>
+  <data name="Expanded" xml:space="preserve">
+    <value>已展开</value>
+  </data>
+  <data name="Collapsed" xml:space="preserve">
+    <value>已折叠</value>
+  </data>
+  <data name="Delete from {0} Panel" xml:space="preserve">
+    <value>从{0}面板删除</value>
+  </data>
+  <data name="FileFluss {0} is available — you have {1}." xml:space="preserve">
+    <value>FileFluss {0} 已推出——你当前的版本是 {1}。</value>
+  </data>
+  <data name="FileFluss {0} is currently the newest version available." xml:space="preserve">
+    <value>FileFluss {0} 是目前可用的最新版本。</value>
+  </data>
+  <data name="You&apos;re up to date!" xml:space="preserve">
+    <value>你使用的是最新版本！</value>
+  </data>
+  <data name="FileFluss could not check for updates: {0}" xml:space="preserve">
+    <value>FileFluss 无法检查更新：{0}</value>
+  </data>
+  <data name="Install and Relaunch" xml:space="preserve">
+    <value>安装并重新启动</value>
+  </data>
+  <data name="Skip This Version" xml:space="preserve">
+    <value>跳过此版本</value>
+  </data>
+  <data name="Open Release Page" xml:space="preserve">
+    <value>打开发布页面</value>
+  </data>
+  <data name="Downloading FileFluss {0}…" xml:space="preserve">
+    <value>正在下载 FileFluss {0}…</value>
+  </data>
+  <data name="The update could not be downloaded: {0}" xml:space="preserve">
+    <value>无法下载更新：{0}</value>
+  </data>
+  <data name="The update could not be verified, so it was not installed." xml:space="preserve">
+    <value>无法验证更新，因此未安装。</value>
+  </data>
+  <data name="This copy of FileFluss was not installed with the FileFluss setup, so it can&apos;t update itself. Download the new version from the release page." xml:space="preserve">
+    <value>此 FileFluss 副本不是通过 FileFluss 安装程序安装的，因此无法自行更新。请从发布页面下载新版本。</value>
+  </data>
+  <data name="Disconnect Network Drive ({0})" xml:space="preserve">
+    <value>断开网络驱动器（{0}）</value>
+  </data>
+  <data name="Only cloud accounts can be mounted as a drive." xml:space="preserve">
+    <value>只有云账户可以映射为驱动器。</value>
+  </data>
+  <data name="No free drive letter is available. Disconnect a network drive and try again." xml:space="preserve">
+    <value>没有可用的驱动器号。请断开一个网络驱动器后重试。</value>
+  </data>
+  <data name="Could not mount in File Explorer: {0}" xml:space="preserve">
+    <value>无法映射为网络驱动器：{0}</value>
+  </data>
+  <data name="Could not reach the internal WebDAV server on 127.0.0.1:{0}: {1}" xml:space="preserve">
+    <value>无法访问 127.0.0.1:{0} 上的内部 WebDAV 服务器：{1}</value>
+  </data>
+  <data name="The internal WebDAV server didn&apos;t respond with 200 OK to OPTIONS." xml:space="preserve">
+    <value>内部 WebDAV 服务器未对 OPTIONS 返回 200 OK。</value>
+  </data>
+  <data name="Showing a cloud account as a drive needs the Windows &quot;WebClient&quot; service, which isn&apos;t installed on this PC. On Windows Server, add the &quot;WebDAV Redirector&quot; feature." xml:space="preserve">
+    <value>将云账户显示为驱动器需要 Windows 的“WebClient”服务，但这台电脑上未安装该服务。在 Windows Server 上，请添加“WebDAV 重定向程序”功能。</value>
+  </data>
+  <data name="The Windows &quot;WebClient&quot; service is disabled, so the account can&apos;t appear as a drive. An administrator can set it to &quot;Manual&quot; in Services (services.msc)." xml:space="preserve">
+    <value>Windows 的“WebClient”服务已禁用，因此该账户无法显示为驱动器。管理员可以在“服务”（services.msc）中将其设置为“手动”。</value>
+  </data>
+  <data name="Windows&apos; WebDAV redirector (the &quot;WebClient&quot; service) couldn&apos;t connect to FileFluss. Make sure the WebClient service isn&apos;t blocked by a policy or security software." xml:space="preserve">
+    <value>Windows 的 WebDAV 重定向程序（“WebClient”服务）无法连接到 FileFluss。请确保 WebClient 服务未被策略或安全软件阻止。</value>
+  </data>
+  <data name="Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." xml:space="preserve">
+    <value>在此类驱动器上，Windows 只能打开和保存不超过 {0} 的文件。更大的文件仍可通过 FileFluss 本身复制。管理员可以提高此限制（WebClient 服务的 FileSizeLimitInBytes）。</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
+    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。</value>
   </data>
 </root>
