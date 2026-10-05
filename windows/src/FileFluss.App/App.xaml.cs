@@ -18,6 +18,9 @@ public partial class App : Application
 {
     public static new App Current => (App)Application.Current;
 
+    /// <summary>How long exit waits for provider connections to close.</summary>
+    private static readonly TimeSpan ProviderDisposalWait = TimeSpan.FromSeconds(3);
+
     public AppServices Services { get; private set; } = null!;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -180,10 +183,23 @@ public partial class App : Application
 
             // Virtual files can't be pasted once FileFluss is gone; don't leave a dead promise behind.
             ExitStep("clipboard", () => services.Export.ReleaseClipboard(clear: true));
-            foreach (var account in services.Accounts.Accounts.ToList())
+            // Closing connections says goodbye to servers (FTP QUIT, SSH disconnect), which can
+            // wait on a dead network for a long time each: off this thread, and not for long.
+            var providers = services.Accounts.Accounts.Select(a => services.Hub.Get(a.Id)).OfType<Core.Providers.CloudProvider>().ToList();
+            ExitStep("providers", () =>
             {
-                ExitStep("provider", () => services.Hub.Get(account.Id)?.Dispose());
-            }
+                var disposal = Task.Run(() =>
+                {
+                    foreach (var provider in providers)
+                    {
+                        ExitStep("provider", provider.Dispose);
+                    }
+                });
+                if (!disposal.Wait(ProviderDisposalWait))
+                {
+                    SupportLogger.Shared.Log("Closing provider connections took too long; leaving the rest to the system", "App", LogLevel.Notice);
+                }
+            });
         }
 
         ExitStep("base", () => base.OnExit(e));
