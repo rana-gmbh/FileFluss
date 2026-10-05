@@ -944,7 +944,12 @@ public sealed class PanelViewModel : Observable
     private void Watch()
     {
         var generation = ++_watchGeneration;
-        _watcher?.Dispose();
+        if (_watcher is { } previous)
+        {
+            // Closing a watch on an unreachable share can wait for the server too.
+            _ = Task.Run(previous.Dispose);
+        }
+
         _watcher = null;
         if (!IsLocal || CurrentPath.Length == 0)
         {
