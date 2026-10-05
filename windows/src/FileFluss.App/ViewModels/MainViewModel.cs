@@ -587,6 +587,20 @@ public sealed class MainViewModel : Observable
         _services.Transfers.Start(request, panel, _ => RefreshAfterTransfer(source, destination));
     }
 
+    private readonly List<CancellationTokenSource> _spaceChecks = [];
+
+    /// <summary>True while a pre-flight space check is summing sizes (macOS <c>isCheckingSpace</c>).</summary>
+    public bool IsCheckingSpace => _spaceChecks.Count > 0;
+
+    /// <summary>The HUD's Cancel: abandons every running space check and the transfers waiting on them.</summary>
+    public void CancelSpaceChecks()
+    {
+        foreach (var check in _spaceChecks.ToList())
+        {
+            check.Cancel();
+        }
+    }
+
     /// <summary>
     /// The pre-flight space check (macOS <c>SpaceCheck</c>): sums what is about to be copied
     /// and compares it with the destination's free space or quota.
@@ -598,13 +612,38 @@ public sealed class MainViewModel : Observable
             return true;
         }
 
+        // Summing a big tree can take a while: the window shows the "Checking available
+        // space…" HUD meanwhile, whose Cancel abandons the transfer before it starts.
         long needed = 0;
-        foreach (var item in items)
+        long? free;
+        using var cancellation = new CancellationTokenSource();
+        _spaceChecks.Add(cancellation);
+        OnPropertyChanged(nameof(IsCheckingSpace));
+        try
         {
-            needed += item.IsDirectory ? await source.FolderSizeAsync(item.Path) : item.Size;
+            foreach (var item in items)
+            {
+                needed += item.IsDirectory ? await source.FolderSizeAsync(item.Path, cancellation.Token) : item.Size;
+            }
+
+            free = await target.AvailableSpaceAsync(destination.Path, cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            SupportLogger.Shared.Log("Space check cancelled; transfer not started", "Transfers");
+            return false;
+        }
+        finally
+        {
+            _spaceChecks.Remove(cancellation);
+            OnPropertyChanged(nameof(IsCheckingSpace));
         }
 
-        var free = await target.AvailableSpaceAsync(destination.Path);
+        if (cancellation.IsCancellationRequested)
+        {
+            return false;
+        }
+
         if (free is not { } available || needed <= available)
         {
             return true;

@@ -58,10 +58,13 @@ public sealed class UpdateService
     /// <summary>The newest release the last successful check found, if newer than this one.</summary>
     public AvailableUpdate? Available { get; private set; }
 
-    /// <summary>The running version ("1.2.3"), as build-release.ps1 stamps it with -p:Version.</summary>
-    public static string CurrentVersion { get; } =
+    /// <summary>The full informational version, with the source revision after a "+" where the build added one.</summary>
+    public static string InformationalVersion { get; } =
         (Assembly.GetEntryAssembly() ?? typeof(UpdateService).Assembly)
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+
+    /// <summary>The running version ("1.2.3"), as build-release.ps1 stamps it with -p:Version.</summary>
+    public static string CurrentVersion { get; } = InformationalVersion.Split('+')[0];
 
     /// <summary>Installers are downloaded here, not to %TEMP%, and removed once the update is in.</summary>
     private static string DownloadsFolder => Path.Combine(SettingsStore.DataDirectory, "Updates");

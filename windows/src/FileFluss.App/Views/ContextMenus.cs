@@ -2,9 +2,11 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
+using FileFluss.App.Views.Dialogs;
 using FileFluss.Core.Commands;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
@@ -134,10 +136,12 @@ public static class ContextMenus
             items.Add(Item(L("Storage Analysis"), Glyphs.Pie, null, () => main.Shell.ShowStorageAnalysis(panel.Location with { Path = single.Path })));
         }
 
-        if (single is { IsDirectory: false } && panel.Provider is CloudProvider cloud && cloud.ShareLinkCapabilities.CanCreate)
+        // Share links are per-file: folders, multi-selections and synthetic rows have no single
+        // shareable path.
+        if (single is { IsDirectory: false, Item.Role: CloudItemRole.Normal } && panel.Provider is CloudProvider cloud && cloud.ShareLinkCapabilities.CanCreate)
         {
             items.Add(new Separator());
-            items.Add(Item(L("Share Link…"), Glyphs.Share, null, () => main.Shell.ShowShareLink(panel, single.Item)));
+            items.AddRange(ShareItems(main, panel, view, cloud, single.Item));
         }
 
         items.Add(new Separator());
@@ -157,6 +161,149 @@ public static class ContextMenus
         }
 
         return TrimSeparators(items);
+    }
+
+    // MARK: - Sharing
+
+    /// <summary>
+    /// "Copy Share Link", then — for a file known to be shared — a checked "Shared" marker,
+    /// "Change Sharing…" and "Stop Sharing", or else "Share Link…" when there are options to
+    /// set (macOS <c>NativeCloudFileList</c>). The menu is built at once; where the state isn't
+    /// known yet it is looked up now and the entries are swapped while the menu is still open.
+    /// </summary>
+    private static List<object> ShareItems(MainViewModel main, PanelViewModel panel, PanelView view, CloudProvider provider, CloudFileItem item)
+    {
+        var sharing = ShareLinkService.Shared;
+        var known = sharing.IsShared(provider, item.Path);
+        var items = ShareEntries(main, panel, view, provider, item, ShareLinkMenu.For(provider.ShareLinkCapabilities, known));
+        if (known is null && provider.ShareLinkCapabilities.CanQueryExisting)
+        {
+            _ = SwapWhenSharedAsync(items, main, panel, view, provider, item);
+        }
+
+        return items;
+    }
+
+    private static List<object> ShareEntries(MainViewModel main, PanelViewModel panel, PanelView view, CloudProvider provider, CloudFileItem item, ShareLinkMenu menu)
+    {
+        var items = new List<object> { Item(L("Copy Share Link"), Glyphs.Link, null, () => _ = CopyShareLinkAsync(view, provider, item)) };
+        if (menu.SharedMarker)
+        {
+            // The state marker: a checked "Shared" tells the user at a glance.
+            items.Add(new MenuItem { Header = L("Shared"), IsChecked = true, IsEnabled = false });
+        }
+
+        if (menu.ChangeSharing)
+        {
+            items.Add(Item(L("Change Sharing…"), Glyphs.Share, null, () => main.Shell.ShowShareLink(panel, item)));
+        }
+
+        if (menu.StopSharing)
+        {
+            items.Add(Item(L("Stop Sharing"), null, null, () => _ = StopSharingAsync(view, provider, item)));
+        }
+
+        if (menu.ShareWithOptions)
+        {
+            items.Add(Item(L("Share Link…"), Glyphs.Share, null, () => main.Shell.ShowShareLink(panel, item)));
+        }
+
+        return items;
+    }
+
+    private static async Task SwapWhenSharedAsync(List<object> shown, MainViewModel main, PanelViewModel panel, PanelView view, CloudProvider provider, CloudFileItem item)
+    {
+        if (!await ShareLinkService.Shared.RefreshStateAsync(provider, item.Path))
+        {
+            return;
+        }
+
+        // Only while the same menu is still open: a closed one is rebuilt from the cache next time.
+        if (shown[0] is not MenuItem { Parent: ContextMenu { IsOpen: true } menu } first)
+        {
+            return;
+        }
+
+        var index = menu.Items.IndexOf(first);
+        if (index < 0)
+        {
+            return;
+        }
+
+        foreach (var entry in shown)
+        {
+            menu.Items.Remove(entry);
+        }
+
+        var replacement = ShareEntries(main, panel, view, provider, item, ShareLinkMenu.For(provider.ShareLinkCapabilities, isShared: true));
+        for (var i = 0; i < replacement.Count; i++)
+        {
+            menu.Items.Insert(index + i, replacement[i]);
+        }
+    }
+
+    /// <summary>One click: create (or fetch) the link, copy it, confirm with the panel's banner.</summary>
+    private static async Task CopyShareLinkAsync(PanelView view, CloudProvider provider, CloudFileItem item)
+    {
+        var sharing = ShareLinkService.Shared;
+        var owner = Window.GetWindow(view);
+        var isShared = sharing.IsShared(provider, item.Path) == true;
+        CloudShareLink? link = null;
+        Exception? failure = null;
+
+        // Creating and checking a link is a round trip or two: the "working in the background"
+        // pointer says something is happening without blocking the window.
+        Mouse.OverrideCursor = Cursors.AppStarting;
+        try
+        {
+            link = isShared
+                ? await sharing.CopyExistingAsync(provider, item.Path)
+                : await sharing.CreateAsync(provider, item.Path, ShareLinkOptions.Default, reuseExisting: true);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            failure = e;
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
+
+        if (failure is not null)
+        {
+            var message = ShareLinkService.IsSignInError(failure) ? CloudProviderException.Unauthorized().Message
+                : isShared ? L("Couldn't read this file's share link: {0}", failure.Message)
+                : L("Couldn't create the share link: {0}", ShareLinkService.FailureMessage(failure, ShareLinkOptions.Default));
+            MessageDialog.Error(owner, L("Sharing failed"), message);
+            return;
+        }
+
+        if (link is null)
+        {
+            // Someone removed it elsewhere in the meantime.
+            MessageDialog.Error(owner, L("Sharing failed"), L("This file is no longer shared."));
+            return;
+        }
+
+        ShareLinkBanner.Show(view, link, sharing.UrlFor(link));
+    }
+
+    private static async Task StopSharingAsync(PanelView view, CloudProvider provider, CloudFileItem item)
+    {
+        var owner = Window.GetWindow(view);
+        if (!MessageDialog.Confirm(owner, L("Stop sharing this file?"), L("The link to \"{0}\" stops working for everyone who has it. This can't be undone.", item.Name), L("Stop Sharing"), destructive: true))
+        {
+            return;
+        }
+
+        try
+        {
+            await ShareLinkService.Shared.RemoveAsync(provider, item.Path);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            MessageDialog.Error(owner, L("Sharing failed"), L("Couldn't stop sharing: {0}", e.Message));
+        }
     }
 
     private static void CalculateFolderSize(MainViewModel main, PanelViewModel panel, FileRowViewModel row)

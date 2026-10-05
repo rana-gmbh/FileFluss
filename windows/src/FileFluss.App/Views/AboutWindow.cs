@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media.Imaging;
 using FileFluss.Core.Net;
+using FileFluss.Core.Settings;
 using static FileFluss.Core.Localization;
 
 namespace FileFluss.App.Views;
@@ -34,7 +35,14 @@ public sealed class AboutWindow : Window
 
         stack.Children.Add(icon);
         stack.Children.Add(Centered(new TextBlock { Text = "FileFluss", FontSize = 26, FontWeight = FontWeights.SemiBold }));
-        stack.Children.Add(Centered(new TextBlock { Text = L("Version {0}", Version) + " · Windows", Opacity = 0.75, Margin = new Thickness(0, 2, 0, 12) }));
+        var versionRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 12) };
+        versionRow.Children.Add(new TextBlock { Text = L("Version {0}", Version) + " · Windows", Opacity = 0.75, VerticalAlignment = VerticalAlignment.Center });
+        var releaseNotes = Link(L("Release Notes ↗"), ReleasesUrl);
+        releaseNotes.FontSize = 11;
+        releaseNotes.Margin = new Thickness(8, 0, 0, 0);
+        releaseNotes.VerticalAlignment = VerticalAlignment.Center;
+        versionRow.Children.Add(releaseNotes);
+        stack.Children.Add(Centered(versionRow));
         stack.Children.Add(Centered(new TextBlock { Text = L("Made by Rana GmbH") }));
         stack.Children.Add(Centered(Link("www.filefluss.de", "https://www.filefluss.de")));
         stack.Children.Add(Centered(Link("github.com/rana-gmbh/filefluss", "https://github.com/rana-gmbh/filefluss")));
@@ -51,7 +59,51 @@ public sealed class AboutWindow : Window
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center,
         }));
+        stack.Children.Add(new Separator { Margin = new Thickness(0, 16, 0, 16) });
+        stack.Children.Add(UpdateSection());
         Content = stack;
+    }
+
+    /// <summary>
+    /// Windows releases are tagged <c>win-v*</c> next to the macOS ones; the release list shows
+    /// both, newest first.
+    /// </summary>
+    public const string ReleasesUrl = "https://github.com/rana-gmbh/FileFluss/releases";
+
+    /// <summary>macOS <c>updateSection</c>: "Check for Updates" and when the last check ran.</summary>
+    private StackPanel UpdateSection()
+    {
+        var section = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        var check = new Button { Content = L("Check for Updates"), MinWidth = 140, HorizontalAlignment = HorizontalAlignment.Center };
+        if (TryFindResource("AccentButtonStyle") is Style accent)
+        {
+            check.Style = accent;
+        }
+
+        check.Click += (_, _) => (Application.Current.MainWindow as MainWindow)?.RequestUpdateCheck(this);
+        section.Children.Add(check);
+
+        var lastChecked = new TextBlock { FontSize = 11, Opacity = 0.7, Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+        void ShowLastChecked()
+        {
+            var last = AppServices.Current.Settings.LastUpdateCheck;
+            lastChecked.Text = last is { } date ? L("Last checked: {0}", date.ToLocalTime().ToString("g", Culture)) : string.Empty;
+            lastChecked.Visibility = last is null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        ShowLastChecked();
+        void OnSettingsChanged(object? sender, string? name)
+        {
+            if (name is null or nameof(AppSettings.LastUpdateCheck))
+            {
+                Dispatcher.BeginInvoke(ShowLastChecked);
+            }
+        }
+
+        AppServices.Current.SettingsStore.Changed += OnSettingsChanged;
+        Closed += (_, _) => AppServices.Current.SettingsStore.Changed -= OnSettingsChanged;
+        section.Children.Add(lastChecked);
+        return section;
     }
 
     public static string Version

@@ -43,7 +43,7 @@ internal static class Features
 
         // Updates: Help → Check for Updates…, and a quiet daily check (macOS Sparkle).
         var updates = new UpdateService(services);
-        window.UpdateRequested += (_, _) => _ = updates.CheckAsync(true, window);
+        window.UpdateRequested += (_, owner) => _ = updates.CheckAsync(true, owner ?? window);
         _ = updates.CheckAsync(false, window);
     }
 
