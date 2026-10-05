@@ -380,10 +380,11 @@ internal static class Program
 
     /// <summary>
     /// Calls whose first string argument is a localization key the callee looks up — L itself,
-    /// the connect form's Info/Warning/Link rows, and the help book's P/H/B/T blocks.
+    /// the connect form's Info/Warning/Link rows, and the help book's P/H/B/T blocks. (No
+    /// "Header": in FileFluss that is the WebDAV server reading an HTTP header, not a key.)
     /// </summary>
     private static readonly Regex KeyCallPattern = new(
-        """(?<![A-Za-z0-9_])(?:L|Tile|InfoCard|DetailRow|Option|SectionTitle|Section|SliceColumn|Requirement|Header|Info|Warning|Link|P|H|B|T)\(\s*"((?:[^"\\]|\\.)*)"(?=\s*[,)])""",
+        """(?<![A-Za-z0-9_])(?:L|Tile|InfoCard|DetailRow|Option|SectionTitle|Section|SliceColumn|Requirement|Info|Warning|Link|P|H|B|T)\(\s*"((?:[^"\\]|\\.)*)"(?=\s*[,)])""",
         RegexOptions.CultureInvariant);
 
     /// <summary>

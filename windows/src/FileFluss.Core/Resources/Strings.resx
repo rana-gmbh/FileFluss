@@ -2271,7 +2271,7 @@
     <value>Loading preview…</value>
   </data>
   <data name="Mount this account first — a cloud folder has no path a terminal can open." xml:space="preserve">
-    <value>Mount this account first — a cloud folder has no path a terminal can open.</value>
+    <value>Map this account as a network drive first — a cloud folder has no path a terminal can open.</value>
   </data>
   <data name="Transfers are still running" xml:space="preserve">
     <value>Transfers are still running</value>
@@ -3090,5 +3090,161 @@ Trust the new key?</value>
   </data>
   <data name="Connection time out." xml:space="preserve">
     <value>Connection timed out.</value>
+  </data>
+  <data name="Your files and your clouds, side by side." xml:space="preserve">
+    <value>Your files and your clouds, side by side.</value>
+  </data>
+  <data name="Two panels" xml:space="preserve">
+    <value>Two panels</value>
+  </data>
+  <data name="Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." xml:space="preserve">
+    <value>Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels.</value>
+  </data>
+  <data name="Every cloud in one place" xml:space="preserve">
+    <value>Every cloud in one place</value>
+  </data>
+  <data name="Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." xml:space="preserve">
+    <value>Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders.</value>
+  </data>
+  <data name="Find anything" xml:space="preserve">
+    <value>Find anything</value>
+  </data>
+  <data name="Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." xml:space="preserve">
+    <value>Search local folders and every connected account at once. Index a drive or account to search it even while it is offline.</value>
+  </data>
+  <data name="Keyboard shortcuts" xml:space="preserve">
+    <value>Keyboard shortcuts</value>
+  </data>
+  <data name="You can change every shortcut later in Settings → Keyboard Map." xml:space="preserve">
+    <value>You can change every shortcut later in Settings → Keyboard Map.</value>
+  </data>
+  <data name="Get Started" xml:space="preserve">
+    <value>Get Started</value>
+  </data>
+  <data name="Results" xml:space="preserve">
+    <value>Results</value>
+  </data>
+  <data name="Searching..." xml:space="preserve">
+    <value>Searching...</value>
+  </data>
+  <data name="No Results for &quot;{0}&quot;" xml:space="preserve">
+    <value>No Results for "{0}"</value>
+  </data>
+  <data name="Check the spelling or try a new search." xml:space="preserve">
+    <value>Check the spelling or try a new search.</value>
+  </data>
+  <data name="Index for Offline Search…" xml:space="preserve">
+    <value>Index for Offline Search…</value>
+  </data>
+  <data name="Re-index for Offline Search…" xml:space="preserve">
+    <value>Re-index for Offline Search…</value>
+  </data>
+  <data name="Erase all offline indexes?" xml:space="preserve">
+    <value>Erase all offline indexes?</value>
+  </data>
+  <data name="Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." xml:space="preserve">
+    <value>Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again.</value>
+  </data>
+  <data name="Analyse" xml:space="preserve">
+    <value>Analyse</value>
+  </data>
+  <data name="Analyse any folder on this PC" xml:space="preserve">
+    <value>Analyse any folder on this PC</value>
+  </data>
+  <data name="Choose Folder…" xml:space="preserve">
+    <value>Choose Folder…</value>
+  </data>
+  <data name="Folders" xml:space="preserve">
+    <value>Folders</value>
+  </data>
+  <data name="Largest files" xml:space="preserve">
+    <value>Largest files</value>
+  </data>
+  <data name="Reveal" xml:space="preserve">
+    <value>Reveal</value>
+  </data>
+  <data name="Expand" xml:space="preserve">
+    <value>Expand</value>
+  </data>
+  <data name="Collapse" xml:space="preserve">
+    <value>Collapse</value>
+  </data>
+  <data name="Different" xml:space="preserve">
+    <value>Different</value>
+  </data>
+  <data name="Expanded" xml:space="preserve">
+    <value>Expanded</value>
+  </data>
+  <data name="Collapsed" xml:space="preserve">
+    <value>Collapsed</value>
+  </data>
+  <data name="Delete from {0} Panel" xml:space="preserve">
+    <value>Delete from {0} Panel</value>
+  </data>
+  <data name="FileFluss {0} is available — you have {1}." xml:space="preserve">
+    <value>FileFluss {0} is available — you have {1}.</value>
+  </data>
+  <data name="FileFluss {0} is currently the newest version available." xml:space="preserve">
+    <value>FileFluss {0} is currently the newest version available.</value>
+  </data>
+  <data name="You&apos;re up to date!" xml:space="preserve">
+    <value>You're up to date!</value>
+  </data>
+  <data name="FileFluss could not check for updates: {0}" xml:space="preserve">
+    <value>FileFluss could not check for updates: {0}</value>
+  </data>
+  <data name="Install and Relaunch" xml:space="preserve">
+    <value>Install and Relaunch</value>
+  </data>
+  <data name="Skip This Version" xml:space="preserve">
+    <value>Skip This Version</value>
+  </data>
+  <data name="Open Release Page" xml:space="preserve">
+    <value>Open Release Page</value>
+  </data>
+  <data name="Downloading FileFluss {0}…" xml:space="preserve">
+    <value>Downloading FileFluss {0}…</value>
+  </data>
+  <data name="The update could not be downloaded: {0}" xml:space="preserve">
+    <value>The update could not be downloaded: {0}</value>
+  </data>
+  <data name="The update could not be verified, so it was not installed." xml:space="preserve">
+    <value>The update could not be verified, so it was not installed.</value>
+  </data>
+  <data name="This copy of FileFluss was not installed with the FileFluss setup, so it can&apos;t update itself. Download the new version from the release page." xml:space="preserve">
+    <value>This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page.</value>
+  </data>
+  <data name="Disconnect Network Drive ({0})" xml:space="preserve">
+    <value>Disconnect Network Drive ({0})</value>
+  </data>
+  <data name="Only cloud accounts can be mounted as a drive." xml:space="preserve">
+    <value>Only cloud accounts can be mounted as a drive.</value>
+  </data>
+  <data name="No free drive letter is available. Disconnect a network drive and try again." xml:space="preserve">
+    <value>No free drive letter is available. Disconnect a network drive and try again.</value>
+  </data>
+  <data name="Could not mount in File Explorer: {0}" xml:space="preserve">
+    <value>Could not mount in File Explorer: {0}</value>
+  </data>
+  <data name="Could not reach the internal WebDAV server on 127.0.0.1:{0}: {1}" xml:space="preserve">
+    <value>Could not reach the internal WebDAV server on 127.0.0.1:{0}: {1}</value>
+  </data>
+  <data name="The internal WebDAV server didn&apos;t respond with 200 OK to OPTIONS." xml:space="preserve">
+    <value>The internal WebDAV server didn't respond with 200 OK to OPTIONS.</value>
+  </data>
+  <data name="Showing a cloud account as a drive needs the Windows &quot;WebClient&quot; service, which isn&apos;t installed on this PC. On Windows Server, add the &quot;WebDAV Redirector&quot; feature." xml:space="preserve">
+    <value>Showing a cloud account as a drive needs the Windows "WebClient" service, which isn't installed on this PC. On Windows Server, add the "WebDAV Redirector" feature.</value>
+  </data>
+  <data name="The Windows &quot;WebClient&quot; service is disabled, so the account can&apos;t appear as a drive. An administrator can set it to &quot;Manual&quot; in Services (services.msc)." xml:space="preserve">
+    <value>The Windows "WebClient" service is disabled, so the account can't appear as a drive. An administrator can set it to "Manual" in Services (services.msc).</value>
+  </data>
+  <data name="Windows&apos; WebDAV redirector (the &quot;WebClient&quot; service) couldn&apos;t connect to FileFluss. Make sure the WebClient service isn&apos;t blocked by a policy or security software." xml:space="preserve">
+    <value>Windows' WebDAV redirector (the "WebClient" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software.</value>
+  </data>
+  <data name="Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." xml:space="preserve">
+    <value>Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service).</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
+    <value>Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.</value>
   </data>
 </root>

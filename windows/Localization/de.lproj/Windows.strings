@@ -99,7 +99,7 @@
 "The folder \"%@\" can't be found." = "Der Ordner „%@“ wurde nicht gefunden.";
 "This location is read-only." = "Dieser Ort ist schreibgeschützt.";
 "Loading preview…" = "Vorschau wird geladen…";
-"Mount this account first — a cloud folder has no path a terminal can open." = "Binde dieses Konto zuerst als Laufwerk ein – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";
+"Mount this account first — a cloud folder has no path a terminal can open." = "Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";
 "Transfers are still running" = "Übertragungen laufen noch";
 "Quitting cancels them. Files already transferred will remain." = "Beim Beenden werden sie abgebrochen. Bereits übertragene Dateien bleiben erhalten.";
 "Quit Anyway" = "Trotzdem beenden";
@@ -426,3 +426,86 @@
 "Invalid parameter for the request." = "Ungültiger Parameter in der Anfrage.";
 "Request denied — too many connections." = "Anfrage abgelehnt – zu viele Verbindungen.";
 "Connection time out." = "Zeitüberschreitung der Verbindung.";
+
+/* ---------------------------------------------------------------------------------------------
+   Welcome window
+   --------------------------------------------------------------------------------------------- */
+
+"Your files and your clouds, side by side." = "Deine Dateien und deine Clouds, Seite an Seite.";
+"Two panels" = "Zwei Bereiche";
+"Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." = "Durchsuche zwei Orte gleichzeitig. F5 kopiert die Auswahl in den anderen Bereich, F6 verschiebt sie, Tab wechselt den Bereich.";
+"Every cloud in one place" = "Alle Clouds an einem Ort";
+"Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." = "Füge OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP und viele mehr hinzu. Kopiere zwischen ihnen, als wären es Ordner.";
+"Find anything" = "Alles finden";
+"Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." = "Durchsuche lokale Ordner und alle verbundenen Konten gleichzeitig. Indiziere ein Laufwerk oder Konto, um es auch offline durchsuchen zu können.";
+"Keyboard shortcuts" = "Tastenkombinationen";
+"You can change every shortcut later in Settings → Keyboard Map." = "Du kannst jede Tastenkombination später unter Einstellungen → Tastaturbelegung ändern.";
+"Get Started" = "Los geht’s";
+
+/* ---------------------------------------------------------------------------------------------
+   Search window and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Results" = "Ergebnisse";
+"Searching..." = "Suche läuft…";
+"No Results for \"%@\"" = "Keine Ergebnisse für „%@“";
+"Check the spelling or try a new search." = "Prüfe die Schreibweise oder starte eine neue Suche.";
+"Index for Offline Search…" = "Für die Offline-Suche indizieren…";
+"Re-index for Offline Search…" = "Für die Offline-Suche neu indizieren…";
+"Erase all offline indexes?" = "Alle Offline-Indizes löschen?";
+"Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." = "Für die Offline-Suche lassen sich Cloud-Konten und alle Laufwerke außer dem Windows-Laufwerk indizieren. Öffne eines davon im aktiven Bereich und versuche es erneut.";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis window
+   --------------------------------------------------------------------------------------------- */
+
+"Analyse" = "Analysieren";
+"Analyse any folder on this PC" = "Einen beliebigen Ordner auf diesem PC analysieren";
+"Choose Folder…" = "Ordner auswählen…";
+"Folders" = "Ordner";
+"Largest files" = "Größte Dateien";
+"Reveal" = "Im Bereich zeigen";
+"Expand" = "Erweitern";
+"Collapse" = "Reduzieren";
+
+/* ---------------------------------------------------------------------------------------------
+   Compare window (screen-reader names)
+   --------------------------------------------------------------------------------------------- */
+
+"Different" = "Unterschiedlich";
+"Expanded" = "Erweitert";
+"Collapsed" = "Reduziert";
+"Delete from %@ Panel" = "Aus Bereich %@ löschen";
+
+/* ---------------------------------------------------------------------------------------------
+   Updates
+   --------------------------------------------------------------------------------------------- */
+
+"FileFluss %@ is available — you have %@." = "FileFluss %@ ist verfügbar – du hast %@.";
+"FileFluss %@ is currently the newest version available." = "FileFluss %@ ist derzeit die neueste verfügbare Version.";
+"You're up to date!" = "Du bist auf dem neuesten Stand!";
+"FileFluss could not check for updates: %@" = "FileFluss konnte nicht nach Updates suchen: %@";
+"Install and Relaunch" = "Installieren und neu starten";
+"Skip This Version" = "Diese Version überspringen";
+"Open Release Page" = "Release-Seite öffnen";
+"Downloading FileFluss %@…" = "FileFluss %@ wird heruntergeladen…";
+"The update could not be downloaded: %@" = "Das Update konnte nicht heruntergeladen werden: %@";
+"The update could not be verified, so it was not installed." = "Das Update konnte nicht überprüft werden und wurde daher nicht installiert.";
+"This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page." = "Diese FileFluss-Kopie wurde nicht mit dem FileFluss-Setup installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.";
+
+/* ---------------------------------------------------------------------------------------------
+   Network drives
+   --------------------------------------------------------------------------------------------- */
+
+"Disconnect Network Drive (%@)" = "Netzlaufwerk trennen (%@)";
+"Only cloud accounts can be mounted as a drive." = "Nur Cloud-Konten können als Laufwerk verbunden werden.";
+"No free drive letter is available. Disconnect a network drive and try again." = "Es ist kein Laufwerkbuchstabe frei. Trenne ein Netzlaufwerk und versuche es erneut.";
+"Could not mount in File Explorer: %@" = "Konnte nicht als Netzlaufwerk verbunden werden: %@";
+"Could not reach the internal WebDAV server on 127.0.0.1:%@: %@" = "Der interne WebDAV-Server auf 127.0.0.1:%@ ist nicht erreichbar: %@";
+"The internal WebDAV server didn't respond with 200 OK to OPTIONS." = "Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet.";
+"Showing a cloud account as a drive needs the Windows \"WebClient\" service, which isn't installed on this PC. On Windows Server, add the \"WebDAV Redirector\" feature." = "Um ein Cloud-Konto als Laufwerk anzuzeigen, wird der Windows-Dienst „WebClient“ benötigt, der auf diesem PC nicht installiert ist. Füge unter Windows Server das Feature „WebDAV-Redirector“ hinzu.";
+"The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc)." = "Der Windows-Dienst „WebClient“ ist deaktiviert, daher kann das Konto nicht als Laufwerk erscheinen. Ein Administrator kann ihn unter „Dienste“ (services.msc) auf „Manuell“ stellen.";
+"Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Der WebDAV-Redirector von Windows (der Dienst „WebClient“) konnte keine Verbindung zu FileFluss herstellen. Stelle sicher, dass der WebClient-Dienst nicht durch eine Richtlinie oder Sicherheitssoftware blockiert wird.";
+"Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "Windows öffnet und speichert auf solchen Laufwerken nur Dateien bis %@. Größere Dateien lassen sich weiterhin mit FileFluss selbst kopieren. Ein Administrator kann das Limit erhöhen (FileSizeLimitInBytes des WebClient-Dienstes).";
+
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";

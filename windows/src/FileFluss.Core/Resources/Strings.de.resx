@@ -2271,7 +2271,7 @@
     <value>Vorschau wird geladen…</value>
   </data>
   <data name="Mount this account first — a cloud folder has no path a terminal can open." xml:space="preserve">
-    <value>Binde dieses Konto zuerst als Laufwerk ein – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
+    <value>Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
   </data>
   <data name="Transfers are still running" xml:space="preserve">
     <value>Übertragungen laufen noch</value>
@@ -3090,5 +3090,161 @@ Dem neuen Schlüssel vertrauen?</value>
   </data>
   <data name="Connection time out." xml:space="preserve">
     <value>Zeitüberschreitung der Verbindung.</value>
+  </data>
+  <data name="Your files and your clouds, side by side." xml:space="preserve">
+    <value>Deine Dateien und deine Clouds, Seite an Seite.</value>
+  </data>
+  <data name="Two panels" xml:space="preserve">
+    <value>Zwei Bereiche</value>
+  </data>
+  <data name="Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." xml:space="preserve">
+    <value>Durchsuche zwei Orte gleichzeitig. F5 kopiert die Auswahl in den anderen Bereich, F6 verschiebt sie, Tab wechselt den Bereich.</value>
+  </data>
+  <data name="Every cloud in one place" xml:space="preserve">
+    <value>Alle Clouds an einem Ort</value>
+  </data>
+  <data name="Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." xml:space="preserve">
+    <value>Füge OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP und viele mehr hinzu. Kopiere zwischen ihnen, als wären es Ordner.</value>
+  </data>
+  <data name="Find anything" xml:space="preserve">
+    <value>Alles finden</value>
+  </data>
+  <data name="Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." xml:space="preserve">
+    <value>Durchsuche lokale Ordner und alle verbundenen Konten gleichzeitig. Indiziere ein Laufwerk oder Konto, um es auch offline durchsuchen zu können.</value>
+  </data>
+  <data name="Keyboard shortcuts" xml:space="preserve">
+    <value>Tastenkombinationen</value>
+  </data>
+  <data name="You can change every shortcut later in Settings → Keyboard Map." xml:space="preserve">
+    <value>Du kannst jede Tastenkombination später unter Einstellungen → Tastaturbelegung ändern.</value>
+  </data>
+  <data name="Get Started" xml:space="preserve">
+    <value>Los geht’s</value>
+  </data>
+  <data name="Results" xml:space="preserve">
+    <value>Ergebnisse</value>
+  </data>
+  <data name="Searching..." xml:space="preserve">
+    <value>Suche läuft…</value>
+  </data>
+  <data name="No Results for &quot;{0}&quot;" xml:space="preserve">
+    <value>Keine Ergebnisse für „{0}“</value>
+  </data>
+  <data name="Check the spelling or try a new search." xml:space="preserve">
+    <value>Prüfe die Schreibweise oder starte eine neue Suche.</value>
+  </data>
+  <data name="Index for Offline Search…" xml:space="preserve">
+    <value>Für die Offline-Suche indizieren…</value>
+  </data>
+  <data name="Re-index for Offline Search…" xml:space="preserve">
+    <value>Für die Offline-Suche neu indizieren…</value>
+  </data>
+  <data name="Erase all offline indexes?" xml:space="preserve">
+    <value>Alle Offline-Indizes löschen?</value>
+  </data>
+  <data name="Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." xml:space="preserve">
+    <value>Für die Offline-Suche lassen sich Cloud-Konten und alle Laufwerke außer dem Windows-Laufwerk indizieren. Öffne eines davon im aktiven Bereich und versuche es erneut.</value>
+  </data>
+  <data name="Analyse" xml:space="preserve">
+    <value>Analysieren</value>
+  </data>
+  <data name="Analyse any folder on this PC" xml:space="preserve">
+    <value>Einen beliebigen Ordner auf diesem PC analysieren</value>
+  </data>
+  <data name="Choose Folder…" xml:space="preserve">
+    <value>Ordner auswählen…</value>
+  </data>
+  <data name="Folders" xml:space="preserve">
+    <value>Ordner</value>
+  </data>
+  <data name="Largest files" xml:space="preserve">
+    <value>Größte Dateien</value>
+  </data>
+  <data name="Reveal" xml:space="preserve">
+    <value>Im Bereich zeigen</value>
+  </data>
+  <data name="Expand" xml:space="preserve">
+    <value>Erweitern</value>
+  </data>
+  <data name="Collapse" xml:space="preserve">
+    <value>Reduzieren</value>
+  </data>
+  <data name="Different" xml:space="preserve">
+    <value>Unterschiedlich</value>
+  </data>
+  <data name="Expanded" xml:space="preserve">
+    <value>Erweitert</value>
+  </data>
+  <data name="Collapsed" xml:space="preserve">
+    <value>Reduziert</value>
+  </data>
+  <data name="Delete from {0} Panel" xml:space="preserve">
+    <value>Aus Bereich {0} löschen</value>
+  </data>
+  <data name="FileFluss {0} is available — you have {1}." xml:space="preserve">
+    <value>FileFluss {0} ist verfügbar – du hast {1}.</value>
+  </data>
+  <data name="FileFluss {0} is currently the newest version available." xml:space="preserve">
+    <value>FileFluss {0} ist derzeit die neueste verfügbare Version.</value>
+  </data>
+  <data name="You&apos;re up to date!" xml:space="preserve">
+    <value>Du bist auf dem neuesten Stand!</value>
+  </data>
+  <data name="FileFluss could not check for updates: {0}" xml:space="preserve">
+    <value>FileFluss konnte nicht nach Updates suchen: {0}</value>
+  </data>
+  <data name="Install and Relaunch" xml:space="preserve">
+    <value>Installieren und neu starten</value>
+  </data>
+  <data name="Skip This Version" xml:space="preserve">
+    <value>Diese Version überspringen</value>
+  </data>
+  <data name="Open Release Page" xml:space="preserve">
+    <value>Release-Seite öffnen</value>
+  </data>
+  <data name="Downloading FileFluss {0}…" xml:space="preserve">
+    <value>FileFluss {0} wird heruntergeladen…</value>
+  </data>
+  <data name="The update could not be downloaded: {0}" xml:space="preserve">
+    <value>Das Update konnte nicht heruntergeladen werden: {0}</value>
+  </data>
+  <data name="The update could not be verified, so it was not installed." xml:space="preserve">
+    <value>Das Update konnte nicht überprüft werden und wurde daher nicht installiert.</value>
+  </data>
+  <data name="This copy of FileFluss was not installed with the FileFluss setup, so it can&apos;t update itself. Download the new version from the release page." xml:space="preserve">
+    <value>Diese FileFluss-Kopie wurde nicht mit dem FileFluss-Setup installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.</value>
+  </data>
+  <data name="Disconnect Network Drive ({0})" xml:space="preserve">
+    <value>Netzlaufwerk trennen ({0})</value>
+  </data>
+  <data name="Only cloud accounts can be mounted as a drive." xml:space="preserve">
+    <value>Nur Cloud-Konten können als Laufwerk verbunden werden.</value>
+  </data>
+  <data name="No free drive letter is available. Disconnect a network drive and try again." xml:space="preserve">
+    <value>Es ist kein Laufwerkbuchstabe frei. Trenne ein Netzlaufwerk und versuche es erneut.</value>
+  </data>
+  <data name="Could not mount in File Explorer: {0}" xml:space="preserve">
+    <value>Konnte nicht als Netzlaufwerk verbunden werden: {0}</value>
+  </data>
+  <data name="Could not reach the internal WebDAV server on 127.0.0.1:{0}: {1}" xml:space="preserve">
+    <value>Der interne WebDAV-Server auf 127.0.0.1:{0} ist nicht erreichbar: {1}</value>
+  </data>
+  <data name="The internal WebDAV server didn&apos;t respond with 200 OK to OPTIONS." xml:space="preserve">
+    <value>Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet.</value>
+  </data>
+  <data name="Showing a cloud account as a drive needs the Windows &quot;WebClient&quot; service, which isn&apos;t installed on this PC. On Windows Server, add the &quot;WebDAV Redirector&quot; feature." xml:space="preserve">
+    <value>Um ein Cloud-Konto als Laufwerk anzuzeigen, wird der Windows-Dienst „WebClient“ benötigt, der auf diesem PC nicht installiert ist. Füge unter Windows Server das Feature „WebDAV-Redirector“ hinzu.</value>
+  </data>
+  <data name="The Windows &quot;WebClient&quot; service is disabled, so the account can&apos;t appear as a drive. An administrator can set it to &quot;Manual&quot; in Services (services.msc)." xml:space="preserve">
+    <value>Der Windows-Dienst „WebClient“ ist deaktiviert, daher kann das Konto nicht als Laufwerk erscheinen. Ein Administrator kann ihn unter „Dienste“ (services.msc) auf „Manuell“ stellen.</value>
+  </data>
+  <data name="Windows&apos; WebDAV redirector (the &quot;WebClient&quot; service) couldn&apos;t connect to FileFluss. Make sure the WebClient service isn&apos;t blocked by a policy or security software." xml:space="preserve">
+    <value>Der WebDAV-Redirector von Windows (der Dienst „WebClient“) konnte keine Verbindung zu FileFluss herstellen. Stelle sicher, dass der WebClient-Dienst nicht durch eine Richtlinie oder Sicherheitssoftware blockiert wird.</value>
+  </data>
+  <data name="Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." xml:space="preserve">
+    <value>Windows öffnet und speichert auf solchen Laufwerken nur Dateien bis {0}. Größere Dateien lassen sich weiterhin mit FileFluss selbst kopieren. Ein Administrator kann das Limit erhöhen (FileSizeLimitInBytes des WebClient-Dienstes).</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
+    <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
   </data>
 </root>

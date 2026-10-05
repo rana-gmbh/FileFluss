@@ -107,7 +107,7 @@
 "The folder \"%@\" can't be found." = "The folder \"%@\" can't be found.";
 "This location is read-only." = "This location is read-only.";
 "Loading preview…" = "Loading preview…";
-"Mount this account first — a cloud folder has no path a terminal can open." = "Mount this account first — a cloud folder has no path a terminal can open.";
+"Mount this account first — a cloud folder has no path a terminal can open." = "Map this account as a network drive first — a cloud folder has no path a terminal can open.";
 "Transfers are still running" = "Transfers are still running";
 "Quitting cancels them. Files already transferred will remain." = "Quitting cancels them. Files already transferred will remain.";
 "Quit Anyway" = "Quit Anyway";
@@ -434,3 +434,87 @@
 "Invalid parameter for the request." = "Invalid parameter for the request.";
 "Request denied — too many connections." = "Request denied — too many connections.";
 "Connection time out." = "Connection timed out.";
+
+/* ---------------------------------------------------------------------------------------------
+   Welcome window
+   --------------------------------------------------------------------------------------------- */
+
+"Your files and your clouds, side by side." = "Your files and your clouds, side by side.";
+"Two panels" = "Two panels";
+"Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." = "Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels.";
+"Every cloud in one place" = "Every cloud in one place";
+"Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." = "Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders.";
+"Find anything" = "Find anything";
+"Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." = "Search local folders and every connected account at once. Index a drive or account to search it even while it is offline.";
+"Keyboard shortcuts" = "Keyboard shortcuts";
+"You can change every shortcut later in Settings → Keyboard Map." = "You can change every shortcut later in Settings → Keyboard Map.";
+"Get Started" = "Get Started";
+
+/* ---------------------------------------------------------------------------------------------
+   Search window and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Results" = "Results";
+"Searching..." = "Searching...";
+"No Results for \"%@\"" = "No Results for \"%@\"";
+"Check the spelling or try a new search." = "Check the spelling or try a new search.";
+"Index for Offline Search…" = "Index for Offline Search…";
+"Re-index for Offline Search…" = "Re-index for Offline Search…";
+"Erase all offline indexes?" = "Erase all offline indexes?";
+"Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." = "Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again.";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis window (the Mac spells "Analyse" the British way; the keys keep it)
+   --------------------------------------------------------------------------------------------- */
+
+"Analyse" = "Analyse";
+"Analyse any folder on this PC" = "Analyse any folder on this PC";
+"Choose Folder…" = "Choose Folder…";
+"Folders" = "Folders";
+"Largest files" = "Largest files";
+"Reveal" = "Reveal";
+"Expand" = "Expand";
+"Collapse" = "Collapse";
+
+/* ---------------------------------------------------------------------------------------------
+   Compare window (screen-reader names)
+   --------------------------------------------------------------------------------------------- */
+
+"Different" = "Different";
+"Expanded" = "Expanded";
+"Collapsed" = "Collapsed";
+"Delete from %@ Panel" = "Delete from %@ Panel";
+
+/* ---------------------------------------------------------------------------------------------
+   Updates
+   --------------------------------------------------------------------------------------------- */
+
+"FileFluss %@ is available — you have %@." = "FileFluss %@ is available — you have %@.";
+"FileFluss %@ is currently the newest version available." = "FileFluss %@ is currently the newest version available.";
+"You're up to date!" = "You're up to date!";
+"FileFluss could not check for updates: %@" = "FileFluss could not check for updates: %@";
+"Install and Relaunch" = "Install and Relaunch";
+"Skip This Version" = "Skip This Version";
+"Open Release Page" = "Open Release Page";
+"Downloading FileFluss %@…" = "Downloading FileFluss %@…";
+"The update could not be downloaded: %@" = "The update could not be downloaded: %@";
+"The update could not be verified, so it was not installed." = "The update could not be verified, so it was not installed.";
+"This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page." = "This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page.";
+
+/* ---------------------------------------------------------------------------------------------
+   Network drives (accounts mapped through the built-in WebDAV server)
+   --------------------------------------------------------------------------------------------- */
+
+"Disconnect Network Drive (%@)" = "Disconnect Network Drive (%@)";
+"Only cloud accounts can be mounted as a drive." = "Only cloud accounts can be mounted as a drive.";
+"No free drive letter is available. Disconnect a network drive and try again." = "No free drive letter is available. Disconnect a network drive and try again.";
+"Could not mount in File Explorer: %@" = "Could not mount in File Explorer: %@";
+"Could not reach the internal WebDAV server on 127.0.0.1:%@: %@" = "Could not reach the internal WebDAV server on 127.0.0.1:%@: %@";
+"The internal WebDAV server didn't respond with 200 OK to OPTIONS." = "The internal WebDAV server didn't respond with 200 OK to OPTIONS.";
+"Showing a cloud account as a drive needs the Windows \"WebClient\" service, which isn't installed on this PC. On Windows Server, add the \"WebDAV Redirector\" feature." = "Showing a cloud account as a drive needs the Windows \"WebClient\" service, which isn't installed on this PC. On Windows Server, add the \"WebDAV Redirector\" feature.";
+"The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc)." = "The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc).";
+"Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software.";
+"Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service).";
+
+/* The corrected Jottacloud wording, ready for when the call site switches to it. */
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
