@@ -12,7 +12,7 @@ public static class CloudQuotaFormatter
 {
     public static string Summary(CloudStorageQuota quota, string accountDisplayName)
     {
-        var used = ByteFormatter.Format(Math.Max(0, quota.UsedBytes));
+        var used = ByteFormatter.Format(Math.Max(0L, quota.UsedBytes));
         if (quota.TotalBytes is not { } total || total <= 0)
         {
             return $"{accountDisplayName}: {Localization.L("{0} used", used)}";
