@@ -220,7 +220,7 @@ public sealed class NextCloudProviderTests
     [Fact]
     public async Task SearchUsesDavSearchWithAnEscapedQuery()
     {
-        _http.On(Search, "/remote.php/dav/files/jane.doe/Documents", (_, _) => Multistatus(WebDavParserTests.NextcloudListing));
+        _http.On(new HttpMethod("SEARCH"), "/remote.php/dav/files/jane.doe/Documents", (_, _) => Multistatus(WebDavParserTests.NextcloudListing));
         using var provider = Connected();
 
         var hits = await provider.SearchFilesAsync("Plan & <Budget>", "/Documents");
