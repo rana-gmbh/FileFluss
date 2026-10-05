@@ -56,7 +56,8 @@
             </Grid.ColumnDefinitions>
 
             <v:SidebarView x:Name="LeftSidebar" Grid.Column="0" />
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext"
+            <GridSplitter x:Name="LeftSplitter" Grid.Column="1" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                          v:SidebarSplitter.Side="Left"
                           DragCompleted="OnSplitterMoved" />
             <Border Grid.Column="2" x:Name="LeftCard" CornerRadius="8,8,0,0" Margin="0,0,1,0" Background="{DynamicResource LayerFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1,1,1,0">
@@ -68,6 +69,7 @@
                 <v:PanelView x:Name="RightPanel" />
             </Border>
             <GridSplitter x:Name="RightSplitter" Grid.Column="5" Width="5" HorizontalAlignment="Center" Background="Transparent" ResizeBehavior="PreviousAndNext"
+                          v:SidebarSplitter.Side="Right"
                           DragCompleted="OnSplitterMoved" />
             <v:SidebarView x:Name="RightSidebar" Grid.Column="6" />
         </Grid>

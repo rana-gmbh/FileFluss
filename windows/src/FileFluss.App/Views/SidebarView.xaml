@@ -7,8 +7,17 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
 
+        <!-- Icon-only mode (macOS CollapsibleSidebarLabelStyle): names and section titles go. -->
+        <Style x:Key="HideWhenCompact" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <DataTemplate x:Key="EntryTemplate" DataType="{x:Type vm:SidebarEntry}">
-            <Grid Margin="8,0,6,0" ToolTip="{Binding ToolTip}" Background="Transparent">
+            <Grid x:Name="Row" Margin="8,0,6,0" ToolTip="{Binding ToolTip}" Background="Transparent">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="20" />
                     <ColumnDefinition Width="*" />
@@ -19,7 +28,7 @@
                            HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 <Image x:Name="Picture" Source="{Binding Image}" Width="16" Height="16" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
                 <TextBlock x:Name="Title" Grid.Column="1" Text="{Binding Title}" Margin="8,0,4,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2" Text="{Binding Trailing}" FontSize="10.5" Margin="4,0" VerticalAlignment="Center"
+                <TextBlock x:Name="Trailing" Grid.Column="2" Text="{Binding Trailing}" FontSize="10.5" Margin="4,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 <Ellipse x:Name="Dot" Grid.Column="3" Width="7" Height="7" Margin="4,0,2,0" VerticalAlignment="Center" Visibility="Collapsed"
                          Fill="{DynamicResource DisconnectedBrush}" />
@@ -27,6 +36,9 @@
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding Image}" Value="{x:Null}">
                     <Setter TargetName="Picture" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Glyph}" Value="{x:Null}">
+                    <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
                     <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
@@ -41,8 +53,13 @@
                 <DataTrigger Binding="{Binding Kind}" Value="Drive">
                     <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
+                <!-- Last, so it wins over the dot: icon-only rows show the icon, centred, and nothing else. -->
                 <DataTrigger Binding="{Binding DataContext.IsCompact, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                    <Setter TargetName="Row" Property="HorizontalAlignment" Value="Center" />
+                    <Setter TargetName="Row" Property="Margin" Value="0" />
                     <Setter TargetName="Title" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Trailing" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Dot" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -65,80 +82,184 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <DataTemplate x:Key="TransferTemplate" DataType="{x:Type t:TransferProgress}">
+            <Border Margin="8,2,8,4" Padding="8,6" CornerRadius="5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                    Cursor="Hand" MouseLeftButtonUp="OnTransferClicked">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
+                                Content="&#xE711;" Click="OnTransferDismiss" ToolTip="{u:Loc 'Cancel this transfer'}" AutomationProperties.Name="{u:Loc 'Cancel this transfer'}" />
+                        <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" FontSize="11.5" VerticalAlignment="Center"
+                                   ToolTip="{Binding StatusText}" />
+                    </DockPanel>
+                    <ProgressBar Height="4" Margin="0,5,0,3" Maximum="1" Value="{Binding Fraction, Mode=OneWay}" x:Name="Bar" />
+                    <TextBlock Text="{Binding LiveDetailLine}" FontSize="10.5" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis" x:Name="Detail" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsComplete}" Value="True">
+                    <Setter TargetName="Bar" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Detail" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FolderSizeTemplate" DataType="{x:Type vm:FolderSizeEntry}">
+            <DockPanel Margin="14,2,8,2">
+                <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
+                        Content="&#xE711;" Click="OnFolderSizeRemove" AutomationProperties.Name="{u:Loc Remove}" />
+                <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" FontSize="11.5" Margin="6,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{Binding Name}" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+        </DataTemplate>
+
+        <!-- Icon-only stand-in for the Transfers / Folder Sizes sections (macOS collapsedInfoRow). -->
+        <Style x:Key="CompactInfoButton" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CountBadge" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource ActivePanelBrush}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="MinWidth" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Padding" Value="3,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="12,-5,0,0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+
+        <Style x:Key="PopupCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorBaseBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStrokeColorFlyoutBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Margin" Value="12" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.25" />
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <DockPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,4,0,8">
             <StackPanel>
-                <!-- Favorites -->
-                <ToggleButton x:Name="FavoritesHeader" Style="{StaticResource SectionToggle}" Tag="favorites" Content="{u:Loc Favorites}"
-                              AllowDrop="True" DragOver="OnFavoritesHeaderDragOver" Drop="OnFavoritesHeaderDrop" Click="OnSectionToggled" />
-                <ListBox x:Name="FavoritesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Favorites}" Tag="favorites" />
+                <!-- Favorites. Dropping a folder on the header inserts it at the top. -->
+                <ToggleButton x:Name="FavoritesHeader" Style="{StaticResource SectionToggle}" Tag="favorites" AutomationProperties.Name="{u:Loc Favorites}"
+                              AllowDrop="True" DragEnter="OnFavoritesHeaderDragOver" DragOver="OnFavoritesHeaderDragOver" DragLeave="OnFavoritesHeaderDragLeave"
+                              Drop="OnFavoritesHeaderDrop" Click="OnSectionToggled">
+                    <TextBlock Text="{u:Loc Favorites}" Style="{StaticResource HideWhenCompact}" />
+                </ToggleButton>
+                <ListBox x:Name="FavoritesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Favorites}" Tag="favorites"
+                         AutomationProperties.Name="{u:Loc Favorites}" />
 
                 <!-- Drives -->
-                <ToggleButton x:Name="DrivesHeader" Style="{StaticResource SectionToggle}" Tag="drives" Content="{u:Loc Drives}" Click="OnSectionToggled" />
-                <ListBox x:Name="DrivesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Drives}" Tag="drives" />
+                <ToggleButton x:Name="DrivesHeader" Style="{StaticResource SectionToggle}" Tag="drives" AutomationProperties.Name="{u:Loc Drives}" Click="OnSectionToggled">
+                    <TextBlock Text="{u:Loc Drives}" Style="{StaticResource HideWhenCompact}" />
+                </ToggleButton>
+                <ListBox x:Name="DrivesList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Drives}" Tag="drives" AutomationProperties.Name="{u:Loc Drives}" />
 
                 <!-- Cloud accounts -->
-                <ToggleButton x:Name="CloudHeader" Style="{StaticResource SectionToggle}" Tag="cloud" Content="{u:Loc 'Cloud Accounts'}" Click="OnSectionToggled" />
+                <ToggleButton x:Name="CloudHeader" Style="{StaticResource SectionToggle}" Tag="cloud" AutomationProperties.Name="{u:Loc 'Cloud Accounts'}" Click="OnSectionToggled">
+                    <TextBlock Text="{u:Loc 'Cloud Accounts'}" Style="{StaticResource HideWhenCompact}" />
+                </ToggleButton>
                 <StackPanel x:Name="CloudSection">
-                    <ListBox x:Name="AccountsList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Accounts}" Tag="cloud" />
+                    <ListBox x:Name="AccountsList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Accounts}" Tag="cloud"
+                             AutomationProperties.Name="{u:Loc 'Cloud Accounts'}" />
                     <Button x:Name="AddAccountButton" Style="{StaticResource SidebarAddButton}" Click="OnAddAccount" AutomationProperties.Name="{u:Loc 'Add Cloud Account…'}"
-                            Visibility="{Binding ShowAddAccount, Converter={StaticResource Visible}}">
+                            ToolTip="{u:Loc 'Add Cloud Account…'}" Visibility="{Binding ShowAddAccount, Converter={StaticResource Visible}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Width="20" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="AddAccountText" Text="{u:Loc 'Add Cloud Account…'}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="AddAccountText" Text="{u:Loc 'Add Cloud Account…'}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Style="{StaticResource HideWhenCompact}" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
 
                 <!-- Transfers -->
-                <StackPanel x:Name="TransfersSection">
+                <StackPanel x:Name="TransfersSection" Visibility="Collapsed">
                     <TextBlock Style="{StaticResource SectionHeader}" Text="{u:Loc Transfers}" />
-                    <ItemsControl x:Name="TransfersList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type t:TransferProgress}">
-                                <Border Margin="8,2,8,4" Padding="8,6" CornerRadius="5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                        Cursor="Hand" MouseLeftButtonUp="OnTransferClicked">
-                                    <StackPanel>
-                                        <DockPanel>
-                                            <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
-                                                    Content="&#xE711;" Click="OnTransferDismiss" ToolTip="{u:Loc 'Cancel this transfer'}" AutomationProperties.Name="{u:Loc 'Cancel this transfer'}" />
-                                            <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" FontSize="11.5" VerticalAlignment="Center"
-                                                       ToolTip="{Binding StatusText}" />
-                                        </DockPanel>
-                                        <ProgressBar Height="4" Margin="0,5,0,3" Maximum="1" Value="{Binding Fraction, Mode=OneWay}" x:Name="Bar" />
-                                        <TextBlock Text="{Binding LiveDetailLine}" FontSize="10.5" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                   TextTrimming="CharacterEllipsis" x:Name="Detail" />
-                                    </StackPanel>
-                                </Border>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsComplete}" Value="True">
-                                        <Setter TargetName="Bar" Property="Visibility" Value="Collapsed" />
-                                        <Setter TargetName="Detail" Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl x:Name="TransfersList" ItemTemplate="{StaticResource TransferTemplate}" />
                 </StackPanel>
 
                 <!-- Folder sizes -->
-                <StackPanel x:Name="FolderSizesSection" Visibility="{Binding ShowFolderSizes, Converter={StaticResource Visible}}">
+                <StackPanel x:Name="FolderSizesSection" Visibility="Collapsed">
                     <TextBlock Style="{StaticResource SectionHeader}" Text="{u:Loc 'Folder Sizes'}" />
-                    <ItemsControl ItemsSource="{Binding FolderSizes}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:FolderSizeEntry}">
-                                <DockPanel Margin="14,2,8,2">
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
-                                            Content="&#xE711;" Click="OnFolderSizeRemove" />
-                                    <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" FontSize="11.5" Margin="6,0" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <TextBlock Text="{Binding Name}" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                </DockPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding FolderSizes}" ItemTemplate="{StaticResource FolderSizeTemplate}" />
+                </StackPanel>
+
+                <!-- Icon-only mode: the two sections above become a badge each, with the list in a popup. -->
+                <StackPanel x:Name="CompactInfo" Margin="0,8,0,0" Visibility="Collapsed">
+                    <ToggleButton x:Name="TransfersBadge" Style="{StaticResource CompactInfoButton}" AutomationProperties.Name="{u:Loc Transfers}"
+                                  Click="OnInfoBadgeClicked">
+                        <Grid>
+                            <TextBlock Text="&#xE8AB;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource AccentTextBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="TransfersCountBadge" Style="{StaticResource CountBadge}">
+                                <TextBlock x:Name="TransfersCountText" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                    </ToggleButton>
+                    <Popup x:Name="TransfersPopup" PlacementTarget="{Binding ElementName=TransfersBadge}" StaysOpen="False" AllowsTransparency="True"
+                           Closed="OnInfoPopupClosed">
+                        <Border Style="{StaticResource PopupCard}" Width="340">
+                            <StackPanel>
+                                <TextBlock Text="{u:Loc Transfers}" FontSize="14" FontWeight="SemiBold" Margin="12,10,12,4" />
+                                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl x:Name="TransfersPopupList" ItemTemplate="{StaticResource TransferTemplate}" Margin="0,0,0,8" />
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+
+                    <ToggleButton x:Name="FolderSizesBadge" Style="{StaticResource CompactInfoButton}" AutomationProperties.Name="{u:Loc 'Folder Sizes'}"
+                                  Click="OnInfoBadgeClicked">
+                        <Grid>
+                            <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource AccentTextBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="FolderSizesCountBadge" Style="{StaticResource CountBadge}">
+                                <TextBlock x:Name="FolderSizesCountText" FontSize="9" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                    </ToggleButton>
+                    <Popup x:Name="FolderSizesPopup" PlacementTarget="{Binding ElementName=FolderSizesBadge}" StaysOpen="False" AllowsTransparency="True"
+                           Closed="OnInfoPopupClosed">
+                        <Border Style="{StaticResource PopupCard}" Width="300">
+                            <StackPanel>
+                                <TextBlock Text="{u:Loc 'Folder Sizes'}" FontSize="14" FontWeight="SemiBold" Margin="12,10,12,4" />
+                                <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding FolderSizes}" ItemTemplate="{StaticResource FolderSizeTemplate}" Margin="0,0,0,8" />
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

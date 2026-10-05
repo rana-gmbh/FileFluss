@@ -69,18 +69,76 @@ public static class Glyphs
     public const string ChevronRight = "";
     public const string SidebarCollapse = "";
 
-    /// <summary>The glyph for a favourite's stored icon name (macOS stored SF Symbol names).</summary>
+    public const string TextDocument = "";
+    public const string Heart = "";
+    public const string Flag = "";
+    public const string Bookmark = "";
+    public const string Tag = "";
+    public const string Work = "";
+    public const string Archive = "";
+    public const string Inbox = "";
+    public const string Send = "";
+    public const string Person = "";
+
+    /// <summary>The prefix of a favourite icon that is a provider logo: "@logo:Dropbox".</summary>
+    public const string LogoPrefix = "@logo:";
+
+    /// <summary>
+    /// The "Change Icon" choices (macOS <c>FavoriteIconLibrary.allSymbols</c>): stored under the
+    /// macOS SF Symbol names so the two apps mean the same thing by them, shown as the nearest
+    /// Segoe Fluent glyph. The names are the macOS menu's English labels, but for Videos.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Icon, string Name)> FavoriteIconLibrary =
+    [
+        ("house", "Home"),
+        ("menubar.dock.rectangle", "Desktop"),
+        ("doc", "Document"),
+        ("doc.text", "Text Document"),
+        ("arrow.down.circle", "Downloads"),
+        ("photo", "Pictures"),
+        ("music.note", "Music"),
+        ("film", "Videos"), // macOS "Movies"; Windows calls the folder Videos
+        ("folder.fill", "Folder"),
+        ("cloud.fill", "Cloud"),
+        ("star.fill", "Star"),
+        ("heart.fill", "Heart"),
+        ("flag.fill", "Flag"),
+        ("bookmark.fill", "Bookmark"),
+        ("tag.fill", "Tag"),
+        ("briefcase.fill", "Work"),
+        ("archivebox.fill", "Archive"),
+        ("tray.fill", "Inbox"),
+        ("paperplane.fill", "Sent"),
+        ("person.crop.circle.fill", "Personal"),
+    ];
+
+    /// <summary>The glyph for a favourite's stored icon name (Windows names and the macOS SF Symbol names).</summary>
     public static string ForFavorite(string icon) => icon switch
     {
-        "home" or "house" => Home,
-        "desktop" or "menubar.dock.rectangle" => Desktop,
-        "documents" or "doc" => Document,
-        "downloads" or "arrow.down.circle" => Download,
-        "pictures" or "photo" => Pictures,
+        "home" or "house" or "house.fill" => Home,
+        "desktop" or "menubar.dock.rectangle" or "desktopcomputer" => Desktop,
+        "documents" or "doc" or "doc.fill" => Document,
+        "doc.text" or "doc.text.fill" => TextDocument,
+        "downloads" or "arrow.down.circle" or "arrow.down.circle.fill" => Download,
+        "pictures" or "photo" or "photo.fill" => Pictures,
         "music" or "music.note" => Music,
-        "videos" or "film" => Video,
-        "star" => Star,
-        _ when icon.StartsWith("@logo:", StringComparison.Ordinal) => Cloud,
+        "videos" or "film" or "film.fill" => Video,
+        "cloud" or "cloud.fill" => Cloud,
+        "star" or "star.fill" => Star,
+        "heart" or "heart.fill" => Heart,
+        "flag" or "flag.fill" => Flag,
+        "bookmark" or "bookmark.fill" => Bookmark,
+        "tag" or "tag.fill" => Tag,
+        "briefcase" or "briefcase.fill" => Work,
+        "archivebox" or "archivebox.fill" => Archive,
+        "tray" or "tray.fill" => Inbox,
+        "paperplane" or "paperplane.fill" => Send,
+        "person.crop.circle" or "person.crop.circle.fill" => Person,
+        _ when icon.StartsWith(LogoPrefix, StringComparison.Ordinal) => Cloud,
         _ => Folder,
     };
+
+    /// <summary>The logo asset a favourite icon names ("@logo:Dropbox" → "Dropbox"), or null for a glyph.</summary>
+    public static string? LogoAsset(string icon)
+        => icon.StartsWith(LogoPrefix, StringComparison.Ordinal) && icon.Length > LogoPrefix.Length ? icon[LogoPrefix.Length..] : null;
 }
