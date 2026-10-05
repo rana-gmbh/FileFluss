@@ -3,6 +3,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -42,6 +43,11 @@ public static class CloudHttp
             AllowAutoRedirect = allowAutoRedirect,
             UseCookies = cookies is not null,
             CookieContainer = cookies ?? new CookieContainer(),
+
+            // TCP keep-alive, so a connection that died silently (Wi-Fi switch, NAT timeout)
+            // is noticed within about two minutes even while nothing is being read — waiting
+            // for the server to finish a large upload, say — instead of never.
+            ConnectCallback = ConnectWithKeepAliveAsync,
         };
 
         if (!string.IsNullOrEmpty(trustedSelfSignedHost))
@@ -57,9 +63,28 @@ public static class CloudHttp
             };
         }
 
-        var client = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
+        var client = new HttpClient(new TransientRetryHandler(handler), disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         return client;
+    }
+
+    private static async ValueTask<Stream> ConnectWithKeepAliveAsync(SocketsHttpConnectionContext context, CancellationToken cancellationToken)
+    {
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 6);
+            await socket.ConnectAsync(context.DnsEndPoint, cancellationToken).ConfigureAwait(false);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Sends an API call bounded by <paramref name="timeout"/> (default 60 s), translating transport failures.</summary>
@@ -84,6 +109,12 @@ public static class CloudHttp
         {
             throw CloudProviderException.Network(e);
         }
+        catch (ObjectDisposedException e)
+        {
+            // The provider was disposed under a running call (its account was re-authenticated
+            // or edited); report it like any lost connection rather than as a crash-looking error.
+            throw CloudProviderException.Network(e);
+        }
     }
 
     /// <summary>Sends a transfer request with no overall timeout, streaming the response.</summary>
@@ -94,6 +125,10 @@ public static class CloudHttp
             return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         }
         catch (HttpRequestException e)
+        {
+            throw CloudProviderException.Network(e);
+        }
+        catch (ObjectDisposedException e)
         {
             throw CloudProviderException.Network(e);
         }
