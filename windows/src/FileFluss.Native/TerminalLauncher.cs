@@ -59,6 +59,17 @@ public static class TerminalLauncher
         }
 
         var terminal = Resolve(configured) ?? throw CloudProviderException.CommandFailed(L("No terminal application could be found."));
+        Process.Start(StartInfo(terminal, directory));
+    }
+
+    /// <summary>
+    /// How <paramref name="terminal"/> is started at <paramref name="directory"/>. The folder
+    /// goes in the working directory wherever the terminal takes it from there, and otherwise
+    /// as a single <see cref="ProcessStartInfo.ArgumentList"/> entry — never pasted into a
+    /// command line, so quotes, <c>&amp;</c> or <c>%</c> in a folder name stay part of the name.
+    /// </summary>
+    internal static ProcessStartInfo StartInfo(TerminalApp terminal, string directory)
+    {
         var start = new ProcessStartInfo(terminal.Executable)
         {
             UseShellExecute = false,
@@ -67,8 +78,10 @@ public static class TerminalLauncher
         switch (terminal.Id)
         {
             case "wt":
+                // Windows Terminal splits its own arguments at ';' into separate commands
+                // ("a;b" → a second tab running "b"); a literal one is written "\;".
                 start.ArgumentList.Add("-d");
-                start.ArgumentList.Add(directory);
+                start.ArgumentList.Add(directory.Replace(";", "\\;", StringComparison.Ordinal));
                 start.UseShellExecute = true;
                 break;
             case "pwsh":
@@ -88,7 +101,7 @@ public static class TerminalLauncher
                 break;
         }
 
-        Process.Start(start);
+        return start;
     }
 
     private static void AddIfExists(List<TerminalApp> list, string id, string name, string path)
