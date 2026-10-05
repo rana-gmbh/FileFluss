@@ -223,7 +223,8 @@ public sealed class MainViewModel : Observable
                 continue;
             }
 
-            var usable = target.IsCloud
+            var usable = target.IsOfflineDrive ? _services.Search.Drives.Find(target.DriveId!) is not null
+                : target.IsCloud
                 ? _services.Hub.Get(target.AccountId!.Value) is not null
                 : target.Path.Length == 0 || Directory.Exists(target.Path);
             await panel.NavigateAsync(usable ? target : home);
@@ -548,6 +549,12 @@ public sealed class MainViewModel : Observable
     {
         if (source is null || items.Count == 0)
         {
+            return;
+        }
+
+        if (destination.IsOfflineDrive)
+        {
+            MessageDialog.Error(Shell.Window, L("Transfer"), L("This location is read-only."));
             return;
         }
 

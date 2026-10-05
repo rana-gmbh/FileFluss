@@ -34,6 +34,7 @@ public sealed class PanelViewModel : Observable
     private IReadOnlyList<FileRowViewModel> _selection = [];
     private PanelLocation _location = PanelLocation.Local(string.Empty);
     private FileProvider? _provider;
+    private Type? _lastProviderType;
     private bool _isLoading;
     private string? _error;
     private bool _needsReauthentication;
@@ -58,10 +59,19 @@ public sealed class PanelViewModel : Observable
             _watchDebounce.Stop();
             await RefreshAsync(quiet: true);
         };
-        services.Accounts.AccountChanged += (_, id) =>
+        services.Accounts.AccountChanged += async (_, id) =>
         {
             if (_location.AccountId == id)
             {
+                // Going offline or online swaps the live provider for the index view and back.
+                var provider = _services.ProviderFor(_location);
+                if (provider?.GetType() != _provider?.GetType())
+                {
+                    _provider = provider;
+                    OnOfflineStateChanged();
+                    await LoadAsync([], quiet: false);
+                }
+
                 OnPropertyChanged(nameof(Account));
                 OnPropertyChanged(nameof(Breadcrumbs));
                 OnPropertyChanged(nameof(Title));
@@ -79,20 +89,47 @@ public sealed class PanelViewModel : Observable
 
     public bool IsCloud => _location.IsCloud;
 
-    public bool IsLocal => !_location.IsCloud;
+    public bool IsLocal => _location.IsLocal;
+
+    /// <summary>Showing an offline account or an unplugged drive from the search index.</summary>
+    public bool IsOffline => _provider is Core.Search.OfflineIndexProvider;
+
+    /// <summary>The offline view's banner: "Offline view — Dropbox · Read only · Indexed 3 days ago".</summary>
+    public string OfflineBanner => _provider is Core.Search.OfflineIndexProvider offline && _services.Search.Safe(offline.GetInfo) is { } info
+        ? $"{info.Title}  ·  {Core.Search.OfflineSourceInfo.ReadOnlyBadge}  ·  {info.LastIndexedText}"
+        : string.Empty;
+
+    /// <summary>What an empty list says: an offline source with nothing indexed explains how to fix that.</summary>
+    public string EmptyText => IsOffline && _provider!.IsRoot(CurrentPath)
+        ? Core.Search.OfflineSourceInfo.EmptyTitle + Environment.NewLine + Core.Search.OfflineSourceInfo.EmptyMessage
+        : L("Empty Folder");
+
+    /// <summary>An unplugged drive's name, as the drive registry remembers it.</summary>
+    private string OfflineDriveName => _location.DriveId is { } id && _services.Search.Drives.Find(id) is { } drive ? drive.DisplayName : L("Offline Source");
+
+    private void OnOfflineStateChanged()
+    {
+        OnPropertyChanged(nameof(Provider));
+        OnPropertyChanged(nameof(IsOffline));
+        OnPropertyChanged(nameof(OfflineBanner));
+        OnPropertyChanged(nameof(EmptyText));
+        OnPropertyChanged(nameof(IsReadOnly));
+        OnPropertyChanged(nameof(CanCreateFolders));
+    }
 
     public CloudAccount? Account => _location.AccountId is { } id ? _services.Accounts.Find(id) : null;
 
     public string CurrentPath => _location.Path;
 
     /// <summary>Read-only: a camera, a source that is offline.</summary>
-    public bool IsReadOnly => Account is { } account && (account.ProviderType.IsReadOnly() || account.IsEffectivelyOffline);
+    public bool IsReadOnly => IsOffline || _location.IsOfflineDrive || (Account is { } account && (account.ProviderType.IsReadOnly() || account.IsEffectivelyOffline));
 
     public bool CanCreateFolders => IsLocal ? CurrentPath.Length > 0 : Account?.ProviderType.CanCreateFolders() == true && !IsReadOnly;
 
     /// <summary>The current folder's name, for window titles and prompts.</summary>
     public string Title => _provider is null ? string.Empty
         : IsCloud && _provider.IsRoot(CurrentPath) ? Account?.DisplayName ?? string.Empty
+        : _location.IsOfflineDrive && _provider.IsRoot(CurrentPath) ? OfflineDriveName
         : _provider.GetName(CurrentPath);
 
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => BuildBreadcrumbs();
@@ -302,7 +339,7 @@ public sealed class PanelViewModel : Observable
 
     private async Task NavigateCoreAsync(PanelLocation location, bool addToHistory, IReadOnlyCollection<string> select)
     {
-        var provider = _services.Hub.For(location);
+        var provider = _services.ProviderFor(location);
         var changed = location != _location;
         _location = location;
         _provider = provider;
@@ -342,6 +379,15 @@ public sealed class PanelViewModel : Observable
             OnPropertyChanged(nameof(CanGoUp));
             LocationChanged?.Invoke(this, EventArgs.Empty);
         }
+        else if (provider?.GetType() != _lastProviderType)
+        {
+            OnOfflineStateChanged();
+        }
+
+        _lastProviderType = provider?.GetType();
+        OnPropertyChanged(nameof(IsOffline));
+        OnPropertyChanged(nameof(OfflineBanner));
+        OnPropertyChanged(nameof(EmptyText));
 
         await LoadAsync(select, quiet: false);
         _ = UpdateQuotaAsync();
@@ -400,9 +446,9 @@ public sealed class PanelViewModel : Observable
 
     public Task JumpToRootAsync()
     {
-        if (IsCloud)
+        if (!IsLocal)
         {
-            return NavigateAsync(_location with { Path = Account?.EffectiveRootPath ?? "/" });
+            return NavigateAsync(_location with { Path = IsCloud ? Account?.EffectiveRootPath ?? "/" : "/" });
         }
 
         var root = Path.GetPathRoot(CurrentPath);
@@ -538,7 +584,11 @@ public sealed class PanelViewModel : Observable
     {
         var location = _location;
         string text = string.Empty;
-        if (location.AccountId is { } id)
+        if (IsOffline)
+        {
+            // Nothing to ask: the source is not reachable, and that is the point.
+        }
+        else if (location.AccountId is { } id)
         {
             var quota = await _services.Accounts.QuotaAsync(id);
             if (quota is not null)
@@ -548,7 +598,7 @@ public sealed class PanelViewModel : Observable
                     : L("{0} used", ByteFormatter.Format(quota.UsedBytes));
             }
         }
-        else if (location.Path.Length > 0)
+        else if (location.IsLocal && location.Path.Length > 0)
         {
             var free = await LocalFileProvider.Shared.AvailableSpaceAsync(location.Path);
             if (free is { } bytes)
@@ -605,7 +655,18 @@ public sealed class PanelViewModel : Observable
     private List<BreadcrumbSegment> BuildBreadcrumbs()
     {
         var segments = new List<(string Title, PanelLocation Location)>();
-        if (IsCloud)
+        if (_location.IsOfflineDrive)
+        {
+            var root = _location with { Path = "/" };
+            segments.Add((OfflineDriveName, root));
+            var accumulated = "/";
+            foreach (var part in Core.IO.CloudPath.Components(CurrentPath))
+            {
+                accumulated = Core.IO.CloudPath.Combine(accumulated, part);
+                segments.Add((part, _location with { Path = accumulated }));
+            }
+        }
+        else         if (IsCloud)
         {
             var account = Account;
             var root = account?.EffectiveRootPath ?? "/";
@@ -665,7 +726,7 @@ public sealed class PanelViewModel : Observable
     /// <summary>The account's provider failed sign-in; after re-auth the panel reloads.</summary>
     public async Task ReloadAfterReauthenticationAsync()
     {
-        _provider = _services.Hub.For(_location);
+        _provider = _services.ProviderFor(_location);
         OnPropertyChanged(nameof(Provider));
         await LoadAsync([], quiet: false);
     }
@@ -673,7 +734,7 @@ public sealed class PanelViewModel : Observable
     /// <summary>A removed or disconnected account: the provider is gone, refresh the error state.</summary>
     public void ProviderInvalidated()
     {
-        _provider = _services.Hub.For(_location);
+        _provider = _services.ProviderFor(_location);
         OnPropertyChanged(nameof(Provider));
     }
 

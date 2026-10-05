@@ -56,6 +56,9 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
 
+        // The index knows unplugged drives a restored panel may be showing.
+        await services.Search.StartAsync(services.Accounts.Accounts.Select(a => a.Id).ToHashSet());
+
         // Local folders first, before any network work: with a dozen accounts reconnecting,
         // a panel shouldn't wait on all of them to show the home folder.
         await vm.RestoreStartupLocationsAsync(cloudOnly: false);

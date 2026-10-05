@@ -38,9 +38,9 @@ public sealed class ProviderHub
 
     public CloudProvider? Get(Guid accountId) => _providers.GetValueOrDefault(accountId);
 
-    /// <summary>The provider for a location: the local disk, or the account's provider (null when not connected).</summary>
+    /// <summary>The provider for a location: the local disk, or the account's provider (null when not connected, and for offline drives, which the app serves from the index).</summary>
     public FileProvider? For(Models.PanelLocation location)
-        => location.IsCloud ? Get(location.AccountId!.Value) : LocalFileProvider.Shared;
+        => location.IsCloud ? Get(location.AccountId!.Value) : location.IsLocal ? LocalFileProvider.Shared : null;
 
     public IReadOnlyCollection<Guid> ConnectedAccountIds => _providers.Keys.ToList();
 }

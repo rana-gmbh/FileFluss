@@ -26,9 +26,14 @@ public enum DragDropMode
     Move,
 }
 
-/// <summary>Where a panel is: a local folder (Windows path; "" = This PC) or a folder of a cloud account.</summary>
+/// <summary>
+/// Where a panel is: a local folder (Windows path; "" = This PC), a folder of a cloud account,
+/// or a folder of an unplugged drive browsed from its offline index (POSIX path relative to the drive).
+/// </summary>
 public sealed record PanelLocation
 {
+    private const string OfflineDriveKind = "offline-drive";
+
     [JsonPropertyName("kind")]
     public string Kind { get; init; } = "local";
 
@@ -38,12 +43,26 @@ public sealed record PanelLocation
     [JsonPropertyName("accountId")]
     public Guid? AccountId { get; init; }
 
+    /// <summary>The drive's "vol:…" id, for an offline drive.</summary>
+    [JsonPropertyName("driveId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DriveId { get; init; }
+
     [JsonIgnore]
     public bool IsCloud => Kind == "cloud" && AccountId is not null;
+
+    [JsonIgnore]
+    public bool IsOfflineDrive => Kind == OfflineDriveKind && DriveId is not null;
+
+    /// <summary>A folder on disk (not a cloud account, not an unplugged drive).</summary>
+    [JsonIgnore]
+    public bool IsLocal => !IsCloud && !IsOfflineDrive;
 
     public static PanelLocation Local(string path) => new() { Kind = "local", Path = path };
 
     public static PanelLocation Cloud(Guid accountId, string path) => new() { Kind = "cloud", AccountId = accountId, Path = path };
+
+    public static PanelLocation OfflineDrive(string driveId, string path) => new() { Kind = OfflineDriveKind, DriveId = driveId, Path = path };
 }
 
 /// <summary>How each panel starts (issue #49).</summary>

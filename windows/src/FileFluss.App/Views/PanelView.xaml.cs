@@ -475,7 +475,7 @@ public partial class PanelView : UserControl
             return;
         }
 
-        if (vm.IsCloud)
+        if (!vm.IsLocal)
         {
             var target = text.StartsWith('/') ? text : Core.IO.CloudPath.Combine(vm.CurrentPath, text);
             await vm.NavigateAsync(vm.Location with { Path = Core.IO.CloudPath.Normalize(target) });

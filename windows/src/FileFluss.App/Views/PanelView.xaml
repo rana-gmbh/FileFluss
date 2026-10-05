@@ -50,6 +50,17 @@
                          Visibility="{Binding IsLoading, Converter={StaticResource Visible}}" />
         </Grid>
 
+        <!-- Offline view: an offline account or unplugged drive, browsed from the index -->
+        <Border DockPanel.Dock="Top" Margin="8,2,8,4" Padding="10,5" CornerRadius="5" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                Visibility="{Binding IsOffline, Converter={StaticResource Visible}}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{x:Static u:Glyphs.Offline}" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Text="{Binding OfflineBanner}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                           AutomationProperties.Name="{Binding OfflineBanner}" />
+            </StackPanel>
+        </Border>
+
         <!-- Quick filter -->
         <Grid DockPanel.Dock="Top" Margin="8,2,8,4" Visibility="{Binding IsFilterVisible, Converter={StaticResource Visible}}">
             <TextBox x:Name="FilterBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" KeyDown="OnFilterKeyDown"
@@ -154,7 +165,7 @@
             </ListView>
 
             <!-- Empty, error and re-authentication states -->
-            <TextBlock Text="{u:Loc 'Empty Folder'}" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}"
+            <TextBlock Text="{Binding EmptyText}" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360"
                        Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" IsHitTestVisible="False" />
             <StackPanel x:Name="ErrorPanel" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420" Margin="24" Visibility="Collapsed">
                 <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,10"

@@ -33,3 +33,6 @@ windows/**/obj/
 windows/artifacts/
 windows/**/*.user
 .vs/
+
+# Agent worktrees
+.claude/worktrees/

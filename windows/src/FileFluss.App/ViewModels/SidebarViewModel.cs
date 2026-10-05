@@ -26,6 +26,7 @@ public sealed class SidebarEntry : Observable
 {
     private bool _isSelected;
     private bool _isDropTarget;
+    private string? _trailing;
 
     public required SidebarEntryKind Kind { get; init; }
 
@@ -42,7 +43,20 @@ public sealed class SidebarEntry : Observable
 
     public CloudAccount? Account { get; init; }
 
-    public string? Trailing { get; init; }
+    public string? Trailing
+    {
+        get => _trailing;
+        set => Set(ref _trailing, value);
+    }
+
+    /// <summary>The drive registry's "vol:…" id, for drives it tracks (not the system drive).</summary>
+    public string? DriveId { get; init; }
+
+    /// <summary>The source id indexing runs are tracked under: a drive's id or an account's.</summary>
+    public string? IndexSourceId => DriveId ?? (Account is { } account ? Core.Search.SearchIndex.SourceIdFor(account.Id) : null);
+
+    /// <summary>What <see cref="Trailing"/> shows when no indexing run is going.</summary>
+    public string? RestingTrailing { get; init; }
 
     public string? ToolTip { get; set; }
 
@@ -127,6 +141,17 @@ public sealed class SidebarViewModel : Observable
         };
         panel.LocationChanged += (_, _) => UpdateSelection();
         services.Transfers.All.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Transfers));
+        services.Search.Drives.Changed += (_, _) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(RebuildDrives);
+        services.Search.Indexing.Jobs.CollectionChanged += (_, e) =>
+        {
+            foreach (var job in e.NewItems?.OfType<Core.Search.IndexingJob>() ?? [])
+            {
+                job.PropertyChanged += (_, _) => UpdateIndexingBadges();
+            }
+
+            UpdateIndexingBadges();
+        };
+        services.Search.Indexing.IndexingFinished += (_, _) => Rebuild();
     }
 
     public PanelSide Side { get; }
@@ -315,9 +340,35 @@ public sealed class SidebarViewModel : Observable
                 Location = PanelLocation.Local(root),
                 Image = IconCache.ForPath(root, true),
                 ToolTip = tooltip,
+                DriveId = _services.Search.DriveAt(root)?.Id,
             });
         }
 
+        // Unplugged drives with an index stay listed, browsable and searchable offline (macOS DriveRow).
+        foreach (var drive in _services.Search.Drives.OfflineIndexedDrives)
+        {
+            Drives.Add(new SidebarEntry
+            {
+                Kind = SidebarEntryKind.Drive,
+                Title = drive.DisplayName,
+                Location = PanelLocation.OfflineDrive(drive.Id, "/"),
+                Glyph = drive.Kind switch
+                {
+                    Core.Search.DriveKind.Network => Glyphs.NetworkDrive,
+                    Core.Search.DriveKind.External => Glyphs.Usb,
+                    _ => Glyphs.HardDrive,
+                },
+                DriveId = drive.Id,
+                IsOffline = true,
+                RestingTrailing = L("Offline"),
+                Trailing = L("Offline"),
+                ToolTip = drive.LastIndexed is { } when
+                    ? Core.Search.IndexingText.IndexedSummary(when, drive.TotalFiles, DateTimeOffset.Now)
+                    : drive.DisplayName,
+            });
+        }
+
+        UpdateIndexingBadges();
         UpdateSelection();
     }
 
@@ -336,12 +387,25 @@ public sealed class SidebarViewModel : Observable
                 Glyph = Glyphs.Cloud,
                 IsConnected = account.IsConnected && !account.IsOfflineMode,
                 IsOffline = account.IsOfflineMode,
+                RestingTrailing = account.IsOfflineMode ? L("Offline") : null,
                 Trailing = account.IsOfflineMode ? L("Offline") : null,
                 ToolTip = account.DisplayName,
             });
         }
 
+        UpdateIndexingBadges();
         UpdateSelection();
+    }
+
+    /// <summary>A running index shows its file count where "Offline" would be (macOS DriveRow).</summary>
+    public void UpdateIndexingBadges()
+    {
+        foreach (var entry in Drives.Concat(Accounts))
+        {
+            entry.Trailing = entry.IndexSourceId is { } source && _services.Search.Indexing.ActiveJob(source) is { } job
+                ? job.FilesProcessed.ToString("N0", Culture)
+                : entry.RestingTrailing;
+        }
     }
 
     /// <summary>Highlights the entry that best matches where the panel is.</summary>
@@ -353,12 +417,13 @@ public sealed class SidebarViewModel : Observable
         foreach (var entry in Favorites.Concat(Drives).Concat(Accounts))
         {
             entry.IsSelected = false;
-            if (entry.Location is not { } target || target.AccountId != location.AccountId)
+            if (entry.Location is not { } target || target.AccountId != location.AccountId || target.IsOfflineDrive != location.IsOfflineDrive)
             {
                 continue;
             }
 
-            var matches = location.IsCloud
+            var matches = location.IsOfflineDrive ? target.DriveId == location.DriveId
+                : location.IsCloud
                 ? (entry.Kind == SidebarEntryKind.Account || string.Equals(Core.IO.CloudPath.Normalize(target.Path), Core.IO.CloudPath.Normalize(location.Path), StringComparison.Ordinal))
                 : IsSameOrParentLocal(target.Path, location.Path);
             var length = entry.Kind == SidebarEntryKind.Account ? 0 : target.Path.Length;

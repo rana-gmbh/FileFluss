@@ -12,6 +12,7 @@ using FileFluss.App.Views.Accounts;
 using FileFluss.App.Views.Dialogs;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
+using FileFluss.Core.Search;
 using FileFluss.Core.Transfers;
 using FileFluss.Native;
 using static FileFluss.Core.Localization;
@@ -185,12 +186,19 @@ public partial class SidebarView : UserControl
                 }));
                 menu.Items.Add(ContextMenus.Item(L("Remove from Favorites"), Glyphs.Delete, null, () => vm.RemoveFavorite(id)));
                 break;
-            case SidebarEntryKind.Drive when entry.Location is { } drive:
+            case SidebarEntryKind.Drive when entry.Location is { IsOfflineDrive: false } drive:
                 menu.Items.Add(new Separator());
                 menu.Items.Add(ContextMenus.Item(L("Show in Explorer"), Glyphs.OpenFolder, null, () => ShellFileOperations.Open(drive.Path)));
-                menu.Items.Add(ContextMenus.Item(L("Index for Offline Search"), Glyphs.Search, null, () => Main.ExecuteIndexRequest(drive)));
                 menu.Items.Add(ContextMenus.Item(L("Storage Analysis"), Glyphs.Pie, null, () => Main.Shell.ShowStorageAnalysis(drive)));
                 menu.Items.Add(ContextMenus.Item(L("Properties"), Glyphs.Info, null, () => ShellFileOperations.ShowProperties(drive.Path, 0)));
+                if (entry.DriveId is { } driveId)
+                {
+                    AddDriveIndexItems(menu, driveId, isOnline: true);
+                }
+
+                break;
+            case SidebarEntryKind.Drive when entry.DriveId is { } offlineDrive:
+                AddDriveIndexItems(menu, offlineDrive, isOnline: false);
                 break;
             case SidebarEntryKind.Account when entry.Account is { } account:
                 menu.Items.Add(new Separator());
@@ -202,13 +210,12 @@ public partial class SidebarView : UserControl
                         Main.Services.Accounts.Rename(account.Id, name);
                     }
                 }));
-                menu.Items.Add(ContextMenus.Check(account.IsOfflineMode ? L("Go Online") : L("Go Offline"), false,
-                    () => Main.Services.Accounts.SetOfflineMode(account.Id, !account.IsOfflineMode)));
-                if (account.IsConnected)
+                if (account.IsConnected && !account.IsOfflineMode)
                 {
-                    menu.Items.Add(ContextMenus.Item(L("Index for Offline Search"), Glyphs.Search, null, () => Main.ExecuteIndexRequest(PanelLocation.Cloud(account.Id, account.EffectiveRootPath))));
                     menu.Items.Add(ContextMenus.Item(L("Storage Analysis"), Glyphs.Pie, null, () => Main.Shell.ShowStorageAnalysis(PanelLocation.Cloud(account.Id, account.EffectiveRootPath))));
                 }
+
+                AddAccountIndexItems(menu, account);
 
                 if (Main.Services.Settings.AllowSidebarRemoveAccount)
                 {
@@ -231,6 +238,124 @@ public partial class SidebarView : UserControl
         menu.PlacementTarget = list;
         menu.IsOpen = true;
         e.Handled = true;
+    }
+
+    // MARK: - Offline index items (macOS driveContextMenu / cloudIndexMenu / offlineModeMenu)
+
+    private void AddDriveIndexItems(ContextMenu menu, string driveId, bool isOnline)
+    {
+        var search = Main.Services.Search;
+        if (search.Drives.Find(driveId) is not { } drive)
+        {
+            return;
+        }
+
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Label(drive.LastIndexed is { } last
+            ? IndexingText.IndexedSummary(last, drive.TotalFiles, DateTimeOffset.Now)
+            : IndexingText.NotIndexed(IndexingJobKind.Drive)));
+        if (isOnline && drive.RootPath is { } root)
+        {
+            menu.Items.Add(search.Indexing.ActiveJob(driveId) is null
+                ? ContextMenus.Item(drive.IsIndexed ? L("Re-index for Offline Search…") : L("Index for Offline Search…"), Glyphs.Search, null,
+                    () => search.Indexing.IndexDrive(drive, root))
+                : ContextMenus.Item(L("Cancel Indexing"), Glyphs.Cancel, null, () => search.Indexing.Cancel(driveId)));
+        }
+
+        if (drive.IsIndexed)
+        {
+            menu.Items.Add(Danger(ContextMenus.Item(L("Remove Offline Index"), Glyphs.Delete, null, () =>
+            {
+                search.Safe(() => search.Drives.RemoveOfflineIndex(driveId));
+                LeaveOfflineDrive(driveId);
+            })));
+        }
+        else if (!isOnline)
+        {
+            menu.Items.Add(Danger(ContextMenus.Item(L("Forget Drive"), Glyphs.Delete, null, () =>
+            {
+                search.Safe(() => search.Drives.Forget(driveId));
+                LeaveOfflineDrive(driveId);
+            })));
+        }
+    }
+
+    private void AddAccountIndexItems(ContextMenu menu, CloudAccount account)
+    {
+        var search = Main.Services.Search;
+        var sourceId = SearchIndex.SourceIdFor(account.Id);
+        var source = search.CloudSource(account.Id);
+        var indexed = source?.LastIndexed is not null;
+
+        if (account.IsOfflineMode)
+        {
+            menu.Items.Add(ContextMenus.Item(L("Go Online"), Glyphs.Cloud, null, () => Main.Services.Accounts.SetOfflineMode(account.Id, false)));
+        }
+        else
+        {
+            var goOffline = ContextMenus.Item(L("Go Offline"), Glyphs.Offline, null, () => Main.Services.Accounts.SetOfflineMode(account.Id, true));
+            goOffline.IsEnabled = indexed;
+            goOffline.ToolTip = indexed
+                ? L("Browse and search this account's last-indexed contents without contacting the server.")
+                : L("Index this account for offline use first.");
+            ToolTipService.SetShowOnDisabled(goOffline, true);
+            menu.Items.Add(goOffline);
+        }
+
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Label(source?.LastIndexed is { } last
+            ? IndexingText.IndexedSummary(last, source.TotalFiles, DateTimeOffset.Now)
+            : IndexingText.NotIndexed(IndexingJobKind.Cloud)));
+        if (!account.IsConnected)
+        {
+            return;
+        }
+
+        menu.Items.Add(search.Indexing.ActiveJob(sourceId) is null
+            ? ContextMenus.Item(indexed ? L("Re-index for Offline Search…") : L("Index for Offline Search…"), Glyphs.Search, null,
+                () => search.Indexing.IndexCloudAccount(account))
+            : ContextMenus.Item(L("Cancel Indexing"), Glyphs.Cancel, null, () => search.Indexing.Cancel(sourceId)));
+        if (indexed)
+        {
+            menu.Items.Add(Danger(ContextMenus.Item(L("Remove Offline Index"), Glyphs.Delete, null, () =>
+            {
+                search.Safe(() =>
+                {
+                    search.Index.DropCloudAccount(account.Id);
+                    search.Index.DropSource(sourceId);
+                });
+                if (account.IsOfflineMode)
+                {
+                    Main.Services.Accounts.SetOfflineMode(account.Id, false);
+                }
+
+                Main.LeftSidebar.Rebuild();
+                Main.RightSidebar.Rebuild();
+            })));
+        }
+    }
+
+    /// <summary>A panel showing a drive whose offline index just went has nothing left to show.</summary>
+    private void LeaveOfflineDrive(string driveId)
+    {
+        foreach (var side in new[] { PanelSide.Left, PanelSide.Right })
+        {
+            if (Main.Panel(side).Location.DriveId == driveId)
+            {
+                _ = Main.Panel(side).NavigateAsync(PanelLocation.Local(string.Empty));
+            }
+        }
+
+        Main.LeftSidebar.RebuildDrives();
+        Main.RightSidebar.RebuildDrives();
+    }
+
+    private static MenuItem Label(string text) => new() { Header = text, IsEnabled = false };
+
+    private MenuItem Danger(MenuItem item)
+    {
+        item.SetResourceReference(ForegroundProperty, "DangerBrush");
+        return item;
     }
 
     // MARK: - Dragging favourites to reorder

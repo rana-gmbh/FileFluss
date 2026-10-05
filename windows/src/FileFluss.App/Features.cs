@@ -4,7 +4,10 @@ using System.IO;
 using System.Windows;
 using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
+using FileFluss.App.Views.Dialogs;
+using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Models;
+using static FileFluss.Core.Localization;
 
 namespace FileFluss.App;
 
@@ -18,6 +21,7 @@ internal static class Features
     {
         WindowsRegistry.About = owner => Views.AboutWindow.Show(owner);
         WindowsRegistry.Help = owner => Views.HelpWindow.Show(owner);
+        WindowsRegistry.Search = (owner, vm) => Views.Search.SearchWindow.Show(owner, vm);
     }
 
     public static void AfterStartup(MainWindow window, MainViewModel vm, AppServices services)
@@ -25,6 +29,70 @@ internal static class Features
         // A folder passed on the command line (or forwarded by a second launch) opens in the active panel.
         SingleInstance.Forwarded += args => window.Dispatcher.Invoke(() => OpenArgument(vm, args));
         OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray());
+        WireIndex(window, vm, services);
+    }
+
+    /// <summary>The search index learns from browsing, follows account changes and runs "Index Current Source".</summary>
+    private static void WireIndex(MainWindow window, MainViewModel vm, AppServices services)
+    {
+        var search = services.Search;
+        foreach (var panel in new[] { vm.Left, vm.Right })
+        {
+            panel.ItemsListed += (_, items) =>
+            {
+                if (panel.IsCloud && !panel.IsOffline && panel.Location.AccountId is { } id)
+                {
+                    search.LearnListing(id, panel.CurrentPath, items);
+                }
+            };
+        }
+
+        services.Accounts.AccountRemoved += (_, id) => search.Safe(() => search.Index.DropIndexedCloudSource(id));
+        services.Accounts.AccountChanged += (_, id) =>
+        {
+            // A renamed account keeps its index under the new name (Index Status, offline results).
+            if (services.Accounts.Find(id) is { } account && search.CloudSource(id) is { } source && source.DisplayName != account.DisplayName)
+            {
+                search.Safe(() => search.Index.RenameIndexedSource(source.SourceId, account.DisplayName));
+            }
+        };
+
+        vm.IndexRequested += (_, location) => IndexLocation(window, services, location);
+        search.Indexing.IndexingFinished += (_, e) =>
+        {
+            if (e.Job.ErrorMessage is { } error && !e.Job.IsCancelled)
+            {
+                SupportLogger.Shared.Log($"Indexing {e.Job.DisplayName} failed: {error}", "Indexing", LogLevel.Error);
+            }
+        };
+    }
+
+    /// <summary>macOS <c>indexActiveSource</c>: the drive the panel is on, or the connected account it shows.</summary>
+    private static void IndexLocation(Window owner, AppServices services, PanelLocation location)
+    {
+        var search = services.Search;
+        if (location.IsCloud && services.Accounts.Find(location.AccountId!.Value) is { } account)
+        {
+            if (account.IsConnected && !account.IsOfflineMode && services.Hub.Get(account.Id) is not null)
+            {
+                search.Indexing.IndexCloudAccount(account);
+            }
+            else
+            {
+                MessageDialog.Info(owner, L("Index Current Source"), L("Cloud account not connected"));
+            }
+
+            return;
+        }
+
+        if (location.IsLocal && search.DriveContaining(location.Path) is { RootPath: { } root } drive)
+        {
+            search.Indexing.IndexDrive(drive, root);
+            return;
+        }
+
+        MessageDialog.Info(owner, L("Index Current Source"),
+            L("Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again."));
     }
 
     private static void OpenArgument(MainViewModel vm, string[] args)

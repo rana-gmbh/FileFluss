@@ -4,6 +4,7 @@ using System.IO;
 using FileFluss.App.Services;
 using FileFluss.Core.Commands;
 using FileFluss.Core.IO;
+using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Services;
 using FileFluss.Core.Settings;
@@ -27,6 +28,7 @@ public sealed class AppServices
         Accounts = new AccountsService(new AccountStore(Path.Combine(dataDirectory, "accounts.json")), Hub, Credentials);
         Transfers = new TransferCenter();
         Keyboard = new KeyboardMap(Settings);
+        Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
 
         // Win32 implementations of the operations Core leaves pluggable.
         LocalFileProvider.CopyFileHandler = ShellFileOperations.CopyFileAsync;
@@ -58,4 +60,16 @@ public sealed class AppServices
     public TransferCenter Transfers { get; }
 
     public KeyboardMap Keyboard { get; }
+
+    public SearchServices Search { get; }
+
+    /// <summary>
+    /// What a panel lists for a location: the disk, a connected account — or, for an account in
+    /// offline mode or an unplugged drive, the read-only view of its index.
+    /// </summary>
+    public FileProvider? ProviderFor(PanelLocation location)
+    {
+        var account = location.AccountId is { } id ? Accounts.Find(id) : null;
+        return Search.OfflineProvider(location, account) ?? Hub.For(location);
+    }
 }

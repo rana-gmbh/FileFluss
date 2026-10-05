@@ -85,10 +85,13 @@ public partial class MainWindow : Window, IShell
             View(PanelSide.Left).FocusList();
         };
         Closing += OnClosing;
-        SourceInitialized += (_, _) => DeviceNotifications.Register(this, () =>
+        SourceInitialized += (_, _) => DeviceNotifications.Register(this, async () =>
         {
             vm.LeftSidebar.RebuildDrives();
             vm.RightSidebar.RebuildDrives();
+
+            // Learn which indexed drives came or went; the registry's change event rebuilds again.
+            await services.Search.RefreshDrivesAsync();
         });
 
         RestorePlacement();
