@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Shell;
+using System.Windows.Threading;
 using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
 using FileFluss.App.Views;
@@ -94,6 +96,7 @@ public partial class MainWindow : Window, IShell
             await services.Search.RefreshDrivesAsync();
         });
 
+        WireStatusOverlays();
         RestorePlacement();
         ApplySidebarWidths();
         BuildMenu();
@@ -352,11 +355,14 @@ public partial class MainWindow : Window, IShell
 
         var help = new MenuItem { Header = "_" + L("Help") };
         help.Items.Add(ContextMenus.Item(L("FileFluss Help"), null, "F1", ShowHelp));
-        help.Items.Add(ContextMenus.Item(L("FileFluss Homepage"), null, null, () => Core.Net.BrowserLauncher.Open("https://github.com/rana-gmbh/FileFluss")));
+        help.Items.Add(ContextMenus.Item(L("FileFluss Homepage"), null, null, () => Core.Net.BrowserLauncher.Open("https://www.filefluss.de")));
         help.Items.Add(new Separator());
-        help.Items.Add(ContextMenus.Item(L("Check for Updates…"), null, null, () => UpdateRequested?.Invoke(this, EventArgs.Empty)));
+        help.Items.Add(ContextMenus.Item(L("Check for Updates…"), null, null, () => RequestUpdateCheck(null)));
         help.Items.Add(ContextMenus.Item(L("GitHub Repository"), null, null, () => Core.Net.BrowserLauncher.Open("https://github.com/rana-gmbh/FileFluss")));
         help.Items.Add(ContextMenus.Item(L("Support the FileFluss Project"), null, null, () => Core.Net.BrowserLauncher.Open("https://buymeacoffee.com/robertrudolph")));
+        _supportLogItem = ContextMenus.Item(L("Support Log"), null, null, SupportLogService.Shared.Start);
+        UpdateSupportLogItem();
+        help.Items.Add(_supportLogItem);
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("About FileFluss"), null, null, ShowAbout));
         MainMenu.Items.Add(help);
@@ -382,8 +388,13 @@ public partial class MainWindow : Window, IShell
         }
     }
 
-    /// <summary>Help → Check for Updates; wired by the app.</summary>
-    public event EventHandler? UpdateRequested;
+    /// <summary>
+    /// Help → Check for Updates, and the About window's button; wired by the app. The argument
+    /// is the window the answer should appear over, or null for this one.
+    /// </summary>
+    public event EventHandler<Window?>? UpdateRequested;
+
+    public void RequestUpdateCheck(Window? owner) => UpdateRequested?.Invoke(this, owner);
 
     // MARK: - Layout
 
@@ -621,6 +632,203 @@ public partial class MainWindow : Window, IShell
     private void ShowHelp() => WindowsRegistry.Help?.Invoke(this);
 
     private void ShowAbout() => WindowsRegistry.About?.Invoke(this);
+
+    // MARK: - Support log banner, space-check HUD, taskbar progress
+
+    private MenuItem? _supportLogItem;
+    private OverlayAdorner? _supportLogBanner;
+    private TextBlock? _supportLogSeconds;
+    private OverlayAdorner? _spaceCheckHud;
+    private DispatcherTimer? _spaceCheckDelay;
+    private DispatcherTimer? _taskbarErrorTimer;
+
+    private void WireStatusOverlays()
+    {
+        SupportLogService.Shared.Owner = this;
+        SupportLogService.Shared.Changed += (_, _) =>
+        {
+            UpdateSupportLogItem();
+            UpdateSupportLogBanner();
+        };
+
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsCheckingSpace))
+            {
+                UpdateSpaceCheckHud();
+            }
+        };
+
+        TaskbarItemInfo = new TaskbarItemInfo();
+        _services.Transfers.PropertyChanged += (_, _) => UpdateTaskbarProgress();
+        _services.Transfers.TransferCompleted += (_, transfer) =>
+        {
+            if (transfer.HasErrors && !transfer.IsCancelled)
+            {
+                FlashTaskbarError();
+            }
+        };
+    }
+
+    /// <summary>macOS: "Support Log", or "Support Log (Recording…)" and disabled while it runs.</summary>
+    private void UpdateSupportLogItem()
+    {
+        if (_supportLogItem is null)
+        {
+            return;
+        }
+
+        var recording = SupportLogService.Shared.IsRecording;
+        _supportLogItem.Header = recording ? L("Support Log (Recording…)") : L("Support Log");
+        _supportLogItem.IsEnabled = !recording;
+    }
+
+    /// <summary>The capsule at the top of the window while a support log records, with the seconds left.</summary>
+    private void UpdateSupportLogBanner()
+    {
+        var log = SupportLogService.Shared;
+        if (!log.IsRecording)
+        {
+            _supportLogBanner?.Remove();
+            _supportLogBanner = null;
+            _supportLogSeconds = null;
+            return;
+        }
+
+        if (_supportLogBanner is null)
+        {
+            var dot = new TextBlock
+            {
+                Text = "",
+                FontFamily = new System.Windows.Media.FontFamily(Glyphs.FontFamily),
+                Foreground = System.Windows.Media.Brushes.Red,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+            };
+            dot.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.35, TimeSpan.FromSeconds(0.8))
+            {
+                AutoReverse = true,
+                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            });
+            var text = new TextBlock { Text = L("Recording support log — reproduce the issue now"), VerticalAlignment = VerticalAlignment.Center };
+            _supportLogSeconds = new TextBlock { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Documents.Typography.SetNumeralAlignment(_supportLogSeconds, System.Windows.FontNumeralAlignment.Tabular);
+            _supportLogSeconds.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { dot, text, _supportLogSeconds } };
+            var capsule = OverlayAdorner.Card(new Border { Padding = new Thickness(14, 8, 14, 8), Child = row }, cornerRadius: 18);
+            capsule.HorizontalAlignment = HorizontalAlignment.Center;
+            capsule.VerticalAlignment = VerticalAlignment.Top;
+            capsule.Margin = new Thickness(16, 8, 16, 0);
+            capsule.IsHitTestVisible = false;
+            System.Windows.Automation.AutomationProperties.SetName(capsule, text.Text);
+            _supportLogBanner = OverlayAdorner.Show(PanelsGrid, capsule);
+        }
+
+        if (_supportLogSeconds is not null)
+        {
+            _supportLogSeconds.Text = $"{log.SecondsRemaining}s";
+        }
+    }
+
+    /// <summary>
+    /// macOS <c>spaceCheckHUD</c>, plus a Cancel: shown while a transfer's size is summed, after a
+    /// short delay so a quick check doesn't flash it.
+    /// </summary>
+    private void UpdateSpaceCheckHud()
+    {
+        if (!_vm.IsCheckingSpace)
+        {
+            _spaceCheckDelay?.Stop();
+            _spaceCheckHud?.Remove();
+            _spaceCheckHud = null;
+            return;
+        }
+
+        if (_spaceCheckHud is not null || _spaceCheckDelay is { IsEnabled: true })
+        {
+            return;
+        }
+
+        _spaceCheckDelay ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        _spaceCheckDelay.Tick -= OnSpaceCheckDelay;
+        _spaceCheckDelay.Tick += OnSpaceCheckDelay;
+        _spaceCheckDelay.Start();
+    }
+
+    private void OnSpaceCheckDelay(object? sender, EventArgs e)
+    {
+        _spaceCheckDelay?.Stop();
+        if (!_vm.IsCheckingSpace || _spaceCheckHud is not null)
+        {
+            return;
+        }
+
+        var stack = new StackPanel { Width = 232 };
+        stack.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 4, Margin = new Thickness(0, 0, 0, 14) });
+        stack.Children.Add(new TextBlock { Text = L("Checking available space…"), TextAlignment = TextAlignment.Center, FontWeight = FontWeights.SemiBold });
+        var detail = new TextBlock
+        {
+            Text = L("Calculating the size of the items and the destination."),
+            Style = (Style)FindResource("Caption"),
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None,
+            Margin = new Thickness(0, 6, 0, 14),
+        };
+        stack.Children.Add(detail);
+        var cancel = new Button { Content = L("Cancel"), MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Center };
+        cancel.Click += (_, _) => _vm.CancelSpaceChecks();
+        stack.Children.Add(cancel);
+        var card = OverlayAdorner.Card(new Border { Padding = new Thickness(24), Child = stack }, cornerRadius: 14);
+        card.HorizontalAlignment = HorizontalAlignment.Center;
+        card.VerticalAlignment = VerticalAlignment.Center;
+        System.Windows.Automation.AutomationProperties.SetName(card, L("Checking available space…"));
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(card, System.Windows.Automation.AutomationLiveSetting.Polite);
+        _spaceCheckHud = OverlayAdorner.Show(PanelsGrid, card);
+    }
+
+    /// <summary>The taskbar button's progress: the transfers' overall fraction while they run, nothing when idle.</summary>
+    private void UpdateTaskbarProgress()
+    {
+        if (TaskbarItemInfo is not { } taskbar || _taskbarErrorTimer is { IsEnabled: true })
+        {
+            return;
+        }
+
+        if (_services.Transfers.RunningFraction is { } fraction)
+        {
+            taskbar.ProgressState = fraction > 0 ? TaskbarItemProgressState.Normal : TaskbarItemProgressState.Indeterminate;
+            taskbar.ProgressValue = fraction;
+        }
+        else
+        {
+            taskbar.ProgressState = TaskbarItemProgressState.None;
+        }
+    }
+
+    /// <summary>A failed transfer turns the taskbar button red for a few seconds.</summary>
+    private void FlashTaskbarError()
+    {
+        if (TaskbarItemInfo is not { } taskbar)
+        {
+            return;
+        }
+
+        taskbar.ProgressState = TaskbarItemProgressState.Error;
+        taskbar.ProgressValue = 1;
+        if (_taskbarErrorTimer is null)
+        {
+            _taskbarErrorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _taskbarErrorTimer.Tick += (_, _) =>
+            {
+                _taskbarErrorTimer.Stop();
+                UpdateTaskbarProgress();
+            };
+        }
+
+        _taskbarErrorTimer.Stop();
+        _taskbarErrorTimer.Start();
+    }
 
     // MARK: - Window placement
 

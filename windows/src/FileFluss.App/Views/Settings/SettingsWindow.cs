@@ -371,19 +371,36 @@ public sealed class SettingsWindow : Window
         var s = _services.Settings;
         var page = new StackPanel();
         var size = new TextBlock { Text = L("Calculating…"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        var clear = Button(L("Clear"), async () =>
+        Button clear = null!;
+        clear = Button(L("Clear Cache…"), async () =>
         {
+            if (!MessageDialog.Confirm(this, L("Clear the cache?"),
+                    L("This removes all cached cloud previews and downloaded files. Files will be re-downloaded on next preview."),
+                    L("Clear Cache"), destructive: true))
+            {
+                return;
+            }
+
+            clear.IsEnabled = false;
             size.Text = L("Calculating…");
             await CacheManager.ClearAsync();
-            size.Text = ByteFormatter.Format(await CacheManager.SizeAsync());
+            await RefreshSizeAsync();
         });
-        page.Children.Add(Card(L("Cache Usage"), L("Cloud files opened or previewed are kept here so reopening them is instant."),
-            new StackPanel { Orientation = Orientation.Horizontal, Children = { size, clear } }));
-        _ = Task.Run(async () =>
+        clear.IsEnabled = false;
+        clear.SetResourceReference(ForegroundProperty, "DangerBrush");
+
+        async Task RefreshSizeAsync()
         {
             var bytes = await CacheManager.SizeAsync();
-            Dispatcher.Invoke(() => size.Text = ByteFormatter.Format(bytes));
-        });
+            size.Text = ByteFormatter.Format(bytes);
+
+            // Nothing to clear, nothing to confirm (macOS disables the button at zero).
+            clear.IsEnabled = bytes > 0;
+        }
+
+        page.Children.Add(Card(L("Cache Usage"), L("Cloud files opened or previewed are kept here so reopening them is instant."),
+            new StackPanel { Orientation = Orientation.Horizontal, Children = { size, clear } }));
+        _ = RefreshSizeAsync();
 
         page.Children.Add(Heading(L("Automatic management")));
         page.Children.Add(Card(L("Automatically manage cache"), L("At launch, delete old cached files and keep the cache under its size limit."),
@@ -396,12 +413,56 @@ public sealed class SettingsWindow : Window
 
         page.Children.Add(Card(L("Delete files older than"), null, Choice(days, s.CacheAutoDeleteDays, v => s.CacheAutoDeleteDays = v, 160)));
 
-        var sizeLabel = new TextBlock { Text = ByteFormatter.Format((long)s.CacheMaxSizeMB * 1024 * 1024), Width = 80, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        var slider = new Slider { Minimum = CacheManager.MinSizeMB, Maximum = CacheManager.MaxSizeMB, Value = s.CacheMaxSizeMB, Width = 220, SmallChange = 100, LargeChange = 500, TickFrequency = 100, IsSnapToTickEnabled = true };
-        slider.ValueChanged += (_, e) => sizeLabel.Text = ByteFormatter.Format((long)e.NewValue * 1024 * 1024);
-        slider.PreviewMouseUp += (_, _) => s.CacheMaxSizeMB = (int)slider.Value;
-        slider.LostKeyboardFocus += (_, _) => s.CacheMaxSizeMB = (int)slider.Value;
-        page.Children.Add(Card(L("Maximum cache size"), null, new StackPanel { Orientation = Orientation.Horizontal, Children = { slider, sizeLabel } }));
+        // macOS: a slider in 50 MB steps beside an MB field; either one, once committed, trims
+        // the cache to the new limit straight away rather than at the next launch.
+        var sizeField = new TextBox { Text = s.CacheMaxSizeMB.ToString(Culture), Width = 70, TextAlignment = TextAlignment.Right, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(sizeField, L("Cache Size Limit"));
+        var slider = new Slider { Minimum = CacheManager.MinSizeMB, Maximum = CacheManager.MaxSizeMB, Value = s.CacheMaxSizeMB, Width = 200, SmallChange = 50, LargeChange = 500, TickFrequency = 50, IsSnapToTickEnabled = true, VerticalAlignment = VerticalAlignment.Center };
+        System.Windows.Automation.AutomationProperties.SetName(slider, L("Cache Size Limit"));
+        var committing = false;
+        void Commit(int mb)
+        {
+            committing = true;
+            slider.Value = mb;
+            sizeField.Text = mb.ToString(Culture);
+            committing = false;
+            if (mb == s.CacheMaxSizeMB)
+            {
+                return;
+            }
+
+            s.CacheMaxSizeMB = mb;
+            _ = EnforceAsync(mb);
+        }
+
+        async Task EnforceAsync(int mb)
+        {
+            await CacheManager.EnforceMaxSizeAsync(mb);
+            await RefreshSizeAsync();
+        }
+
+        slider.ValueChanged += (_, e) =>
+        {
+            if (!committing)
+            {
+                sizeField.Text = CacheManager.SnapSliderMB(e.NewValue).ToString(Culture);
+            }
+        };
+        slider.PreviewMouseUp += (_, _) => Commit(CacheManager.SnapSliderMB(slider.Value));
+        slider.PreviewKeyUp += (_, _) => Commit(CacheManager.SnapSliderMB(slider.Value));
+        sizeField.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Commit(CacheManager.ParseFieldMB(sizeField.Text, s.CacheMaxSizeMB));
+                e.Handled = true;
+            }
+        };
+        sizeField.LostKeyboardFocus += (_, _) => Commit(CacheManager.ParseFieldMB(sizeField.Text, s.CacheMaxSizeMB));
+        var mbLabel = new TextBlock { Text = L("MB"), VerticalAlignment = VerticalAlignment.Center };
+        mbLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        page.Children.Add(Card(L("Cache Size Limit"), L("When the cache exceeds this size, the oldest files are removed first. Applied on launch and when this value changes."),
+            new StackPanel { Orientation = Orientation.Horizontal, Children = { slider, sizeField, mbLabel } }));
 
         page.Children.Add(Heading(L("Cache Location")));
         var location = string.IsNullOrEmpty(s.CustomCacheFolder) ? L("System temporary folder") : s.CustomCacheFolder;

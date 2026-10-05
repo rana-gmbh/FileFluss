@@ -2,25 +2,25 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
 using FileFluss.App.Views.Dialogs;
 using FileFluss.Core.Models;
-using FileFluss.Core.Net;
 using FileFluss.Core.Providers;
 using static FileFluss.Core.Localization;
 
 namespace FileFluss.App.Views;
 
 /// <summary>
-/// Share Link: asks the provider for a public link, verifies it the way a stranger would,
-/// and puts it on the clipboard. Offers password, expiry and download options only where
-/// the account can honour them, and says up front when they need a paid plan.
+/// "Share Link…" / "Change Sharing…": the options sheet. Asks the provider for a public link,
+/// verifies it the way a stranger would, and puts it on the clipboard — all through
+/// <see cref="ShareLinkService"/>, which the one-click menu actions share. Offers password,
+/// expiry and download options only where the account can honour them, and says up front
+/// when they need a paid plan.
 /// </summary>
 public sealed class ShareLinkDialog : Window
 {
-    private static readonly string[] PlanRefusal = ["forbidden", "not_authorized", "not authorized", "settings_error", "403", "payment", "upgrade", "premium", "plan", "subscription"];
-
-    private readonly AppServices _services;
+    private readonly ShareLinkService _sharing;
     private readonly CloudProvider _provider;
     private readonly CloudFileItem _item;
     private readonly ShareLinkCapabilities _capabilities;
@@ -37,9 +37,9 @@ public sealed class ShareLinkDialog : Window
     private readonly Button _stop = new() { Content = L("Stop Sharing"), Visibility = Visibility.Collapsed };
     private CloudShareLink? _existing;
 
-    private ShareLinkDialog(AppServices services, CloudProvider provider, CloudFileItem item)
+    private ShareLinkDialog(ShareLinkService sharing, CloudProvider provider, CloudFileItem item)
     {
-        _services = services;
+        _sharing = sharing;
         _provider = provider;
         _item = item;
         _capabilities = provider.ShareLinkCapabilities;
@@ -53,10 +53,7 @@ public sealed class ShareLinkDialog : Window
         _body.Children.Add(new TextBlock { Text = item.Name, FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         _body.Children.Add(_status);
         _body.Children.Add(_linkBox);
-        var flags = _services.Settings;
-        var rejectedPassword = flags.GetFlag($"shareOptionRejected.password.{provider.AccountId}");
-        var rejectedExpiry = flags.GetFlag($"shareOptionRejected.expiry.{provider.AccountId}");
-        if (_capabilities.SupportsPassword && !rejectedPassword)
+        if (_capabilities.SupportsPassword && !sharing.PasswordRejected(provider.AccountId))
         {
             _usePassword.Checked += (_, _) => _password.IsEnabled = true;
             _usePassword.Unchecked += (_, _) => _password.IsEnabled = false;
@@ -64,7 +61,7 @@ public sealed class ShareLinkDialog : Window
             _body.Children.Add(_password);
         }
 
-        if (_capabilities.SupportsExpiry && !rejectedExpiry)
+        if (_capabilities.SupportsExpiry && !sharing.ExpiryRejected(provider.AccountId))
         {
             _useExpiry.IsChecked = _capabilities.RequiresExpiry;
             _useExpiry.IsEnabled = !_capabilities.RequiresExpiry;
@@ -110,7 +107,7 @@ public sealed class ShareLinkDialog : Window
             });
         }
 
-        if (flags.GetFlag($"shareLinksNotPublic.{provider.AccountId}"))
+        if (sharing.LinksNotPublic(provider.AccountId))
         {
             var warning = new TextBlock { Text = L("Links from this account have needed a sign-in before. Check the link before you send it."), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
             warning.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
@@ -144,9 +141,13 @@ public sealed class ShareLinkDialog : Window
             return;
         }
 
-        new ShareLinkDialog(services, provider, item) { Owner = owner }.ShowDialog();
+        new ShareLinkDialog(ShareLinkService.Shared, provider, item) { Owner = owner }.ShowDialog();
     }
 
+    /// <summary>
+    /// Asks the provider now, not the remembered state: the cache can say "shared" for a link
+    /// since removed elsewhere (macOS <c>applyShareOptions</c>).
+    /// </summary>
     private async Task LoadExistingAsync()
     {
         if (!_capabilities.CanQueryExisting)
@@ -158,7 +159,7 @@ public sealed class ShareLinkDialog : Window
         SetBusy(true);
         try
         {
-            _existing = await _provider.ExistingShareLinkAsync(_item.Path);
+            _existing = await _sharing.ExistingAsync(_provider, _item.Path);
         }
         catch (Exception)
         {
@@ -171,7 +172,8 @@ public sealed class ShareLinkDialog : Window
 
         if (_existing is { } link)
         {
-            ShowLink(link, L("This file is shared. The link is on the clipboard."), copy: true);
+            _sharing.CopyToClipboard(link);
+            ShowLink(link, L("This file is shared. The link is on the clipboard."));
             _create.Content = _capabilities.CanUpdate ? L("Save Changes") : L("Copy Link");
             _stop.Visibility = _capabilities.CanRemove ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -191,37 +193,35 @@ public sealed class ShareLinkDialog : Window
     private async Task CreateAsync()
     {
         var options = Options();
+        var changing = _existing is not null && _capabilities.CanUpdate;
         SetBusy(true);
         try
         {
             CloudShareLink link;
-            if (_existing is not null && _capabilities.CanUpdate)
+            if (changing)
             {
-                link = await _provider.UpdateShareLinkAsync(_item.Path, options);
-            }
-            else if (_existing is not null && options == ShareLinkOptions.Default)
-            {
-                link = _existing;
+                link = await _sharing.UpdateAsync(_provider, _item.Path, options);
             }
             else
             {
-                link = await _provider.CreateShareLinkAsync(_item.Path, options);
+                // An existing link with nothing new asked of it is simply handed back; settings
+                // the user just chose must never be answered with an old link that ignores them.
+                var reuse = _existing is not null && options == ShareLinkOptions.Default;
+                link = await _sharing.CreateAsync(_provider, _item.Path, options, reuseExisting: reuse);
             }
 
-            NoteAccepted(options);
-            link = await VerifyAsync(link);
             _existing = link;
-            ShowLink(link, L("The link is on the clipboard."), copy: true);
+            ShowLink(link, L("The link is on the clipboard."));
             _stop.Visibility = _capabilities.CanRemove ? Visibility.Visible : Visibility.Collapsed;
         }
-        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotAuthenticated)
+        catch (Exception e) when (ShareLinkService.IsSignInError(e))
         {
             _status.Text = CloudProviderException.Unauthorized().Message;
         }
         catch (Exception e)
         {
-            NoteRejected(options, e.Message);
-            _status.Text = L("Couldn't create the share link: {0}", e.Message);
+            var message = ShareLinkService.FailureMessage(e, options);
+            _status.Text = changing ? L("Couldn't change sharing: {0}", message) : L("Couldn't create the share link: {0}", message);
         }
         finally
         {
@@ -231,7 +231,7 @@ public sealed class ShareLinkDialog : Window
 
     private async Task StopAsync()
     {
-        if (!MessageDialog.Confirm(this, L("Stop Sharing"), L("People with the link will no longer be able to open \"{0}\".", _item.Name), L("Stop Sharing"), destructive: true))
+        if (!MessageDialog.Confirm(this, L("Stop sharing this file?"), L("The link to \"{0}\" stops working for everyone who has it. This can't be undone.", _item.Name), L("Stop Sharing"), destructive: true))
         {
             return;
         }
@@ -239,7 +239,7 @@ public sealed class ShareLinkDialog : Window
         SetBusy(true);
         try
         {
-            await _provider.RemoveShareLinkAsync(_item.Path);
+            await _sharing.RemoveAsync(_provider, _item.Path);
             _existing = null;
             _linkBox.Visibility = Visibility.Collapsed;
             _stop.Visibility = Visibility.Collapsed;
@@ -248,7 +248,7 @@ public sealed class ShareLinkDialog : Window
         }
         catch (Exception e)
         {
-            _status.Text = L("Couldn't change sharing: {0}", e.Message);
+            _status.Text = L("Couldn't stop sharing: {0}", e.Message);
         }
         finally
         {
@@ -256,51 +256,9 @@ public sealed class ShareLinkDialog : Window
         }
     }
 
-    /// <summary>Checks the link as a stranger; downgrades a refused direct link to the share page.</summary>
-    private async Task<CloudShareLink> VerifyAsync(CloudShareLink link)
+    private void ShowLink(CloudShareLink link, string message)
     {
-        var accountKey = _provider.AccountId;
-        if (link.DirectDownloadUrl is { } direct && direct != link.Url)
-        {
-            var blockedKey = $"shareLinkDirectBlocked.{accountKey}";
-            if (_services.Settings.GetFlag(blockedKey))
-            {
-                return link with { DirectDownloadUrl = null, Note = Join(link.Note, L("This account can't serve direct download links, so the share page link was copied instead.")) };
-            }
-
-            var directCheck = await PublicUrlCheck.IsReachableAsync(direct);
-            if (directCheck.CouldNotCheck || directCheck.Ok)
-            {
-                return link;
-            }
-
-            _services.Settings.SetFlag(blockedKey, true);
-            return link with { DirectDownloadUrl = null, Note = Join(link.Note, L("This account can't serve direct download links, so the share page link was copied instead.")) };
-        }
-
-        var result = await PublicUrlCheck.IsReachableAsync(link.Url);
-        var notPublicKey = $"shareLinksNotPublic.{accountKey}";
-        if (result.Ok)
-        {
-            _services.Settings.SetFlag(notPublicKey, false);
-            return link;
-        }
-
-        if (result.CouldNotCheck)
-        {
-            return link with { Note = Join(link.Note, L("The link couldn't be checked from here: {0}", result.Detail ?? L("the server didn't answer."))) };
-        }
-
-        _services.Settings.SetFlag(notPublicKey, true);
-        return link with { IsPublic = false, Note = Join(link.Note, L("Checked just now: {0}", result.Detail ?? L("the link is not reachable without signing in."))) };
-    }
-
-    private static string Join(string? a, string b) => string.IsNullOrEmpty(a) ? b : a + " " + b;
-
-    private void ShowLink(CloudShareLink link, string message, bool copy)
-    {
-        var url = (_services.Settings.ShareLinkPreferDirectDownload ? link.PreferredUrl : link.Url).ToString();
-        _linkBox.Text = url;
+        _linkBox.Text = _sharing.UrlFor(link).ToString();
         _linkBox.Visibility = Visibility.Visible;
         var text = message;
         if (!link.IsPublic)
@@ -318,49 +276,6 @@ public sealed class ShareLinkDialog : Window
         }
 
         _status.Text = text;
-        if (copy)
-        {
-            try
-            {
-                Clipboard.SetText(url);
-            }
-            catch (System.Runtime.InteropServices.ExternalException)
-            {
-            }
-        }
-    }
-
-    private void NoteAccepted(ShareLinkOptions options)
-    {
-        if (options.Password is not null)
-        {
-            _services.Settings.SetFlag($"shareOptionRejected.password.{_provider.AccountId}", false);
-        }
-
-        if (options.Expiry is not null)
-        {
-            _services.Settings.SetFlag($"shareOptionRejected.expiry.{_provider.AccountId}", false);
-        }
-    }
-
-    /// <summary>A flat "forbidden" for a paid-only option means: stop offering it for this account.</summary>
-    private void NoteRejected(ShareLinkOptions options, string message)
-    {
-        var text = message.ToLowerInvariant();
-        if (!PlanRefusal.Any(text.Contains))
-        {
-            return;
-        }
-
-        if (options.Password is not null)
-        {
-            _services.Settings.SetFlag($"shareOptionRejected.password.{_provider.AccountId}", true);
-        }
-
-        if (options.Expiry is not null)
-        {
-            _services.Settings.SetFlag($"shareOptionRejected.expiry.{_provider.AccountId}", true);
-        }
     }
 
     private void SetBusy(bool busy)

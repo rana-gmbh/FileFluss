@@ -80,49 +80,87 @@ public static class CacheManager
         });
 
     public static Task RunAutoMaintenanceAsync(int maxAgeDays, int maxSizeMB)
-        => Task.Run(() =>
+        => Task.Run(() => Maintain(DateTime.UtcNow.AddDays(-maxAgeDays), maxSizeMB));
+
+    /// <summary>
+    /// Trims the cache to <paramref name="maxSizeMB"/>, oldest first — run when the limit is
+    /// changed in Settings, so a lower limit takes effect at once rather than at the next launch
+    /// (macOS <c>enforceMaxSize</c>).
+    /// </summary>
+    public static Task EnforceMaxSizeAsync(int maxSizeMB)
+        => Task.Run(() => Maintain(null, maxSizeMB));
+
+    /// <summary>The slider's value as stored: whole 50 MB steps inside the allowed range (macOS <c>commitSliderValue</c>).</summary>
+    public static int SnapSliderMB(double value)
+        => Math.Clamp((int)Math.Round(value / 50, MidpointRounding.AwayFromZero) * 50, MinSizeMB, MaxSizeMB);
+
+    /// <summary>
+    /// The MB field's text as stored: a number clamped to the allowed range, or
+    /// <paramref name="current"/> when it isn't one (macOS <c>commitFieldValue</c>).
+    /// </summary>
+    public static int ParseFieldMB(string text, int current)
+    {
+        var parsed = int.TryParse(text.Trim(), System.Globalization.NumberStyles.Integer | System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.CurrentCulture, out var value)
+            ? value
+            : current;
+        return Math.Clamp(parsed, MinSizeMB, MaxSizeMB);
+    }
+
+    /// <summary>
+    /// Deletes cached files, oldest first, until <paramref name="entries"/> fit in
+    /// <paramref name="limitBytes"/>. A file <paramref name="tryDelete"/> can't remove (an open
+    /// document) still counts, so the next-oldest goes instead. Returns what was deleted.
+    /// </summary>
+    public static IReadOnlyList<string> TrimToLimit(IEnumerable<(string Path, long Size, DateTime Cached)> entries, long limitBytes, Func<string, bool> tryDelete)
+    {
+        var list = entries.ToList();
+        var total = list.Sum(e => e.Size);
+        var deleted = new List<string>();
+        foreach (var entry in list.OrderBy(e => e.Cached))
         {
-            var cutoff = DateTime.UtcNow.AddDays(-maxAgeDays);
-            var entries = new List<(string Path, long Size, DateTime Cached)>();
-            foreach (var file in CacheFiles())
+            if (total <= limitBytes)
             {
-                try
-                {
-                    var info = new FileInfo(file);
-                    var cached = info.CreationTimeUtc;
-                    if (cached < cutoff)
-                    {
-                        TryDelete(file);
-                        continue;
-                    }
-
-                    entries.Add((file, info.Length, cached));
-                }
-                catch (IOException)
-                {
-                }
+                break;
             }
 
-            var limit = (long)maxSizeMB * 1024 * 1024;
-            var total = entries.Sum(e => e.Size);
-            foreach (var entry in entries.OrderBy(e => e.Cached))
+            if (tryDelete(entry.Path))
             {
-                if (total <= limit)
+                deleted.Add(entry.Path);
+                total -= entry.Size;
+            }
+        }
+
+        return deleted;
+    }
+
+    private static void Maintain(DateTime? cutoff, int maxSizeMB)
+    {
+        var entries = new List<(string Path, long Size, DateTime Cached)>();
+        foreach (var file in CacheFiles())
+        {
+            try
+            {
+                var info = new FileInfo(file);
+                var cached = info.CreationTimeUtc;
+                if (cutoff is { } oldest && cached < oldest)
                 {
-                    break;
+                    TryDelete(file);
+                    continue;
                 }
 
-                if (TryDelete(entry.Path))
-                {
-                    total -= entry.Size;
-                }
+                entries.Add((file, info.Length, cached));
             }
-
-            foreach (var root in StagingLocation.CacheScanRoots())
+            catch (IOException)
             {
-                RemoveEmptyDirectories(root);
             }
-        });
+        }
+
+        TrimToLimit(entries, (long)maxSizeMB * 1024 * 1024, TryDelete);
+        foreach (var root in StagingLocation.CacheScanRoots())
+        {
+            RemoveEmptyDirectories(root);
+        }
+    }
 
     private static bool TryDelete(string path)
     {
