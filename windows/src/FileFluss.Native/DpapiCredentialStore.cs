@@ -1,7 +1,9 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using FileFluss.Core.Security;
 
@@ -21,6 +23,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("FileFluss credential store v1");
     private readonly string _directory;
     private readonly Lock _gate = new();
+    private bool _secured;
 
     public DpapiCredentialStore(string directory)
     {
@@ -31,11 +34,26 @@ public sealed class DpapiCredentialStore : ICredentialStore
     {
         lock (_gate)
         {
-            Directory.CreateDirectory(_directory);
+            EnsureDirectory();
             var path = PathFor(key);
-            var temporary = path + ".tmp";
-            File.WriteAllBytes(temporary, Protect(data));
-            File.Move(temporary, path, overwrite: true);
+            var temporary = path + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp";
+            try
+            {
+                // Flushed to disk before the rename: after a power cut the old secret or the
+                // new one is there, never an empty file that reads as "signed out".
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(Protect(data));
+                    stream.Flush(flushToDisk: true);
+                }
+
+                File.Move(temporary, path, overwrite: true);
+            }
+            catch
+            {
+                TryDelete(temporary);
+                throw;
+            }
         }
     }
 
@@ -53,12 +71,61 @@ public sealed class DpapiCredentialStore : ICredentialStore
             {
                 return Unprotect(File.ReadAllBytes(path));
             }
-            catch (Exception e) when (e is CryptographicException or IOException)
+            catch (Exception e) when (e is CryptographicException or IOException or UnauthorizedAccessException)
             {
-                // Written by another Windows account or a reinstalled profile: unreadable, so
-                // treat as absent; the account asks to sign in again.
+                // Written by another Windows account or a reinstalled profile, truncated, or
+                // locked away: unreadable, so treat as absent; the account asks to sign in again.
                 return null;
             }
+        }
+    }
+
+    /// <summary>
+    /// Creates the folder readable by this user (and SYSTEM) only, with inheritance from
+    /// %LOCALAPPDATA% cut — defence in depth on top of DPAPI, for profiles whose AppData was
+    /// redirected or loosened. Best effort: a folder whose permissions can't be changed still
+    /// holds DPAPI-encrypted files only.
+    /// </summary>
+    private void EnsureDirectory()
+    {
+        Directory.CreateDirectory(_directory);
+        if (_secured)
+        {
+            return;
+        }
+
+        _secured = true;
+        try
+        {
+            new DirectoryInfo(_directory).SetAccessControl(PrivateSecurity());
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidOperationException or PrivilegeNotHeldException or IdentityNotMappedException)
+        {
+        }
+    }
+
+    /// <summary>Full control for the current user and SYSTEM, inherited by everything inside; nothing else, nothing inherited from above.</summary>
+    internal static DirectorySecurity PrivateSecurity()
+    {
+        var security = new DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+        foreach (var identity in new IdentityReference[] { WindowsIdentity.GetCurrent().User!, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) })
+        {
+            security.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
+        }
+
+        return security;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -66,13 +133,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
     {
         lock (_gate)
         {
-            try
-            {
-                File.Delete(PathFor(key));
-            }
-            catch (IOException)
-            {
-            }
+            TryDelete(PathFor(key));
         }
     }
 
