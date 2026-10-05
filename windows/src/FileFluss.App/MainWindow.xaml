@@ -27,13 +27,13 @@
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Style="{StaticResource ToolbarButton}" Tag="&#xE72C;" Content="{u:Loc Refresh}" Click="OnRefresh" ToolTip="{u:Loc 'Refresh both panels'}" />
-                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE721;" Content="{u:Loc Search}" Click="OnSearch" x:Name="SearchButton" />
+                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE721;" Content="{u:Loc Search}" Click="OnSearch" x:Name="SearchButton" ToolTip="{u:Loc 'Search all sources (⌘F)'}" />
                 <ToggleButton x:Name="TransfersButton" Style="{StaticResource ToolbarButton}" Tag="&#xE8AB;" Content="{u:Loc Transfers}" Click="OnTransfers" />
                 <ToggleButton x:Name="PanesButton" Style="{StaticResource ToolbarButton}" Tag="&#xE89A;" Content="{u:Loc 'Single Pane'}"
-                              IsChecked="{Binding SinglePaneMode}" ToolTip="{u:Loc 'Show only the active panel'}" />
-                <Button x:Name="SyncButton" Style="{StaticResource ToolbarButton}" Tag="&#xE895;" Content="{u:Loc Sync}" Click="OnSync" />
-                <Button x:Name="CompareButton" Style="{StaticResource ToolbarButton}" Tag="&#xE8AB;" Content="{u:Loc Compare}" Click="OnCompare" />
-                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE753;" Content="{u:Loc Cloud}" Click="OnCloudAccounts" ToolTip="{u:Loc 'Cloud Accounts'}" />
+                              IsChecked="{Binding SinglePaneMode}" ToolTip="{u:Loc 'Show a single pane (hides the second panel)'}" />
+                <Button x:Name="SyncButton" Style="{StaticResource ToolbarButton}" Tag="&#xE895;" Content="{u:Loc Sync}" Click="OnSync" ToolTip="{u:Loc 'Sync left and right panels'}" />
+                <Button x:Name="CompareButton" Style="{StaticResource ToolbarButton}" Tag="&#xF5A9;" Content="{u:Loc Compare}" Click="OnCompare" ToolTip="{u:Loc 'Compare the two folders side by side'}" />
+                <Button Style="{StaticResource ToolbarButton}" Tag="&#xE753;" Content="{u:Loc Cloud}" Click="OnCloudAccounts" ToolTip="{u:Loc 'Open cloud accounts settings'}" />
                 <ToggleButton x:Name="HiddenButton" Style="{StaticResource ToolbarButton}" Tag="&#xE890;" Content="{u:Loc 'Hidden Files'}"
                               Click="OnToggleHidden" ToolTip="{u:Loc 'Show hidden files'}" />
                 <ToggleButton Style="{StaticResource ToolbarButton}" Tag="&#xE8C8;" Content="{u:Loc 'Copy Mode'}" IsChecked="{Binding IsCopyMode}"

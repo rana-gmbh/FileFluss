@@ -16,7 +16,7 @@ public static class Glyphs
     public const string Refresh = "";
     public const string Search = "";
     public const string Sync = "";
-    public const string Compare = "";
+    public const string Compare = "";
     public const string Settings = "";
     public const string Add = "";
     public const string Delete = "";
