@@ -379,7 +379,7 @@ public sealed class StorageAnalysisSession : INotifyPropertyChanged
                 node.IsDirectory && node.Children.Count > 0,
                 fraction,
                 ByteFormatter.Format(node.Size),
-                L("{0}% of the total", (fraction * 100).ToString("0.0", Culture))));
+                StorageLayout.ShareText(fraction)));
             if (!expanded)
             {
                 return;
