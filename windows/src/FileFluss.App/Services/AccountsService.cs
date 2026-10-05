@@ -301,7 +301,8 @@ public sealed class AccountsService : Observable
     {
         try
         {
-            if (_hub.Get(id) is { } provider && await provider.StorageQuotaAsync() is { } fresh)
+            // Started on the thread pool: a provider's synchronous first steps must not hold up the UI.
+            if (_hub.Get(id) is { } provider && await Task.Run(() => provider.StorageQuotaAsync()) is { } fresh)
             {
                 _quotaCache[id] = fresh;
                 _staleQuotas.Remove(id);

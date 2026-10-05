@@ -470,6 +470,9 @@ public sealed class PanelViewModel : Observable
     /// <summary>Raised after a load so the view can restore focus/selection (names to select).</summary>
     public event EventHandler<IReadOnlyCollection<string>>? Loaded;
 
+    /// <summary>The last load listed the folder that was already on screen (a refresh), so the view keeps its scroll position.</summary>
+    public bool IsRefreshLoad { get; private set; }
+
     /// <summary>Raised when the location changes (sidebar highlight, window title).</summary>
     public event EventHandler? LocationChanged;
 
@@ -650,6 +653,7 @@ public sealed class PanelViewModel : Observable
             (_sortedRows, _sortedField, _sortedFolderCount) = (sorted, field, folderCount);
             Error = null;
             NeedsReauthentication = false;
+            IsRefreshLoad = _listedLocation == location;
             ApplyView();
             ItemsListed?.Invoke(this, items);
             Loaded?.Invoke(this, select);
