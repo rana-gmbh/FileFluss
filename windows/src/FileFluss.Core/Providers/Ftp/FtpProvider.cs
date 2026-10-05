@@ -426,11 +426,82 @@ public sealed class FtpProvider : CloudProvider
     public override Task UploadFileAsync(string localPath, string remotePath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
         => RunAsync<bool>(remotePath, async (connection, home) =>
         {
-            var progress = new CumulativeProgress(onBytes);
-            await using var source = HttpTransfer.OpenForUpload(localPath);
-            await connection.UploadAsync(source, ServerPath(home, remotePath), progress.Report, cancellationToken).ConfigureAwait(false);
+            var target = ServerPath(home, remotePath);
+            long sent = 0;
+            if (!await TryUploadStagedAsync(connection, localPath, target, d => { sent += d; onBytes?.Invoke(d); }, cancellationToken).ConfigureAwait(false))
+            {
+                // The server refused the staging name or the rename: write in place, as before.
+                var progress = new CumulativeProgress(onBytes, sent);
+                await using var source = HttpTransfer.OpenForUpload(localPath);
+                await connection.UploadAsync(source, target, progress.Report, cancellationToken).ConfigureAwait(false);
+            }
+
             return true;
         }, cancellationToken);
+
+    /// <summary>
+    /// Uploads to "&lt;name&gt;.fileflusspart" and renames it over the target (RNTO replaces on
+    /// most servers; where it refuses, the old file is deleted only once the new one is
+    /// complete), so a failed or cancelled upload never truncates the file it replaces.
+    /// Returns false, staging file removed, when the server refuses that route outright.
+    /// </summary>
+    private static async Task<bool> TryUploadStagedAsync(IFtpConnection connection, string localPath, string target, ByteProgress onBytes, CancellationToken cancellationToken)
+    {
+        var partial = target + ".fileflusspart";
+        var progress = new CumulativeProgress(onBytes);
+        try
+        {
+            await using var source = HttpTransfer.OpenForUpload(localPath);
+            await connection.UploadAsync(source, partial, progress.Report, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OperationCanceledException && !FtpErrors.IsConnectionLevel(e) && progress.Total == 0)
+        {
+            await TryDeleteAsync(connection, partial).ConfigureAwait(false);
+            return false;
+        }
+        catch (Exception e) when (e is not OperationCanceledException && !FtpErrors.IsConnectionLevel(e))
+        {
+            // A cancelled or broken transfer leaves the control connection in no state for
+            // another command (it is retired); the "*.fileflusspart" name marks the leftover.
+            await TryDeleteAsync(connection, partial).ConfigureAwait(false);
+            throw;
+        }
+
+        try
+        {
+            await connection.RenameAsync(partial, target, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception e) when (e is not OperationCanceledException && !FtpErrors.IsConnectionLevel(e))
+        {
+            try
+            {
+                await connection.DeleteFileAsync(target, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception delete) when (delete is not OperationCanceledException && !FtpErrors.IsConnectionLevel(delete))
+            {
+                // Nothing to replace (or not ours to delete): the rename itself is refused.
+                await TryDeleteAsync(connection, partial).ConfigureAwait(false);
+                return false;
+            }
+
+            await connection.RenameAsync(partial, target, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+    }
+
+    private static async Task TryDeleteAsync(IFtpConnection connection, string path)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await connection.DeleteFileAsync(path, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // Best effort: a clearly named leftover, and the connection may be gone already.
+        }
+    }
 
     // MARK: - File operations
 
@@ -542,18 +613,25 @@ public sealed class FtpProvider : CloudProvider
     }
 
     /// <summary>Turns the library's cumulative byte count into the deltas <see cref="ByteProgress"/> wants.</summary>
-    private sealed class CumulativeProgress(ByteProgress? onBytes)
+    private sealed class CumulativeProgress(ByteProgress? onBytes, long alreadyReported = 0)
     {
         private readonly Lock _gate = new();
-        private long _reported;
+        private long _reported = alreadyReported;
+
+        /// <summary>The highest running total seen so far.</summary>
+        public long Total
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _reported;
+                }
+            }
+        }
 
         public void Report(long total)
         {
-            if (onBytes is null)
-            {
-                return;
-            }
-
             long delta;
             lock (_gate)
             {
@@ -566,7 +644,7 @@ public sealed class FtpProvider : CloudProvider
                 _reported = total;
             }
 
-            onBytes(delta);
+            onBytes?.Invoke(delta);
         }
     }
 }

@@ -669,9 +669,13 @@ public sealed class SftpProvider : CloudProvider
         => RunAsync<bool>(remotePath, async transport =>
         {
             var target = CloudPath.Normalize(remotePath);
-            var progress = new CumulativeProgress(onBytes);
-            await using (var source = HttpTransfer.OpenForUpload(localPath))
+            long sent = 0;
+            if (!await TryUploadStagedAsync(transport, localPath, target, d => { sent += d; onBytes?.Invoke(d); }, cancellationToken).ConfigureAwait(false))
             {
+                // A server that refuses the staging name or the rename (an upload-only drop box)
+                // still gets the file, written in place as before.
+                var progress = new CumulativeProgress(onBytes, sent);
+                await using var source = HttpTransfer.OpenForUpload(localPath);
                 await transport.UploadAsync(source, target, progress.Report, cancellationToken).ConfigureAwait(false);
             }
 
@@ -686,6 +690,84 @@ public sealed class SftpProvider : CloudProvider
 
             return true;
         }, cancellationToken);
+
+    /// <summary>
+    /// Uploads to "&lt;name&gt;.fileflusspart" beside the target and renames it into place, so a
+    /// failed or cancelled upload never truncates the file it was replacing. Returns false
+    /// (with the staging file removed) when the server refuses the staging route for a reason
+    /// other than a lost connection or a cancel; those propagate.
+    /// </summary>
+    private static async Task<bool> TryUploadStagedAsync(ISftpTransport transport, string localPath, string target, ByteProgress? onBytes, CancellationToken cancellationToken)
+    {
+        var partial = target + ".fileflusspart";
+        var progress = new CumulativeProgress(onBytes);
+        try
+        {
+            await using (var source = HttpTransfer.OpenForUpload(localPath))
+            {
+                await transport.UploadAsync(source, partial, progress.Report, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e) when (e is not OperationCanceledException && !SftpErrors.IsConnectionLost(e) && progress.Total == 0)
+        {
+            // Refused before a byte moved (the name, the folder's rules): try the plain way.
+            await TryRemoveAsync(transport, partial).ConfigureAwait(false);
+            return false;
+        }
+        catch
+        {
+            await TryRemoveAsync(transport, partial).ConfigureAwait(false);
+            throw;
+        }
+
+        try
+        {
+            await transport.RenameAsync(partial, target, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception e) when (e is not OperationCanceledException && !SftpErrors.IsConnectionLost(e))
+        {
+            // SSH_FXP_RENAME refuses an existing target. The complete new copy is already on the
+            // server, so only now is the old file removed.
+            SftpEntry? existing;
+            try
+            {
+                existing = await transport.StatAsync(target, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception stat) when (stat is not OperationCanceledException && !SftpErrors.IsConnectionLost(stat))
+            {
+                existing = null;
+            }
+
+            if (existing is { IsDirectory: false })
+            {
+                await transport.RemoveAsync(target, cancellationToken).ConfigureAwait(false);
+                await transport.RenameAsync(partial, target, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            await TryRemoveAsync(transport, partial).ConfigureAwait(false);
+            if (existing is not null)
+            {
+                throw;
+            }
+
+            return false;
+        }
+    }
+
+    private static async Task TryRemoveAsync(ISftpTransport transport, string path)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await transport.RemoveAsync(path, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // Best effort: the staging file is clearly named and harmless.
+        }
+    }
 
     // MARK: - File operations
 
@@ -919,18 +1001,26 @@ public sealed class SftpProvider : CloudProvider
     }
 
     /// <summary>Turns the library's cumulative byte count into the deltas <see cref="ByteProgress"/> wants.</summary>
-    private sealed class CumulativeProgress(ByteProgress? onBytes)
+    /// <summary>Turns running totals into deltas. <paramref name="alreadyReported"/> bytes are not reported again (a retried upload).</summary>
+    private sealed class CumulativeProgress(ByteProgress? onBytes, long alreadyReported = 0)
     {
         private readonly Lock _gate = new();
-        private long _reported;
+        private long _reported = alreadyReported;
+
+        /// <summary>The highest running total seen so far.</summary>
+        public long Total
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _reported;
+                }
+            }
+        }
 
         public void Report(long total)
         {
-            if (onBytes is null)
-            {
-                return;
-            }
-
             long delta;
             lock (_gate)
             {
@@ -943,7 +1033,7 @@ public sealed class SftpProvider : CloudProvider
                 _reported = total;
             }
 
-            onBytes(delta);
+            onBytes?.Invoke(delta);
         }
     }
 }

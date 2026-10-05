@@ -33,6 +33,12 @@ internal sealed class FakeFtpServer
     /// <summary>Thrown by the next listing; null afterwards.</summary>
     public Exception? FailNextList { get; set; }
 
+    /// <summary>For an upload to the path: the error to fail with after storing half the bytes.</summary>
+    public Func<string, Exception?> FailUpload { get; set; } = _ => null;
+
+    /// <summary>Refuse STOR of "*.fileflusspart" outright (a server with a name filter).</summary>
+    public bool RefuseStagingNames { get; set; }
+
     public Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, CancellationToken cancellationToken)
     {
         LastCredentials = credentials;
@@ -119,8 +125,20 @@ internal sealed class FakeFtpConnection(FakeFtpServer server) : IFtpConnection
     public async Task UploadAsync(Stream source, string path, Action<long> onTotal, CancellationToken cancellationToken)
     {
         Tree.Log.Enqueue("STOR " + path);
+        if (server.RefuseStagingNames && path.EndsWith(".fileflusspart", StringComparison.Ordinal))
+        {
+            throw new FtpCommandException("553", "File name not allowed");
+        }
+
         using var buffer = new MemoryStream();
         await source.CopyToAsync(buffer, cancellationToken);
+        if (server.FailUpload(path) is { } failure)
+        {
+            onTotal(buffer.Length / 2);
+            Tree.Put(path, new PosixTestTree.Node(PosixTestTree.NodeKind.File, buffer.ToArray()[..(int)(buffer.Length / 2)], DateTime.UtcNow));
+            throw failure;
+        }
+
         onTotal(3);
         onTotal(buffer.Length);
         Tree.Put(path, new PosixTestTree.Node(PosixTestTree.NodeKind.File, buffer.ToArray(), DateTime.UtcNow));
@@ -446,6 +464,75 @@ public class FtpProviderTests
 
             Assert.Equal("uploaded!", _server.Tree.Text("/home/u/in/x.txt"));
             Assert.Equal([3L, 6L], deltas);
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task AFailedUploadLeavesTheFileItWasReplacingIntact()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-ftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "the new version");
+        try
+        {
+            _server.Tree.Dir("/home/u/in");
+            _server.Tree.Put("/home/u/in/doc.txt", new PosixTestTree.Node(PosixTestTree.NodeKind.File, "the old version"u8.ToArray(), DateTime.UtcNow));
+            _server.FailUpload = path => path.EndsWith(".fileflusspart", StringComparison.Ordinal) ? new FtpCommandException("451", "Local error in processing") : null;
+            using var provider = Signed();
+
+            await Assert.ThrowsAsync<CloudProviderException>(() => provider.UploadFileAsync(local, "/in/doc.txt"));
+
+            Assert.Equal("the old version", _server.Tree.Text("/home/u/in/doc.txt"));
+            Assert.Null(_server.Tree.Get("/home/u/in/doc.txt.fileflusspart"));
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task UploadsReplaceThroughAStagingFileEvenWhereRntoRefusesToOverwrite()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-ftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "new");
+        try
+        {
+            _server.Tree.Dir("/home/u/in");
+            _server.Tree.Put("/home/u/in/doc.txt", new PosixTestTree.Node(PosixTestTree.NodeKind.File, "old"u8.ToArray(), DateTime.UtcNow));
+            using var provider = Signed();
+
+            await provider.UploadFileAsync(local, "/in/doc.txt");
+
+            Assert.Equal("new", _server.Tree.Text("/home/u/in/doc.txt"));
+            Assert.Null(_server.Tree.Get("/home/u/in/doc.txt.fileflusspart"));
+            Assert.Contains("STOR /home/u/in/doc.txt.fileflusspart", _server.Tree.Log);
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task AServerThatRefusesTheStagingNameStillGetsTheFile()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-ftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "uploaded!");
+        try
+        {
+            _server.Tree.Dir("/home/u/in");
+            _server.RefuseStagingNames = true;
+            using var provider = Signed();
+            var deltas = new List<long>();
+
+            await provider.UploadFileAsync(local, "/in/x.txt", d => deltas.Add(d));
+
+            Assert.Equal("uploaded!", _server.Tree.Text("/home/u/in/x.txt"));
+            Assert.Equal(9, deltas.Sum());
         }
         finally
         {
