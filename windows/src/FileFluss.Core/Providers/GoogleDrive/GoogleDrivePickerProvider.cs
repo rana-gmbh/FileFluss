@@ -249,6 +249,7 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
     {
         var files = new List<GoogleDriveFile>();
         string? pageToken = null;
+        var guard = new PageGuard("Google Drive listing");
         try
         {
             do
@@ -270,6 +271,10 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
                 var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, parentPath, cancellationToken).ConfigureAwait(false);
                 files.AddRange(page.Files ?? []);
                 pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
+                if (pageToken is not null)
+                {
+                    guard.Follow(pageToken);
+                }
             }
             while (pageToken is not null);
 

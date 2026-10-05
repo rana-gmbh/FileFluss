@@ -247,8 +247,10 @@ internal sealed class OneDriveApiClient
         var endpoint = CloudPath.IsRoot(path) ? "/me/drive/root/children" : $"/me/drive/root:{EncodePath(path)}:/children";
         var page = await GraphJsonAsync<GraphListResponse>(HttpMethod.Get, endpoint + "?$top=1000&$orderby=name%20asc", null, path, cancellationToken).ConfigureAwait(false);
         var all = new List<GraphDriveItem>(page.Value ?? []);
+        var guard = new PageGuard("OneDrive children");
         while (!string.IsNullOrEmpty(page.NextLink))
         {
+            guard.Follow(page.NextLink);
             page = await GraphJsonAsync<GraphListResponse>(HttpMethod.Get, page.NextLink, null, path, cancellationToken).ConfigureAwait(false);
             all.AddRange(page.Value ?? []);
         }

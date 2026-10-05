@@ -356,8 +356,10 @@ internal sealed class DropboxApiClient
             cancellationToken).ConfigureAwait(false);
         entries.AddRange(page.Entries);
 
+        var guard = new PageGuard("Dropbox list_folder");
         while (page.HasMore)
         {
+            guard.Follow(page.Cursor);
             page = await RpcAsync<DropboxListFolderResponse>(
                 "/files/list_folder/continue",
                 new JsonObject { ["cursor"] = page.Cursor },

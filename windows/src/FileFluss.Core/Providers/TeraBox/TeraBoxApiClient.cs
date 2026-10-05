@@ -280,8 +280,10 @@ internal sealed class TeraBoxApiClient
     {
         await RefreshIfNeededAsync(cancellationToken).ConfigureAwait(false);
         var items = new List<CloudFileItem>();
+        var guard = new PageGuard("TeraBox listing");
         for (var page = 1; ; page++)
         {
+            guard.Count();
             var body = await ApiGetAsync(
                 $"/openapi/api/list?dir={CloudHttp.Escape(path)}&order=name&desc=0&num=1000&page={page.ToString(CultureInfo.InvariantCulture)}",
                 cancellationToken).ConfigureAwait(false);
@@ -311,6 +313,12 @@ internal sealed class TeraBoxApiClient
             if (entries.Count < 1000)
             {
                 break;
+            }
+
+            // A server that ignores the page number sends the first page again and again.
+            if (page > 1 && items.Count >= 2000 && items[^1000].Id == items[^2000].Id)
+            {
+                throw CloudProviderException.InvalidResponse();
             }
         }
 

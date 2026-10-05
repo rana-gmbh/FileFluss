@@ -184,6 +184,7 @@ public sealed class GoogleDriveProvider : CloudProvider
         var folder = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
         var files = new List<GoogleDriveFile>();
         string? pageToken = null;
+        var guard = new PageGuard("Google Drive listing");
         do
         {
             var query = new List<(string, string)>
@@ -202,6 +203,10 @@ public sealed class GoogleDriveProvider : CloudProvider
             var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, cancellationToken).ConfigureAwait(false);
             files.AddRange(page.Files ?? []);
             pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
+            if (pageToken is not null)
+            {
+                guard.Follow(pageToken);
+            }
         }
         while (pageToken is not null);
 
@@ -268,6 +273,7 @@ public sealed class GoogleDriveProvider : CloudProvider
 
         var drives = new List<SharedDrive>();
         string? pageToken = null;
+        var guard = new PageGuard("Google Drive listing");
         do
         {
             var query = new List<(string, string)> { ("pageSize", "100") };
@@ -279,6 +285,10 @@ public sealed class GoogleDriveProvider : CloudProvider
             var page = await ApiAsync<SharedDriveList>(HttpMethod.Get, "/drives", query, null, cancellationToken).ConfigureAwait(false);
             drives.AddRange((page.Drives ?? []).Select(d => new SharedDrive(d.Id, d.Name)));
             pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
+            if (pageToken is not null)
+            {
+                guard.Follow(pageToken);
+            }
         }
         while (pageToken is not null);
 
@@ -688,6 +698,7 @@ public sealed class GoogleDriveProvider : CloudProvider
 
         var files = new List<GoogleDriveFile>();
         string? pageToken = null;
+        var guard = new PageGuard("Google Drive listing");
         do
         {
             var items = new List<(string, string)>
@@ -705,6 +716,10 @@ public sealed class GoogleDriveProvider : CloudProvider
             var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", items, null, cancellationToken).ConfigureAwait(false);
             files.AddRange(page.Files ?? []);
             pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
+            if (pageToken is not null)
+            {
+                guard.Follow(pageToken);
+            }
         }
         while (pageToken is not null && files.Count < 500);
 
