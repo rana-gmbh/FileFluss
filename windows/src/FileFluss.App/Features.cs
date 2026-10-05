@@ -30,21 +30,44 @@ internal static class Features
     public static void AfterStartup(MainWindow window, MainViewModel vm, AppServices services)
     {
         // A folder passed on the command line (or forwarded by a second launch) opens in the active panel.
-        SingleInstance.Forwarded += args => window.Dispatcher.Invoke(() => OpenArgument(vm, args));
-        OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray());
-        WireIndex(window, vm, services);
+        // Queued, not waited for: the pipe listener must never block on (or die with) the UI.
+        SingleInstance.Forwarded += args =>
+        {
+            if (!window.Dispatcher.HasShutdownStarted)
+            {
+                window.Dispatcher.BeginInvoke(() => OpenArgument(vm, args));
+            }
+        };
+        Run("command line", () => OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray()));
+        Run("index", () => WireIndex(window, vm, services));
 
         // Drives left mapped by a FileFluss that crashed point at a server that is gone.
-        _ = MountService.CleanupOrphansAsync();
-
-        // First launch, or "Show Welcome Screen Again" in Settings.
-        Views.WelcomeWindow.ShowIfNeeded(window, services);
-        Views.Settings.SettingsWindow.WelcomeRequested += (_, _) => Views.WelcomeWindow.Show(window, services);
+        MountService.CleanupOrphansAsync().Forget("orphaned drive cleanup");
 
         // Updates: Help → Check for Updates…, and a quiet daily check (macOS Sparkle).
-        var updates = new UpdateService(services);
-        window.UpdateRequested += (_, owner) => _ = updates.CheckAsync(true, owner ?? window);
-        _ = updates.CheckAsync(false, window);
+        Run("updates", () =>
+        {
+            var updates = new UpdateService(services);
+            window.UpdateRequested += (_, owner) => updates.CheckAsync(true, owner ?? window).Forget("update check");
+            updates.CheckAsync(false, window).Forget("automatic update check");
+        });
+
+        // First launch, or "Show Welcome Screen Again" in Settings.
+        Views.Settings.SettingsWindow.WelcomeRequested += (_, _) => Views.WelcomeWindow.Show(window, services);
+        Run("welcome", () => Views.WelcomeWindow.ShowIfNeeded(window, services));
+    }
+
+    /// <summary>One feature failing to wire must not keep the others from it.</summary>
+    private static void Run(string feature, Action wire)
+    {
+        try
+        {
+            wire();
+        }
+        catch (Exception e)
+        {
+            CrashLog.Write($"startup: {feature}", e);
+        }
     }
 
     /// <summary>The search index learns from browsing, follows account changes and runs "Index Current Source".</summary>
@@ -119,7 +142,16 @@ internal static class Features
             return;
         }
 
-        path = Path.GetFullPath(path.Trim('"'));
+        try
+        {
+            path = Path.GetFullPath(path.Trim('"'));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or System.Security.SecurityException)
+        {
+            SupportLogger.Shared.Log($"Ignoring the command-line argument \"{path}\": {e.Message}", "App", LogLevel.Notice);
+            return;
+        }
+
         if (Directory.Exists(path))
         {
             _ = vm.ActivePanel.NavigateAsync(PanelLocation.Local(path));
