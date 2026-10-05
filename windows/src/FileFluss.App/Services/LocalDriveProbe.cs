@@ -19,6 +19,9 @@ public static class LocalDriveProbe
     private static readonly Lock Gate = new();
     private static Task<IReadOnlyList<LocalDriveInfo>>? _inFlight;
 
+    /// <summary>The drives the last finished probe found; null before the first one finished.</summary>
+    public static IReadOnlyList<LocalDriveInfo>? Latest { get; private set; }
+
     public static Task<IReadOnlyList<LocalDriveInfo>> ProbeAsync()
     {
         lock (Gate)
@@ -46,7 +49,9 @@ public static class LocalDriveProbe
 
         // One slow drive must not hold up the others' answers longer than itself.
         var probes = await Task.WhenAll(drives.Select(drive => Task.Run(() => Probe(drive))));
-        return probes.OfType<LocalDriveInfo>().ToList();
+        var ready = probes.OfType<LocalDriveInfo>().ToList();
+        Latest = ready;
+        return ready;
     }
 
     private static LocalDriveInfo? Probe(DriveInfo drive)

@@ -1015,7 +1015,9 @@ public sealed class MainViewModel : Observable
         }
 
         var label = rows.Count == 1 ? $"\"{rows[0].Name}\"" : L("{0} items", rows.Count);
-        var permanent = !panel.IsLocal || rows.Any(r => !ShellFileOperations.HasRecycleBin(r.Path));
+        // Once per volume, not per row: 20,000 selected files share one or two roots.
+        var permanent = !panel.IsLocal || rows.Select(r => Path.GetPathRoot(r.Path) ?? r.Path).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Any(root => !ShellFileOperations.HasRecycleBin(root));
         if (permanent)
         {
             // Cloud deletions and volumes without a Recycle Bin can't be undone; always ask.
