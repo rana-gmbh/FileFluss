@@ -363,6 +363,10 @@ public partial class MainWindow : Window, IShell
         _supportLogItem = ContextMenus.Item(L("Support Log"), null, null, SupportLogService.Shared.Start);
         UpdateSupportLogItem();
         help.Items.Add(_supportLogItem);
+#if DEBUG
+        // macOS: right after "Support Log", debug builds only — never shipped to users.
+        help.Items.Add(ContextMenus.Item(L("Run Version Test…"), null, null, () => VersionTestRunner.Run(this)));
+#endif
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("About FileFluss"), null, null, ShowAbout));
         MainMenu.Items.Add(help);

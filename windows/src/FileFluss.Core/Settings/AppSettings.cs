@@ -62,7 +62,9 @@ public sealed class AppSettings : INotifyPropertyChanged
     private WindowPlacement? _mainWindow;
     private Dictionary<string, WindowPlacement> _windowFrames = [];
     private int _mountReadCacheMaxMB = 2048;
+#if DEBUG
     private List<Guid> _versionTestAccountIds = [];
+#endif
     private Dictionary<string, bool> _flags = [];
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -186,7 +188,10 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     // MARK: - Misc
 
+#if DEBUG
+    /// <summary>The accounts last ticked for the debug-only version test (macOS <c>versionTestSelectedAccountIds</c>).</summary>
     public List<Guid> VersionTestAccountIds { get => _versionTestAccountIds; set => Set(ref _versionTestAccountIds, value); }
+#endif
 
     /// <summary>
     /// Small per-account facts learned at run time (macOS <c>shareLinksNotPublic.&lt;id&gt;</c>,

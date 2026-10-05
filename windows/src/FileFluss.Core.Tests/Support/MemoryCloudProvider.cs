@@ -40,6 +40,17 @@ public sealed class MemoryCloudProvider : CloudProvider
 
     public HashSet<string> FailingUploads { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Set to give the account a sharing API; it builds the link for a path.</summary>
+    public Func<string, CloudShareLink>? ShareLinkFactory { get; set; }
+
+    public override ShareLinkCapabilities ShareLinkCapabilities
+        => ShareLinkFactory is null ? ShareLinkCapabilities.Unsupported : new ShareLinkCapabilities { CanCreate = true };
+
+    public override Task<CloudShareLink> CreateShareLinkAsync(string path, ShareLinkOptions options, CancellationToken cancellationToken = default)
+        => ShareLinkFactory is { } factory && Exists(path)
+            ? Task.FromResult(factory(CloudPath.Normalize(path)))
+            : throw CloudProviderException.NotImplemented();
+
     public override Task<ConnectResult> ConnectAsync(ConnectValues values, IConnectPrompt prompt, CancellationToken cancellationToken = default)
         => Task.FromResult(new ConnectResult("memory"));
 
