@@ -92,10 +92,24 @@ internal static class WebDavHttp
                 return response;
             }
 
+            var next = location.IsAbsoluteUri ? location : new Uri(current, location);
+            if (!IsFollowable(current, next))
+            {
+                // Like HttpClient's own redirect handling: never from https down to plain
+                // http (the body — an upload — would cross the network in the clear), and
+                // never to anything but http(s). The redirect answer is the result.
+                return response;
+            }
+
             response.Dispose();
-            current = location.IsAbsoluteUri ? location : new Uri(current, location);
+            current = next;
         }
     }
+
+    /// <summary>An http(s) target, and no step down from https to http.</summary>
+    internal static bool IsFollowable(Uri from, Uri to)
+        => (to.Scheme == Uri.UriSchemeHttps || to.Scheme == Uri.UriSchemeHttp)
+           && !(from.Scheme == Uri.UriSchemeHttps && to.Scheme == Uri.UriSchemeHttp);
 
     private static bool IsRedirect(HttpStatusCode status)
         => status is HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther

@@ -248,6 +248,31 @@ public sealed class WebDavProviderTests : IDisposable
         Assert.Null(_http.All(Propfind)[1].Header("Authorization"));
     }
 
+    [Theory]
+    [InlineData("http://dav.example.com/dav/r.bin")]
+    [InlineData("file:///C:/Windows/win.ini")]
+    public async Task UploadsAreNeverRedirectedOffHttps(string location)
+    {
+        var local = _temp.File("r.bin", 1000);
+        _http.On(HttpMethod.Put, "/dav/r.bin", (_, _) => Redirect(HttpStatusCode.TemporaryRedirect, location));
+        using var provider = Connected();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.UploadFileAsync(local, "/r.bin"));
+
+        // Only the original HTTPS request went out; the body never crossed in the clear.
+        var put = Assert.Single(_http.Requests);
+        Assert.Equal("https", put.Uri.Scheme);
+    }
+
+    [Theory]
+    [InlineData("https://h/a", "https://h/b", true)]
+    [InlineData("http://h/a", "https://h/b", true)]
+    [InlineData("http://h/a", "http://h/b", true)]
+    [InlineData("https://h/a", "http://h/b", false)]
+    [InlineData("https://h/a", "ftp://h/b", false)]
+    public void RedirectsAreFollowedOnlyWithinHttp(string from, string to, bool followed)
+        => Assert.Equal(followed, Core.Providers.WebDav.WebDavHttp.IsFollowable(new Uri(from), new Uri(to)));
+
     // MARK: - Transfers
 
     [Fact]

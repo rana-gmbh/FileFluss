@@ -774,6 +774,13 @@ internal sealed partial class WordPressApiClient
             }
 
             var next = response.Headers.Location.IsAbsoluteUri ? response.Headers.Location : new Uri(uri, response.Headers.Location);
+            if (!WebDav.WebDavHttp.IsFollowable(uri, next))
+            {
+                // Never down to plain http (an upload would cross the network in the clear),
+                // never to anything but http(s): the redirect answer is the result.
+                return response;
+            }
+
             response.Dispose();
 
             var sameHost = string.Equals(next.Host, originalHost, StringComparison.OrdinalIgnoreCase) &&
