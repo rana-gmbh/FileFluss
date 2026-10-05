@@ -97,6 +97,7 @@ public sealed class MessageDialog : Window
         if (inputText is not null)
         {
             _input = new TextBox { Text = inputText, Margin = new Thickness(0, 12, 0, 0) };
+            System.Windows.Automation.AutomationProperties.SetName(_input, string.IsNullOrEmpty(message) ? title : message);
             _input.Loaded += (_, _) =>
             {
                 _input.Focus();

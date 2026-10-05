@@ -157,6 +157,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
             MinHeight = 104,
             HorizontalContentAlignment = HorizontalAlignment.Center,
         };
+        System.Windows.Automation.AutomationProperties.SetName(tile, type.DisplayName());
         tile.Click += (_, _) => ShowForm(type);
         return tile;
     }
@@ -379,6 +380,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
                 break;
         }
 
+        System.Windows.Automation.AutomationProperties.SetName(input, L(field.Label));
         stack.Children.Add(input);
         if (field.Placeholder is not null && field.Kind is not (ConnectFieldKind.Password or ConnectFieldKind.Choice))
         {

@@ -39,6 +39,8 @@ public partial class SidebarView : UserControl
             list.PreviewMouseLeftButtonUp += OnEntryMouseUp;
             list.PreviewMouseMove += OnEntryMouseMove;
             list.MouseRightButtonUp += OnEntryRightClick;
+            list.SelectionChanged += OnEntrySelectionChanged;
+            list.KeyDown += OnEntryKeyDown;
             list.DragOver += OnEntryDragOver;
             list.DragEnter += OnEntryDragOver;
             list.DragLeave += (_, _) => ClearHover();
@@ -126,6 +128,45 @@ public partial class SidebarView : UserControl
         var list = (ListBox)sender;
         var entry = EntryAt(list, e.GetPosition(list));
         _dragCandidate = null;
+        await ActivateAsync(entry);
+    }
+
+    /// <summary>
+    /// Keyboard and screen readers: selecting a row (UI Automation's Select, arrow keys) opens
+    /// it like a click. The highlight the view model sets to follow the panel arrives here too —
+    /// those rows are already marked selected in the view model and are left alone.
+    /// </summary>
+    private async void OnEntrySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var list = (ListBox)sender;
+        foreach (var entry in e.AddedItems.OfType<SidebarEntry>())
+        {
+            if (entry.IsSelected)
+            {
+                continue;
+            }
+
+            // Hand the highlight back to the view model's binding.
+            if (list.ItemContainerGenerator.ContainerFromItem(entry) is ListBoxItem container)
+            {
+                container.ClearValue(ListBoxItem.IsSelectedProperty);
+            }
+
+            await ActivateAsync(entry);
+        }
+    }
+
+    private async void OnEntryKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Space && e.OriginalSource is ListBoxItem { DataContext: SidebarEntry entry })
+        {
+            e.Handled = true;
+            await ActivateAsync(entry);
+        }
+    }
+
+    private async Task ActivateAsync(SidebarEntry? entry)
+    {
         if (entry?.Location is not { } location || Vm is not { } vm)
         {
             return;

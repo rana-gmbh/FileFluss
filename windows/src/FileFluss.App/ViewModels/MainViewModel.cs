@@ -939,7 +939,9 @@ public sealed class MainViewModel : Observable
             // Cloud deletions and volumes without a Recycle Bin can't be undone; always ask.
             var message = panel.IsLocal
                 ? L("{0} can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone.", label)
-                : L("Are you sure you want to delete {0} items from {1}?", rows.Count, panel.Account?.DisplayName ?? string.Empty);
+                : rows.Count == 1
+                    ? L("Are you sure you want to delete \"{0}\" from {1}?", rows[0].Name, panel.Account?.DisplayName ?? string.Empty)
+                    : L("Are you sure you want to delete {0} items from {1}?", rows.Count, panel.Account?.DisplayName ?? string.Empty);
             if (!MessageDialog.Confirm(Shell.Window, L("Delete"), message, L("Delete"), destructive: true))
             {
                 return;
