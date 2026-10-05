@@ -84,6 +84,20 @@ public sealed class KDriveProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task ADriveNamedAfterItsOwnerIsNotNamedTwice()
+    {
+        Profile();
+        Drives((101, "Me Myself"));
+        DriveInfo();
+        Route("GET /2/drive/101/files/5/files", Data("[]"));
+        using var provider = new KDriveProvider(_id, _store, _http);
+
+        var result = await provider.ConnectAsync(TokenValues(), new RecordingPrompt());
+
+        Assert.Equal("Me Myself", result.AccountLabel);
+    }
+
+    [Fact]
     public async Task SingleDriveConnectsWithoutAsking()
     {
         Profile();

@@ -134,10 +134,12 @@ public sealed class KDriveProvider : CloudProvider
         Credentials.Save(CredentialKey, credentials);
         _client = client;
 
-        // "kDrive (me · Common Documents)" tells workspaces of one token apart.
-        var label = (userName.Length > 0, string.IsNullOrEmpty(chosen.Name)) switch
+        // "kDrive (me · Common Documents)" tells workspaces of one token apart. A personal
+        // drive is usually named after its owner: "kDrive (me)", not "kDrive (me · me)".
+        var driveName = string.Equals(chosen.Name?.Trim(), userName.Trim(), StringComparison.CurrentCultureIgnoreCase) ? null : chosen.Name;
+        var label = (userName.Length > 0, string.IsNullOrEmpty(driveName)) switch
         {
-            (true, false) => $"{userName} · {chosen.Name}",
+            (true, false) => $"{userName} · {driveName}",
             (true, true) => userName,
             (false, false) => chosen.Name!,
             _ => null,

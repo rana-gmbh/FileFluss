@@ -73,9 +73,12 @@ public sealed class FileListLayoutTests
     public void StatusBarTexts()
     {
         Assert.Equal("3 files, 2 folders — 1.50 KB", StatusBarText.Listing(3, 2, 1536));
+        Assert.Equal("1 file, 1 folder — 1 byte", StatusBarText.Listing(1, 1, 1));
+        Assert.Equal("1 file, 2 folders — 1.50 KB", StatusBarText.Listing(1, 2, 1536));
+        Assert.Equal("0 files, 1 folder — 0 bytes", StatusBarText.Listing(0, 1, 0));
         Assert.Equal(string.Empty, StatusBarText.Selection(0, 10, false));
         Assert.Equal("Selected: 4 items, calculating…", StatusBarText.Selection(4, 10, true));
-        Assert.Equal("Selected: 1 items, 10 bytes", StatusBarText.Selection(1, 10, false));
+        Assert.Equal("Selected: 1 item, 10 bytes", StatusBarText.Selection(1, 10, false));
         Assert.Equal("a · c", StatusBarText.Join("a", null, string.Empty, "c"));
     }
 

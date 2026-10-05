@@ -3349,4 +3349,19 @@ Dem neuen Schlüssel vertrauen?</value>
   <data name="This selection contains more than {0} files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
     <value>Diese Auswahl enthält mehr als {0} Dateien und Ordner – zu viele, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.</value>
   </data>
+  <data name="1 file, 1 folder — {0}" xml:space="preserve">
+    <value>1 Datei, 1 Ordner – {0}</value>
+  </data>
+  <data name="1 file, {0} folders — {1}" xml:space="preserve">
+    <value>1 Datei, {0} Ordner – {1}</value>
+  </data>
+  <data name="{0} files, 1 folder — {1}" xml:space="preserve">
+    <value>{0} Dateien, 1 Ordner – {1}</value>
+  </data>
+  <data name="Selected: 1 item, calculating…" xml:space="preserve">
+    <value>Ausgewählt: 1 Objekt, wird berechnet …</value>
+  </data>
+  <data name="Selected: 1 item, {0}" xml:space="preserve">
+    <value>Ausgewählt: 1 Objekt, {0}</value>
+  </data>
 </root>

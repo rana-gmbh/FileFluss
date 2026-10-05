@@ -16,7 +16,17 @@ public static class StatusBarText
 
     /// <summary>"3 files, 2 folders — 1.20 MB".</summary>
     public static string Listing(int files, int folders, long bytes)
-        => L("{0} files, {1} folders — {2}", files, folders, ByteFormatter.Format(bytes));
+    {
+        // macOS always says "files" and "folders"; Windows gets the singular right too.
+        var size = ByteFormatter.Format(bytes);
+        return (files == 1, folders == 1) switch
+        {
+            (true, true) => L("1 file, 1 folder — {0}", size),
+            (true, false) => L("1 file, {0} folders — {1}", folders, size),
+            (false, true) => L("{0} files, 1 folder — {1}", files, size),
+            _ => L("{0} files, {1} folders — {2}", files, folders, size),
+        };
+    }
 
     /// <summary>
     /// "Selected: 4 items, 12.0 MB", or "Selected: 4 items, calculating…" while folder sizes
@@ -31,10 +41,15 @@ public static class StatusBarText
 
         if (calculating)
         {
-            return L("Selected: {0} items, calculating…", count);
+            return count == 1 ? L("Selected: 1 item, calculating…") : L("Selected: {0} items, calculating…", count);
         }
 
-        return bytes is { } size ? L("Selected: {0} items, {1}", count, ByteFormatter.Format(size)) : string.Empty;
+        if (bytes is not { } total)
+        {
+            return string.Empty;
+        }
+
+        return count == 1 ? L("Selected: 1 item, {0}", ByteFormatter.Format(total)) : L("Selected: {0} items, {1}", count, ByteFormatter.Format(total));
     }
 
     /// <summary>The non-empty parts joined with " · ".</summary>

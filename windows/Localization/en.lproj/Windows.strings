@@ -563,3 +563,10 @@
 "Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.";
 "The files couldn't be prepared for the other app: %@" = "The files couldn't be prepared for the other app: %@";
 "This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.";
+
+/* Status bar: singular forms (macOS always uses the plural). */
+"1 file, 1 folder — %@" = "1 file, 1 folder — %@";
+"1 file, %@ folders — %@" = "1 file, %@ folders — %@";
+"%@ files, 1 folder — %@" = "%@ files, 1 folder — %@";
+"Selected: 1 item, calculating…" = "Selected: 1 item, calculating…";
+"Selected: 1 item, %@" = "Selected: 1 item, %@";

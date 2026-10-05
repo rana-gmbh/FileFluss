@@ -574,3 +574,10 @@
 "Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "此选择中的某些文件嵌套过深，无法移交给文件资源管理器或其他应用。请在另一个面板中打开本地文件夹，然后用 FileFluss 将所选内容复制到那里。";
 "The files couldn't be prepared for the other app: %@" = "无法为其他应用准备文件：%@";
 "This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "此选择包含超过 %@ 个文件和文件夹，数量过多，无法移交给文件资源管理器或其他应用。请在另一个面板中打开本地文件夹，然后用 FileFluss 将所选内容复制到那里。";
+
+/* Status bar: singular forms (macOS always uses the plural). */
+"1 file, 1 folder — %@" = "1 个文件，1 个文件夹 — %@";
+"1 file, %@ folders — %@" = "1 个文件，%@ 个文件夹 — %@";
+"%@ files, 1 folder — %@" = "%@ 个文件，1 个文件夹 — %@";
+"Selected: 1 item, calculating…" = "已选择 1 个项目，正在计算…";
+"Selected: 1 item, %@" = "已选择 1 个项目，%@";
