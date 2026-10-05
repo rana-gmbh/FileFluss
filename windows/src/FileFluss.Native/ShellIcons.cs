@@ -63,21 +63,39 @@ public static class ShellIcons
         return result == 0 ? -1 : info.IconIndex;
     }
 
-    /// <summary>An HICON from the system image list; the caller destroys it with <see cref="DestroyIcon"/>.</summary>
-    public static nint IconFromIndex(int index, ShellIconSize size)
+    /// <summary>
+    /// An HICON from the system image list; the caller destroys it with <see cref="DestroyIcon"/>.
+    /// Safe on any thread: <c>IImageList::GetIcon</c> is called through the object's vtable, not
+    /// through a runtime-callable wrapper. The system image list is one object per process, so
+    /// its wrapper was cached and tied to the apartment of the first thread that asked; any other
+    /// thread (the icon worker, a second UI thread) then got E_NOINTERFACE.
+    /// </summary>
+    public static unsafe nint IconFromIndex(int index, ShellIconSize size)
     {
         if (index < 0)
         {
             return 0;
         }
 
-        var iid = typeof(IImageList).GUID;
-        if (SHGetImageList((int)size, ref iid, out var list) != 0 || list is null)
+        var iid = ImageListInterfaceId;
+        if (SHGetImageList((int)size, ref iid, out var list) != 0 || list == 0)
         {
             return 0;
         }
 
-        return list.GetIcon(index, IldTransparent, out var icon) == 0 ? icon : 0;
+        try
+        {
+            // IUnknown (3 slots), then Add, ReplaceIcon, SetOverlayImage, Replace, AddMasked, Draw, Remove, GetIcon.
+            const int GetIconSlot = 10;
+            var vtable = *(nint**)list;
+            var getIcon = (delegate* unmanaged[Stdcall]<nint, int, int, nint*, int>)vtable[GetIconSlot];
+            nint icon = 0;
+            return getIcon(list, index, IldTransparent, &icon) == 0 ? icon : 0;
+        }
+        finally
+        {
+            Marshal.Release(list);
+        }
     }
 
     /// <summary>Explorer's "Type" column text: "PNG File", "Microsoft Word Document", "File folder".</summary>
@@ -158,20 +176,8 @@ public static class ShellIcons
         public readonly int Height = height;
     }
 
-    [ComImport]
-    [Guid("46EB5926-582E-4017-9FDF-E8998DAA0950")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IImageList
-    {
-        [PreserveSig] int Add(nint image, nint mask, out int index);
-        [PreserveSig] int ReplaceIcon(int i, nint icon, out int index);
-        [PreserveSig] int SetOverlayImage(int image, int overlay);
-        [PreserveSig] int Replace(int i, nint image, nint mask);
-        [PreserveSig] int AddMasked(nint image, int mask, out int index);
-        [PreserveSig] int Draw(nint parameters);
-        [PreserveSig] int Remove(int i);
-        [PreserveSig] int GetIcon(int i, int flags, out nint icon);
-    }
+    /// <summary>IID_IImageList.</summary>
+    private static readonly Guid ImageListInterfaceId = new("46EB5926-582E-4017-9FDF-E8998DAA0950");
 
     [ComImport]
     [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
@@ -185,7 +191,7 @@ public static class ShellIcons
     private static extern nint SHGetFileInfo(string path, uint attributes, ref ShFileInfo info, uint size, uint flags);
 
     [DllImport("shell32.dll", EntryPoint = "#727")]
-    private static extern int SHGetImageList(int list, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out IImageList? imageList);
+    private static extern int SHGetImageList(int list, ref Guid iid, out nint imageList);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string path, nint bindContext, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory? item);
