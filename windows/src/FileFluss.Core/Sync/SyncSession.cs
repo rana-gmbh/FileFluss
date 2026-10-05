@@ -364,7 +364,11 @@ public sealed class SyncSession : INotifyPropertyChanged
     /// and refreshes that panel on <see cref="TransferProgress.Completed"/>. Null when
     /// <see cref="CanStart"/> is false.
     /// </summary>
-    public TransferProgress? StartSync()
+    /// <param name="register">
+    /// Called with the progress before the sync starts running, so a transfer list can
+    /// subscribe to <see cref="TransferProgress.Completed"/> without racing a fast sync.
+    /// </param>
+    public TransferProgress? StartSync(Action<TransferProgress>? register = null)
     {
         SyncPlan plan;
         SyncEndpoint source, destination;
@@ -383,6 +387,7 @@ public sealed class SyncSession : INotifyPropertyChanged
         }
 
         var progress = SyncExecutor.CreateProgress(plan, source, destination, side);
+        register?.Invoke(progress);
         ExecutionTask = Task.Run(() => SyncExecutor.ExecuteAsync(plan, source, destination, progress));
         return progress;
     }

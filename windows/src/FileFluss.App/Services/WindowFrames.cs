@@ -6,12 +6,13 @@ using FileFluss.Core.Settings;
 namespace FileFluss.App.Services;
 
 /// <summary>
-/// Remembers where a secondary window was (macOS <c>WindowFrameAutosaver</c>): restored when it
-/// opens again — if that spot is still on a screen — and saved as it closes.
+/// Remembers where a secondary window was (macOS <c>WindowFrameAutosaver</c>), in
+/// <see cref="AppSettings.WindowFrames"/> under a key per window: restored when it opens again —
+/// if that spot is still on a screen, otherwise the window centres on its owner — and saved as it closes.
 /// </summary>
 public static class WindowFrames
 {
-    /// <summary>Restores the window's last frame under <paramref name="key"/> and saves it when the window closes.</summary>
+    /// <summary>Restores the window's last frame under <paramref name="key"/> (before it is shown) and saves it when the window closes.</summary>
     public static void Remember(Window window, string key, AppSettings settings)
     {
         if (settings.WindowFrames.TryGetValue(key, out var frame) && IsOnScreen(frame))
@@ -30,11 +31,15 @@ public static class WindowFrames
                 window.WindowState = WindowState.Maximized;
             }
         }
+        else if (window.Owner is not null)
+        {
+            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
 
         window.Closing += (_, _) =>
         {
             var bounds = window.WindowState == WindowState.Normal ? new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight) : window.RestoreBounds;
-            if (bounds.IsEmpty)
+            if (bounds.IsEmpty || double.IsNaN(bounds.Left))
             {
                 return;
             }
@@ -46,6 +51,9 @@ public static class WindowFrames
             };
         };
     }
+
+    /// <summary>Same as <see cref="Remember"/>, argument order of the Compare and Sync windows.</summary>
+    public static void Attach(Window window, AppSettings settings, string key) => Remember(window, key, settings);
 
     private static bool IsOnScreen(WindowPlacement frame)
         => SystemParameters.VirtualScreenLeft <= frame.Left + 100 &&

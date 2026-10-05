@@ -413,6 +413,9 @@ public sealed class TransferProgress : INotifyPropertyChanged
         }
     }
 
+    /// <summary>What screen readers announce for the transfer: its headline.</summary>
+    public override string ToString() => StatusText;
+
     /// <summary>The headline: what it is doing now, or how it ended.</summary>
     public string StatusText
     {

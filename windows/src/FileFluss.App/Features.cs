@@ -22,6 +22,8 @@ internal static class Features
         WindowsRegistry.About = owner => Views.AboutWindow.Show(owner);
         WindowsRegistry.Help = owner => Views.HelpWindow.Show(owner);
         WindowsRegistry.Search = (owner, vm) => Views.Search.SearchWindow.Show(owner, vm);
+        WindowsRegistry.Compare = (owner, vm) => Views.Compare.CompareWindow.Show(owner, vm);
+        WindowsRegistry.Sync = (owner, vm) => Views.Sync.SyncWindow.Show(owner, vm);
         WindowsRegistry.StorageAnalysis = (owner, vm, location) => Views.Storage.StorageAnalysisWindow.Show(owner, vm, location);
     }
 

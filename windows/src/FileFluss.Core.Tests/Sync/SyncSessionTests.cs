@@ -136,6 +136,30 @@ public sealed class SyncSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task StartSyncHandsOverTheProgressBeforeItRuns()
+    {
+        var cloud = new MemoryCloudProvider();
+        cloud.AddFolder("/Dst");
+        var session = new SyncSession(LocalSource("a.txt"), new SyncEndpoint(cloud, "/Dst"));
+        await session.CalculateAsync();
+
+        Transfers.TransferProgress? registered = null;
+        var completions = 0;
+        var progress = session.StartSync(p =>
+        {
+            registered = p;
+            Assert.Null(session.ExecutionTask);
+            Assert.False(p.IsComplete);
+            p.Completed += (_, _) => Interlocked.Increment(ref completions);
+        });
+        await session.ExecutionTask!;
+
+        Assert.Same(progress, registered);
+        Assert.Equal(1, completions);
+        Assert.True(cloud.Exists("/Dst/a.txt"));
+    }
+
+    [Fact]
     public async Task NothingToDoCannotStart()
     {
         var cloud = new MemoryCloudProvider();
