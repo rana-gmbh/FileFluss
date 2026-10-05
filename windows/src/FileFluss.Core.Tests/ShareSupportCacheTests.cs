@@ -194,4 +194,16 @@ public class CacheLimitTests
     [Fact]
     public void TrimLeavesACacheUnderTheLimitAlone()
         => Assert.Empty(CacheManager.TrimToLimit([("a", 10L, DateTime.UtcNow)], 100, _ => true));
+
+    [Theory]
+    [InlineData(@"C:\Cache\FileFluss-Cache\transfer-0123\abc-report.pdf", 0, true)]
+    [InlineData(@"C:\Cache\FileFluss-Cache\dl-0123", 0, true)]
+    [InlineData(@"C:\Cache\FileFluss-Cache\open\acc\x.docx.fileflusspart", 0, true)]
+    [InlineData(@"C:\Cache\FileFluss-Cache\transfer-0123\abc-report.pdf", 2, false)]
+    [InlineData(@"C:\Cache\FileFluss-Cache\open\acc\x.docx", 0, false)]
+    public void ClearingSparesWhatARunningTransferStillNeeds(string path, int daysOld, bool spared)
+    {
+        var now = DateTime.UtcNow;
+        Assert.Equal(spared, CacheManager.MayBeInUse(path, now.AddDays(-daysOld), now));
+    }
 }

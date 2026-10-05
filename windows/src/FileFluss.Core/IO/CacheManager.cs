@@ -162,10 +162,34 @@ public static class CacheManager
         }
     }
 
+    /// <summary>
+    /// A file a running transfer may still need: the staging copy of a cloud ↔ cloud transfer
+    /// (between its download and its upload nothing holds it open, so Windows would let it be
+    /// deleted) or a download in progress. Leftovers of a crashed run are fair game after a day.
+    /// </summary>
+    internal static bool MayBeInUse(string path, DateTime lastWriteUtc, DateTime nowUtc)
+    {
+        if (nowUtc - lastWriteUtc > TimeSpan.FromDays(1))
+        {
+            return false;
+        }
+
+        var name = Path.GetFileName(path);
+        var folder = Path.GetFileName(Path.GetDirectoryName(path) ?? string.Empty);
+        return name.EndsWith(".fileflusspart", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("dl-", StringComparison.Ordinal) ||
+               folder.StartsWith("transfer-", StringComparison.Ordinal);
+    }
+
     private static bool TryDelete(string path)
     {
         try
         {
+            if (MayBeInUse(path, File.GetLastWriteTimeUtc(path), DateTime.UtcNow))
+            {
+                return false;
+            }
+
             File.Delete(path);
             return true;
         }
