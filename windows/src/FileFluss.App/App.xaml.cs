@@ -10,6 +10,8 @@ using FileFluss.Core.Providers.ICloud;
 using FileFluss.Core.Settings;
 using FileFluss.Native;
 
+using Localization = FileFluss.Core.Localization;
+
 namespace FileFluss.App;
 
 public partial class App : Application

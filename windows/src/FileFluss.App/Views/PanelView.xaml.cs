@@ -16,6 +16,8 @@ using FileFluss.Core.Providers;
 using FileFluss.Native;
 using static FileFluss.Core.Localization;
 
+using Localization = FileFluss.Core.Localization;
+
 namespace FileFluss.App.Views;
 
 /// <summary>What is being dragged out of a panel (in-process; Explorer gets a FileDrop alongside).</summary>

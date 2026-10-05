@@ -464,7 +464,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
             ShowStatus(null);
             ShowError(e.Message);
             // A failed sign-in can leave the provider half-configured; the next try starts fresh.
-            var type = _provider.ProviderType;
+            var type = _provider!.ProviderType;
             _provider.Dispose();
             _provider = _services.Accounts.CreateProvider(type, _editingId ?? Guid.NewGuid());
         }

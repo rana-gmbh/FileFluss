@@ -18,6 +18,8 @@ using Microsoft.Win32;
 using static FileFluss.App.Views.Settings.SettingsKit;
 using static FileFluss.Core.Localization;
 
+using Localization = FileFluss.Core.Localization;
+
 namespace FileFluss.App.Views.Settings;
 
 /// <summary>

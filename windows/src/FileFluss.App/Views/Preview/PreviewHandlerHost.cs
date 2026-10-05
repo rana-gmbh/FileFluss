@@ -2,6 +2,7 @@
 
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Win32;
 

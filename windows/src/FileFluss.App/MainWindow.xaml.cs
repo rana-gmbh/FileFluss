@@ -17,6 +17,8 @@ using FileFluss.Core.Settings;
 using FileFluss.Native;
 using static FileFluss.Core.Localization;
 
+using Localization = FileFluss.Core.Localization;
+
 namespace FileFluss.App;
 
 public partial class MainWindow : Window, IShell

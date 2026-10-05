@@ -8,6 +8,8 @@ using System.Windows.Media;
 using FileFluss.App.Services;
 using static FileFluss.Core.Localization;
 
+using Glyphs = FileFluss.App.Services.Glyphs;
+
 namespace FileFluss.App.Views;
 
 /// <summary>
