@@ -213,6 +213,26 @@ public partial class SidebarView : UserControl
                 if (account.IsConnected && !account.IsOfflineMode)
                 {
                     menu.Items.Add(ContextMenus.Item(L("Storage Analysis"), Glyphs.Pie, null, () => Main.Shell.ShowStorageAnalysis(PanelLocation.Cloud(account.Id, account.EffectiveRootPath))));
+
+                    // macOS mountMenu: Mount in Finder / Reveal + Unmount.
+                    if (Main.Services.Mount.MountFor(account.Id) is { } mount)
+                    {
+                        menu.Items.Add(ContextMenus.Item(L("Reveal in Finder"), Glyphs.OpenFolder, null, () => Main.Services.Mount.OpenInExplorer(account.Id)));
+                        menu.Items.Add(ContextMenus.Item(L("Disconnect Network Drive ({0})", mount.DriveLetter), Glyphs.Mount, null,
+                            async () => await Main.Services.Mount.UnmountAsync(account.Id)));
+                    }
+                    else
+                    {
+                        var map = ContextMenus.Item(L("Mount in Finder"), Glyphs.Mount, null, async () =>
+                        {
+                            if (await Main.MountAccountAsync(account) is not null)
+                            {
+                                Main.Services.Mount.OpenInExplorer(account.Id);
+                            }
+                        });
+                        map.ToolTip = L("Open this account as a drive in Finder");
+                        menu.Items.Add(map);
+                    }
                 }
 
                 AddAccountIndexItems(menu, account);

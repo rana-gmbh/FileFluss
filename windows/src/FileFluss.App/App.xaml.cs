@@ -89,6 +89,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SingleInstance.Release();
+        Services?.Mount.UnmountAllOnExit();
         foreach (var account in Services?.Accounts.Accounts.ToList() ?? [])
         {
             Services!.Hub.Get(account.Id)?.Dispose();

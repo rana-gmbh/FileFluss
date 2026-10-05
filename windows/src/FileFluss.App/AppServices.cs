@@ -29,6 +29,7 @@ public sealed class AppServices
         Transfers = new TransferCenter();
         Keyboard = new KeyboardMap(Settings);
         Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
+        Mount = new MountService(SettingsStore, dataDirectory);
 
         // Win32 implementations of the operations Core leaves pluggable.
         LocalFileProvider.CopyFileHandler = ShellFileOperations.CopyFileAsync;
@@ -62,6 +63,9 @@ public sealed class AppServices
     public KeyboardMap Keyboard { get; }
 
     public SearchServices Search { get; }
+
+    /// <summary>Accounts mapped as drives in File Explorer (macOS "Mount in Finder").</summary>
+    public MountService Mount { get; }
 
     /// <summary>
     /// What a panel lists for a location: the disk, a connected account — or, for an account in

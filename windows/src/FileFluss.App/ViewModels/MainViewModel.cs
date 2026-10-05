@@ -3,6 +3,7 @@
 using System.Collections.Specialized;
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using FileFluss.App.Mvvm;
 using FileFluss.App.Services;
 using FileFluss.App.Views.Dialogs;
@@ -81,6 +82,8 @@ public sealed class MainViewModel : Observable
         RightSidebar = new SidebarViewModel(PanelSide.Right, Right, services);
         services.Transfers.All.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Transfers));
         services.Accounts.AccountRemoved += (_, id) => _ = OnAccountRemovedAsync(id);
+        services.Accounts.AccountRemoved += (_, id) => _ = services.Mount.UnmountAsync(id);
+        services.Mount.NeedsReauthentication += (_, id) => services.Accounts.MarkNeedsReauthentication(id);
         services.Hub.ProviderChanged += (_, id) =>
         {
             foreach (var panel in new[] { Left, Right })
@@ -985,13 +988,87 @@ public sealed class MainViewModel : Observable
         await Task.WhenAll(Left.NavigateAsync(right), Right.NavigateAsync(left));
     }
 
-    private void OpenTerminal(PanelViewModel panel)
+    /// <summary>
+    /// "Map as Network Drive" (macOS "Mount in Finder"): serves the account through a local
+    /// WebDAV server mapped to a drive letter. Null when it failed — the user has been told why.
+    /// </summary>
+    public async Task<MountInfo?> MountAccountAsync(CloudAccount account)
+    {
+        if (_services.Mount.MountFor(account.Id) is { } existing)
+        {
+            return existing;
+        }
+
+        if (_services.Hub.Get(account.Id) is not { } provider || account.IsOfflineMode)
+        {
+            MessageDialog.Error(Shell.Window, L("Could not mount in Finder"), L("Cloud account not connected"));
+            return null;
+        }
+
+        var cursor = Mouse.OverrideCursor;
+        Mouse.OverrideCursor = Cursors.AppStarting;
+        try
+        {
+            var mount = await _services.Mount.MountAsync(account, provider);
+
+            // WebClient's 50 MB per-file cap surprises people; say so once.
+            if (mount.FileSizeLimitNotice is { } notice && !_services.Settings.GetFlag("mount.sizeNoticeShown"))
+            {
+                _services.Settings.SetFlag("mount.sizeNoticeShown", true);
+                MessageDialog.Info(Shell.Window, L("Mount in Finder"), notice);
+            }
+
+            return mount;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            SupportLogger.Shared.Log($"Mapping {account.DisplayName} failed: {e.Message}", "Mount", LogLevel.Error);
+            MessageDialog.Error(Shell.Window, L("Could not mount in Finder"), e.Message);
+            return null;
+        }
+        finally
+        {
+            Mouse.OverrideCursor = cursor;
+        }
+    }
+
+    /// <summary>Where a cloud path of a mapped account is on its drive: <c>X:\Photos\2026</c>.</summary>
+    public static string DrivePathFor(MountInfo mount, string cloudPath)
+    {
+        var root = Core.IO.CloudPath.Normalize(mount.RootPath);
+        var path = Core.IO.CloudPath.Normalize(cloudPath);
+        var relative = Core.IO.CloudPath.IsWithin(path, root) ? path[root.TrimEnd('/').Length..] : path;
+        return Path.Combine(mount.DrivePath, relative.TrimStart('/').Replace('/', '\\'));
+    }
+
+    private async void OpenTerminal(PanelViewModel panel)
     {
         string? directory = null;
+
+        // One selected folder opens that folder; anything else opens where the panel is.
+        var folder = panel.Selection is [{ IsDirectory: true } only] ? only.Path : panel.CurrentPath;
         if (panel.IsLocal)
         {
-            // One selected folder opens that folder; anything else opens where the panel is.
-            directory = panel.Selection is [{ IsDirectory: true } only] ? only.Path : panel.CurrentPath;
+            directory = folder;
+        }
+        else if (panel.IsCloud && !panel.IsOffline && panel.Account is { } account)
+        {
+            // A cloud folder has a path a terminal can open once the account is a drive (macOS: mounted in Finder).
+            var mount = _services.Mount.MountFor(account.Id);
+            if (mount is null &&
+                MessageDialog.Confirm(Shell.Window, L("Do you want to mount “{0}” in Finder?", account.DisplayName),
+                    L("A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it."),
+                    L("Mount in Finder")))
+            {
+                mount = await MountAccountAsync(account);
+            }
+
+            if (mount is null)
+            {
+                return;
+            }
+
+            directory = DrivePathFor(mount, folder);
         }
 
         if (string.IsNullOrEmpty(directory))

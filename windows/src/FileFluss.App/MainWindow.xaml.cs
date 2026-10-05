@@ -132,6 +132,13 @@ public partial class MainWindow : Window, IShell
             return;
         }
 
+#if DEBUG
+        if (ShortcutFromKey(e) is { Modifiers: not ShortcutModifiers.None } debugPressed)
+        {
+            Core.Diagnostics.SupportLogger.Shared.Log($"Key {debugPressed} → {_services.Keyboard.CommandFor(debugPressed)?.ToString() ?? "none"} (focus: {Keyboard.FocusedElement?.GetType().Name})", "Keys");
+        }
+#endif
+
         if (ShortcutFromKey(e) is not { } pressed || _services.Keyboard.CommandFor(pressed) is not { } command)
         {
             return;

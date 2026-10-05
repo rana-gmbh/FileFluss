@@ -34,6 +34,9 @@ internal static class Features
         OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray());
         WireIndex(window, vm, services);
 
+        // Drives left mapped by a FileFluss that crashed point at a server that is gone.
+        _ = MountService.CleanupOrphansAsync();
+
         // First launch, or "Show Welcome Screen Again" in Settings.
         Views.WelcomeWindow.ShowIfNeeded(window, services);
         Views.Settings.SettingsWindow.WelcomeRequested += (_, _) => Views.WelcomeWindow.Show(window, services);
