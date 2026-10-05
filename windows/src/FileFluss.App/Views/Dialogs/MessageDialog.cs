@@ -224,7 +224,8 @@ public sealed class MessageDialog : Window
     public static void Info(Window? owner, string title, string message)
         => Show(owner, title, message, DialogIcon.Info, new DialogButton("ok", L("OK"), IsDefault: true, IsCancel: true));
 
-    private static Window? OwnerOrMain(Window? owner)
+    /// <summary>A window that can own a dialog: the one given, else the active or main window — never a closed one (WPF throws).</summary>
+    internal static Window? OwnerOrMain(Window? owner)
     {
         var candidate = owner ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current?.MainWindow;
         return candidate is { IsLoaded: true } ? candidate : null;

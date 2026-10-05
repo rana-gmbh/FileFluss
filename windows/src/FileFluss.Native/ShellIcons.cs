@@ -37,7 +37,21 @@ public static class ShellIcons
         ".exe", ".lnk", ".ico", ".url", ".cpl", ".msc", ".appref-ms", ".scr",
     };
 
+    /// <summary>
+    /// Extensions are mostly a few hundred, but names like "backup.20240101" make each file
+    /// its own: past this many cached answers the caches start over rather than grow forever.
+    /// </summary>
+    private const int MaxCachedExtensions = 4096;
+
     public static bool NeedsPerFileIcon(string name) => PerFileExtensions.Contains(Path.GetExtension(name));
+
+    private static void Bound<T>(ConcurrentDictionary<string, T> cache)
+    {
+        if (cache.Count > MaxCachedExtensions)
+        {
+            cache.Clear();
+        }
+    }
 
     /// <summary>
     /// The system image list index for an item. <paramref name="path"/> is a real path when
@@ -48,6 +62,7 @@ public static class ShellIcons
         if (!exists || (!isDirectory && !NeedsPerFileIcon(path)))
         {
             var key = isDirectory ? "\\folder" : Path.GetExtension(path);
+            Bound(ExtensionIndexes);
             return ExtensionIndexes.GetOrAdd(key, _ => QueryIndex(isDirectory ? "folder" : "file" + key, isDirectory, useAttributes: true));
         }
 
@@ -84,6 +99,7 @@ public static class ShellIcons
     public static string TypeName(string name, bool isDirectory)
     {
         var key = isDirectory ? "\\folder" : Path.GetExtension(name);
+        Bound(TypeNames);
         return TypeNames.GetOrAdd(key, k =>
         {
             var info = default(ShFileInfo);

@@ -66,7 +66,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
     /// <summary>Shows the provider grid, then the form. True when an account was added.</summary>
     public static bool Add(Window? owner, AppServices services, CloudProviderType? preselect = null)
     {
-        var dialog = new AccountDialog(services, null) { Owner = owner };
+        var dialog = new AccountDialog(services, null) { Owner = MessageDialog.OwnerOrMain(owner) };
         if (preselect is { } type)
         {
             dialog.ShowForm(type);
@@ -87,7 +87,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
             return false;
         }
 
-        var dialog = new AccountDialog(services, accountId) { Owner = owner ?? Application.Current.MainWindow };
+        var dialog = new AccountDialog(services, accountId) { Owner = MessageDialog.OwnerOrMain(owner) };
         dialog.ShowForm(account.ProviderType);
         return dialog.ShowDialog() == true;
     }

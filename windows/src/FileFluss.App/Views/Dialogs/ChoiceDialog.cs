@@ -46,7 +46,7 @@ public sealed class ChoiceDialog : Window
 
     public static int? Ask(Window? owner, string title, string message, IReadOnlyList<string> options)
     {
-        var dialog = new ChoiceDialog(title, message, options) { Owner = owner };
+        var dialog = new ChoiceDialog(title, message, options) { Owner = MessageDialog.OwnerOrMain(owner) };
         return dialog.ShowDialog() == true ? dialog._list.SelectedIndex : null;
     }
 }

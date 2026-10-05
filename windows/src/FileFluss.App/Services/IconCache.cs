@@ -39,8 +39,25 @@ public static class IconCache
 
     public static ImageSource? Folder(double dips = 16) => FromIndex(ShellIcons.IconIndex("folder", true, exists: false), SizeFor(dips));
 
+    /// <summary>
+    /// Programs, shortcuts and .ico files each bring their own icon (and index), so browsing
+    /// folders full of them would grow the cache without end; past this many it starts over.
+    /// </summary>
+    private const int MaxIcons = 2048;
+
     private static ImageSource? FromIndex(int index, ShellIconSize size)
-        => index < 0 ? null : ByIndex.GetOrAdd((index, size), key =>
+    {
+        if (index < 0)
+        {
+            return null;
+        }
+
+        if (ByIndex.Count > MaxIcons && !ByIndex.ContainsKey((index, size)))
+        {
+            ByIndex.Clear();
+        }
+
+        return ByIndex.GetOrAdd((index, size), key =>
         {
             var handle = ShellIcons.IconFromIndex(key.Index, key.Size);
             if (handle == 0)
@@ -64,6 +81,7 @@ public static class IconCache
                 ShellIcons.DestroyIcon(handle);
             }
         });
+    }
 
     /// <summary>A provider logo from Assets/ProviderLogos/&lt;Name&gt;.png, or null.</summary>
     public static ImageSource? Logo(CloudProviderType type) => Logo(type.LogoAssetName());
