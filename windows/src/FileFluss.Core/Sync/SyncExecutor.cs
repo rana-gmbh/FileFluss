@@ -111,6 +111,19 @@ public static class SyncExecutor
         var open = new Dictionary<string, (List<SyncOperation> Ops, HashSet<string> Names)>(StringComparer.Ordinal);
         foreach (var op in plan.Operations.Where(o => o.CopiesFile))
         {
+            try
+            {
+                // A name that can't be resolved safely on either side (a hostile ".."): that
+                // one file fails, the rest of the sync goes on.
+                _ = source.Resolve(op.RelativePath);
+                _ = destination.Resolve(op.DestinationRelativePath);
+            }
+            catch (CloudProviderException e)
+            {
+                progress.RecordFailure(op.DisplayName, e.Message);
+                continue;
+            }
+
             var folder = ParentOf(op.DestinationRelativePath);
             var name = NameOf(op.RelativePath);
             if (open.TryGetValue(folder, out var group) && group.Names.Add(name))

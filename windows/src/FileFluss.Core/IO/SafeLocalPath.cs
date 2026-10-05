@@ -76,14 +76,57 @@ public static class SafeLocalPath
     public static string Destination(string remoteName, string directory)
     {
         var candidate = Path.GetFullPath(Path.Combine(directory, FileName(remoteName)));
-        var root = Path.GetFullPath(directory);
-        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
-        if (!candidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+        if (!IsStrictlyInside(candidate, directory))
         {
-            throw CloudProviderException.CommandFailed(
-                Localization.L("The server returned an unsafe file name (\"{0}\"), so the download was stopped.", remoteName));
+            throw UnsafeName(remoteName);
         }
 
         return candidate;
     }
+
+    /// <summary>
+    /// One component of a relative path that came off the network (a sync or compare key),
+    /// for a path below a local folder. A name Windows takes as one ordinary component is
+    /// kept verbatim — so a local tree resolves to its own files — anything else
+    /// (<c>a\..\..\x</c>, <c>C:\x</c>, <c>a:b</c> streams, <c>?</c>) is reduced by
+    /// <see cref="FileName"/>, as the transfer engine names files. "." and ".." are refused.
+    /// </summary>
+    public static string Component(string remoteName)
+    {
+        if (CloudPath.IsTraversalName(remoteName))
+        {
+            throw UnsafeName(remoteName);
+        }
+
+        var plain = remoteName.Length > 0
+                    && !remoteName.All(c => c == '.')
+                    && !remoteName.Any(c => c is '/' or '\\' or '<' or '>' or ':' or '"' or '|' or '?' or '*' or < ' ')
+                    && !ReservedNames.Contains(remoteName.Split('.')[0].TrimEnd(' '));
+        return plain ? remoteName : FileName(remoteName);
+    }
+
+    /// <summary>
+    /// Throws unless <paramref name="path"/> is <paramref name="root"/> or lies below it once
+    /// both are normalised — the last line of defence after names were made safe.
+    /// </summary>
+    public static void EnsureWithin(string path, string root, string name)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        if (!full.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) && !IsStrictlyInside(full, fullRoot))
+        {
+            throw UnsafeName(name);
+        }
+    }
+
+    private static bool IsStrictlyInside(string candidate, string directory)
+    {
+        var root = Path.GetFullPath(directory);
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static CloudProviderException UnsafeName(string remoteName)
+        => CloudProviderException.CommandFailed(
+            Localization.L("The server returned an unsafe file name (\"{0}\"), so the download was stopped.", remoteName));
 }

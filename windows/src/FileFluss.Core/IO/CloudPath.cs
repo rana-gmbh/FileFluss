@@ -38,6 +38,25 @@ public static class CloudPath
 
     public static bool IsRoot(string path) => Normalize(path) == "/";
 
+    /// <summary>
+    /// True for a name that would climb out of its folder once used as a path component:
+    /// "." or "..", or one with such a part between slashes or backslashes
+    /// (<see cref="Normalize"/> treats a backslash as a separator). No real file is called
+    /// that; a hostile server can still list one.
+    /// </summary>
+    public static bool IsTraversalName(string name)
+    {
+        foreach (var part in name.Split('/', '\\'))
+        {
+            if (part is "." or "..")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Path components without the root: "/a/b" → ["a", "b"].</summary>
     public static string[] Components(string path)
         => Normalize(path).Split('/', StringSplitOptions.RemoveEmptyEntries);
