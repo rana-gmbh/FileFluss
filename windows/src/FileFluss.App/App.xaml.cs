@@ -48,6 +48,20 @@ public partial class App : Application
         Localization.Use(services.Settings.Language);
         ThemeBrushes.Install(this);
         ICloudDriveLocator.Registry = new WindowsRegistryReader();
+#if DEBUG
+        // Debug builds mirror the support log to a file, for diagnosing runs driven by UI automation.
+        var debugLog = System.IO.Path.Combine(SettingsStore.DataDirectory, "debug.log");
+        SupportLogger.Shared.EntryAdded += entry =>
+        {
+            try
+            {
+                System.IO.File.AppendAllText(debugLog, $"{entry.Date:HH:mm:ss.fff} [{entry.Level}] {entry.Category}: {entry.Message}{Environment.NewLine}");
+            }
+            catch (System.IO.IOException)
+            {
+            }
+        };
+#endif
         SupportLogger.Shared.Log("FileFluss for Windows starting", "App");
         Features.Register(services);
 

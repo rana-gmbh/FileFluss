@@ -15,7 +15,11 @@ using static FileFluss.Core.Localization;
 namespace FileFluss.App.ViewModels;
 
 /// <summary>One crumb of the path bar.</summary>
-public sealed record BreadcrumbSegment(string Title, PanelLocation Location, bool IsLast);
+public sealed record BreadcrumbSegment(string Title, PanelLocation Location, bool IsLast)
+{
+    /// <summary>What screen readers announce for the crumb.</summary>
+    public override string ToString() => Title;
+}
 
 /// <summary>
 /// One file panel — the merged macOS <c>FileManagerViewModel</c> (local) and

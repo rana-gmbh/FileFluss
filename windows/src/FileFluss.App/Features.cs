@@ -30,6 +30,11 @@ internal static class Features
         SingleInstance.Forwarded += args => window.Dispatcher.Invoke(() => OpenArgument(vm, args));
         OpenArgument(vm, Environment.GetCommandLineArgs().Skip(1).ToArray());
         WireIndex(window, vm, services);
+
+        // Updates: Help → Check for Updates…, and a quiet daily check (macOS Sparkle).
+        var updates = new UpdateService(services);
+        window.UpdateRequested += (_, _) => _ = updates.CheckAsync(true, window);
+        _ = updates.CheckAsync(false, window);
     }
 
     /// <summary>The search index learns from browsing, follows account changes and runs "Index Current Source".</summary>
@@ -71,6 +76,7 @@ internal static class Features
     private static void IndexLocation(Window owner, AppServices services, PanelLocation location)
     {
         var search = services.Search;
+        SupportLogger.Shared.Log($"Index requested for {location.Kind} {location.Path}", "Indexing");
         if (location.IsCloud && services.Accounts.Find(location.AccountId!.Value) is { } account)
         {
             if (account.IsConnected && !account.IsOfflineMode && services.Hub.Get(account.Id) is not null)

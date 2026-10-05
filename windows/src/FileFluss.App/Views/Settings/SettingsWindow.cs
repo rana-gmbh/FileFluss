@@ -37,9 +37,6 @@ public sealed class SettingsWindow : Window
     private readonly TextBlock _title = new() { FontSize = 26, FontWeight = FontWeights.SemiBold, Margin = new Thickness(32, 20, 32, 8) };
     private string _current = "general";
 
-    /// <summary>Extra pages contributed by features (Index Status).</summary>
-    public static Func<SettingsWindow, AppServices, FrameworkElement>? IndexStatusPage { get; set; }
-
     private static readonly (string Key, string Glyph, string Label)[] Pages =
     [
         ("general", Glyphs.Settings, "General"),
@@ -158,7 +155,7 @@ public sealed class SettingsWindow : Window
         {
             "cloud" => CloudPage(),
             "storage" => StoragePage(),
-            "index" => IndexStatusPage?.Invoke(this, _services) ?? Caption(L("Index Status")),
+            "index" => new IndexStatusPage(_services),
             "keyboard" => new KeyboardMapPage(_services),
             _ => GeneralPage(),
         };
