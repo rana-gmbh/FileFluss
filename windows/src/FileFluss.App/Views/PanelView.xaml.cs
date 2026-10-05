@@ -875,7 +875,7 @@ public partial class PanelView : UserControl
                 {
                     items.Add(await LocalFileProvider.Shared.GetFileMetadataAsync(path));
                 }
-                catch (CloudProviderException)
+                catch (Exception failure) when (failure is CloudProviderException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
                 }
             }

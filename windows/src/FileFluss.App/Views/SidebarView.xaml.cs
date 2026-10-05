@@ -844,7 +844,7 @@ public partial class SidebarView : UserControl
                 {
                     items.Add(await LocalFileProvider.Shared.GetFileMetadataAsync(path));
                 }
-                catch (CloudProviderException)
+                catch (Exception failure) when (failure is CloudProviderException or System.IO.IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
                 }
             }

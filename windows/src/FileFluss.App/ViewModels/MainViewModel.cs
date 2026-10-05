@@ -850,7 +850,7 @@ public sealed class MainViewModel : Observable
                 {
                     items.Add(await LocalFileProvider.Shared.GetFileMetadataAsync(path));
                 }
-                catch (CloudProviderException)
+                catch (Exception e) when (e is CloudProviderException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
                 }
             }
