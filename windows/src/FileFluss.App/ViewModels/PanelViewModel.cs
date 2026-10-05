@@ -9,6 +9,7 @@ using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Formatting;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
+using FileFluss.Core.Storage;
 using FileFluss.Native;
 using static FileFluss.Core.Localization;
 
@@ -48,6 +49,12 @@ public sealed class PanelViewModel : Observable
     private bool _isFilterVisible;
     private bool _showHiddenFiles;
     private string _quotaText = string.Empty;
+    private long? _selectionSize;
+    private bool _isCalculatingSelectionSize;
+    private CancellationTokenSource? _selectionSizeCancellation;
+    private string? _walkKey;
+    private long? _walkResult;
+    private PanelLocation? _listedLocation;
     private int _loadGeneration;
     private FileSystemWatcher? _watcher;
     private CancellationTokenSource? _loadCancellation;
@@ -147,6 +154,7 @@ public sealed class PanelViewModel : Observable
         {
             _rows = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ListingText));
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(IsEmpty));
         }
@@ -164,8 +172,7 @@ public sealed class PanelViewModel : Observable
         {
             _selection = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(SelectionText));
-            OnPropertyChanged(nameof(StatusText));
+            RecalculateSelectionSize();
         }
     }
 
@@ -240,7 +247,7 @@ public sealed class PanelViewModel : Observable
         else
         {
             _sortField = field;
-            _sortAscending = field != SortField.Date && field != SortField.Size;
+            _sortAscending = field is not (SortField.Date or SortField.DateCreated or SortField.Size);
             OnPropertyChanged(nameof(SortField));
             OnPropertyChanged(nameof(SortAscending));
             ApplyView();
@@ -285,41 +292,141 @@ public sealed class PanelViewModel : Observable
 
     // MARK: - Status bar
 
-    public string StatusText
+    /// <summary>
+    /// The whole status line, as on macOS: "3 files, 2 folders — 1.2 MB · Selected: 2 items,
+    /// 800 KB · 120 GB free of 500 GB" (a cloud panel ends with the account's quota).
+    /// </summary>
+    public string StatusText => StatusBarText.Join(ListingText, SelectionText, QuotaText);
+
+    /// <summary>"3 files, 2 folders — 1.2 MB" for what the list shows.</summary>
+    public string ListingText
     {
         get
         {
-            if (_selection.Count > 1)
-            {
-                return SelectionText;
-            }
-
             var files = _rows.Count(r => !r.IsDirectory);
-            var folders = _rows.Count(r => r.IsDirectory);
+            var folders = _rows.Count - files;
             var bytes = _rows.Where(r => !r.IsDirectory).Sum(r => r.Item.Size);
-            return L("{0} files, {1} folders — {2}", files, folders, ByteFormatter.Format(bytes));
+            return StatusBarText.Listing(files, folders, bytes);
         }
     }
 
-    public string SelectionText
-    {
-        get
-        {
-            if (_selection.Count == 0)
-            {
-                return string.Empty;
-            }
+    /// <summary>"Selected: 2 items, 800 KB", "… calculating…" while folder sizes are summed, or empty.</summary>
+    public string SelectionText => StatusBarText.Selection(_selection.Count, _selectionSize, _isCalculatingSelectionSize);
 
-            var bytes = _selection.Where(r => !r.IsDirectory).Sum(r => r.Item.Size) + _selection.Sum(r => r.FolderSize ?? 0);
-            return L("Selected: {0} items, {1}", _selection.Count, ByteFormatter.Format(bytes));
-        }
-    }
-
-    /// <summary>"12.3 GB of 2 TB used" for cloud accounts with a quota; drive free space locally.</summary>
+    /// <summary>"Dropbox: 12.3 GB of 2 TB used (1%)" for cloud accounts; "120 GB free of 500 GB" for local volumes.</summary>
     public string QuotaText
     {
         get => _quotaText;
-        private set => Set(ref _quotaText, value);
+        private set
+        {
+            if (Set(ref _quotaText, value))
+            {
+                OnPropertyChanged(nameof(StatusText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sums the selection for the status bar (macOS <c>recalculateSelectionSize</c>): file
+    /// sizes at once, folders walked in the background. A different selection cancels the
+    /// walk; folders whose size is already known ("Calculate Folder Size") aren't walked.
+    /// The same folders selected again — a live refresh re-selects the rows it rebuilt — keep
+    /// the walk under way or its result instead of starting over.
+    /// </summary>
+    private void RecalculateSelectionSize()
+    {
+        long known = 0;
+        var folders = new List<string>();
+        foreach (var row in _selection)
+        {
+            if (!row.IsDirectory || row.IsDrive)
+            {
+                known += row.Item.Size;
+            }
+            else if (row.FolderSize is { } size)
+            {
+                known += size;
+            }
+            else if (row.Item.Role != CloudItemRole.VirtualContainer)
+            {
+                // Virtual containers ("Shared with me", camera roots) would walk whole drives.
+                folders.Add(row.Path);
+            }
+        }
+
+        var provider = _provider;
+        var key = folders.Count == 0 || provider is null
+            ? null
+            : $"{_location.Kind}|{_location.AccountId}|{_location.DriveId}|" + string.Join('\n', folders.Order(StringComparer.Ordinal));
+        if (key != _walkKey)
+        {
+            _selectionSizeCancellation?.Cancel();
+            _selectionSizeCancellation = null;
+            _walkKey = key;
+            _walkResult = null;
+            if (key is not null)
+            {
+                WalkSelectedFolders(provider!, folders, key);
+            }
+        }
+
+        _isCalculatingSelectionSize = key is not null && _walkResult is null;
+        _selectionSize = _selection.Count == 0 ? null : known + (_walkResult ?? 0);
+        OnSelectionSizeChanged();
+    }
+
+    private async void WalkSelectedFolders(FileProvider provider, List<string> folders, string key)
+    {
+        var cancellation = new CancellationTokenSource();
+        _selectionSizeCancellation = cancellation;
+        var ct = cancellation.Token;
+        try
+        {
+            // Holding Shift+Down over folders shouldn't start a walk per step.
+            await Task.Delay(200, ct);
+            var total = await Task.Run(async () =>
+            {
+                long running = 0;
+                foreach (var folder in folders)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        running += await provider.FolderSizeAsync(folder, ct).ConfigureAwait(false);
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException)
+                    {
+                        // Skip folders that fail, as macOS does.
+                    }
+                }
+
+                return running;
+            }, ct);
+
+            if (!ct.IsCancellationRequested && _walkKey == key)
+            {
+                _walkResult = total;
+                RecalculateSelectionSize();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Selection size failed: {e.Message}", "Panel", LogLevel.Error);
+            if (_walkKey == key)
+            {
+                _walkResult = 0;
+                RecalculateSelectionSize();
+            }
+        }
+    }
+
+    private void OnSelectionSizeChanged()
+    {
+        OnPropertyChanged(nameof(SelectionText));
+        OnPropertyChanged(nameof(StatusText));
     }
 
     // MARK: - History
@@ -393,8 +500,8 @@ public sealed class PanelViewModel : Observable
         OnPropertyChanged(nameof(OfflineBanner));
         OnPropertyChanged(nameof(EmptyText));
 
-        await LoadAsync(select, quiet: false);
         _ = UpdateQuotaAsync();
+        await LoadAsync(select, quiet: false);
     }
 
     public async Task RefreshAsync(bool quiet = false)
@@ -503,6 +610,20 @@ public sealed class PanelViewModel : Observable
             ApplyView();
             ItemsListed?.Invoke(this, items);
             Loaded?.Invoke(this, select);
+
+            // An upload, delete or new folder changed what this folder holds, and the free
+            // space or quota with it: macOS re-probes when the item count changes.
+            if (_listedLocation == location && previous.Count != _allRows.Count)
+            {
+                if (location.AccountId is { } changed)
+                {
+                    _services.Accounts.InvalidateQuota(changed);
+                }
+
+                _ = UpdateQuotaAsync();
+            }
+
+            _listedLocation = location;
         }
         catch (OperationCanceledException)
         {
@@ -559,6 +680,7 @@ public sealed class PanelViewModel : Observable
         Comparison<FileRowViewModel> byField = _sortField switch
         {
             SortField.Date => (a, b) => a.Item.ModificationDate.CompareTo(b.Item.ModificationDate),
+            SortField.DateCreated => (a, b) => a.Item.CreationDate.CompareTo(b.Item.CreationDate),
             SortField.Size => (a, b) => a.SortSize.CompareTo(b.SortSize),
             SortField.Kind => (a, b) => string.Compare(a.KindText, b.KindText, StringComparison.CurrentCultureIgnoreCase),
             _ => (a, b) => names.Compare(a.Name, b.Name),
@@ -584,36 +706,65 @@ public sealed class PanelViewModel : Observable
         return list;
     }
 
+    /// <summary>
+    /// The storage part of the status bar: the account's quota (macOS <c>CloudQuotaFormatter</c>)
+    /// or the local volume's "X free of Y" (<c>LocalVolumeFormatter</c>).
+    /// </summary>
     private async Task UpdateQuotaAsync()
     {
         var location = _location;
         string text = string.Empty;
-        if (IsOffline)
+        try
         {
-            // Nothing to ask: the source is not reachable, and that is the point.
-        }
-        else if (location.AccountId is { } id)
-        {
-            var quota = await _services.Accounts.QuotaAsync(id);
-            if (quota is not null)
+            if (IsOffline || location.IsOfflineDrive)
             {
-                text = quota.TotalBytes is { } total
-                    ? L("{0} of {1} used", ByteFormatter.Format(quota.UsedBytes), ByteFormatter.Format(total))
-                    : L("{0} used", ByteFormatter.Format(quota.UsedBytes));
+                // Nothing to ask: the source is not reachable, and that is the point.
+            }
+            else if (location.AccountId is { } id)
+            {
+                var quota = await _services.Accounts.QuotaAsync(id);
+                if (quota is not null)
+                {
+                    text = CloudQuotaFormatter.Summary(quota, Account?.DisplayName ?? string.Empty);
+                }
+            }
+            else if (location.IsLocal && location.Path.Length > 0)
+            {
+                var capacity = await Task.Run(() => VolumeCapacity(location.Path));
+                if (capacity is { } volume)
+                {
+                    text = LocalVolumeFormatter.Summary(volume.Free, volume.Total);
+                }
             }
         }
-        else if (location.IsLocal && location.Path.Length > 0)
+        catch (Exception e)
         {
-            var free = await LocalFileProvider.Shared.AvailableSpaceAsync(location.Path);
-            if (free is { } bytes)
-            {
-                text = L("{0} free", ByteFormatter.Format(bytes));
-            }
+            SupportLogger.Shared.Log($"Storage summary failed: {e.Message}", "Panel");
         }
 
         if (location == _location)
         {
             QuotaText = text;
+        }
+    }
+
+    /// <summary>Free and total bytes of the volume holding <paramref name="path"/>, or null (UNC shares, unready drives).</summary>
+    private static (long Free, long Total)? VolumeCapacity(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var drive = new DriveInfo(root);
+            return drive.IsReady && drive.TotalSize > 0 ? (drive.AvailableFreeSpace, drive.TotalSize) : null;
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 

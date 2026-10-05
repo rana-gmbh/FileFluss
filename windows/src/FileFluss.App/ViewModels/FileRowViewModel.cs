@@ -17,6 +17,7 @@ public sealed class FileRowViewModel : Observable
     private readonly bool _isLocal;
     private readonly bool _hideExtension;
     private ImageSource? _icon;
+    private ImageSource? _thumbnail;
     private bool _iconLoaded;
     private string? _kind;
     private bool _isRenaming;
@@ -64,17 +65,46 @@ public sealed class FileRowViewModel : Observable
 
     public bool IsEvicted => Item.DownloadStatus == CloudDownloadStatus.Evicted;
 
+    /// <summary>
+    /// The type icon, or — for local images and PDFs, as on macOS — a content thumbnail once
+    /// it has been made. Read only while the row is on screen (the list virtualizes), so only
+    /// visible rows ask for thumbnails; one that scrolled away before its turn asks again
+    /// when it comes back.
+    /// </summary>
     public ImageSource? Icon
     {
         get
         {
+            if (_thumbnail is not null)
+            {
+                return _thumbnail;
+            }
+
             if (!_iconLoaded)
             {
                 _iconLoaded = true;
                 _icon = IsDrive ? IconCache.ForPath(Item.Path, true) : IconCache.For(Item, _isLocal);
             }
 
+            if (ThumbnailCache.ShouldUseThumbnail(Item, _isLocal) && !IsDrive)
+            {
+                _thumbnail = ThumbnailCache.Get(Item, OnThumbnailLoaded);
+                if (_thumbnail is not null)
+                {
+                    return _thumbnail;
+                }
+            }
+
             return _icon;
+        }
+    }
+
+    private void OnThumbnailLoaded(ImageSource thumbnail)
+    {
+        if (_thumbnail is null)
+        {
+            _thumbnail = thumbnail;
+            OnPropertyChanged(nameof(Icon));
         }
     }
 

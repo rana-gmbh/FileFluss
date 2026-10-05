@@ -44,28 +44,7 @@ public partial class PanelView : UserControl
         Localization.LanguageChanged += (_, _) => UpdateHeaders();
         Loaded += (_, _) => UpdateHeaders();
         List.SizeChanged += (_, _) => FitNameColumn();
-        foreach (var column in new[] { DateColumn, SizeColumn, KindColumn })
-        {
-            System.ComponentModel.DependencyPropertyDescriptor
-                .FromProperty(GridViewColumn.WidthProperty, typeof(GridViewColumn))
-                .AddValueChanged(column, (_, _) => FitNameColumn());
-        }
-    }
-
-    /// <summary>
-    /// The Name column takes whatever the other columns leave, so all columns fit without a
-    /// horizontal scroll bar — the macOS "Auto Resize" name column, on by default.
-    /// </summary>
-    private void FitNameColumn()
-    {
-        if (Main?.Services.Settings.NameAutoResize == false || List.ActualWidth <= 0)
-        {
-            return;
-        }
-
-        var others = DateColumn.ActualWidth + SizeColumn.ActualWidth + KindColumn.ActualWidth;
-        var available = List.ActualWidth - others - SystemParameters.VerticalScrollBarWidth - 26;
-        NameColumn.Width = Math.Max(140, available);
+        InitializeColumns();
     }
 
     public MainViewModel Main { get; set; } = null!;
@@ -296,6 +275,7 @@ public partial class PanelView : UserControl
             var title = tag switch
             {
                 "Date" => L("Date Modified"),
+                "DateCreated" => L("Date Created"),
                 _ => L(tag),
             };
             var arrow = Vm is { } vm && vm.SortField.ToString() == tag ? (vm.SortAscending ? " " : " ") : string.Empty;
@@ -546,6 +526,11 @@ public partial class PanelView : UserControl
     private void OnListRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         Main.ActiveSide = Vm?.Side ?? Main.ActiveSide;
+        if (e.OriginalSource is DependencyObject source && FindAncestor<GridViewColumnHeader>(source) is not null)
+        {
+            return; // The header has its own menu and leaves the selection alone.
+        }
+
         var row = RowAt(e.GetPosition(List));
         if (row is null)
         {
@@ -563,6 +548,12 @@ public partial class PanelView : UserControl
         if (Vm is not { } vm)
         {
             e.Handled = true;
+            return;
+        }
+
+        if (e.OriginalSource is DependencyObject source && FindAncestor<GridViewColumnHeader>(source) is { } header)
+        {
+            BuildHeaderMenu(header);
             return;
         }
 

@@ -61,16 +61,49 @@
             </StackPanel>
         </Border>
 
-        <!-- Quick filter -->
+        <!-- Quick filter (macOS PanelFilterBar): placeholder, clear, close; Esc closes. -->
         <Grid DockPanel.Dock="Top" Margin="8,2,8,4" Visibility="{Binding IsFilterVisible, Converter={StaticResource Visible}}">
-            <TextBox x:Name="FilterBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" KeyDown="OnFilterKeyDown"
-                     ToolTip="{u:Loc 'Filter visible items…'}" />
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{x:Static u:Glyphs.Filter}" FontFamily="{StaticResource IconFont}" FontSize="13" VerticalAlignment="Center" Margin="2,0,8,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <TextBox x:Name="FilterBox" Grid.Column="1" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" KeyDown="OnFilterKeyDown"
+                     Padding="6,2,28,2" VerticalContentAlignment="Center" AutomationProperties.Name="{u:Loc 'Filter visible items…'}" />
+            <TextBlock Grid.Column="1" Text="{u:Loc 'Filter visible items…'}" Margin="10,0,30,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextTrimming="CharacterEllipsis">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding FilterText}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <Button Grid.Column="1" HorizontalAlignment="Right" Margin="0,0,3,0" Width="24" Height="24" FontSize="10"
+                    Content="&#xE894;" Click="OnClearFilter" ToolTip="{u:Loc 'Clear filter'}" AutomationProperties.Name="{u:Loc 'Clear filter'}" IsTabStop="False">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource GlyphButton}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding FilterText}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Grid.Column="2" Margin="4,0,0,0" Style="{StaticResource GlyphButton}" Width="28" Height="28" FontSize="11"
+                    Content="{x:Static u:Glyphs.Cancel}" Click="OnCloseFilter" ToolTip="{u:Loc 'Close filter (Esc)'}" AutomationProperties.Name="{u:Loc 'Close filter (Esc)'}" />
         </Grid>
 
-        <!-- Status bar -->
+        <!-- Status bar: listing · selection · free space or quota (macOS statusFooter) -->
         <DockPanel DockPanel.Dock="Bottom" Margin="10,3,10,5" x:Name="StatusBar">
-            <TextBlock DockPanel.Dock="Right" Text="{Binding QuotaText}" Style="{StaticResource Caption}" />
-            <TextBlock Text="{Binding StatusText}" Style="{StaticResource Caption}" />
+            <TextBlock Text="{Binding StatusText}" ToolTip="{Binding StatusText}" Style="{StaticResource Caption}" />
         </DockPanel>
 
         <Grid>
@@ -102,6 +135,9 @@
                 </ListView.ContextMenu>
                 <ListView.View>
                     <GridView x:Name="Grid" ColumnHeaderContainerStyle="{StaticResource FileHeaderStyle}" AllowsColumnReorder="True">
+                        <GridView.ColumnHeaderContextMenu>
+                            <ContextMenu x:Name="HeaderMenu" />
+                        </GridView.ColumnHeaderContextMenu>
                         <GridViewColumn x:Name="NameColumn" Width="280">
                             <GridViewColumn.Header>
                                 <GridViewColumnHeader Tag="Name" Click="OnHeaderClick" Content="{u:Loc Name}" />
@@ -136,6 +172,16 @@
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate DataType="{x:Type vm:FileRowViewModel}">
                                     <TextBlock Text="{Binding DateText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="{Binding Opacity}" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                        <GridViewColumn x:Name="CreatedColumn" Width="128">
+                            <GridViewColumn.Header>
+                                <GridViewColumnHeader Tag="DateCreated" Click="OnHeaderClick" Content="{u:Loc 'Date Created'}" />
+                            </GridViewColumn.Header>
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate DataType="{x:Type vm:FileRowViewModel}">
+                                    <TextBlock Text="{Binding CreatedText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="{Binding Opacity}" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
