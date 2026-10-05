@@ -125,12 +125,15 @@ public sealed class AccountsService : Observable
         return account;
     }
 
-    /// <summary>Edited credentials for an existing account: same id, so favourites and panels survive.</summary>
-    public void Update(Guid id, CloudProvider provider, ConnectResult result)
+    /// <summary>
+    /// Edited credentials for an existing account: same id, so favourites and panels survive.
+    /// False when the account has been removed meanwhile — the provider is then not taken.
+    /// </summary>
+    public bool Update(Guid id, CloudProvider provider, ConnectResult result)
     {
-        if (Find(id) is not { } account)
+        if (Find(id) is not { } account || _removing.Contains(id))
         {
-            return;
+            return false;
         }
 
         _hub.Register(id, provider);
@@ -143,45 +146,65 @@ public sealed class AccountsService : Observable
         });
         InvalidateQuota(id);
         Save();
+        return true;
     }
 
     public async Task RemoveAsync(Guid id)
     {
-        if (Find(id) is not { } account)
+        // Remove pressed twice (sidebar and Settings, or a double click) while the first
+        // disconnect is still out: one removal, one set of events.
+        if (Find(id) is not { } account || !_removing.Add(id))
         {
             return;
         }
 
-        if (_hub.Get(id) is { } provider)
+        try
         {
-            try
+            if (_hub.Get(id) is { } provider)
             {
-                await provider.DisconnectAsync();
+                try
+                {
+                    await provider.DisconnectAsync();
+                }
+                catch (Exception e)
+                {
+                    SupportLogger.Shared.Log($"Disconnecting {account.DisplayName}: {e.Message}", "Accounts", LogLevel.Notice);
+                }
             }
-            catch (Exception e)
+            else
             {
-                SupportLogger.Shared.Log($"Disconnecting {account.DisplayName}: {e.Message}", "Accounts", LogLevel.Notice);
+                try
+                {
+                    using var dormant = CreateProvider(account.ProviderType, id);
+                    await dormant.DisconnectAsync();
+                }
+                catch (Exception)
+                {
+                    // The type may no longer be available; the stored list entry still goes.
+                }
             }
-        }
-        else
-        {
-            try
-            {
-                using var dormant = CreateProvider(account.ProviderType, id);
-                await dormant.DisconnectAsync();
-            }
-            catch (Exception)
-            {
-                // The type may no longer be available; the stored list entry still goes.
-            }
-        }
 
-        _hub.Remove(id);
-        Accounts.Remove(account);
-        Save();
-        AccountRemoved?.Invoke(this, id);
-        AccountChanged?.Invoke(this, id);
+            _hub.Remove(id);
+            _quotaCache.Remove(id);
+            _staleQuotas.Remove(id);
+
+            // Find again: the list may have been replaced entry by entry while disconnecting.
+            if (Find(id) is { } current)
+            {
+                Accounts.Remove(current);
+            }
+
+            Save();
+            AccountRemoved?.Invoke(this, id);
+            AccountChanged?.Invoke(this, id);
+        }
+        finally
+        {
+            _removing.Remove(id);
+        }
     }
+
+    private readonly HashSet<Guid> _removing = [];
 
     /// <summary>Lets the search index drop the account's rows, and panels move away from it.</summary>
     public event EventHandler<Guid>? AccountRemoved;
@@ -217,6 +240,13 @@ public sealed class AccountsService : Observable
     /// <summary>Re-registers a provider after an inline re-authentication from the panel banner.</summary>
     public void MarkConnected(Guid id, CloudProvider provider)
     {
+        if (Find(id) is null || _removing.Contains(id))
+        {
+            // Removed while signing in again: nothing to connect, and the hub must not hold it.
+            provider.Dispose();
+            return;
+        }
+
         _hub.Register(id, provider);
         if (Find(id) is { } account)
         {

@@ -87,13 +87,13 @@ public partial class MainWindow : Window, IShell
             View(PanelSide.Left).FocusList();
         };
         Closing += OnClosing;
-        SourceInitialized += (_, _) => DeviceNotifications.Register(this, async () =>
+        SourceInitialized += (_, _) => DeviceNotifications.Register(this, () =>
         {
             vm.LeftSidebar.RebuildDrives();
             vm.RightSidebar.RebuildDrives();
 
             // Learn which indexed drives came or went; the registry's change event rebuilds again.
-            await services.Search.RefreshDrivesAsync();
+            services.Search.RefreshDrivesAsync().Forget("drive survey");
         });
 
         WireStatusOverlays();
@@ -154,7 +154,22 @@ public partial class MainWindow : Window, IShell
         }
 
         e.Handled = true;
-        await _vm.ExecuteAsync(command);
+
+        // A held key repeats: walking up folders may, but a held F5 must not start the same
+        // copy ten times, nor a held Enter open a file ten times.
+        if (e.IsRepeat && !command.RepeatsWhenHeld())
+        {
+            return;
+        }
+
+        try
+        {
+            await _vm.ExecuteAsync(command);
+        }
+        catch (Exception failure)
+        {
+            TaskFailures.ShowFailure(failure, L(command.DisplayName()), this);
+        }
     }
 
     public static ShortcutBinding? ShortcutFromKey(KeyEventArgs e)
@@ -881,6 +896,7 @@ public partial class MainWindow : Window, IShell
             return;
         }
 
+        Lifecycle.LogClosing("Main window");
         foreach (var transfer in _services.Transfers.Running.ToList())
         {
             transfer.Cancel();

@@ -210,6 +210,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
     private void ShowForm(CloudProviderType type)
     {
         _provider?.Dispose();
+        _provider = null;
         try
         {
             _provider = _services.Accounts.CreateProvider(type, _editingId ?? Guid.NewGuid());
@@ -217,6 +218,12 @@ public sealed class AccountDialog : Window, IConnectPrompt
         catch (NotSupportedException)
         {
             MessageDialog.Error(this, Title, L("This account type isn't available in this version."));
+            return;
+        }
+        catch (Exception e)
+        {
+            // The account's stored settings couldn't be read back.
+            MessageDialog.Error(this, Title, e.Message);
             return;
         }
 
@@ -464,13 +471,14 @@ public sealed class AccountDialog : Window, IConnectPrompt
 
     private async Task ConnectAsync()
     {
-        if (_provider is null || _mode is null)
+        // A second click (or Enter) while signing in must not start a second sign-in.
+        if (_provider is null || _mode is null || _connecting is not null || _closed)
         {
             return;
         }
 
         ShowError(null);
-        _connecting = new CancellationTokenSource();
+        var connecting = _connecting = new CancellationTokenSource();
         SetBusy(true);
         if (_mode.OpensBrowser)
         {
@@ -481,21 +489,35 @@ public sealed class AccountDialog : Window, IConnectPrompt
             }
         }
 
+        var provider = _provider;
         try
         {
-            var provider = _provider;
             var values = CurrentValues();
-            var result = await provider.ConnectAsync(values, this, _connecting.Token);
+            var result = await provider.ConnectAsync(values, this, connecting.Token);
+
+            // Closed (or cancelled) while the sign-in finished anyway: the dialog has already
+            // disposed this provider and nobody is waiting for the account any more.
+            if (_closed || connecting.IsCancellationRequested)
+            {
+                return;
+            }
+
+            _provider = null;
             if (_editingId is { } id)
             {
-                _services.Accounts.Update(id, provider, result);
+                if (!_services.Accounts.Update(id, provider, result))
+                {
+                    // Removed while its form was open.
+                    provider.Dispose();
+                    Close();
+                    return;
+                }
             }
             else
             {
                 _services.Accounts.Add(provider, result);
             }
 
-            _provider = null;
             DialogResult = true;
         }
         catch (OperationCanceledException)
@@ -511,15 +533,12 @@ public sealed class AccountDialog : Window, IConnectPrompt
         {
             ShowStatus(null);
             ShowError(e.Message);
-            // A failed sign-in can leave the provider half-configured; the next try starts fresh.
-            var type = _provider!.ProviderType;
-            _provider.Dispose();
-            _provider = _services.Accounts.CreateProvider(type, _editingId ?? Guid.NewGuid());
+            RenewProvider(provider);
         }
         finally
         {
             _connecting = null;
-            if (IsLoaded)
+            if (!_closed)
             {
                 SetBusy(false);
                 if (_back is not null)
@@ -527,6 +546,26 @@ public sealed class AccountDialog : Window, IConnectPrompt
                     _back.Content = _editingId is null ? L("Back") : L("Cancel");
                 }
             }
+        }
+    }
+
+    /// <summary>A failed sign-in can leave the provider half-configured; the next try starts fresh.</summary>
+    private void RenewProvider(CloudProvider failed)
+    {
+        if (_closed || !ReferenceEquals(_provider, failed))
+        {
+            return;
+        }
+
+        failed.Dispose();
+        _provider = null;
+        try
+        {
+            _provider = _services.Accounts.CreateProvider(failed.ProviderType, _editingId ?? Guid.NewGuid());
+        }
+        catch (Exception e)
+        {
+            ShowError(e.Message);
         }
     }
 
@@ -561,15 +600,20 @@ public sealed class AccountDialog : Window, IConnectPrompt
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         base.OnClosed(e);
         _provider?.Dispose();
+        _provider = null;
     }
+
+    private bool _closed;
 
     // MARK: - IConnectPrompt
 
+    /// <summary>Called from the provider's thread too: queued, never waited for (a wait could deadlock a closing app).</summary>
     public void ShowStatus(string? message)
     {
-        Dispatcher.Invoke(() =>
+        void Apply()
         {
             if (_status is null)
             {
@@ -578,7 +622,16 @@ public sealed class AccountDialog : Window, IConnectPrompt
 
             _status.Text = message ?? string.Empty;
             _status.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
-        });
+        }
+
+        if (Dispatcher.CheckAccess())
+        {
+            Apply();
+        }
+        else if (!Dispatcher.HasShutdownStarted)
+        {
+            Dispatcher.BeginInvoke(Apply);
+        }
     }
 
     public Task<string?> RequestCodeAsync(string title, string message, CancellationToken cancellationToken)
@@ -602,7 +655,8 @@ public sealed class AccountDialog : Window, IConnectPrompt
             image.EndInit();
             window = new Window
             {
-                Owner = this,
+                // A closed dialog can't own a window (WPF throws).
+                Owner = _closed ? null : this,
                 Title = Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,

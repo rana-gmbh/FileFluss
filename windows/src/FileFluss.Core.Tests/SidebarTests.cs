@@ -123,4 +123,40 @@ public sealed class ReorderingTests
             }
         }
     }
+
+    [Fact]
+    public void AStoreLockedAtLaunchStartsEmptyAndIsNotWipedByAnEmptySave()
+    {
+        // Another process (a backup tool, a second FileFluss mid-exit) holds the file: launch
+        // must not crash, and the empty list it starts with must not be written over it.
+        // (Only Windows enforces FileShare.None against readers.)
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var path =Path.Combine(Path.GetTempPath(), "ff-accounts-" + Guid.NewGuid().ToString("N") + ".json");
+        var stored = new AccountStore(path);
+        stored.Save([new CloudAccount { ProviderType = CloudProviderType.Dropbox, DisplayName = "Dropbox" }]);
+        var original = File.ReadAllText(path);
+        try
+        {
+            var store = new AccountStore(path);
+            using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.Empty(store.Load());
+            }
+
+            store.Save([]);
+            Assert.Equal(original, File.ReadAllText(path));
+            Assert.Equal(["Dropbox"], new AccountStore(path).Load().Select(a => a.DisplayName));
+        }
+        finally
+        {
+            foreach (var file in Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + "*"))
+            {
+                File.Delete(file);
+            }
+        }
+    }
 }
