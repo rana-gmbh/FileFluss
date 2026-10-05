@@ -17,6 +17,55 @@ public sealed record AvailableUpdate(string Version, string ReleaseNotes, Uri Re
 public sealed class UpdateVerificationException(string message) : Exception(message);
 
 /// <summary>
+/// A downloaded installer that matched its checksum, held open (others may read and execute
+/// it, but not change, rename or delete it) until disposed — so nothing can swap the file
+/// between the check and the launch.
+/// </summary>
+public sealed class VerifiedInstaller : IDisposable
+{
+    private readonly FileStream _hold;
+
+    private VerifiedInstaller(string path, FileStream hold)
+    {
+        Path = path;
+        _hold = hold;
+    }
+
+    public string Path { get; }
+
+    /// <summary>Opens <paramref name="path"/> against changes and hashes it through that handle; deletes it and throws on a mismatch.</summary>
+    internal static VerifiedInstaller Open(string path, string expectedSha256)
+    {
+        var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+        try
+        {
+            var actual = Convert.ToHexStringLower(SHA256.HashData(hold));
+            if (!string.Equals(actual, expectedSha256, StringComparison.Ordinal))
+            {
+                throw new UpdateVerificationException($"{System.IO.Path.GetFileName(path)} changed after it was verified.");
+            }
+
+            return new VerifiedInstaller(path, hold);
+        }
+        catch
+        {
+            hold.Dispose();
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+
+            throw;
+        }
+    }
+
+    public void Dispose() => _hold.Dispose();
+}
+
+/// <summary>
 /// Asks GitHub for the newest FileFluss for Windows release — the Windows counterpart of
 /// Sparkle's appcast check on macOS, ported from the NetFluss Windows updater.
 ///
@@ -42,6 +91,16 @@ public static class UpdateLookup
     public static readonly Uri ReleasesPage = new("https://github.com/rana-gmbh/FileFluss/releases");
 
     private static readonly Uri ReleasesApi = new("https://api.github.com/repos/rana-gmbh/FileFluss/releases?per_page=30");
+
+    /// <summary>
+    /// Every link taken from the release list must point into this repository on github.com:
+    /// the release page under <see cref="RepositoryPrefix"/>, assets under
+    /// <c>releases/download/&lt;tag&gt;/</c>. The checksum list is only as trustworthy as the
+    /// place it comes from, so neither it nor the installer may come from anywhere else.
+    /// </summary>
+    private const string RepositoryPrefix = "https://github.com/rana-gmbh/FileFluss/";
+
+    private const int MaxVersionLength = 32;
 
     /// <summary>"x64" or "arm64": the asset suffix for this PC. An x64 build emulated on Arm is offered the native Arm build.</summary>
     public static string CurrentArchitecture => RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
@@ -98,24 +157,25 @@ public static class UpdateLookup
 
             // The version names a download folder and asset files: digits, letters, '.', '-', '+' only.
             var version = tag[TagPrefix.Length..];
-            if (version.Length == 0 || !version.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+') ||
+            if (version.Length is 0 or > MaxVersionLength || !version.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+') ||
                 !IsNewer(version, currentVersion) || (best is not null && !IsNewer(version, best.Version)))
             {
                 continue;
             }
 
-            if (!Uri.TryCreate(String(release, "html_url"), UriKind.Absolute, out var page) || page.Scheme != Uri.UriSchemeHttps)
+            if (!Uri.TryCreate(String(release, "html_url"), UriKind.Absolute, out var page) || !IsInRepository(page, RepositoryPrefix))
             {
                 continue;
             }
 
+            var downloads = RepositoryPrefix + "releases/download/" + tag + "/";
             best = new AvailableUpdate(
                 version,
                 String(release, "body") ?? string.Empty,
                 page,
-                Asset(release, InstallerFileName(version, architecture)),
-                Asset(release, PortableFileName(version, architecture)),
-                Asset(release, ChecksumsFileName));
+                Asset(release, InstallerFileName(version, architecture), downloads),
+                Asset(release, PortableFileName(version, architecture), downloads),
+                Asset(release, ChecksumsFileName, downloads));
         }
 
         return best;
@@ -179,9 +239,12 @@ public static class UpdateLookup
     /// the bytes do not match — in which case nothing is left behind.
     ///
     /// <para>The download lands under a <c>.partial</c> name and only gets the installer's
-    /// name once verified, so an unverified file never sits there looking runnable.</para>
+    /// name once verified, so an unverified file never sits there looking runnable. The
+    /// result holds the installer open against writes, renames and deletes, and was hashed
+    /// again through that handle: the file that gets launched is the file that was checked.
+    /// Dispose it once the setup has been started.</para>
     /// </summary>
-    public static async Task<string> DownloadVerifiedInstallerAsync(
+    public static async Task<VerifiedInstaller> DownloadVerifiedInstallerAsync(
         AvailableUpdate update,
         string folder,
         IProgress<double>? progress = null,
@@ -245,8 +308,9 @@ public static class UpdateLookup
             }
 
             File.Move(partial, path, overwrite: true);
+            var verified = VerifiedInstaller.Open(path, expected);
             progress?.Report(1.0);
-            return path;
+            return verified;
         }
         finally
         {
@@ -266,8 +330,8 @@ public static class UpdateLookup
         return http;
     }
 
-    /// <summary>An asset by its exact name, over HTTPS only.</summary>
-    private static Uri? Asset(JsonElement release, string name)
+    /// <summary>An asset by its exact name, downloaded from this release of this repository over HTTPS only.</summary>
+    private static Uri? Asset(JsonElement release, string name, string downloadsPrefix)
     {
         if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
@@ -278,7 +342,7 @@ public static class UpdateLookup
         {
             if (asset.ValueKind == JsonValueKind.Object &&
                 string.Equals(String(asset, "name"), name, StringComparison.OrdinalIgnoreCase) &&
-                Uri.TryCreate(String(asset, "browser_download_url"), UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps)
+                Uri.TryCreate(String(asset, "browser_download_url"), UriKind.Absolute, out var url) && IsInRepository(url, downloadsPrefix))
             {
                 return url;
             }
@@ -286,6 +350,17 @@ public static class UpdateLookup
 
         return null;
     }
+
+    /// <summary>
+    /// HTTPS on github.com's default port, no user info, and (after <see cref="Uri"/> has
+    /// resolved any "..") a path below <paramref name="prefix"/>.
+    /// </summary>
+    internal static bool IsInRepository(Uri url, string prefix)
+        => url.Scheme == Uri.UriSchemeHttps
+           && url.IsDefaultPort
+           && url.UserInfo.Length == 0
+           && string.Equals(url.Host, "github.com", StringComparison.OrdinalIgnoreCase)
+           && url.AbsoluteUri.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 
     private static void TryDelete(string path)
     {

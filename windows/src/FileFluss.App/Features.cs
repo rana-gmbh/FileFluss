@@ -119,7 +119,16 @@ internal static class Features
             return;
         }
 
-        path = Path.GetFullPath(path.Trim('"'));
+        try
+        {
+            path = Path.GetFullPath(path.Trim('"'));
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or System.Security.SecurityException)
+        {
+            // Not a path (a forwarded argument is only ever data to look up, never run).
+            return;
+        }
+
         if (Directory.Exists(path))
         {
             _ = vm.ActivePanel.NavigateAsync(PanelLocation.Local(path));

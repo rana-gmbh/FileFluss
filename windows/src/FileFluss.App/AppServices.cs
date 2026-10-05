@@ -35,6 +35,7 @@ public sealed class AppServices
         // Win32 implementations of the operations Core leaves pluggable.
         LocalFileProvider.CopyFileHandler = ShellFileOperations.CopyFileAsync;
         LocalFileProvider.RecycleHandler = ShellFileOperations.MoveToRecycleBin;
+        StagingLocation.SecureFolder = path => PrivateFolder.Apply(path);
         StagingLocation.CustomFolder = Settings.CustomCacheFolder;
         SettingsStore.Changed += (_, name) =>
         {

@@ -46,13 +46,36 @@ public sealed record SyncEndpoint(FileProvider Provider, string Path)
     public string FolderName
         => Provider.IsRoot(Path) ? DisplayName ?? Provider.GetName(Path) : Provider.GetName(Path);
 
-    /// <summary>The provider path of <paramref name="relativePath"/> ("a/b.txt") beneath this endpoint.</summary>
+    /// <summary>
+    /// The provider path of <paramref name="relativePath"/> ("a/b.txt") beneath this endpoint.
+    /// The components are names another side listed — a hostile server's included — so a
+    /// ".." is refused, and on the local disk a name that isn't one plain Windows component
+    /// (<c>..\..\Startup\x.exe</c>, <c>C:\x</c>, <c>a:b</c>) is made safe the way the
+    /// transfer engine names files; the result never leaves the endpoint's folder.
+    /// </summary>
+    /// <exception cref="CloudProviderException">A component would climb out of the endpoint.</exception>
     public string Resolve(string relativePath)
     {
         var path = Path;
         foreach (var component in relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
         {
-            path = Provider.CombinePath(path, component);
+            if (Provider.IsLocal)
+            {
+                path = Provider.CombinePath(path, SafeLocalPath.Component(component));
+            }
+            else if (CloudPath.IsTraversalName(component))
+            {
+                throw SafeLocalPath.UnsafeName(component);
+            }
+            else
+            {
+                path = Provider.CombinePath(path, component);
+            }
+        }
+
+        if (Provider.IsLocal && Path.Length > 0)
+        {
+            SafeLocalPath.EnsureWithin(path, Path, relativePath);
         }
 
         return path;

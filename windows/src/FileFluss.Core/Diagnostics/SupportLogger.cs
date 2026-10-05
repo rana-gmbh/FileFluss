@@ -30,7 +30,8 @@ public sealed class SupportLogger
 
     public void Log(string message, string category = "General", LogLevel level = LogLevel.Info)
     {
-        var entry = new LogEntry(DateTimeOffset.Now, level, category, message);
+        // Masked once here, so the saved report and every file sink only ever see the masked text.
+        var entry = new LogEntry(DateTimeOffset.Now, level, category, LogRedactor.Redact(message));
         lock (_gate)
         {
             _entries.Enqueue(entry);

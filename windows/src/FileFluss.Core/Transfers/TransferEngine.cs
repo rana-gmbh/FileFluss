@@ -167,6 +167,12 @@ public static class TransferEngine
             {
                 targetName = SafeLocalPath.FileName(targetName);
             }
+            else if (CloudPath.IsTraversalName(targetName))
+            {
+                // A hostile source listing "..": it must not climb out of the destination folder.
+                progress.RecordFailure(item.Name, SafeLocalPath.UnsafeName(targetName).Message);
+                continue;
+            }
 
             // Copying onto itself (same folder, same account) is Explorer's "- Copy".
             var sameFolder = sameProvider && PathsEqual(source, source.GetParentPath(item.Path), request.DestinationPath);
@@ -467,6 +473,13 @@ public static class TransferEngine
             }
 
             var name = destination.IsLocal ? SafeLocalPath.FileName(entry.Item.Name) : entry.Item.Name;
+            if (!destination.IsLocal && CloudPath.IsTraversalName(name))
+            {
+                // Its children are skipped too: their parent key never gets a created folder.
+                failures.Add($"{entry.Item.Name}: {SafeLocalPath.UnsafeName(name).Message}");
+                continue;
+            }
+
             var path = destination.CombinePath(parentPath, name);
             try
             {

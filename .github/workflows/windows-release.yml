@@ -37,9 +37,13 @@ jobs:
       - name: Version from tag
         id: version
         shell: pwsh
+        # The tag reaches the script as an environment variable, never pasted into its
+        # source: a tag name may contain "$(…)", which PowerShell would run.
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          $version = "${{ github.ref_name }}".Substring("win-v".Length)
-          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must be win-vX.Y.Z, got ${{ github.ref_name }}" }
+          $version = $env:TAG.Substring("win-v".Length)
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must be win-vX.Y.Z, got $env:TAG" }
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Verify generated resources are current
@@ -74,11 +78,13 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:TAG
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title "FileFluss for Windows ${{ steps.version.outputs.version }}" --latest=false --notes "FileFluss for Windows ${{ steps.version.outputs.version }}"
+            gh release create $tag --title "FileFluss for Windows $env:VERSION" --latest=false --notes "FileFluss for Windows $env:VERSION"
           }
           gh release upload $tag (Get-ChildItem windows/artifacts/release -File).FullName --clobber
 

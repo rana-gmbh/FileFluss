@@ -56,6 +56,29 @@ public sealed class PreviewHandlerHost : HwndHost
         Resize();
     }
 
+    /// <summary>
+    /// The handler in its surrogate process (prevhost.exe), as Explorer runs it: a handler is
+    /// a third-party parser fed files from other people's clouds, and a crash or exploit in it
+    /// must not happen inside FileFluss, which holds every account's tokens. Only a handler
+    /// registered without a surrogate is loaded in-process, as before.
+    /// </summary>
+    private static IPreviewHandler? CreateHandler(Guid clsid)
+    {
+        var iid = typeof(IPreviewHandler).GUID;
+        if (CoCreateInstance(ref clsid, 0, ClsctxLocalServer, ref iid, out var isolated) >= 0 && isolated is IPreviewHandler handler)
+        {
+            return handler;
+        }
+
+        var type = Type.GetTypeFromCLSID(clsid);
+        return type is null ? null : Activator.CreateInstance(type) as IPreviewHandler;
+    }
+
+    private const int ClsctxLocalServer = 0x4;
+
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(ref Guid clsid, nint outer, int context, ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object? instance);
+
     private void Load()
     {
         Unload();
@@ -66,8 +89,7 @@ public sealed class PreviewHandlerHost : HwndHost
 
         try
         {
-            var type = Type.GetTypeFromCLSID(clsid);
-            if (type is null || Activator.CreateInstance(type) is not IPreviewHandler handler)
+            if (CreateHandler(clsid) is not { } handler)
             {
                 return;
             }
