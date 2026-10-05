@@ -1,0 +1,445 @@
+/* Windows-only strings — Simplified Chinese. Keys match en.lproj/Windows.strings. */
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of macOS strings whose wording is wrong on Windows
+   --------------------------------------------------------------------------------------------- */
+
+/* Windows says 复制, not the Mac's 拷贝. */
+"Copy" = "复制";
+"Copy Path" = "复制路径";
+
+"System Default follows the language selected in macOS." = "“跟随系统”将使用 Windows 中设置的语言。";
+"Search all sources (⌘F)" = "搜索所有来源（Ctrl+F）";
+"Move to Trash" = "移到回收站";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "“%@”无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d 个项目无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。";
+"Are you sure you want to move \"%@\" to the Trash?" = "确定要将“%@”移到回收站吗？";
+"Are you sure you want to move %d items to the Trash?" = "确定要将 %d 个项目移到回收站吗？";
+"FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks." = "FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需单击几下，即可在二者之间复制、移动、同步和比较文件。";
+"**Search** (⌘F) — open the search window." = "**搜索**（Ctrl+F）——打开搜索窗口。";
+"Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." = "将鼠标悬停在工具栏按钮上，大多数按钮都会显示简短说明。";
+"Open **Settings → Cloud Accounts** (⌘,)." = "打开 **设置 → 云账户**（Ctrl+,）。";
+"Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain." = "通过服务商的认证流程登录。FileFluss 会将令牌存储在 Windows 凭据存储中，并针对你的 Windows 用户账户加密。";
+"In **Settings → Cloud Accounts**, click the trash icon next to the account." = "在 **设置 → 云账户** 中，单击账户旁边的 **移除**。";
+"Click **Search** in the toolbar, or press **⌘F**." = "单击工具栏中的 **搜索**，或按 **Ctrl+F**。";
+"Click the round X close button, press **Esc**, or click the red traffic‑light button." = "单击圆形的 X 关闭按钮、按 **Esc**，或单击窗口的关闭按钮。";
+"**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." = "**双击** 任意文件。Word 文档会在 Word 中打开，PDF 在你的 PDF 阅读器中打开，图像在“照片”应用中打开，依此类推。";
+"Could not mount in Finder" = "无法映射为网络驱动器";
+"Reveal in Finder" = "在文件资源管理器中显示";
+"Open this account as a drive in Finder" = "将此账户映射为网络驱动器";
+"Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." = "每个映射为网络驱动器的云账户会在本地保留最近下载的文件，上限为此大小，以便再次打开同一文件时即时完成。新值将在下次映射驱动器时生效。";
+"Eject this drive from Finder" = "断开此网络驱动器";
+"Finder-Mount Read Cache" = "网络驱动器读取缓存";
+"Mount in Finder" = "映射为网络驱动器";
+"macOS / Finder Style" = "Windows / 文件资源管理器风格";
+"Open in Finder" = "在文件资源管理器中打开";
+"Do you want to mount “%@” in Finder?" = "是否要将“%@”映射为网络驱动器？";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "此账户尚未映射为网络驱动器。映射后，它会作为驱动器出现在文件资源管理器中，以便你在那里打开此项目。";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。";
+"A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "终端只能打开这台电脑上存在的文件夹。将此账户映射为网络驱动器后，它会出现在文件资源管理器中，终端将在其中打开。";
+"2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" = "2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）";
+"Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." = "单击“连接”以登录你的 Box 账户。你的浏览器将打开以进行认证。";
+"FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account." = "FileFluss 只读取一次密钥文件，并将其内容存储在 Windows 凭据存储中，针对你的用户账户加密——之后移动或删除原始文件不会影响此账户。";
+"FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." = "FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用 Windows 版 iCloud 的登录——此处无可编辑内容。请在 Windows 版 iCloud 应用中管理 iCloud 云盘。";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager." = "Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。";
+
+/* ---------------------------------------------------------------------------------------------
+   Menus, toolbar, panels and sidebar
+   --------------------------------------------------------------------------------------------- */
+
+"File" = "文件";
+"Edit" = "编辑";
+"View" = "查看";
+"Help" = "帮助";
+"Exit" = "退出";
+"Open" = "打开";
+"Open With…" = "打开方式…";
+"Close" = "关闭";
+"Properties" = "属性";
+"Move to Recycle Bin" = "移到回收站";
+"Show in Explorer" = "在文件资源管理器中显示";
+"Sort By" = "排序方式";
+"Folder" = "文件夹";
+"Cloud" = "云端";
+"Local" = "本地";
+"This PC" = "此电脑";
+"Local Disk" = "本地磁盘";
+"USB Drive" = "USB 驱动器";
+"DVD Drive" = "DVD 驱动器";
+"Home" = "主文件夹";
+"Desktop" = "桌面";
+"Documents" = "文档";
+"Downloads" = "下载";
+"Pictures" = "图片";
+"Music" = "音乐";
+"Videos" = "视频";
+"Retry" = "重试";
+"Show only the active panel" = "仅显示活动面板";
+"Index for Offline Search" = "为离线搜索编制索引";
+"Storage Analysis" = "存储分析";
+"Storage Analysis…" = "存储分析…";
+"Share Link…" = "共享链接…";
+"Where" = "位置";
+"Checksum" = "校验和";
+"bytes" = "字节";
+"1 byte" = "1 字节";
+"%@ bytes" = "%@ 字节";
+"1 file" = "1 个文件";
+"1 folder" = "1 个文件夹";
+"%@ items" = "%@ 个项目";
+"%@ free" = "可用 %@";
+"%@ used" = "已用 %@";
+"%@ of %@ used" = "已用 %@，共 %@";
+"%@ (offline)" = "%@（离线）";
+"Name of the new folder:" = "新文件夹的名称：";
+"A file with that name already exists." = "已存在同名文件。";
+"A name can't contain \"/\"." = "名称不能包含“/”。";
+"A file name can't contain any of the following characters: %@" = "文件名不能包含下列任何字符：%@";
+"\"%@\" isn't a valid name on Windows." = "“%@”在 Windows 上不是有效的名称。";
+"Couldn't open \"%@\"" = "无法打开“%@”";
+"You don't have permission to open \"%@\"." = "你没有打开“%@”的权限。";
+"The folder \"%@\" can't be found." = "找不到文件夹“%@”。";
+"This location is read-only." = "此位置为只读。";
+"Loading preview…" = "正在加载预览…";
+"Mount this account first — a cloud folder has no path a terminal can open." = "请先将此账户装载为驱动器——云端文件夹没有终端可以打开的路径。";
+"Transfers are still running" = "传输仍在进行";
+"Quitting cancels them. Files already transferred will remain." = "退出将取消这些传输。已传输的文件会保留。";
+"Quit Anyway" = "仍要退出";
+
+/* ---------------------------------------------------------------------------------------------
+   Deleting, copying and moving
+   --------------------------------------------------------------------------------------------- */
+
+"Are you sure you want to move \"%@\" to the Recycle Bin?" = "确定要将“%@”移到回收站吗？";
+"Are you sure you want to move %@ items to the Recycle Bin?" = "确定要将 %@ 个项目移到回收站吗？";
+"\"%@\" couldn't be moved to the Recycle Bin." = "无法将“%@”移到回收站。";
+"%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone." = "%@无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。";
+"\"%@\" can't be moved." = "无法移动“%@”。";
+"A folder can't be copied or moved into itself." = "无法将文件夹复制或移动到其自身中。";
+"An item named “%@” already exists at the destination." = "目标位置已存在名为“%@”的项目。";
+"The items need %@, but only %@ is available at the destination." = "这些项目需要 %@，但目标位置只有 %@ 可用空间。";
+"Copy Anyway" = "仍要复制";
+"Move Anyway" = "仍要移动";
+"Replace or Skip" = "替换或跳过";
+"Source" = "源";
+"Destination" = "目标";
+"Transfer" = "传输";
+"Cloud account not connected" = "云账户未连接";
+"The file changed while it was being uploaded." = "文件在上传过程中发生了更改。";
+"The server returned an unsafe file name (\"%@\"), so the download was stopped." = "服务器返回了不安全的文件名（“%@”），因此已停止下载。";
+
+/* ---------------------------------------------------------------------------------------------
+   Transfers
+   --------------------------------------------------------------------------------------------- */
+
+"Copied" = "已复制";
+"Moved" = "已移动";
+"Downloaded" = "已下载";
+"Uploaded" = "已上传";
+"Opened" = "已打开";
+"Synced" = "已同步";
+"Done" = "完成";
+"Cancelled" = "已取消";
+"Cancelling…" = "正在取消…";
+"Downloading %@" = "正在下载 %@";
+"Uploading %@" = "正在上传 %@";
+"%@ %@ — %@ of %@ files" = "%@：%@——%@/%@ 个文件";
+"Cancelled: %@ %@" = "已取消——%@：%@";
+"%@ %@ of %@ — %@ failed" = "%@：%@/%@——%@ 个失败";
+"Failed: %@ %@ — %@" = "失败——%@：%@——%@";
+"Skipped: %@" = "已跳过：%@";
+"Done: %@ %@" = "完成——%@：%@";
+"Done: %@ %@ (%@ files)" = "完成——%@：%@（%@ 个文件）";
+"Done: %@ %@ +%@ more" = "完成——%@：%@ 及另外 %@ 项";
+"%@ of %@" = "%@ / %@";
+"~%@ left" = "剩余约 %@";
+"%@ of %@ files failed: %@" = "%@ 个文件失败（共 %@ 个）：%@";
+"Unknown error" = "未知错误";
+
+/* ---------------------------------------------------------------------------------------------
+   Sync and compare
+   --------------------------------------------------------------------------------------------- */
+
+"Bidirectional" = "双向";
+"Upload Only" = "仅上传";
+"Download Only" = "仅下载";
+"Paused" = "已暂停";
+"Syncing..." = "正在同步…";
+"Sync needs a live folder on both sides." = "同步需要两侧都有可访问的文件夹。";
+"Could not compute plan: %@" = "无法计算同步计划：%@";
+"Could not read folders: %@" = "无法读取文件夹：%@";
+"Left newer" = "左侧较新";
+"Right newer" = "右侧较新";
+"%@ different" = "%@ 个不同";
+"%@ only left" = "%@ 个仅在左侧";
+"%@ only right" = "%@ 个仅在右侧";
+"%@ same" = "%@ 个相同";
+
+/* ---------------------------------------------------------------------------------------------
+   Search and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Current Folder" = "当前文件夹";
+"This Source" = "此来源";
+"All Sources" = "所有来源";
+"Local Files" = "本地文件";
+"Account not connected" = "账户未连接";
+"Could not save the index: %@" = "无法保存索引：%@";
+"Failed to open search index: %@" = "无法打开搜索索引：%@";
+"Search index error: %@" = "搜索索引错误：%@";
+"\"%@\" is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed." = "“%@”处于离线状态。可以浏览和搜索其已索引的内容，但无法打开、复制或更改。";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis
+   --------------------------------------------------------------------------------------------- */
+
+"Pick a cloud account or a folder, then choose Analyse." = "选择一个云账户或文件夹，然后选择“分析”。";
+"All sizes" = "所有大小";
+"1 MB and up" = "1 MB 及以上";
+"10 MB and up" = "10 MB 及以上";
+"100 MB and up" = "100 MB 及以上";
+"1 GB and up" = "1 GB 及以上";
+"No files above this size." = "没有超过此大小的文件。";
+"%@ files · %@" = "%@ 个文件 · %@";
+"%@ files · %@ · %@" = "%@ 个文件 · %@ · %@";
+"%@ · %@ files · %@ folders" = "%@ · %@ 个文件 · %@ 个文件夹";
+"%@%% of the total" = "占总量的 %@%%";
+"Stopped early, so these totals are a lower bound — the real figures are larger." = "已提前停止，因此这些总数只是下限——实际数值更大。";
+
+/* ---------------------------------------------------------------------------------------------
+   Settings
+   --------------------------------------------------------------------------------------------- */
+
+"Files" = "文件";
+"Sidebar" = "侧边栏";
+"Updates" = "更新";
+"Welcome" = "欢迎";
+"Show" = "显示";
+"When FileFluss opens" = "FileFluss 启动时";
+"Home folder" = "主文件夹";
+"The folders from last time" = "上次的文件夹";
+"Specific folders" = "指定的文件夹";
+"A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead." = "已不存在的文件夹（已删除的文件夹、已拔出的驱动器、已断开的云账户）将改为打开你的主文件夹。";
+"Programs" = "程序";
+"Check for updates automatically" = "自动检查更新";
+"FileFluss checks daily and asks before installing." = "FileFluss 每天检查一次，并在安装前询问你。";
+"Up to date" = "已是最新版本";
+"Copy direct download links when available" = "尽可能复制直接下载链接";
+"\"Copy Share Link\" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page." = "这样，“复制共享链接”会复制一个可直接下载文件的链接，而不是服务商的预览页面。不提供直接链接的服务商始终给出其自己的页面。";
+"System Default follows the language selected in Windows." = "“跟随系统”将使用 Windows 中设置的语言。";
+"Cloud files opened or previewed are kept here so reopening them is instant." = "打开或预览过的云文件会保存在这里，以便再次打开时即时完成。";
+"Open Cache Folder" = "打开缓存文件夹";
+"Clear" = "清除";
+"Automatic management" = "自动管理";
+"At launch, delete old cached files and keep the cache under its size limit." = "启动时删除旧的缓存文件，并使缓存保持在大小上限以内。";
+"Maximum cache size" = "最大缓存大小";
+"3 days" = "3 天";
+"1 week" = "1 周";
+"2 weeks" = "2 周";
+"1 month" = "1 个月";
+"3 months" = "3 个月";
+"Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn't available, the system temporary folder is used." = "下载内容会先暂存在此文件夹中。将其指向外部驱动器上的文件夹，可使传输到该驱动器的大文件不占用系统磁盘。如果此文件夹不可用，则使用系统临时文件夹。";
+"System temporary folder" = "系统临时文件夹";
+"Use Default" = "使用默认值";
+"Edit Account" = "编辑账户";
+"Remove Account" = "移除账户";
+"Remove from FileFluss" = "从 FileFluss 中移除";
+"Remove \"%@\" from FileFluss? Files in the account are not touched." = "要从 FileFluss 中移除“%@”吗？账户中的文件不受影响。";
+"App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)" = "应用图标由 @JohnnyFireOne 设计 · 文件类型图标来自 redbooth/free-file-icons（MIT）";
+"GNU General Public License v3.0 ↗" = "GNU 通用公共许可证 v3.0 ↗";
+"github.com/rana-gmbh/filefluss" = "github.com/rana-gmbh/filefluss";
+"www.filefluss.de" = "www.filefluss.de";
+
+/* Keyboard map */
+"Preset" = "预设";
+"Windows / Explorer Style" = "Windows / 文件资源管理器风格";
+"None" = "无";
+"Space" = "空格键";
+"Press a shortcut…" = "请按快捷键…";
+"Shortcut in use" = "快捷键已被占用";
+"%@ is already used by %@. Use it for %@ instead?" = "%@ 已被“%@”使用。要改为用于“%@”吗？";
+"Reassign" = "重新分配";
+"Panel Navigation" = "面板导航";
+"File Operations" = "文件操作";
+"Clipboard" = "剪贴板";
+"Selection" = "选择";
+"View & Sort" = "视图和排序";
+"Cross-panel & Tools" = "跨面板和工具";
+"Misc" = "其他";
+
+/* ---------------------------------------------------------------------------------------------
+   Add / edit account
+   --------------------------------------------------------------------------------------------- */
+
+"Cloud Storage Providers" = "云存储服务商";
+"Other Protocols" = "其他协议";
+"Cameras & Devices" = "相机和设备";
+"(optional)" = "（可选）";
+"Continue" = "继续";
+"Save Changes" = "保存更改";
+"Choose File…" = "选择文件…";
+"No file chosen" = "未选择文件";
+"All files" = "所有文件";
+"Leave empty to keep the stored secret access key." = "留空以保留已存储的秘密访问密钥。";
+"This account type isn't available in this version." = "此版本不支持该账户类型。";
+"Select the folders for FileFluss in your browser…" = "请在浏览器中为 FileFluss 选择文件夹…";
+"Timed out waiting for browser sign-in." = "等待浏览器登录超时。";
+"Authorization code invalid or expired." = "授权码无效或已过期。";
+"Server URL is not a valid URL." = "服务器 URL 不是有效的 URL。";
+"Several cameras were found. Choose the one to add." = "找到了多台相机。请选择要添加的相机。";
+"2. Open DevTools (F12 in Chrome/Edge/Firefox)" = "2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）";
+"FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." = "FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。";
+"iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." = "在这台电脑上找不到 iCloud 云盘。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘，然后重试。";
+"pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field." = "pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。";
+"This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead." = "此 Nextcloud 服务器未提供 Login Flow v2。请改用应用专用密码登录方式。";
+"Waiting for authorization in the TeraBox app." = "正在等待 TeraBox 应用中的授权。";
+"Authorization timed out — the QR code expired before it was scanned." = "授权超时——二维码在扫描前已过期。";
+"Box authentication failed: %@" = "Box 认证失败：%@";
+
+/* GoPro: macOS keys the macOS Chinese catalogues have not translated yet. */
+"Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it." = "打开相机，然后通过 USB 连接，或加入相机的 Wi-Fi 网络。再扫描以查找相机。";
+"Scan for Cameras" = "扫描相机";
+"Scanning…" = "正在扫描…";
+"No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again." = "未找到相机。请确保相机已开机并通过 USB 或 Wi-Fi 连接，然后再次扫描。";
+"GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again." = "GoPro 相机在开机且可访问时会自动连接。要配对其他相机，请移除此相机后重新添加。";
+"USB or Wi-Fi" = "USB 或 Wi-Fi";
+"Home Wi-Fi (COHN)" = "家庭 Wi-Fi（COHN）";
+"Set up \"Camera on Home Network\" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows." = "在 GoPro Quik 应用中设置“家庭网络上的相机”（COHN），然后输入相机的 IP 地址以及应用显示的 COHN 用户名和密码。";
+"Camera IP address" = "相机 IP 地址";
+"COHN Username" = "COHN 用户名";
+"COHN Password" = "COHN 密码";
+
+/* ---------------------------------------------------------------------------------------------
+   Share links
+   --------------------------------------------------------------------------------------------- */
+
+"Create Link" = "创建链接";
+"Copy Link" = "复制链接";
+"Stop Sharing" = "停止共享";
+"Allow downloading" = "允许下载";
+"Set an expiry date" = "设置过期日期";
+"Protect with password" = "使用密码保护";
+"Expires" = "过期时间";
+"expiry dates" = "过期日期";
+"password protection" = "密码保护";
+" and " = "和";
+"%@ usually need a paid plan." = "%@通常需要付费套餐。";
+"Create a public link to this file and copy it to the clipboard." = "为此文件创建公开链接并将其复制到剪贴板。";
+"Anyone with this link can download the file until it expires. The link cannot be revoked early." = "在链接过期之前，任何拥有此链接的人都可以下载该文件。此链接无法提前撤销。";
+"The link is on the clipboard." = "链接已复制到剪贴板。";
+"This file is shared. The link is on the clipboard." = "此文件已共享。链接已复制到剪贴板。";
+"This file is no longer shared." = "此文件已不再共享。";
+"People with the link will no longer be able to open \"%@\"." = "拥有此链接的人将无法再打开“%@”。";
+"Couldn't create the share link: %@" = "无法创建共享链接：%@";
+"Couldn't change sharing: %@" = "无法更改共享设置：%@";
+"Checked just now: %@" = "刚刚检查：%@";
+"The link couldn't be checked from here: %@" = "无法从此处检查链接：%@";
+"the link is not reachable without signing in." = "未登录时无法访问该链接。";
+"the server didn't answer." = "服务器没有响应。";
+"Links from this account have needed a sign-in before. Check the link before you send it." = "此账户的链接以前需要登录才能访问。发送前请先检查链接。";
+"This link only works for people who can sign in to the account." = "此链接仅对能够登录该账户的人有效。";
+"This account can't serve direct download links, so the share page link was copied instead." = "此账户无法提供直接下载链接，因此已改为复制共享页面链接。";
+"This file already had a public link, so the requested settings were not applied." = "此文件已有公开链接，因此未应用所请求的设置。";
+"This file already had a share link, so that one was returned." = "此文件已有共享链接，因此返回了该链接。";
+"This file already has a public link. Open it in Dropbox to copy that link." = "此文件已有公开链接。请在 Dropbox 中打开它以复制该链接。";
+"This file doesn't have a public link." = "此文件没有公开链接。";
+"This item doesn't have a public link." = "此项目没有公开链接。";
+"This file has no public link to update. Create one first." = "此文件没有可更新的公开链接。请先创建一个。";
+"This file isn't shared with anyone who has the link." = "此文件未与拥有链接的人共享。";
+"This file was already public — WordPress media has no private state." = "此文件已经是公开的——WordPress 媒体没有私有状态。";
+"OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works." = "OneDrive 无法直接更改链接的设置，因此已撤销之前的链接并创建了新链接——旧地址已失效。";
+"OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation." = "OneDrive 拒绝为此文件创建公开链接。账户可能关闭了通过链接共享的功能，而且企业账户通常只允许组织内部人员使用链接。";
+"This link is not public: OneDrive granted it as \"%@\", so opening it asks for a Microsoft sign-in." = "此链接不是公开的：OneDrive 以“%@”方式授予了它，因此打开时需要登录 Microsoft 账户。";
+"This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it." = "此 Microsoft 账户不允许应用更改文件的现有链接。请在 OneDrive 网页版中打开该文件以更改或移除链接。";
+"This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there." = "此 Microsoft 账户不允许应用管理文件的现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。";
+"This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there." = "此 Microsoft 账户不允许应用移除现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。";
+"Box kept the public link in place — check whether your administrator manages sharing for this item." = "Box 保留了公开链接——请确认你的管理员是否管理此项目的共享。";
+"Your Box administrator disabled downloads for shared links — recipients can only preview the file." = "你的 Box 管理员已禁用共享链接的下载——收件人只能预览该文件。";
+"Your Box administrator restricted this link to people in your company — it is not publicly accessible." = "你的 Box 管理员已将此链接限制为仅公司内部人员可用——它无法公开访问。";
+"Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible." = "你的 Box 管理员已将此链接限制为仅文件的协作者可用——它无法公开访问。";
+"Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works." = "Seafile 无法更改链接的设置，因此已替换该链接——之前的 URL 已失效。";
+"Jottacloud accepted the request but returned no public link for this file." = "Jottacloud 接受了请求，但没有返回此文件的公开链接。";
+"kDrive created the link without download permission — recipients can view the file only." = "kDrive 创建的链接没有下载权限——收件人只能查看该文件。";
+"The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it." = "NAS 根据 DSM 自认为的地址生成了此链接，因此它可能只能在你的本地网络中使用。如果收件人无法打开，请检查 DSM 的外部访问设置。";
+"The NAS has reached its maximum number of sharing links — delete some in File Station and try again." = "NAS 的共享链接数量已达上限——请在 File Station 中删除一些后重试。";
+"Failed to access the NAS's sharing links." = "无法访问 NAS 的共享链接。";
+"The sharing link does not exist." = "共享链接不存在。";
+
+/* ---------------------------------------------------------------------------------------------
+   Provider errors
+   --------------------------------------------------------------------------------------------- */
+
+"The request timed out." = "请求超时。";
+"Could not connect to the server." = "无法连接到服务器。";
+"Network is unreachable from this PC." = "从这台电脑无法访问网络。";
+"Permission denied." = "权限被拒绝。";
+"Permission denied: %@" = "权限被拒绝：%@";
+"Invalid file name." = "文件名无效。";
+"TLS/SSL error: %@" = "TLS/SSL 错误：%@";
+"the server's certificate could not be verified." = "无法验证服务器的证书。";
+"S3 error (HTTP %@): %@" = "S3 错误（HTTP %@）：%@";
+"S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "S3 端点 URL 无效（主机：“%@”）。请检查“端点 URL”字段。";
+"This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions." = "此密钥无权列出账户的存储桶（s3:ListAllMyBuckets）。请在“路径”字段中输入存储桶名称——FileFluss 将只使用该存储桶，不会请求账户范围的权限。";
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下载的文件已损坏：其 MEGA 完整性校验（MAC）不匹配。";
+
+/* FTP and SFTP */
+"FTP command failed." = "FTP 命令失败。";
+"Could not connect — check the host, port, and that FTP is reachable." = "无法连接——请检查主机、端口以及 FTP 是否可访问。";
+"Could not resolve host. Check the server address." = "无法解析主机。请检查服务器地址。";
+"Connection timed out." = "连接超时。";
+"SFTP command failed." = "SFTP 命令失败。";
+"Connection refused — is the SSH daemon running on this host and port?" = "连接被拒绝——此主机和端口上是否运行着 SSH 服务？";
+"Connection timed out. Check the hostname, port, and your network." = "连接超时。请检查主机名、端口和你的网络。";
+"Could not resolve hostname. Check spelling or DNS." = "无法解析主机名。请检查拼写或 DNS。";
+"SSH authentication failed. Check the username and password." = "SSH 认证失败。请检查用户名和密码。";
+"SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong." = "SSH 认证失败。服务器可能未授权你的公钥，或者密码短语错误。";
+"SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)." = "服务器拒绝了 SSH 密钥。请确保公钥位于服务器的 ~/.ssh/authorized_keys 中（对于 Hetzner Storage Box 等托管服务，请将其添加到服务商的 SSH 密钥面板中）。";
+"The private key is protected by a passphrase. Enter it and try again." = "私钥受密码短语保护。请输入密码短语后重试。";
+"Wrong passphrase for the private key." = "私钥的密码短语错误。";
+"Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "私钥格式不受支持。请将其转换为 OpenSSH 格式（例如使用 `puttygen key.ppk -O private-openssh -o id_rsa`）。";
+"This SFTP operation is not supported by the bundled SSH library." = "内置的 SSH 库不支持此 SFTP 操作。";
+"Host key changed" = "主机密钥已更改";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "主机密钥验证失败——服务器的主机密钥已更改。如果这在你的预料之中，请编辑账户并重新连接以接受新密钥。";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "自上次连接以来，%@ 的 SSH 主机密钥已更改。服务器重新安装后会出现这种情况——也可能是有人在拦截连接。\n\n之前：%@\n现在：%@\n\n要信任新密钥吗？";
+
+/* Seafile */
+"Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." = "无法在 FileFluss 中删除 Seafile 资料库。请使用 Seafile 网页界面。";
+"Cannot share the Seafile library list — pick a file or folder inside a library." = "无法共享 Seafile 资料库列表——请选择资料库中的文件或文件夹。";
+"Cannot upload directly to the Seafile library root — pick a library first." = "无法直接上传到 Seafile 资料库的根目录——请先选择一个资料库。";
+"Create a library in the Seafile web UI before adding folders." = "添加文件夹之前，请先在 Seafile 网页界面中创建资料库。";
+"Rename a Seafile library from its web UI." = "请在 Seafile 网页界面中重命名资料库。";
+"This library is encrypted. Unlock it in the Seafile web interface, then try again." = "此资料库已加密。请在 Seafile 网页界面中解锁后重试。";
+
+/* Filen */
+"Filen API error" = "Filen API 错误";
+"Filen /v3/auth/info returned an unexpected payload." = "Filen /v3/auth/info 返回了意外的数据。";
+"Filen /v3/user/baseFolder didn't return a root UUID." = "Filen /v3/user/baseFolder 未返回根 UUID。";
+"Filen /v3/user/baseFolder failed (HTTP %@)" = "Filen /v3/user/baseFolder 失败（HTTP %@）";
+"Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented." = "Filen 账户使用认证版本 %@。FileFluss 目前仅支持 v2 账户——尚未实现 Filen v1 / v3（Argon2）。";
+"Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet." = "Filen 文件密钥不是 32 个 ASCII 字节——它使用了尚不支持的认证版本加密。";
+"Filen file metadata not cached — listing didn't populate chunk info." = "Filen 文件元数据未缓存——列表未提供分块信息。";
+"Filen file metadata not cached — re-open the folder and try again." = "Filen 文件元数据未缓存——请重新打开文件夹后重试。";
+"Filen login succeeded but the server didn't return an apiKey." = "Filen 登录成功，但服务器未返回 apiKey。";
+
+/* Synology */
+"Synology login failed (code %@)." = "Synology 登录失败（代码 %@）。";
+"Synology rejected the file path." = "Synology 拒绝了该文件路径。";
+"Synology administrator must enforce 2-factor authentication." = "Synology 管理员要求进行双重验证。";
+"No such account or incorrect password." = "账户不存在或密码错误。";
+"Account is disabled." = "账户已停用。";
+"Insufficient user privilege." = "用户权限不足。";
+"Password expired — please reset it from DSM." = "密码已过期——请在 DSM 中重置。";
+"Password must be changed at first login." = "首次登录时必须更改密码。";
+"This account requires a 2-factor authentication (OTP) code." = "此账户需要双重验证（OTP）代码。";
+"OTP code is incorrect." = "OTP 代码不正确。";
+"OTP code authentication has failed too many times." = "OTP 代码验证失败次数过多。";
+"Maximum number of OTP retries reached. Try again later." = "已达到 OTP 最大重试次数。请稍后再试。";
+"Multiple login detected." = "检测到多处登录。";
+"Unknown API method." = "未知的 API 方法。";
+"Invalid API method." = "无效的 API 方法。";
+"Invalid API method version." = "无效的 API 方法版本。";
+"Invalid parameter for the request." = "请求参数无效。";
+"Request denied — too many connections." = "请求被拒绝——连接过多。";
+"Connection time out." = "连接超时。";

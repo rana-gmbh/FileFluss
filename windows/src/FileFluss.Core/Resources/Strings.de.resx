@@ -102,7 +102,7 @@
     <value>Willkommensbildschirm erneut anzeigen</value>
   </data>
   <data name="Search all sources (⌘F)" xml:space="preserve">
-    <value>Alle Quellen durchsuchen (Ctrl+F)</value>
+    <value>Alle Quellen durchsuchen (Strg+F)</value>
   </data>
   <data name="Refresh" xml:space="preserve">
     <value>Aktualisieren</value>
@@ -264,7 +264,7 @@
     <value>Pfad kopieren</value>
   </data>
   <data name="Move to Trash" xml:space="preserve">
-    <value>In den Papierkorb legen</value>
+    <value>In den Papierkorb verschieben</value>
   </data>
   <data name="Delete Immediately?" xml:space="preserve">
     <value>Sofort löschen?</value>
@@ -273,10 +273,10 @@
     <value>Endgültig löschen</value>
   </data>
   <data name="&quot;{0}&quot; can&apos;t be moved to the Trash because its volume doesn&apos;t have one. Delete it permanently? This can&apos;t be undone." xml:space="preserve">
-    <value>„{0}“ kann nicht in den Papierkorb gelegt werden, da das Volume keinen besitzt. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.</value>
+    <value>„{0}“ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.</value>
   </data>
   <data name="{0} items can&apos;t be moved to the Trash because their volume doesn&apos;t have one. Delete them permanently? This can&apos;t be undone." xml:space="preserve">
-    <value>{0} Objekte können nicht in den Papierkorb gelegt werden, da das Volume keinen besitzt. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.</value>
+    <value>{0} Objekte können nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.</value>
   </data>
   <data name="Cut" xml:space="preserve">
     <value>Ausschneiden</value>
@@ -495,7 +495,7 @@
     <value>Symbolleiste</value>
   </data>
   <data name="**Search** (⌘F) — open the search window." xml:space="preserve">
-    <value>**Suchen** (Ctrl+F) – öffnet das Suchfenster.</value>
+    <value>**Suchen** (Strg+F) – öffnet das Suchfenster.</value>
   </data>
   <data name="**Sync** — open the Sync planner." xml:space="preserve">
     <value>**Synchronisieren** – öffnet den Sync-Planer.</value>
@@ -513,7 +513,7 @@
     <value>**Kopiermodus** / **Verschiebemodus** – erzwingt für jedes Drag &amp; Drop diesen Vorgang.</value>
   </data>
   <data name="Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." xml:space="preserve">
-    <value>Klicke mit der rechten Maustaste auf die Symbolleiste und wähle *Symbolleiste anpassen …*, um Tasten umzuordnen oder auszublenden.</value>
+    <value>Die meisten Schaltflächen der Symbolleiste erklären sich in einer QuickInfo, wenn du mit der Maus darauf zeigst.</value>
   </data>
   <data name="FileFluss shows a left panel and a right panel. The active panel is marked with a thin accent line at the top — most actions (toolbar buttons, keyboard shortcuts, the search target) apply to whichever panel is active." xml:space="preserve">
     <value>FileFluss zeigt einen linken und einen rechten Bereich. Der aktive Bereich ist oben durch eine dünne Akzentlinie markiert – die meisten Aktionen (Symbolleisten-Tasten, Tastaturkurzbefehle, das Suchziel) gelten für den jeweils aktiven Bereich.</value>
@@ -552,13 +552,13 @@
     <value>Konto hinzufügen</value>
   </data>
   <data name="Open **Settings → Cloud Accounts** (⌘,)." xml:space="preserve">
-    <value>Öffne **Einstellungen → Cloud-Konten** (Ctrl+,).</value>
+    <value>Öffne **Einstellungen → Cloud-Konten** (Strg+,).</value>
   </data>
   <data name="Click **Add Cloud Account** and pick the provider (kDrive, pCloud, OneDrive, Google Drive, Dropbox, MEGA, Koofr, NextCloud, WebDAV, SFTP, GMX Cloud, WordPress, …)." xml:space="preserve">
     <value>Klicke auf **Cloud-Konto hinzufügen** und wähle den Anbieter (kDrive, pCloud, OneDrive, Google Drive, Dropbox, MEGA, Koofr, NextCloud, WebDAV, SFTP, GMX Cloud, WordPress, …).</value>
   </data>
   <data name="Sign in via the provider&apos;s authentication flow. FileFluss stores the tokens securely in your macOS Keychain." xml:space="preserve">
-    <value>Melde dich über den Authentifizierungsablauf des Anbieters an. FileFluss speichert die Tokens sicher in deinem Windows-Schlüsselbund.</value>
+    <value>Melde dich über den Authentifizierungsablauf des Anbieters an. FileFluss speichert die Tokens im Windows-Anmeldedatenspeicher, verschlüsselt für dein Windows-Benutzerkonto.</value>
   </data>
   <data name="The new account immediately appears in both panels&apos; sidebars." xml:space="preserve">
     <value>Das neue Konto erscheint sofort in den Seitenleisten beider Bereiche.</value>
@@ -576,7 +576,7 @@
     <value>Konto entfernen</value>
   </data>
   <data name="In **Settings → Cloud Accounts**, click the trash icon next to the account." xml:space="preserve">
-    <value>Klicke unter **Einstellungen → Cloud-Konten** auf das Papierkorbsymbol neben dem Konto.</value>
+    <value>Klicke unter **Einstellungen → Cloud-Konten** neben dem Konto auf **Entfernen**.</value>
   </data>
   <data name="FileFluss disconnects the account, removes the cached login, and clears its panels." xml:space="preserve">
     <value>FileFluss trennt das Konto, entfernt die gespeicherte Anmeldung und leert dessen Bereiche.</value>
@@ -744,7 +744,7 @@
     <value>Suche ausführen</value>
   </data>
   <data name="Click **Search** in the toolbar, or press **⌘F**." xml:space="preserve">
-    <value>Klicke in der Symbolleiste auf **Suchen** oder drücke **Ctrl+F**.</value>
+    <value>Klicke in der Symbolleiste auf **Suchen** oder drücke **Strg+F**.</value>
   </data>
   <data name="Type a query — results stream in as each source responds." xml:space="preserve">
     <value>Gib eine Suchanfrage ein – die Ergebnisse strömen ein, sobald jede Quelle antwortet.</value>
@@ -768,7 +768,7 @@
     <value>Schließen</value>
   </data>
   <data name="Click the round X close button, press **Esc**, or click the red traffic‑light button." xml:space="preserve">
-    <value>Klicke auf den runden X-Schließknopf, drücke **Esc** oder klicke auf den roten Ampelknopf.</value>
+    <value>Klicke auf den runden X-Schließknopf, drücke **Esc** oder klicke auf die Schließen-Schaltfläche des Fensters.</value>
   </data>
   <data name="The search window is movable and resizable — its size is remembered across launches." xml:space="preserve">
     <value>Das Suchfenster ist beweglich und in der Größe veränderbar – seine Größe wird über Neustarts hinweg gemerkt.</value>
@@ -780,7 +780,7 @@
     <value>In der Standard-App öffnen</value>
   </data>
   <data name="**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." xml:space="preserve">
-    <value>**Doppelklick** auf eine beliebige Datei. Word-Dokumente öffnen sich in Word, PDFs in der Vorschau, Bilder in deinem Bildbetrachter usw.</value>
+    <value>**Doppelklick** auf eine beliebige Datei. Word-Dokumente öffnen sich in Word, PDFs in deinem PDF-Viewer, Bilder in der Fotos-App usw.</value>
   </data>
   <data name="Cloud files are downloaded to a temporary cache the first time, so reopening the same file is instant." xml:space="preserve">
     <value>Cloud-Dateien werden beim ersten Mal in einen temporären Cache geladen, sodass das erneute Öffnen derselben Datei sofort erfolgt.</value>
@@ -822,10 +822,10 @@
     <value>Was möchtest du mit {0} Objekten in „{1}“ tun?</value>
   </data>
   <data name="Are you sure you want to move &quot;{0}&quot; to the Trash?" xml:space="preserve">
-    <value>Möchtest du „{0}“ wirklich in den Papierkorb legen?</value>
+    <value>Möchtest du „{0}“ wirklich in den Papierkorb verschieben?</value>
   </data>
   <data name="Are you sure you want to move {0} items to the Trash?" xml:space="preserve">
-    <value>Möchtest du {0} Objekte wirklich in den Papierkorb legen?</value>
+    <value>Möchtest du {0} Objekte wirklich in den Papierkorb verschieben?</value>
   </data>
   <data name="Folder name" xml:space="preserve">
     <value>Ordnername</value>
@@ -969,7 +969,7 @@
     <value>Dies trennt {0} von FileFluss. Dateien in der Cloud werden nicht gelöscht.</value>
   </data>
   <data name="Could not mount in Finder" xml:space="preserve">
-    <value>Konnte nicht im Explorer eingebunden werden</value>
+    <value>Konnte nicht als Netzlaufwerk verbunden werden</value>
   </data>
   <data name="OK" xml:space="preserve">
     <value>OK</value>
@@ -990,10 +990,10 @@
     <value>Laufwerk vergessen</value>
   </data>
   <data name="Reveal in Finder" xml:space="preserve">
-    <value>Im Explorer zeigen</value>
+    <value>Im Explorer anzeigen</value>
   </data>
   <data name="Open this account as a drive in Finder" xml:space="preserve">
-    <value>Dieses Konto als Laufwerk im Explorer öffnen</value>
+    <value>Dieses Konto als Netzlaufwerk verbinden</value>
   </data>
   <data name="Go Online" xml:space="preserve">
     <value>Online gehen</value>
@@ -1323,13 +1323,13 @@
     <value>Laufwerk</value>
   </data>
   <data name="Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." xml:space="preserve">
-    <value>Jedes im Explorer eingebundene Cloud-Konto behält kürzlich geladene Dateien lokal bis zu dieser Größe, sodass das erneute Öffnen derselben Datei sofort erfolgt. Der neue Wert gilt ab der nächsten Einbindung.</value>
+    <value>Jedes als Netzlaufwerk verbundene Cloud-Konto behält kürzlich geladene Dateien lokal bis zu dieser Größe, sodass das erneute Öffnen derselben Datei sofort erfolgt. Ein neuer Wert gilt ab der nächsten Verbindung eines Laufwerks.</value>
   </data>
   <data name="Edit…" xml:space="preserve">
     <value>Bearbeiten …</value>
   </data>
   <data name="Eject this drive from Finder" xml:space="preserve">
-    <value>Dieses Laufwerk aus dem Explorer auswerfen</value>
+    <value>Dieses Netzlaufwerk trennen</value>
   </data>
   <data name="Erase All Indexes" xml:space="preserve">
     <value>Alle Indizes löschen</value>
@@ -1338,7 +1338,7 @@
     <value>Alles löschen</value>
   </data>
   <data name="Finder-Mount Read Cache" xml:space="preserve">
-    <value>Lese-Cache für Explorer-Einbindung</value>
+    <value>Lese-Cache für Netzlaufwerke</value>
   </data>
   <data name="Index a drive or cloud account from its sidebar context menu to make its contents searchable while offline." xml:space="preserve">
     <value>Indiziere ein Laufwerk oder Cloud-Konto über dessen Kontextmenü in der Seitenleiste, damit seine Inhalte offline durchsuchbar sind.</value>
@@ -1347,7 +1347,7 @@
     <value>MB</value>
   </data>
   <data name="Mount in Finder" xml:space="preserve">
-    <value>Im Explorer einbinden</value>
+    <value>Als Netzlaufwerk verbinden</value>
   </data>
   <data name="No Cloud Accounts" xml:space="preserve">
     <value>Keine Cloud-Konten</value>
@@ -1416,10 +1416,10 @@
     <value>Im Explorer öffnen</value>
   </data>
   <data name="Do you want to mount “{0}” in Finder?" xml:space="preserve">
-    <value>Möchten Sie „{0}“ im Explorer einbinden?</value>
+    <value>Möchtest du „{0}“ als Netzlaufwerk verbinden?</value>
   </data>
   <data name="This account isn&apos;t mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." xml:space="preserve">
-    <value>Dieses Konto ist noch nicht eingebunden. Beim Einbinden wird es als Laufwerk im Explorer hinzugefügt, damit Sie dieses Element dort öffnen können.</value>
+    <value>Dieses Konto ist noch nicht als Netzlaufwerk verbunden. Dabei wird es als Laufwerk im Explorer hinzugefügt, damit du dieses Element dort öffnen kannst.</value>
   </data>
   <data name="Copying" xml:space="preserve">
     <value>Wird kopiert</value>
@@ -1455,7 +1455,7 @@
     <value>1. Melde dich unter my.pcloud.com im Browser an</value>
   </data>
   <data name="2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" xml:space="preserve">
-    <value>2. Öffne die Entwicklertools (⌥Ctrl+I in Chrome/Safari/Firefox)</value>
+    <value>2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)</value>
   </data>
   <data name="3. Chrome/Edge: Application tab → Storage → Cookies → https://my.pcloud.com" xml:space="preserve">
     <value>3. Chrome/Edge: Tab „Application“ → Storage → Cookies → https://my.pcloud.com</value>
@@ -1503,7 +1503,7 @@
     <value>Klicke auf „Verbinden“, um die Anmeldeseite deines Nextcloud-Servers im Browser zu öffnen. Melde dich dort mit deinem normalen Benutzernamen und Passwort an (2FA unterstützt); FileFluss erhält automatisch ein App-spezifisches Passwort zurück.</value>
   </data>
   <data name="Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." xml:space="preserve">
-    <value>Klicke auf „Verbinden“, um dich mit deinem Box-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung. Uploads sind in dieser Version auf 50 MB pro Datei begrenzt.</value>
+    <value>Klicke auf „Verbinden“, um dich mit deinem Box-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.</value>
   </data>
   <data name="Click Connect to sign in with your Dropbox account. Your browser will open for authentication." xml:space="preserve">
     <value>Klicke auf „Verbinden“, um dich mit deinem Dropbox-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.</value>
@@ -1557,10 +1557,10 @@
     <value>Gib die URL deiner WordPress-Site und ein App-Passwort ein. Erstelle eines in WordPress unter Benutzer → Profil → Anwendungspasswörter.</value>
   </data>
   <data name="FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won&apos;t affect this account." xml:space="preserve">
-    <value>FileFluss liest die Schlüsseldatei einmal und speichert ihren Inhalt im Windows-Schlüsselbund — das spätere Verschieben oder Löschen der Originaldatei wirkt sich nicht auf dieses Konto aus.</value>
+    <value>FileFluss liest die Schlüsseldatei einmal und speichert ihren Inhalt im Windows-Anmeldedatenspeicher, verschlüsselt für dein Benutzerkonto – das spätere Verschieben oder Löschen der Originaldatei wirkt sich nicht auf dieses Konto aus.</value>
   </data>
   <data name="FileFluss uses your Mac&apos;s existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." xml:space="preserve">
-    <value>FileFluss verwendet die bestehende iCloud-Anmeldung deines Macs — hier ist kein Passwort nötig. iCloud Drive muss in den Systemeinstellungen → Apple-Account → iCloud → iCloud Drive aktiviert sein.</value>
+    <value>FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.</value>
   </data>
   <data name="Filen is end-to-end encrypted, so there&apos;s no browser OAuth — the password is used locally to derive your master key, then discarded. Only v2 accounts are supported in this release; new Filen accounts default to v2." xml:space="preserve">
     <value>Filen ist Ende-zu-Ende-verschlüsselt, daher gibt es kein Browser-OAuth — das Passwort wird lokal verwendet, um deinen Hauptschlüssel abzuleiten, und dann verworfen. In dieser Version werden nur v2-Konten unterstützt; neue Filen-Konten sind standardmäßig v2.</value>
@@ -1629,7 +1629,7 @@
     <value>Persönliches Login-Token</value>
   </data>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in your keychain." xml:space="preserve">
-    <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die in Ihrem Schlüsselbund gespeichert wird.</value>
+    <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
   </data>
   <data name="To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." xml:space="preserve">
     <value>Um Jottacloud mit einem neuen persönlichen Login-Token neu zu verbinden, entfernen Sie dieses Konto und fügen Sie es erneut hinzu.</value>
@@ -1818,7 +1818,7 @@
     <value>Das sieht nicht nach einem privaten PEM-Schlüssel aus.</value>
   </data>
   <data name="iCloud uses your Mac&apos;s system sign-in — there&apos;s nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." xml:space="preserve">
-    <value>iCloud verwendet die System-Anmeldung deines Macs — hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in den Systemeinstellungen → Apple-Account → iCloud.</value>
+    <value>iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“.</value>
   </data>
   <data name="{0} {1} into {2} may exceed the available space. Continue anyway?" xml:space="preserve">
     <value>{0} von {1} nach {2} überschreitet möglicherweise den verfügbaren Speicher. Trotzdem fortfahren?</value>
@@ -2058,13 +2058,13 @@
     <value>{0} ist kein Ordner.</value>
   </data>
   <data name="Mount this account in Finder first — a cloud folder has no path a terminal can open." xml:space="preserve">
-    <value>Binde dieses Konto zuerst im Explorer ein — ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
+    <value>Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
   </data>
   <data name="Mount and Open in Terminal" xml:space="preserve">
     <value>Einbinden und im Terminal öffnen</value>
   </data>
   <data name="A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." xml:space="preserve">
-    <value>Ein Terminal kann nur Ordner öffnen, die es auf diesem Mac gibt. Beim Einbinden erscheint dieses Konto als Laufwerk im Explorer, und das Terminal öffnet darin.</value>
+    <value>Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin.</value>
   </data>
   <data name="Not authenticated. Please sign in." xml:space="preserve">
     <value>Nicht angemeldet. Bitte melde dich an.</value>
@@ -2104,5 +2104,991 @@
   </data>
   <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
     <value>Datei ist zu groß zum Hochladen ({0}). Der Anbieter hat sie abgelehnt. Teile die Datei auf oder verwende einen anderen Cloud-Dienst.</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in Windows Credential Manager." xml:space="preserve">
+    <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
+  </data>
+  <data name="File" xml:space="preserve">
+    <value>Datei</value>
+  </data>
+  <data name="Edit" xml:space="preserve">
+    <value>Bearbeiten</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>Ansicht</value>
+  </data>
+  <data name="Help" xml:space="preserve">
+    <value>Hilfe</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Beenden</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Öffnen</value>
+  </data>
+  <data name="Open With…" xml:space="preserve">
+    <value>Öffnen mit…</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Schließen</value>
+  </data>
+  <data name="Properties" xml:space="preserve">
+    <value>Eigenschaften</value>
+  </data>
+  <data name="Move to Recycle Bin" xml:space="preserve">
+    <value>In den Papierkorb verschieben</value>
+  </data>
+  <data name="Show in Explorer" xml:space="preserve">
+    <value>Im Explorer anzeigen</value>
+  </data>
+  <data name="Sort By" xml:space="preserve">
+    <value>Sortieren nach</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>Ordner</value>
+  </data>
+  <data name="Cloud" xml:space="preserve">
+    <value>Cloud</value>
+  </data>
+  <data name="Local" xml:space="preserve">
+    <value>Lokal</value>
+  </data>
+  <data name="This PC" xml:space="preserve">
+    <value>Dieser PC</value>
+  </data>
+  <data name="Local Disk" xml:space="preserve">
+    <value>Lokaler Datenträger</value>
+  </data>
+  <data name="USB Drive" xml:space="preserve">
+    <value>USB-Laufwerk</value>
+  </data>
+  <data name="DVD Drive" xml:space="preserve">
+    <value>DVD-Laufwerk</value>
+  </data>
+  <data name="Home" xml:space="preserve">
+    <value>Benutzerordner</value>
+  </data>
+  <data name="Desktop" xml:space="preserve">
+    <value>Desktop</value>
+  </data>
+  <data name="Documents" xml:space="preserve">
+    <value>Dokumente</value>
+  </data>
+  <data name="Downloads" xml:space="preserve">
+    <value>Downloads</value>
+  </data>
+  <data name="Pictures" xml:space="preserve">
+    <value>Bilder</value>
+  </data>
+  <data name="Music" xml:space="preserve">
+    <value>Musik</value>
+  </data>
+  <data name="Videos" xml:space="preserve">
+    <value>Videos</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Wiederholen</value>
+  </data>
+  <data name="Show only the active panel" xml:space="preserve">
+    <value>Nur den aktiven Bereich anzeigen</value>
+  </data>
+  <data name="Index for Offline Search" xml:space="preserve">
+    <value>Für die Offline-Suche indizieren</value>
+  </data>
+  <data name="Storage Analysis" xml:space="preserve">
+    <value>Speicheranalyse</value>
+  </data>
+  <data name="Storage Analysis…" xml:space="preserve">
+    <value>Speicheranalyse…</value>
+  </data>
+  <data name="Share Link…" xml:space="preserve">
+    <value>Link teilen…</value>
+  </data>
+  <data name="Where" xml:space="preserve">
+    <value>Ort</value>
+  </data>
+  <data name="Checksum" xml:space="preserve">
+    <value>Prüfsumme</value>
+  </data>
+  <data name="bytes" xml:space="preserve">
+    <value>Bytes</value>
+  </data>
+  <data name="1 byte" xml:space="preserve">
+    <value>1 Byte</value>
+  </data>
+  <data name="{0} bytes" xml:space="preserve">
+    <value>{0} Bytes</value>
+  </data>
+  <data name="1 file" xml:space="preserve">
+    <value>1 Datei</value>
+  </data>
+  <data name="1 folder" xml:space="preserve">
+    <value>1 Ordner</value>
+  </data>
+  <data name="{0} items" xml:space="preserve">
+    <value>{0} Objekte</value>
+  </data>
+  <data name="{0} free" xml:space="preserve">
+    <value>{0} frei</value>
+  </data>
+  <data name="{0} used" xml:space="preserve">
+    <value>{0} belegt</value>
+  </data>
+  <data name="{0} of {1} used" xml:space="preserve">
+    <value>{0} von {1} belegt</value>
+  </data>
+  <data name="{0} (offline)" xml:space="preserve">
+    <value>{0} (offline)</value>
+  </data>
+  <data name="Name of the new folder:" xml:space="preserve">
+    <value>Name des neuen Ordners:</value>
+  </data>
+  <data name="A file with that name already exists." xml:space="preserve">
+    <value>Eine Datei mit diesem Namen ist bereits vorhanden.</value>
+  </data>
+  <data name="A name can&apos;t contain &quot;/&quot;." xml:space="preserve">
+    <value>Ein Name darf kein „/“ enthalten.</value>
+  </data>
+  <data name="A file name can&apos;t contain any of the following characters: {0}" xml:space="preserve">
+    <value>Ein Dateiname darf keines der folgenden Zeichen enthalten: {0}</value>
+  </data>
+  <data name="&quot;{0}&quot; isn&apos;t a valid name on Windows." xml:space="preserve">
+    <value>„{0}“ ist unter Windows kein gültiger Name.</value>
+  </data>
+  <data name="Couldn&apos;t open &quot;{0}&quot;" xml:space="preserve">
+    <value>„{0}“ konnte nicht geöffnet werden</value>
+  </data>
+  <data name="You don&apos;t have permission to open &quot;{0}&quot;." xml:space="preserve">
+    <value>Du hast keine Berechtigung, „{0}“ zu öffnen.</value>
+  </data>
+  <data name="The folder &quot;{0}&quot; can&apos;t be found." xml:space="preserve">
+    <value>Der Ordner „{0}“ wurde nicht gefunden.</value>
+  </data>
+  <data name="This location is read-only." xml:space="preserve">
+    <value>Dieser Ort ist schreibgeschützt.</value>
+  </data>
+  <data name="Loading preview…" xml:space="preserve">
+    <value>Vorschau wird geladen…</value>
+  </data>
+  <data name="Mount this account first — a cloud folder has no path a terminal can open." xml:space="preserve">
+    <value>Binde dieses Konto zuerst als Laufwerk ein – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
+  </data>
+  <data name="Transfers are still running" xml:space="preserve">
+    <value>Übertragungen laufen noch</value>
+  </data>
+  <data name="Quitting cancels them. Files already transferred will remain." xml:space="preserve">
+    <value>Beim Beenden werden sie abgebrochen. Bereits übertragene Dateien bleiben erhalten.</value>
+  </data>
+  <data name="Quit Anyway" xml:space="preserve">
+    <value>Trotzdem beenden</value>
+  </data>
+  <data name="Are you sure you want to move &quot;{0}&quot; to the Recycle Bin?" xml:space="preserve">
+    <value>Möchtest du „{0}“ wirklich in den Papierkorb verschieben?</value>
+  </data>
+  <data name="Are you sure you want to move {0} items to the Recycle Bin?" xml:space="preserve">
+    <value>Möchtest du {0} Objekte wirklich in den Papierkorb verschieben?</value>
+  </data>
+  <data name="&quot;{0}&quot; couldn&apos;t be moved to the Recycle Bin." xml:space="preserve">
+    <value>„{0}“ konnte nicht in den Papierkorb verschoben werden.</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its drive doesn&apos;t have one. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.</value>
+  </data>
+  <data name="&quot;{0}&quot; can&apos;t be moved." xml:space="preserve">
+    <value>„{0}“ kann nicht verschoben werden.</value>
+  </data>
+  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
+    <value>Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.</value>
+  </data>
+  <data name="An item named “{0}” already exists at the destination." xml:space="preserve">
+    <value>Am Ziel ist bereits ein Objekt namens „{0}“ vorhanden.</value>
+  </data>
+  <data name="The items need {0}, but only {1} is available at the destination." xml:space="preserve">
+    <value>Die Objekte benötigen {0}, am Ziel sind aber nur {1} verfügbar.</value>
+  </data>
+  <data name="Copy Anyway" xml:space="preserve">
+    <value>Trotzdem kopieren</value>
+  </data>
+  <data name="Move Anyway" xml:space="preserve">
+    <value>Trotzdem verschieben</value>
+  </data>
+  <data name="Replace or Skip" xml:space="preserve">
+    <value>Ersetzen oder überspringen</value>
+  </data>
+  <data name="Source" xml:space="preserve">
+    <value>Quelle</value>
+  </data>
+  <data name="Destination" xml:space="preserve">
+    <value>Ziel</value>
+  </data>
+  <data name="Transfer" xml:space="preserve">
+    <value>Übertragung</value>
+  </data>
+  <data name="Cloud account not connected" xml:space="preserve">
+    <value>Cloud-Konto nicht verbunden</value>
+  </data>
+  <data name="The file changed while it was being uploaded." xml:space="preserve">
+    <value>Die Datei wurde während des Hochladens geändert.</value>
+  </data>
+  <data name="The server returned an unsafe file name (&quot;{0}&quot;), so the download was stopped." xml:space="preserve">
+    <value>Der Server hat einen unsicheren Dateinamen („{0}“) geliefert, daher wurde der Download abgebrochen.</value>
+  </data>
+  <data name="Copied" xml:space="preserve">
+    <value>Kopiert</value>
+  </data>
+  <data name="Moved" xml:space="preserve">
+    <value>Verschoben</value>
+  </data>
+  <data name="Downloaded" xml:space="preserve">
+    <value>Heruntergeladen</value>
+  </data>
+  <data name="Uploaded" xml:space="preserve">
+    <value>Hochgeladen</value>
+  </data>
+  <data name="Opened" xml:space="preserve">
+    <value>Geöffnet</value>
+  </data>
+  <data name="Synced" xml:space="preserve">
+    <value>Synchronisiert</value>
+  </data>
+  <data name="Done" xml:space="preserve">
+    <value>Fertig</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>Abgebrochen</value>
+  </data>
+  <data name="Cancelling…" xml:space="preserve">
+    <value>Wird abgebrochen…</value>
+  </data>
+  <data name="Downloading {0}" xml:space="preserve">
+    <value>{0} wird heruntergeladen</value>
+  </data>
+  <data name="Uploading {0}" xml:space="preserve">
+    <value>{0} wird hochgeladen</value>
+  </data>
+  <data name="{0} {1} — {2} of {3} files" xml:space="preserve">
+    <value>{0}: {1} – {2} von {3} Dateien</value>
+  </data>
+  <data name="Cancelled: {0} {1}" xml:space="preserve">
+    <value>Abgebrochen – {0}: {1}</value>
+  </data>
+  <data name="{0} {1} of {2} — {3} failed" xml:space="preserve">
+    <value>{0}: {1} von {2} – {3} fehlgeschlagen</value>
+  </data>
+  <data name="Failed: {0} {1} — {2}" xml:space="preserve">
+    <value>Fehlgeschlagen – {0}: {1} – {2}</value>
+  </data>
+  <data name="Skipped: {0}" xml:space="preserve">
+    <value>Übersprungen: {0}</value>
+  </data>
+  <data name="Done: {0} {1}" xml:space="preserve">
+    <value>Fertig – {0}: {1}</value>
+  </data>
+  <data name="Done: {0} {1} ({2} files)" xml:space="preserve">
+    <value>Fertig – {0}: {1} ({2} Dateien)</value>
+  </data>
+  <data name="Done: {0} {1} +{2} more" xml:space="preserve">
+    <value>Fertig – {0}: {1} und {2} weitere</value>
+  </data>
+  <data name="{0} of {1}" xml:space="preserve">
+    <value>{0} von {1}</value>
+  </data>
+  <data name="~{0} left" xml:space="preserve">
+    <value>noch ca. {0}</value>
+  </data>
+  <data name="{0} of {1} files failed: {2}" xml:space="preserve">
+    <value>{0} von {1} Dateien fehlgeschlagen: {2}</value>
+  </data>
+  <data name="Unknown error" xml:space="preserve">
+    <value>Unbekannter Fehler</value>
+  </data>
+  <data name="Bidirectional" xml:space="preserve">
+    <value>In beide Richtungen</value>
+  </data>
+  <data name="Upload Only" xml:space="preserve">
+    <value>Nur hochladen</value>
+  </data>
+  <data name="Download Only" xml:space="preserve">
+    <value>Nur herunterladen</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Pausiert</value>
+  </data>
+  <data name="Syncing..." xml:space="preserve">
+    <value>Wird synchronisiert…</value>
+  </data>
+  <data name="Sync needs a live folder on both sides." xml:space="preserve">
+    <value>Zum Synchronisieren wird auf beiden Seiten ein erreichbarer Ordner benötigt.</value>
+  </data>
+  <data name="Could not compute plan: {0}" xml:space="preserve">
+    <value>Plan konnte nicht berechnet werden: {0}</value>
+  </data>
+  <data name="Could not read folders: {0}" xml:space="preserve">
+    <value>Ordner konnten nicht gelesen werden: {0}</value>
+  </data>
+  <data name="Left newer" xml:space="preserve">
+    <value>Links neuer</value>
+  </data>
+  <data name="Right newer" xml:space="preserve">
+    <value>Rechts neuer</value>
+  </data>
+  <data name="{0} different" xml:space="preserve">
+    <value>{0} unterschiedlich</value>
+  </data>
+  <data name="{0} only left" xml:space="preserve">
+    <value>{0} nur links</value>
+  </data>
+  <data name="{0} only right" xml:space="preserve">
+    <value>{0} nur rechts</value>
+  </data>
+  <data name="{0} same" xml:space="preserve">
+    <value>{0} gleich</value>
+  </data>
+  <data name="Current Folder" xml:space="preserve">
+    <value>Aktueller Ordner</value>
+  </data>
+  <data name="This Source" xml:space="preserve">
+    <value>Diese Quelle</value>
+  </data>
+  <data name="All Sources" xml:space="preserve">
+    <value>Alle Quellen</value>
+  </data>
+  <data name="Local Files" xml:space="preserve">
+    <value>Lokale Dateien</value>
+  </data>
+  <data name="Account not connected" xml:space="preserve">
+    <value>Konto nicht verbunden</value>
+  </data>
+  <data name="Could not save the index: {0}" xml:space="preserve">
+    <value>Der Index konnte nicht gespeichert werden: {0}</value>
+  </data>
+  <data name="Failed to open search index: {0}" xml:space="preserve">
+    <value>Der Suchindex konnte nicht geöffnet werden: {0}</value>
+  </data>
+  <data name="Search index error: {0}" xml:space="preserve">
+    <value>Fehler im Suchindex: {0}</value>
+  </data>
+  <data name="&quot;{0}&quot; is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed." xml:space="preserve">
+    <value>„{0}“ ist offline. Die indizierten Inhalte lassen sich durchblättern und durchsuchen, aber nicht öffnen, kopieren oder ändern.</value>
+  </data>
+  <data name="Pick a cloud account or a folder, then choose Analyse." xml:space="preserve">
+    <value>Wähle ein Cloud-Konto oder einen Ordner und dann „Analysieren“.</value>
+  </data>
+  <data name="All sizes" xml:space="preserve">
+    <value>Alle Größen</value>
+  </data>
+  <data name="1 MB and up" xml:space="preserve">
+    <value>Ab 1 MB</value>
+  </data>
+  <data name="10 MB and up" xml:space="preserve">
+    <value>Ab 10 MB</value>
+  </data>
+  <data name="100 MB and up" xml:space="preserve">
+    <value>Ab 100 MB</value>
+  </data>
+  <data name="1 GB and up" xml:space="preserve">
+    <value>Ab 1 GB</value>
+  </data>
+  <data name="No files above this size." xml:space="preserve">
+    <value>Keine Dateien über dieser Größe.</value>
+  </data>
+  <data name="{0} files · {1}" xml:space="preserve">
+    <value>{0} Dateien · {1}</value>
+  </data>
+  <data name="{0} files · {1} · {2}" xml:space="preserve">
+    <value>{0} Dateien · {1} · {2}</value>
+  </data>
+  <data name="{0} · {1} files · {2} folders" xml:space="preserve">
+    <value>{0} · {1} Dateien · {2} Ordner</value>
+  </data>
+  <data name="{0}% of the total" xml:space="preserve">
+    <value>{0} % der Gesamtgröße</value>
+  </data>
+  <data name="Stopped early, so these totals are a lower bound — the real figures are larger." xml:space="preserve">
+    <value>Vorzeitig beendet – diese Summen sind daher eine Untergrenze, die tatsächlichen Werte sind höher.</value>
+  </data>
+  <data name="Files" xml:space="preserve">
+    <value>Dateien</value>
+  </data>
+  <data name="Sidebar" xml:space="preserve">
+    <value>Seitenleiste</value>
+  </data>
+  <data name="Updates" xml:space="preserve">
+    <value>Updates</value>
+  </data>
+  <data name="Welcome" xml:space="preserve">
+    <value>Willkommen</value>
+  </data>
+  <data name="Show" xml:space="preserve">
+    <value>Anzeigen</value>
+  </data>
+  <data name="When FileFluss opens" xml:space="preserve">
+    <value>Beim Start von FileFluss</value>
+  </data>
+  <data name="Home folder" xml:space="preserve">
+    <value>Benutzerordner</value>
+  </data>
+  <data name="The folders from last time" xml:space="preserve">
+    <value>Die Ordner vom letzten Mal</value>
+  </data>
+  <data name="Specific folders" xml:space="preserve">
+    <value>Bestimmte Ordner</value>
+  </data>
+  <data name="A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead." xml:space="preserve">
+    <value>Ein Ordner, den es nicht mehr gibt – ein gelöschter Ordner, ein entferntes Laufwerk, ein getrenntes Cloud-Konto –, öffnet stattdessen deinen Benutzerordner.</value>
+  </data>
+  <data name="Programs" xml:space="preserve">
+    <value>Programme</value>
+  </data>
+  <data name="Check for updates automatically" xml:space="preserve">
+    <value>Automatisch nach Updates suchen</value>
+  </data>
+  <data name="FileFluss checks daily and asks before installing." xml:space="preserve">
+    <value>FileFluss sucht täglich und fragt vor der Installation.</value>
+  </data>
+  <data name="Up to date" xml:space="preserve">
+    <value>Auf dem neuesten Stand</value>
+  </data>
+  <data name="Copy direct download links when available" xml:space="preserve">
+    <value>Direkte Download-Links kopieren, sofern verfügbar</value>
+  </data>
+  <data name="&quot;Copy Share Link&quot; then copies a link that downloads the file straight away, instead of the provider&apos;s preview page. Providers that offer no direct link always give their own page." xml:space="preserve">
+    <value>„Freigabelink kopieren“ kopiert dann einen Link, der die Datei sofort herunterlädt, statt der Vorschauseite des Anbieters. Anbieter ohne direkten Link liefern immer ihre eigene Seite.</value>
+  </data>
+  <data name="System Default follows the language selected in Windows." xml:space="preserve">
+    <value>„Systemstandard“ folgt der in Windows eingestellten Sprache.</value>
+  </data>
+  <data name="Cloud files opened or previewed are kept here so reopening them is instant." xml:space="preserve">
+    <value>Geöffnete oder in der Vorschau angezeigte Cloud-Dateien werden hier aufbewahrt, damit sie sich sofort wieder öffnen lassen.</value>
+  </data>
+  <data name="Open Cache Folder" xml:space="preserve">
+    <value>Cache-Ordner öffnen</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>Leeren</value>
+  </data>
+  <data name="Automatic management~2" xml:space="preserve">
+    <value>Automatische Verwaltung</value>
+  </data>
+  <data name="At launch, delete old cached files and keep the cache under its size limit." xml:space="preserve">
+    <value>Beim Start alte Cache-Dateien löschen und den Cache unter seiner Größenbeschränkung halten.</value>
+  </data>
+  <data name="Maximum cache size" xml:space="preserve">
+    <value>Maximale Cache-Größe</value>
+  </data>
+  <data name="3 days" xml:space="preserve">
+    <value>3 Tage</value>
+  </data>
+  <data name="1 week" xml:space="preserve">
+    <value>1 Woche</value>
+  </data>
+  <data name="2 weeks" xml:space="preserve">
+    <value>2 Wochen</value>
+  </data>
+  <data name="1 month" xml:space="preserve">
+    <value>1 Monat</value>
+  </data>
+  <data name="3 months" xml:space="preserve">
+    <value>3 Monate</value>
+  </data>
+  <data name="Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn&apos;t available, the system temporary folder is used." xml:space="preserve">
+    <value>Downloads werden über diesen Ordner zwischengespeichert. Wähle einen Ordner auf einem externen Laufwerk, damit große Übertragungen auf dieses Laufwerk deinen Systemdatenträger nicht belasten. Ist der Ordner nicht verfügbar, wird der temporäre Systemordner verwendet.</value>
+  </data>
+  <data name="System temporary folder" xml:space="preserve">
+    <value>Temporärer Systemordner</value>
+  </data>
+  <data name="Use Default" xml:space="preserve">
+    <value>Standard verwenden</value>
+  </data>
+  <data name="Edit Account" xml:space="preserve">
+    <value>Konto bearbeiten</value>
+  </data>
+  <data name="Remove Account" xml:space="preserve">
+    <value>Konto entfernen</value>
+  </data>
+  <data name="Remove from FileFluss" xml:space="preserve">
+    <value>Aus FileFluss entfernen</value>
+  </data>
+  <data name="Remove &quot;{0}&quot; from FileFluss? Files in the account are not touched." xml:space="preserve">
+    <value>„{0}“ aus FileFluss entfernen? Die Dateien im Konto bleiben unverändert.</value>
+  </data>
+  <data name="App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)" xml:space="preserve">
+    <value>App-Symbol von @JohnnyFireOne · Dateityp-Symbole von redbooth/free-file-icons (MIT)</value>
+  </data>
+  <data name="GNU General Public License v3.0 ↗" xml:space="preserve">
+    <value>GNU General Public License v3.0 ↗</value>
+  </data>
+  <data name="github.com/rana-gmbh/filefluss" xml:space="preserve">
+    <value>github.com/rana-gmbh/filefluss</value>
+  </data>
+  <data name="www.filefluss.de" xml:space="preserve">
+    <value>www.filefluss.de</value>
+  </data>
+  <data name="Preset" xml:space="preserve">
+    <value>Vorlage</value>
+  </data>
+  <data name="Windows / Explorer Style" xml:space="preserve">
+    <value>Windows- / Explorer-Stil</value>
+  </data>
+  <data name="None" xml:space="preserve">
+    <value>Keine</value>
+  </data>
+  <data name="Space" xml:space="preserve">
+    <value>Leertaste</value>
+  </data>
+  <data name="Press a shortcut…" xml:space="preserve">
+    <value>Tastenkombination drücken…</value>
+  </data>
+  <data name="Shortcut in use" xml:space="preserve">
+    <value>Tastenkombination belegt</value>
+  </data>
+  <data name="{0} is already used by {1}. Use it for {2} instead?" xml:space="preserve">
+    <value>{0} wird bereits von {1} verwendet. Stattdessen für {2} verwenden?</value>
+  </data>
+  <data name="Reassign" xml:space="preserve">
+    <value>Neu zuweisen</value>
+  </data>
+  <data name="Panel Navigation" xml:space="preserve">
+    <value>Navigation im Bereich</value>
+  </data>
+  <data name="File Operations" xml:space="preserve">
+    <value>Dateioperationen</value>
+  </data>
+  <data name="Clipboard" xml:space="preserve">
+    <value>Zwischenablage</value>
+  </data>
+  <data name="Selection" xml:space="preserve">
+    <value>Auswahl</value>
+  </data>
+  <data name="View &amp; Sort" xml:space="preserve">
+    <value>Ansicht &amp; Sortierung</value>
+  </data>
+  <data name="Cross-panel &amp; Tools" xml:space="preserve">
+    <value>Bereichsübergreifend &amp; Werkzeuge</value>
+  </data>
+  <data name="Misc" xml:space="preserve">
+    <value>Sonstiges</value>
+  </data>
+  <data name="Cloud Storage Providers" xml:space="preserve">
+    <value>Cloud-Speicheranbieter</value>
+  </data>
+  <data name="Other Protocols" xml:space="preserve">
+    <value>Andere Protokolle</value>
+  </data>
+  <data name="Cameras &amp; Devices" xml:space="preserve">
+    <value>Kameras &amp; Geräte</value>
+  </data>
+  <data name="(optional)" xml:space="preserve">
+    <value>(optional)</value>
+  </data>
+  <data name="Continue" xml:space="preserve">
+    <value>Weiter</value>
+  </data>
+  <data name="Save Changes" xml:space="preserve">
+    <value>Änderungen speichern</value>
+  </data>
+  <data name="Choose File…" xml:space="preserve">
+    <value>Datei auswählen…</value>
+  </data>
+  <data name="No file chosen" xml:space="preserve">
+    <value>Keine Datei ausgewählt</value>
+  </data>
+  <data name="All files" xml:space="preserve">
+    <value>Alle Dateien</value>
+  </data>
+  <data name="Leave empty to keep the stored secret access key." xml:space="preserve">
+    <value>Leer lassen, um den gespeicherten geheimen Zugriffsschlüssel zu behalten.</value>
+  </data>
+  <data name="This account type isn&apos;t available in this version." xml:space="preserve">
+    <value>Dieser Kontotyp ist in dieser Version nicht verfügbar.</value>
+  </data>
+  <data name="Select the folders for FileFluss in your browser…" xml:space="preserve">
+    <value>Wähle die Ordner für FileFluss in deinem Browser aus…</value>
+  </data>
+  <data name="Timed out waiting for browser sign-in." xml:space="preserve">
+    <value>Zeitüberschreitung beim Warten auf die Anmeldung im Browser.</value>
+  </data>
+  <data name="Authorization code invalid or expired." xml:space="preserve">
+    <value>Autorisierungscode ungültig oder abgelaufen.</value>
+  </data>
+  <data name="Server URL is not a valid URL." xml:space="preserve">
+    <value>Die Server-URL ist keine gültige URL.</value>
+  </data>
+  <data name="Several cameras were found. Choose the one to add." xml:space="preserve">
+    <value>Es wurden mehrere Kameras gefunden. Wähle die aus, die du hinzufügen möchtest.</value>
+  </data>
+  <data name="2. Open DevTools (F12 in Chrome/Edge/Firefox)" xml:space="preserve">
+    <value>2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)</value>
+  </data>
+  <data name="FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." xml:space="preserve">
+    <value>FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.</value>
+  </data>
+  <data name="iCloud Drive wasn&apos;t found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." xml:space="preserve">
+    <value>iCloud Drive wurde auf diesem PC nicht gefunden. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an, aktiviere iCloud Drive und versuche es dann erneut.</value>
+  </data>
+  <data name="pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the &apos;pcauth&apos; cookie value, and paste it into the Access Token field." xml:space="preserve">
+    <value>pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein.</value>
+  </data>
+  <data name="This Nextcloud server doesn&apos;t expose Login Flow v2. Use the App Password sign-in option instead." xml:space="preserve">
+    <value>Dieser Nextcloud-Server bietet keinen Login Flow v2 an. Verwende stattdessen die Anmeldung mit App-Passwort.</value>
+  </data>
+  <data name="Waiting for authorization in the TeraBox app." xml:space="preserve">
+    <value>Warte auf die Autorisierung in der TeraBox-App.</value>
+  </data>
+  <data name="Authorization timed out — the QR code expired before it was scanned." xml:space="preserve">
+    <value>Zeitüberschreitung bei der Autorisierung – der QR-Code ist abgelaufen, bevor er gescannt wurde.</value>
+  </data>
+  <data name="Box authentication failed: {0}" xml:space="preserve">
+    <value>Box-Authentifizierung fehlgeschlagen: {0}</value>
+  </data>
+  <data name="Create Link" xml:space="preserve">
+    <value>Link erstellen</value>
+  </data>
+  <data name="Copy Link" xml:space="preserve">
+    <value>Link kopieren</value>
+  </data>
+  <data name="Stop Sharing" xml:space="preserve">
+    <value>Freigabe beenden</value>
+  </data>
+  <data name="Allow downloading" xml:space="preserve">
+    <value>Herunterladen erlauben</value>
+  </data>
+  <data name="Set an expiry date" xml:space="preserve">
+    <value>Ablaufdatum festlegen</value>
+  </data>
+  <data name="Protect with password" xml:space="preserve">
+    <value>Mit Passwort schützen</value>
+  </data>
+  <data name="Expires" xml:space="preserve">
+    <value>Läuft ab</value>
+  </data>
+  <data name="expiry dates" xml:space="preserve">
+    <value>Ablaufdaten</value>
+  </data>
+  <data name="password protection" xml:space="preserve">
+    <value>Passwortschutz</value>
+  </data>
+  <data name=" and " xml:space="preserve">
+    <value> und </value>
+  </data>
+  <data name="{0} usually need a paid plan." xml:space="preserve">
+    <value>{0} erfordern meist ein kostenpflichtiges Abo.</value>
+  </data>
+  <data name="Create a public link to this file and copy it to the clipboard." xml:space="preserve">
+    <value>Einen öffentlichen Link zu dieser Datei erstellen und in die Zwischenablage kopieren.</value>
+  </data>
+  <data name="Anyone with this link can download the file until it expires. The link cannot be revoked early." xml:space="preserve">
+    <value>Jeder mit diesem Link kann die Datei herunterladen, bis er abläuft. Der Link kann nicht vorzeitig widerrufen werden.</value>
+  </data>
+  <data name="The link is on the clipboard." xml:space="preserve">
+    <value>Der Link ist in der Zwischenablage.</value>
+  </data>
+  <data name="This file is shared. The link is on the clipboard." xml:space="preserve">
+    <value>Diese Datei ist freigegeben. Der Link ist in der Zwischenablage.</value>
+  </data>
+  <data name="This file is no longer shared." xml:space="preserve">
+    <value>Diese Datei ist nicht mehr freigegeben.</value>
+  </data>
+  <data name="People with the link will no longer be able to open &quot;{0}&quot;." xml:space="preserve">
+    <value>Personen mit dem Link können „{0}“ dann nicht mehr öffnen.</value>
+  </data>
+  <data name="Couldn&apos;t create the share link: {0}" xml:space="preserve">
+    <value>Der Freigabelink konnte nicht erstellt werden: {0}</value>
+  </data>
+  <data name="Couldn&apos;t change sharing: {0}" xml:space="preserve">
+    <value>Die Freigabe konnte nicht geändert werden: {0}</value>
+  </data>
+  <data name="Checked just now: {0}" xml:space="preserve">
+    <value>Gerade geprüft: {0}</value>
+  </data>
+  <data name="The link couldn&apos;t be checked from here: {0}" xml:space="preserve">
+    <value>Der Link konnte von hier aus nicht geprüft werden: {0}</value>
+  </data>
+  <data name="the link is not reachable without signing in." xml:space="preserve">
+    <value>der Link ist ohne Anmeldung nicht erreichbar.</value>
+  </data>
+  <data name="the server didn&apos;t answer." xml:space="preserve">
+    <value>der Server hat nicht geantwortet.</value>
+  </data>
+  <data name="Links from this account have needed a sign-in before. Check the link before you send it." xml:space="preserve">
+    <value>Links aus diesem Konto haben bisher eine Anmeldung erfordert. Prüfe den Link, bevor du ihn verschickst.</value>
+  </data>
+  <data name="This link only works for people who can sign in to the account." xml:space="preserve">
+    <value>Dieser Link funktioniert nur für Personen, die sich bei dem Konto anmelden können.</value>
+  </data>
+  <data name="This account can&apos;t serve direct download links, so the share page link was copied instead." xml:space="preserve">
+    <value>Dieses Konto kann keine direkten Download-Links bereitstellen, daher wurde stattdessen der Link zur Freigabeseite kopiert.</value>
+  </data>
+  <data name="This file already had a public link, so the requested settings were not applied." xml:space="preserve">
+    <value>Diese Datei hatte bereits einen öffentlichen Link, daher wurden die gewünschten Einstellungen nicht übernommen.</value>
+  </data>
+  <data name="This file already had a share link, so that one was returned." xml:space="preserve">
+    <value>Diese Datei hatte bereits einen Freigabelink, daher wurde dieser verwendet.</value>
+  </data>
+  <data name="This file already has a public link. Open it in Dropbox to copy that link." xml:space="preserve">
+    <value>Diese Datei hat bereits einen öffentlichen Link. Öffne sie in Dropbox, um diesen Link zu kopieren.</value>
+  </data>
+  <data name="This file doesn&apos;t have a public link." xml:space="preserve">
+    <value>Diese Datei hat keinen öffentlichen Link.</value>
+  </data>
+  <data name="This item doesn&apos;t have a public link." xml:space="preserve">
+    <value>Dieses Objekt hat keinen öffentlichen Link.</value>
+  </data>
+  <data name="This file has no public link to update. Create one first." xml:space="preserve">
+    <value>Diese Datei hat keinen öffentlichen Link, der aktualisiert werden könnte. Erstelle zuerst einen.</value>
+  </data>
+  <data name="This file isn&apos;t shared with anyone who has the link." xml:space="preserve">
+    <value>Diese Datei ist nicht für Personen mit dem Link freigegeben.</value>
+  </data>
+  <data name="This file was already public — WordPress media has no private state." xml:space="preserve">
+    <value>Diese Datei war bereits öffentlich – WordPress-Medien können nicht privat sein.</value>
+  </data>
+  <data name="OneDrive can&apos;t change a link&apos;s settings in place, so the previous link was revoked and a new one created — the old address no longer works." xml:space="preserve">
+    <value>OneDrive kann die Einstellungen eines Links nicht direkt ändern, daher wurde der bisherige Link widerrufen und ein neuer erstellt – die alte Adresse funktioniert nicht mehr.</value>
+  </data>
+  <data name="OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation." xml:space="preserve">
+    <value>OneDrive hat das Erstellen eines öffentlichen Links für diese Datei abgelehnt. Das Teilen per Link kann für ein Konto deaktiviert sein, und Geschäftskonten erlauben Links oft nur für Personen innerhalb der Organisation.</value>
+  </data>
+  <data name="This link is not public: OneDrive granted it as &quot;{0}&quot;, so opening it asks for a Microsoft sign-in." xml:space="preserve">
+    <value>Dieser Link ist nicht öffentlich: OneDrive hat ihn als „{0}“ vergeben, daher verlangt das Öffnen eine Microsoft-Anmeldung.</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to change a file&apos;s existing link. Open the file in OneDrive on the web to change or remove it." xml:space="preserve">
+    <value>Dieses Microsoft-Konto erlaubt Apps nicht, den bestehenden Link einer Datei zu ändern. Öffne die Datei in OneDrive im Web, um ihn zu ändern oder zu entfernen.</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to manage a file&apos;s existing links. Open the file in OneDrive on the web and remove the link there." xml:space="preserve">
+    <value>Dieses Microsoft-Konto erlaubt Apps nicht, die bestehenden Links einer Datei zu verwalten. Öffne die Datei in OneDrive im Web und entferne den Link dort.</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there." xml:space="preserve">
+    <value>Dieses Microsoft-Konto erlaubt Apps nicht, einen bestehenden Link zu entfernen. Öffne die Datei in OneDrive im Web und entferne den Link dort.</value>
+  </data>
+  <data name="Box kept the public link in place — check whether your administrator manages sharing for this item." xml:space="preserve">
+    <value>Box hat den öffentlichen Link beibehalten – prüfe, ob dein Administrator die Freigabe für dieses Objekt verwaltet.</value>
+  </data>
+  <data name="Your Box administrator disabled downloads for shared links — recipients can only preview the file." xml:space="preserve">
+    <value>Dein Box-Administrator hat Downloads über Freigabelinks deaktiviert – Empfänger können die Datei nur in der Vorschau ansehen.</value>
+  </data>
+  <data name="Your Box administrator restricted this link to people in your company — it is not publicly accessible." xml:space="preserve">
+    <value>Dein Box-Administrator hat diesen Link auf Personen in deinem Unternehmen beschränkt – er ist nicht öffentlich zugänglich.</value>
+  </data>
+  <data name="Your Box administrator restricted this link to the file&apos;s collaborators — it is not publicly accessible." xml:space="preserve">
+    <value>Dein Box-Administrator hat diesen Link auf die Mitwirkenden der Datei beschränkt – er ist nicht öffentlich zugänglich.</value>
+  </data>
+  <data name="Seafile cannot change a link&apos;s settings, so the link was replaced — the previous URL no longer works." xml:space="preserve">
+    <value>Seafile kann die Einstellungen eines Links nicht ändern, daher wurde der Link ersetzt – die bisherige URL funktioniert nicht mehr.</value>
+  </data>
+  <data name="Jottacloud accepted the request but returned no public link for this file." xml:space="preserve">
+    <value>Jottacloud hat die Anfrage angenommen, aber keinen öffentlichen Link für diese Datei geliefert.</value>
+  </data>
+  <data name="kDrive created the link without download permission — recipients can view the file only." xml:space="preserve">
+    <value>kDrive hat den Link ohne Download-Berechtigung erstellt – Empfänger können die Datei nur ansehen.</value>
+  </data>
+  <data name="The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM&apos;s external access settings if recipients can&apos;t open it." xml:space="preserve">
+    <value>Das NAS hat diesen Link aus der Adresse gebildet, die DSM für die eigene hält, daher funktioniert er möglicherweise nur in deinem lokalen Netzwerk. Prüfe die Einstellungen für den externen Zugriff in DSM, falls Empfänger ihn nicht öffnen können.</value>
+  </data>
+  <data name="The NAS has reached its maximum number of sharing links — delete some in File Station and try again." xml:space="preserve">
+    <value>Das NAS hat die maximale Anzahl an Freigabelinks erreicht – lösche einige in der File Station und versuche es erneut.</value>
+  </data>
+  <data name="Failed to access the NAS&apos;s sharing links." xml:space="preserve">
+    <value>Auf die Freigabelinks des NAS konnte nicht zugegriffen werden.</value>
+  </data>
+  <data name="The sharing link does not exist." xml:space="preserve">
+    <value>Der Freigabelink existiert nicht.</value>
+  </data>
+  <data name="The request timed out." xml:space="preserve">
+    <value>Zeitüberschreitung bei der Anfrage.</value>
+  </data>
+  <data name="Could not connect to the server." xml:space="preserve">
+    <value>Es konnte keine Verbindung zum Server hergestellt werden.</value>
+  </data>
+  <data name="Network is unreachable from this PC." xml:space="preserve">
+    <value>Das Netzwerk ist von diesem PC aus nicht erreichbar.</value>
+  </data>
+  <data name="Permission denied." xml:space="preserve">
+    <value>Zugriff verweigert.</value>
+  </data>
+  <data name="Permission denied: {0}" xml:space="preserve">
+    <value>Zugriff verweigert: {0}</value>
+  </data>
+  <data name="Invalid file name." xml:space="preserve">
+    <value>Ungültiger Dateiname.</value>
+  </data>
+  <data name="TLS/SSL error: {0}" xml:space="preserve">
+    <value>TLS/SSL-Fehler: {0}</value>
+  </data>
+  <data name="the server&apos;s certificate could not be verified." xml:space="preserve">
+    <value>das Zertifikat des Servers konnte nicht überprüft werden.</value>
+  </data>
+  <data name="S3 error (HTTP {0}): {1}" xml:space="preserve">
+    <value>S3-Fehler (HTTP {0}): {1}</value>
+  </data>
+  <data name="S3 endpoint URL is invalid (host: &quot;{0}&quot;). Double-check the Endpoint URL field." xml:space="preserve">
+    <value>Die S3-Endpunkt-URL ist ungültig (Host: „{0}“). Prüfe das Feld „Endpunkt-URL“.</value>
+  </data>
+  <data name="This key isn&apos;t allowed to list the account&apos;s buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won&apos;t ask for account-wide permissions." xml:space="preserve">
+    <value>Dieser Schlüssel darf die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). Gib den Bucket-Namen im Feld „Pfad“ ein – FileFluss arbeitet dann nur mit diesem Bucket und benötigt keine kontoweiten Berechtigungen.</value>
+  </data>
+  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
+    <value>Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.</value>
+  </data>
+  <data name="FTP command failed." xml:space="preserve">
+    <value>FTP-Befehl fehlgeschlagen.</value>
+  </data>
+  <data name="Could not connect — check the host, port, and that FTP is reachable." xml:space="preserve">
+    <value>Verbindung fehlgeschlagen – prüfe Host und Port und ob FTP erreichbar ist.</value>
+  </data>
+  <data name="Could not resolve host. Check the server address." xml:space="preserve">
+    <value>Host konnte nicht aufgelöst werden. Prüfe die Serveradresse.</value>
+  </data>
+  <data name="Connection timed out." xml:space="preserve">
+    <value>Zeitüberschreitung der Verbindung.</value>
+  </data>
+  <data name="SFTP command failed." xml:space="preserve">
+    <value>SFTP-Befehl fehlgeschlagen.</value>
+  </data>
+  <data name="Connection refused — is the SSH daemon running on this host and port?" xml:space="preserve">
+    <value>Verbindung abgelehnt – läuft der SSH-Dienst auf diesem Host und Port?</value>
+  </data>
+  <data name="Connection timed out. Check the hostname, port, and your network." xml:space="preserve">
+    <value>Zeitüberschreitung der Verbindung. Prüfe Hostname, Port und dein Netzwerk.</value>
+  </data>
+  <data name="Could not resolve hostname. Check spelling or DNS." xml:space="preserve">
+    <value>Hostname konnte nicht aufgelöst werden. Prüfe die Schreibweise oder das DNS.</value>
+  </data>
+  <data name="SSH authentication failed. Check the username and password." xml:space="preserve">
+    <value>SSH-Authentifizierung fehlgeschlagen. Prüfe Benutzername und Passwort.</value>
+  </data>
+  <data name="SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong." xml:space="preserve">
+    <value>SSH-Authentifizierung fehlgeschlagen. Möglicherweise ist dein öffentlicher Schlüssel auf dem Server nicht autorisiert, oder die Passphrase ist falsch.</value>
+  </data>
+  <data name="SSH key was rejected by the server. Make sure the public key is in the server&apos;s ~/.ssh/authorized_keys (or added to the provider&apos;s SSH-keys panel for managed services like Hetzner Storage Box)." xml:space="preserve">
+    <value>Der SSH-Schlüssel wurde vom Server abgelehnt. Stelle sicher, dass der öffentliche Schlüssel in ~/.ssh/authorized_keys auf dem Server steht (oder bei verwalteten Diensten wie der Hetzner Storage Box in der SSH-Schlüssel-Verwaltung des Anbieters hinterlegt ist).</value>
+  </data>
+  <data name="The private key is protected by a passphrase. Enter it and try again." xml:space="preserve">
+    <value>Der private Schlüssel ist durch eine Passphrase geschützt. Gib sie ein und versuche es erneut.</value>
+  </data>
+  <data name="Wrong passphrase for the private key." xml:space="preserve">
+    <value>Falsche Passphrase für den privaten Schlüssel.</value>
+  </data>
+  <data name="Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." xml:space="preserve">
+    <value>Der private Schlüssel liegt in einem nicht unterstützten Format vor. Konvertiere ihn ins OpenSSH-Format (z. B. mit `puttygen key.ppk -O private-openssh -o id_rsa`).</value>
+  </data>
+  <data name="This SFTP operation is not supported by the bundled SSH library." xml:space="preserve">
+    <value>Dieser SFTP-Vorgang wird von der mitgelieferten SSH-Bibliothek nicht unterstützt.</value>
+  </data>
+  <data name="Host key changed" xml:space="preserve">
+    <value>Hostschlüssel geändert</value>
+  </data>
+  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
+    <value>Überprüfung des Hostschlüssels fehlgeschlagen – der Hostschlüssel des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um den neuen Schlüssel zu akzeptieren.</value>
+  </data>
+  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
+    <value>Der SSH-Hostschlüssel von {0} hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server neu installiert wurde – oder wenn jemand die Verbindung abfängt.
+
+Bisher: {1}
+Jetzt: {2}
+
+Dem neuen Schlüssel vertrauen?</value>
+  </data>
+  <data name="Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." xml:space="preserve">
+    <value>Eine Seafile-Bibliothek kann nicht in FileFluss gelöscht werden. Verwende die Seafile-Weboberfläche.</value>
+  </data>
+  <data name="Cannot share the Seafile library list — pick a file or folder inside a library." xml:space="preserve">
+    <value>Die Liste der Seafile-Bibliotheken kann nicht geteilt werden – wähle eine Datei oder einen Ordner innerhalb einer Bibliothek.</value>
+  </data>
+  <data name="Cannot upload directly to the Seafile library root — pick a library first." xml:space="preserve">
+    <value>In die oberste Ebene der Seafile-Bibliotheken kann nicht direkt hochgeladen werden – wähle zuerst eine Bibliothek.</value>
+  </data>
+  <data name="Create a library in the Seafile web UI before adding folders." xml:space="preserve">
+    <value>Erstelle in der Seafile-Weboberfläche eine Bibliothek, bevor du Ordner hinzufügst.</value>
+  </data>
+  <data name="Rename a Seafile library from its web UI." xml:space="preserve">
+    <value>Benenne eine Seafile-Bibliothek in der Weboberfläche um.</value>
+  </data>
+  <data name="This library is encrypted. Unlock it in the Seafile web interface, then try again." xml:space="preserve">
+    <value>Diese Bibliothek ist verschlüsselt. Entsperre sie in der Seafile-Weboberfläche und versuche es dann erneut.</value>
+  </data>
+  <data name="Filen API error" xml:space="preserve">
+    <value>Filen-API-Fehler</value>
+  </data>
+  <data name="Filen /v3/auth/info returned an unexpected payload." xml:space="preserve">
+    <value>Filen /v3/auth/info hat unerwartete Daten geliefert.</value>
+  </data>
+  <data name="Filen /v3/user/baseFolder didn&apos;t return a root UUID." xml:space="preserve">
+    <value>Filen /v3/user/baseFolder hat keine Stamm-UUID geliefert.</value>
+  </data>
+  <data name="Filen /v3/user/baseFolder failed (HTTP {0})" xml:space="preserve">
+    <value>Filen /v3/user/baseFolder fehlgeschlagen (HTTP {0})</value>
+  </data>
+  <data name="Filen account uses auth version {0}. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented." xml:space="preserve">
+    <value>Das Filen-Konto verwendet die Auth-Version {0}. FileFluss unterstützt derzeit nur v2-Konten – Filen v1 / v3 (Argon2) sind noch nicht implementiert.</value>
+  </data>
+  <data name="Filen file key isn&apos;t 32 ASCII bytes — encrypted with an auth-version we don&apos;t support yet." xml:space="preserve">
+    <value>Der Filen-Dateischlüssel ist nicht 32 ASCII-Bytes lang – er wurde mit einer Auth-Version verschlüsselt, die noch nicht unterstützt wird.</value>
+  </data>
+  <data name="Filen file metadata not cached — listing didn&apos;t populate chunk info." xml:space="preserve">
+    <value>Filen-Dateimetadaten nicht im Cache – die Auflistung hat keine Chunk-Informationen geliefert.</value>
+  </data>
+  <data name="Filen file metadata not cached — re-open the folder and try again." xml:space="preserve">
+    <value>Filen-Dateimetadaten nicht im Cache – öffne den Ordner erneut und versuche es noch einmal.</value>
+  </data>
+  <data name="Filen login succeeded but the server didn&apos;t return an apiKey." xml:space="preserve">
+    <value>Die Filen-Anmeldung war erfolgreich, aber der Server hat keinen apiKey geliefert.</value>
+  </data>
+  <data name="Synology login failed (code {0})." xml:space="preserve">
+    <value>Synology-Anmeldung fehlgeschlagen (Code {0}).</value>
+  </data>
+  <data name="Synology rejected the file path." xml:space="preserve">
+    <value>Synology hat den Dateipfad abgelehnt.</value>
+  </data>
+  <data name="Synology administrator must enforce 2-factor authentication." xml:space="preserve">
+    <value>Der Synology-Administrator verlangt eine Zwei-Faktor-Authentifizierung.</value>
+  </data>
+  <data name="No such account or incorrect password." xml:space="preserve">
+    <value>Konto nicht vorhanden oder Passwort falsch.</value>
+  </data>
+  <data name="Account is disabled." xml:space="preserve">
+    <value>Das Konto ist deaktiviert.</value>
+  </data>
+  <data name="Insufficient user privilege." xml:space="preserve">
+    <value>Unzureichende Benutzerrechte.</value>
+  </data>
+  <data name="Password expired — please reset it from DSM." xml:space="preserve">
+    <value>Passwort abgelaufen – bitte setze es in DSM zurück.</value>
+  </data>
+  <data name="Password must be changed at first login." xml:space="preserve">
+    <value>Das Passwort muss bei der ersten Anmeldung geändert werden.</value>
+  </data>
+  <data name="This account requires a 2-factor authentication (OTP) code." xml:space="preserve">
+    <value>Dieses Konto erfordert einen Code für die Zwei-Faktor-Authentifizierung (OTP).</value>
+  </data>
+  <data name="OTP code is incorrect." xml:space="preserve">
+    <value>Der OTP-Code ist falsch.</value>
+  </data>
+  <data name="OTP code authentication has failed too many times." xml:space="preserve">
+    <value>Die OTP-Authentifizierung ist zu oft fehlgeschlagen.</value>
+  </data>
+  <data name="Maximum number of OTP retries reached. Try again later." xml:space="preserve">
+    <value>Maximale Anzahl an OTP-Versuchen erreicht. Versuche es später erneut.</value>
+  </data>
+  <data name="Multiple login detected." xml:space="preserve">
+    <value>Mehrfache Anmeldung erkannt.</value>
+  </data>
+  <data name="Unknown API method." xml:space="preserve">
+    <value>Unbekannte API-Methode.</value>
+  </data>
+  <data name="Invalid API method." xml:space="preserve">
+    <value>Ungültige API-Methode.</value>
+  </data>
+  <data name="Invalid API method version." xml:space="preserve">
+    <value>Ungültige Version der API-Methode.</value>
+  </data>
+  <data name="Invalid parameter for the request." xml:space="preserve">
+    <value>Ungültiger Parameter in der Anfrage.</value>
+  </data>
+  <data name="Request denied — too many connections." xml:space="preserve">
+    <value>Anfrage abgelehnt – zu viele Verbindungen.</value>
+  </data>
+  <data name="Connection time out." xml:space="preserve">
+    <value>Zeitüberschreitung der Verbindung.</value>
   </data>
 </root>
