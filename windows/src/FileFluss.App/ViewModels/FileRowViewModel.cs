@@ -35,6 +35,10 @@ public sealed class FileRowViewModel : Observable
 
     public CloudFileItem Item { get; }
 
+    /// <summary>Whether a refreshed listing can keep this row (with its icon, thumbnail and folder size) for <paramref name="item"/>.</summary>
+    public bool CanReuseFor(CloudFileItem item, bool isLocal, bool hideExtension)
+        => _isLocal == isLocal && _hideExtension == hideExtension && Item == item;
+
     public string Name => Item.Name;
 
     public string Path => Item.Path;

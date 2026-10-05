@@ -321,7 +321,11 @@ public static class ContextMenus
             return;
         }
 
-        main.Sidebar(panel.Side).CalculateFolderSize(provider, row.Item, panel.Location with { Path = row.Path }, size => row.FolderSize = size);
+        main.Sidebar(panel.Side).CalculateFolderSize(provider, row.Item, panel.Location with { Path = row.Path }, size =>
+        {
+            row.FolderSize = size;
+            panel.OnFolderSizeKnown();
+        });
     }
 
     public static MenuItem Item(string header, string? glyph, string? shortcut, Action action)

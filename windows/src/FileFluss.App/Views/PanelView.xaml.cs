@@ -117,12 +117,9 @@ public partial class PanelView : UserControl
                 return;
             }
 
-            var rows = names.Count == 0 ? [] : vm.Rows.Where(r => names.Contains(r.Name, StringComparer.OrdinalIgnoreCase)).ToList();
-            List.SelectedItems.Clear();
-            foreach (var row in rows)
-            {
-                List.SelectedItems.Add(row);
-            }
+            var wanted = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var rows = wanted.Count == 0 ? [] : vm.Rows.Where(r => wanted.Contains(r.Name)).ToList();
+            SelectRows(rows);
 
             var anchor = rows.FirstOrDefault() ?? (IsKeyboardFocusWithin ? vm.Rows.FirstOrDefault() : null);
             if (anchor is not null)
@@ -225,16 +222,30 @@ public partial class PanelView : UserControl
                 break;
             case SelectionAction.Invert:
                 var selected = List.SelectedItems.Cast<object>().ToHashSet();
-                List.SelectedItems.Clear();
-                foreach (var row in List.Items)
-                {
-                    if (!selected.Contains(row))
-                    {
-                        List.SelectedItems.Add(row);
-                    }
-                }
-
+                SelectRows(List.Items.Cast<object>().Where(row => !selected.Contains(row)).ToList());
                 break;
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo? SetSelectedItems =
+        typeof(ListBox).GetMethod("SetSelectedItems", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    /// <summary>
+    /// Replaces the selection in one change — one SelectionChanged, one status-line update —
+    /// instead of one per row: restoring 20,000 selected rows after a refresh was quadratic.
+    /// </summary>
+    private void SelectRows(System.Collections.IList rows)
+    {
+        if (SetSelectedItems is not null && rows.Count > 1)
+        {
+            SetSelectedItems.Invoke(List, [rows]);
+            return;
+        }
+
+        List.SelectedItems.Clear();
+        foreach (var row in rows)
+        {
+            List.SelectedItems.Add(row);
         }
     }
 

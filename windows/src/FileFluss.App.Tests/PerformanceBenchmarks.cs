@@ -91,9 +91,23 @@ public sealed class PerformanceBenchmarks(ITestOutputHelper output)
         await panel.RefreshAsync(quiet: true);
         output.WriteLine($"{"RefreshAsync (watcher refresh of the same folder)",-58} {watch.Elapsed.TotalMilliseconds,9:F2} ms");
 
-        Bench.Measure(output, "Sort by Date (UI thread)", () => panel.SortBy(SortField.Date), 4);
-        Bench.Measure(output, "Sort by Name (UI thread)", () => panel.SortBy(SortField.Name), 4);
-        Bench.Measure(output, "Sort by Kind (UI thread)", () => panel.SortBy(SortField.Kind), 4);
+        foreach (var field in new[] { SortField.Date, SortField.Name, SortField.Kind, SortField.Name })
+        {
+            // A column click, then the same column again (reverse): UI-thread cost, and time until the list shows it.
+            foreach (var click in new[] { "", " again (reverse)" })
+            {
+                var before = panel.Rows;
+                var clock = Stopwatch.StartNew();
+                panel.SortBy(field);
+                var ui = clock.Elapsed.TotalMilliseconds;
+                while (ReferenceEquals(panel.Rows, before) && clock.Elapsed < TimeSpan.FromSeconds(10))
+                {
+                    Thread.Sleep(1);
+                }
+
+                output.WriteLine($"{"Sort by " + field + click,-58} UI {ui,9:F2} ms   shown after {clock.Elapsed.TotalMilliseconds,9:F2} ms");
+            }
+        }
         panel.SortBy(SortField.Name);
         if (!panel.SortAscending)
         {
