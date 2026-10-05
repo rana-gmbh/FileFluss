@@ -49,7 +49,15 @@ public static class ContextMenus
             items.Add(Item(L("Refresh"), Glyphs.Refresh, Shortcut(KeyboardCommand.RefreshActive), () => _ = panel.RefreshAsync()));
             items.Add(Check(L("Show Hidden Files"), panel.ShowHiddenFiles, () => panel.ShowHiddenFiles = !panel.ShowHiddenFiles));
             var sort = new MenuItem { Header = L("Sort By") };
-            foreach (var (field, title) in new[] { (SortField.Name, "Name"), (SortField.Date, "Date Modified"), (SortField.Size, "Size"), (SortField.Kind, "Kind") })
+            var fields = new List<(SortField Field, string Title)> { (SortField.Name, "Name"), (SortField.Date, "Date Modified") };
+            if (panel.IsLocal)
+            {
+                // Cloud listings carry no creation date (macOS shows the column for local panels only).
+                fields.Add((SortField.DateCreated, "Date Created"));
+            }
+
+            fields.AddRange([(SortField.Size, "Size"), (SortField.Kind, "Kind")]);
+            foreach (var (field, title) in fields)
             {
                 sort.Items.Add(Check(L(title), panel.SortField == field, () => panel.SortBy(field)));
             }

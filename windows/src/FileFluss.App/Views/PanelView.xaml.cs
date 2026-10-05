@@ -287,6 +287,7 @@ public partial class PanelView : UserControl
             }
 
             header.Content = panel;
+            System.Windows.Automation.AutomationProperties.SetName(header, title);
             header.HorizontalContentAlignment = tag == "Size" ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         }
     }
