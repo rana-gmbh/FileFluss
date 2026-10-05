@@ -57,7 +57,7 @@ internal static class CrashLog
             var entry = new StringBuilder()
                 .Append(DateTimeOffset.Now.ToString("u"))
                 .Append(" [").Append(context).Append("] ")
-                .AppendLine(exception.ToString())
+                .AppendLine(LogRedactor.Redact(exception.ToString()))
                 .AppendLine();
             File.AppendAllText(LogPath, entry.ToString());
         }
