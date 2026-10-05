@@ -3,6 +3,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FileFluss.Core.IO;
 
 namespace FileFluss.Core.Settings;
 
@@ -26,6 +27,7 @@ public sealed class SettingsStore
     private readonly string _path;
     private readonly Lock _gate = new();
     private bool _suspended;
+    private bool _unread;
 
     public SettingsStore(string path)
     {
@@ -68,16 +70,16 @@ public sealed class SettingsStore
         {
             try
             {
-                var directory = Path.GetDirectoryName(_path);
-                if (!string.IsNullOrEmpty(directory))
+                if (_unread)
                 {
-                    Directory.CreateDirectory(directory);
+                    // The file couldn't be read at launch: keep a copy before defaults replace it.
+                    Preserve();
+                    _unread = false;
                 }
 
-                // Write-then-replace: a crash midway leaves the previous file intact.
-                var temporary = _path + ".tmp";
-                File.WriteAllText(temporary, JsonSerializer.Serialize(Settings, SerializerOptions));
-                File.Move(temporary, _path, overwrite: true);
+                // Durable write-then-replace, keeping the previous file as settings.json.bak: a
+                // crash or power cut midway leaves a complete file either way.
+                AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(Settings, SerializerOptions));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -88,23 +90,64 @@ public sealed class SettingsStore
 
     private AppSettings Load()
     {
-        try
+        if (!File.Exists(_path) && !File.Exists(AtomicFile.BackupPath(_path)))
         {
-            if (!File.Exists(_path))
+            return new AppSettings();
+        }
+
+        string? text = null;
+        for (var attempt = 0; attempt < 5 && text is null; attempt++)
+        {
+            try
             {
-                return new AppSettings();
+                text = File.Exists(_path) ? File.ReadAllText(_path) : string.Empty;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A scanner or backup tool holding the file at launch: wait it out briefly.
+                Thread.Sleep(50 * (attempt + 1));
+            }
+        }
+
+        if (text is null)
+        {
+            _unread = true;
+        }
+        else if (text.Length > 0)
+        {
+            if (TryDeserialize(text) is { } settings)
+            {
+                return settings;
             }
 
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), SerializerOptions) ?? new AppSettings();
-        }
-        catch (JsonException)
-        {
             Preserve();
-            return new AppSettings();
+        }
+
+        // Damaged, empty (a power cut's leftover) or unreadable: the previous good file.
+        try
+        {
+            var backup = AtomicFile.BackupPath(_path);
+            if (File.Exists(backup) && TryDeserialize(File.ReadAllText(backup)) is { } previous)
+            {
+                return previous;
+            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return new AppSettings();
+        }
+
+        return new AppSettings();
+    }
+
+    private static AppSettings? TryDeserialize(string text)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<AppSettings>(text, SerializerOptions);
+        }
+        catch (Exception e) when (e is JsonException or NotSupportedException or InvalidOperationException)
+        {
+            return null;
         }
     }
 
