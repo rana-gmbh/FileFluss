@@ -113,8 +113,8 @@ public sealed class JottacloudProvider : CloudProvider
         ConnectField.Info("Generate a Personal Login Token in your Jottacloud account, then paste it below."),
         ConnectField.Link("Open Jottacloud token page", TokenPageUrl),
         new ConnectField("token", ConnectFieldKind.Password, "Personal Login Token"),
-        // The macOS text says "stored in your keychain", which is wrong here.
-        ConnectField.Info("Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager."));
+        // The macOS text says "stored in your keychain"; FileFluss encrypts the login with DPAPI instead.
+        ConnectField.Info("Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store."));
 
     private string Username
     {

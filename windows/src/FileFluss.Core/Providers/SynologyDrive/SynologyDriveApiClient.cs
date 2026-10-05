@@ -779,7 +779,7 @@ internal sealed class SynologyDriveApiClient
         402 => CloudProviderException.CommandFailed(Localization.L("Invalid API method version.")),
         403 => CloudProviderException.CommandFailed(Localization.L("Invalid API method.")),
         405 => CloudProviderException.CommandFailed(Localization.L("Insufficient user privilege.")),
-        406 => CloudProviderException.CommandFailed(Localization.L("Connection time out.")),
+        406 => CloudProviderException.CommandFailed(Localization.L("Connection timed out.")),
         407 => CloudProviderException.CommandFailed(Localization.L("Multiple login detected.")),
         408 => CloudProviderException.CommandFailed(Localization.L("Request denied — too many connections.")),
         119 => CloudProviderException.NotAuthenticated(),
