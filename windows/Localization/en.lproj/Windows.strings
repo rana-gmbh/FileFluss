@@ -1,0 +1,436 @@
+/* Windows-only strings — English.
+
+   Same format as the macOS Localizable.strings: the key is the English text, %@ stands where the
+   C# call site has {0}, {1}, … (in that order), and %% is a literal percent sign. A key that also
+   exists in a macOS catalogue overrides the Mac wording for every language that lists it here.
+   Generate the .resx files with: dotnet run --project windows/tools/StringsToResx */
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of macOS strings whose wording is wrong on Windows
+   --------------------------------------------------------------------------------------------- */
+
+"System Default follows the language selected in macOS." = "System Default follows the language selected in Windows.";
+"Search all sources (⌘F)" = "Search all sources (Ctrl+F)";
+"Move to Trash" = "Move to Recycle Bin";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "\"%@\" can't be moved to the Recycle Bin because its drive doesn't have one. Delete it permanently? This can't be undone.";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d items can't be moved to the Recycle Bin because their drive doesn't have one. Delete them permanently? This can't be undone.";
+"Are you sure you want to move \"%@\" to the Trash?" = "Are you sure you want to move \"%@\" to the Recycle Bin?";
+"Are you sure you want to move %d items to the Trash?" = "Are you sure you want to move %d items to the Recycle Bin?";
+"FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks." = "FileFluss is a dual‑panel file manager for Windows that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.";
+"**Search** (⌘F) — open the search window." = "**Search** (Ctrl+F) — open the search window.";
+"Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." = "Most toolbar buttons explain themselves in a tooltip when you hover over them.";
+"Open **Settings → Cloud Accounts** (⌘,)." = "Open **Settings → Cloud Accounts** (Ctrl+,).";
+"Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain." = "Sign in via the provider's authentication flow. FileFluss stores the tokens in the Windows credential store, encrypted for your Windows user account.";
+"In **Settings → Cloud Accounts**, click the trash icon next to the account." = "In **Settings → Cloud Accounts**, click **Remove** next to the account.";
+"Click **Search** in the toolbar, or press **⌘F**." = "Click **Search** in the toolbar, or press **Ctrl+F**.";
+"Click the round X close button, press **Esc**, or click the red traffic‑light button." = "Click the round X close button, press **Esc**, or click the window's close button.";
+"**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." = "**Double‑click** any file. Word documents open in Word, PDFs in your PDF viewer, images in Photos, and so on.";
+"Could not mount in Finder" = "Could not map as a network drive";
+"Reveal in Finder" = "Show in Explorer";
+"Open this account as a drive in Finder" = "Map this account as a network drive";
+"Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." = "Each cloud account you map as a network drive keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. A new value applies the next time a drive is mapped.";
+"Eject this drive from Finder" = "Disconnect this network drive";
+"Finder-Mount Read Cache" = "Network Drive Read Cache";
+"Mount in Finder" = "Map as Network Drive";
+"macOS / Finder Style" = "Windows / Explorer Style";
+"Open in Finder" = "Open in Explorer";
+"Do you want to mount “%@” in Finder?" = "Do you want to map “%@” as a network drive?";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "This account isn't mapped as a network drive yet. Mapping it adds it as a drive in File Explorer so you can open this item there.";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Map this account as a network drive first — a cloud folder has no path a terminal can open.";
+"A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "A terminal can only open a folder that exists on this PC. Mapping this account as a network drive adds it to File Explorer, and the terminal opens inside it.";
+"2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" = "2. Open DevTools (F12 in Chrome/Edge/Firefox)";
+"Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." = "Click Connect to sign in with your Box account. Your browser will open for authentication.";
+"FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account." = "FileFluss reads the key file once and stores its contents in the Windows credential store, encrypted for your user account — moving or deleting the original file later won't affect this account.";
+"FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." = "FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive.";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud uses the sign-in of iCloud for Windows — there's nothing to edit here. Manage iCloud Drive in the iCloud for Windows app.";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
+
+/* The Windows call site says "Windows Credential Manager"; FileFluss encrypts credentials with
+   DPAPI per user and does not use Credential Manager. */
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
+
+/* ---------------------------------------------------------------------------------------------
+   Menus, toolbar, panels and sidebar
+   --------------------------------------------------------------------------------------------- */
+
+"File" = "File";
+"Edit" = "Edit";
+"View" = "View";
+"Help" = "Help";
+"Exit" = "Exit";
+"Open" = "Open";
+"Open With…" = "Open With…";
+"Close" = "Close";
+"Properties" = "Properties";
+"Move to Recycle Bin" = "Move to Recycle Bin";
+"Show in Explorer" = "Show in Explorer";
+"Sort By" = "Sort By";
+"Folder" = "Folder";
+"Cloud" = "Cloud";
+"Local" = "Local";
+"This PC" = "This PC";
+"Local Disk" = "Local Disk";
+"USB Drive" = "USB Drive";
+"DVD Drive" = "DVD Drive";
+"Home" = "Home";
+"Desktop" = "Desktop";
+"Documents" = "Documents";
+"Downloads" = "Downloads";
+"Pictures" = "Pictures";
+"Music" = "Music";
+"Videos" = "Videos";
+"Retry" = "Retry";
+"Show only the active panel" = "Show only the active panel";
+"Index for Offline Search" = "Index for Offline Search";
+"Storage Analysis" = "Storage Analysis";
+"Storage Analysis…" = "Storage Analysis…";
+"Share Link…" = "Share Link…";
+"Where" = "Where";
+"Checksum" = "Checksum";
+"bytes" = "bytes";
+"1 byte" = "1 byte";
+"%@ bytes" = "%@ bytes";
+"1 file" = "1 file";
+"1 folder" = "1 folder";
+"%@ items" = "%@ items";
+"%@ free" = "%@ free";
+"%@ used" = "%@ used";
+"%@ of %@ used" = "%@ of %@ used";
+"%@ (offline)" = "%@ (offline)";
+"Name of the new folder:" = "Name of the new folder:";
+"A file with that name already exists." = "A file with that name already exists.";
+"A name can't contain \"/\"." = "A name can't contain \"/\".";
+"A file name can't contain any of the following characters: %@" = "A file name can't contain any of the following characters: %@";
+"\"%@\" isn't a valid name on Windows." = "\"%@\" isn't a valid name on Windows.";
+"Couldn't open \"%@\"" = "Couldn't open \"%@\"";
+"You don't have permission to open \"%@\"." = "You don't have permission to open \"%@\".";
+"The folder \"%@\" can't be found." = "The folder \"%@\" can't be found.";
+"This location is read-only." = "This location is read-only.";
+"Loading preview…" = "Loading preview…";
+"Mount this account first — a cloud folder has no path a terminal can open." = "Mount this account first — a cloud folder has no path a terminal can open.";
+"Transfers are still running" = "Transfers are still running";
+"Quitting cancels them. Files already transferred will remain." = "Quitting cancels them. Files already transferred will remain.";
+"Quit Anyway" = "Quit Anyway";
+
+/* ---------------------------------------------------------------------------------------------
+   Deleting, copying and moving
+   --------------------------------------------------------------------------------------------- */
+
+"Are you sure you want to move \"%@\" to the Recycle Bin?" = "Are you sure you want to move \"%@\" to the Recycle Bin?";
+"Are you sure you want to move %@ items to the Recycle Bin?" = "Are you sure you want to move %@ items to the Recycle Bin?";
+"\"%@\" couldn't be moved to the Recycle Bin." = "\"%@\" couldn't be moved to the Recycle Bin.";
+"%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone." = "%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone.";
+"\"%@\" can't be moved." = "\"%@\" can't be moved.";
+"A folder can't be copied or moved into itself." = "A folder can't be copied or moved into itself.";
+"An item named “%@” already exists at the destination." = "An item named “%@” already exists at the destination.";
+"The items need %@, but only %@ is available at the destination." = "The items need %@, but only %@ is available at the destination.";
+"Copy Anyway" = "Copy Anyway";
+"Move Anyway" = "Move Anyway";
+"Replace or Skip" = "Replace or Skip";
+"Source" = "Source";
+"Destination" = "Destination";
+"Transfer" = "Transfer";
+"Cloud account not connected" = "Cloud account not connected";
+"The file changed while it was being uploaded." = "The file changed while it was being uploaded.";
+"The server returned an unsafe file name (\"%@\"), so the download was stopped." = "The server returned an unsafe file name (\"%@\"), so the download was stopped.";
+
+/* ---------------------------------------------------------------------------------------------
+   Transfers
+   --------------------------------------------------------------------------------------------- */
+
+"Copied" = "Copied";
+"Moved" = "Moved";
+"Downloaded" = "Downloaded";
+"Uploaded" = "Uploaded";
+"Opened" = "Opened";
+"Synced" = "Synced";
+"Done" = "Done";
+"Cancelled" = "Cancelled";
+"Cancelling…" = "Cancelling…";
+"Downloading %@" = "Downloading %@";
+"Uploading %@" = "Uploading %@";
+"%@ %@ — %@ of %@ files" = "%@ %@ — %@ of %@ files";
+"Cancelled: %@ %@" = "Cancelled: %@ %@";
+"%@ %@ of %@ — %@ failed" = "%@ %@ of %@ — %@ failed";
+"Failed: %@ %@ — %@" = "Failed: %@ %@ — %@";
+"Skipped: %@" = "Skipped: %@";
+"Done: %@ %@" = "Done: %@ %@";
+"Done: %@ %@ (%@ files)" = "Done: %@ %@ (%@ files)";
+"Done: %@ %@ +%@ more" = "Done: %@ %@ +%@ more";
+"%@ of %@" = "%@ of %@";
+"~%@ left" = "~%@ left";
+"%@ of %@ files failed: %@" = "%@ of %@ files failed: %@";
+"Unknown error" = "Unknown error";
+
+/* ---------------------------------------------------------------------------------------------
+   Sync and compare
+   --------------------------------------------------------------------------------------------- */
+
+"Bidirectional" = "Bidirectional";
+"Upload Only" = "Upload Only";
+"Download Only" = "Download Only";
+"Paused" = "Paused";
+"Syncing..." = "Syncing...";
+"Sync needs a live folder on both sides." = "Sync needs a live folder on both sides.";
+"Could not compute plan: %@" = "Could not compute plan: %@";
+"Could not read folders: %@" = "Could not read folders: %@";
+"Left newer" = "Left newer";
+"Right newer" = "Right newer";
+"%@ different" = "%@ different";
+"%@ only left" = "%@ only left";
+"%@ only right" = "%@ only right";
+"%@ same" = "%@ same";
+
+/* ---------------------------------------------------------------------------------------------
+   Search and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Current Folder" = "Current Folder";
+"This Source" = "This Source";
+"All Sources" = "All Sources";
+"Local Files" = "Local Files";
+"Account not connected" = "Account not connected";
+"Could not save the index: %@" = "Could not save the index: %@";
+"Failed to open search index: %@" = "Failed to open search index: %@";
+"Search index error: %@" = "Search index error: %@";
+"\"%@\" is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed." = "\"%@\" is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed.";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis
+   --------------------------------------------------------------------------------------------- */
+
+"Pick a cloud account or a folder, then choose Analyse." = "Pick a cloud account or a folder, then choose Analyse.";
+"All sizes" = "All sizes";
+"1 MB and up" = "1 MB and up";
+"10 MB and up" = "10 MB and up";
+"100 MB and up" = "100 MB and up";
+"1 GB and up" = "1 GB and up";
+"No files above this size." = "No files above this size.";
+"%@ files · %@" = "%@ files · %@";
+"%@ files · %@ · %@" = "%@ files · %@ · %@";
+"%@ · %@ files · %@ folders" = "%@ · %@ files · %@ folders";
+"%@%% of the total" = "%@%% of the total";
+"Stopped early, so these totals are a lower bound — the real figures are larger." = "Stopped early, so these totals are a lower bound — the real figures are larger.";
+
+/* ---------------------------------------------------------------------------------------------
+   Settings
+   --------------------------------------------------------------------------------------------- */
+
+"Files" = "Files";
+"Sidebar" = "Sidebar";
+"Updates" = "Updates";
+"Welcome" = "Welcome";
+"Show" = "Show";
+"When FileFluss opens" = "When FileFluss opens";
+"Home folder" = "Home folder";
+"The folders from last time" = "The folders from last time";
+"Specific folders" = "Specific folders";
+"A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead." = "A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.";
+"Programs" = "Programs";
+"Check for updates automatically" = "Check for updates automatically";
+"FileFluss checks daily and asks before installing." = "FileFluss checks daily and asks before installing.";
+"Up to date" = "Up to date";
+"Copy direct download links when available" = "Copy direct download links when available";
+"\"Copy Share Link\" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page." = "\"Copy Share Link\" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.";
+"System Default follows the language selected in Windows." = "System Default follows the language selected in Windows.";
+"Cloud files opened or previewed are kept here so reopening them is instant." = "Cloud files opened or previewed are kept here so reopening them is instant.";
+"Open Cache Folder" = "Open Cache Folder";
+"Clear" = "Clear";
+"Automatic management" = "Automatic management";
+"At launch, delete old cached files and keep the cache under its size limit." = "At launch, delete old cached files and keep the cache under its size limit.";
+"Maximum cache size" = "Maximum cache size";
+"3 days" = "3 days";
+"1 week" = "1 week";
+"2 weeks" = "2 weeks";
+"1 month" = "1 month";
+"3 months" = "3 months";
+"Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn't available, the system temporary folder is used." = "Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn't available, the system temporary folder is used.";
+"System temporary folder" = "System temporary folder";
+"Use Default" = "Use Default";
+"Edit Account" = "Edit Account";
+"Remove Account" = "Remove Account";
+"Remove from FileFluss" = "Remove from FileFluss";
+"Remove \"%@\" from FileFluss? Files in the account are not touched." = "Remove \"%@\" from FileFluss? Files in the account are not touched.";
+"App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)" = "App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)";
+"GNU General Public License v3.0 ↗" = "GNU General Public License v3.0 ↗";
+"github.com/rana-gmbh/filefluss" = "github.com/rana-gmbh/filefluss";
+"www.filefluss.de" = "www.filefluss.de";
+
+/* Keyboard map */
+"Preset" = "Preset";
+"Windows / Explorer Style" = "Windows / Explorer Style";
+"None" = "None";
+"Space" = "Space";
+"Press a shortcut…" = "Press a shortcut…";
+"Shortcut in use" = "Shortcut in use";
+"%@ is already used by %@. Use it for %@ instead?" = "%@ is already used by %@. Use it for %@ instead?";
+"Reassign" = "Reassign";
+"Panel Navigation" = "Panel Navigation";
+"File Operations" = "File Operations";
+"Clipboard" = "Clipboard";
+"Selection" = "Selection";
+"View & Sort" = "View & Sort";
+"Cross-panel & Tools" = "Cross-panel & Tools";
+"Misc" = "Misc";
+
+/* ---------------------------------------------------------------------------------------------
+   Add / edit account
+   --------------------------------------------------------------------------------------------- */
+
+"Cloud Storage Providers" = "Cloud Storage Providers";
+"Other Protocols" = "Other Protocols";
+"Cameras & Devices" = "Cameras & Devices";
+"(optional)" = "(optional)";
+"Continue" = "Continue";
+"Save Changes" = "Save Changes";
+"Choose File…" = "Choose File…";
+"No file chosen" = "No file chosen";
+"All files" = "All files";
+"Leave empty to keep the stored secret access key." = "Leave empty to keep the stored secret access key.";
+"This account type isn't available in this version." = "This account type isn't available in this version.";
+"Select the folders for FileFluss in your browser…" = "Select the folders for FileFluss in your browser…";
+"Timed out waiting for browser sign-in." = "Timed out waiting for browser sign-in.";
+"Authorization code invalid or expired." = "Authorization code invalid or expired.";
+"Server URL is not a valid URL." = "Server URL is not a valid URL.";
+"Several cameras were found. Choose the one to add." = "Several cameras were found. Choose the one to add.";
+"2. Open DevTools (F12 in Chrome/Edge/Firefox)" = "2. Open DevTools (F12 in Chrome/Edge/Firefox)";
+"FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." = "FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive.";
+"iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." = "iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again.";
+"pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field." = "pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.";
+"This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead." = "This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.";
+"Waiting for authorization in the TeraBox app." = "Waiting for authorization in the TeraBox app.";
+"Authorization timed out — the QR code expired before it was scanned." = "Authorization timed out — the QR code expired before it was scanned.";
+"Box authentication failed: %@" = "Box authentication failed: %@";
+
+/* ---------------------------------------------------------------------------------------------
+   Share links
+   --------------------------------------------------------------------------------------------- */
+
+"Create Link" = "Create Link";
+"Copy Link" = "Copy Link";
+"Stop Sharing" = "Stop Sharing";
+"Allow downloading" = "Allow downloading";
+"Set an expiry date" = "Set an expiry date";
+"Protect with password" = "Protect with password";
+"Expires" = "Expires";
+"expiry dates" = "expiry dates";
+"password protection" = "password protection";
+" and " = " and ";
+"%@ usually need a paid plan." = "%@ usually need a paid plan.";
+"Create a public link to this file and copy it to the clipboard." = "Create a public link to this file and copy it to the clipboard.";
+"Anyone with this link can download the file until it expires. The link cannot be revoked early." = "Anyone with this link can download the file until it expires. The link cannot be revoked early.";
+"The link is on the clipboard." = "The link is on the clipboard.";
+"This file is shared. The link is on the clipboard." = "This file is shared. The link is on the clipboard.";
+"This file is no longer shared." = "This file is no longer shared.";
+"People with the link will no longer be able to open \"%@\"." = "People with the link will no longer be able to open \"%@\".";
+"Couldn't create the share link: %@" = "Couldn't create the share link: %@";
+"Couldn't change sharing: %@" = "Couldn't change sharing: %@";
+"Checked just now: %@" = "Checked just now: %@";
+"The link couldn't be checked from here: %@" = "The link couldn't be checked from here: %@";
+"the link is not reachable without signing in." = "the link is not reachable without signing in.";
+"the server didn't answer." = "the server didn't answer.";
+"Links from this account have needed a sign-in before. Check the link before you send it." = "Links from this account have needed a sign-in before. Check the link before you send it.";
+"This link only works for people who can sign in to the account." = "This link only works for people who can sign in to the account.";
+"This account can't serve direct download links, so the share page link was copied instead." = "This account can't serve direct download links, so the share page link was copied instead.";
+"This file already had a public link, so the requested settings were not applied." = "This file already had a public link, so the requested settings were not applied.";
+"This file already had a share link, so that one was returned." = "This file already had a share link, so that one was returned.";
+"This file already has a public link. Open it in Dropbox to copy that link." = "This file already has a public link. Open it in Dropbox to copy that link.";
+"This file doesn't have a public link." = "This file doesn't have a public link.";
+"This item doesn't have a public link." = "This item doesn't have a public link.";
+"This file has no public link to update. Create one first." = "This file has no public link to update. Create one first.";
+"This file isn't shared with anyone who has the link." = "This file isn't shared with anyone who has the link.";
+"This file was already public — WordPress media has no private state." = "This file was already public — WordPress media has no private state.";
+"OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works." = "OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.";
+"OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation." = "OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation.";
+"This link is not public: OneDrive granted it as \"%@\", so opening it asks for a Microsoft sign-in." = "This link is not public: OneDrive granted it as \"%@\", so opening it asks for a Microsoft sign-in.";
+"This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it." = "This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it.";
+"This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there." = "This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there.";
+"This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there." = "This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there.";
+"Box kept the public link in place — check whether your administrator manages sharing for this item." = "Box kept the public link in place — check whether your administrator manages sharing for this item.";
+"Your Box administrator disabled downloads for shared links — recipients can only preview the file." = "Your Box administrator disabled downloads for shared links — recipients can only preview the file.";
+"Your Box administrator restricted this link to people in your company — it is not publicly accessible." = "Your Box administrator restricted this link to people in your company — it is not publicly accessible.";
+"Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible." = "Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible.";
+"Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works." = "Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.";
+"Jottacloud accepted the request but returned no public link for this file." = "Jottacloud accepted the request but returned no public link for this file.";
+"kDrive created the link without download permission — recipients can view the file only." = "kDrive created the link without download permission — recipients can view the file only.";
+"The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it." = "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.";
+"The NAS has reached its maximum number of sharing links — delete some in File Station and try again." = "The NAS has reached its maximum number of sharing links — delete some in File Station and try again.";
+"Failed to access the NAS's sharing links." = "Failed to access the NAS's sharing links.";
+"The sharing link does not exist." = "The sharing link does not exist.";
+
+/* ---------------------------------------------------------------------------------------------
+   Provider errors
+   --------------------------------------------------------------------------------------------- */
+
+"The request timed out." = "The request timed out.";
+"Could not connect to the server." = "Could not connect to the server.";
+"Network is unreachable from this PC." = "Network is unreachable from this PC.";
+"Permission denied." = "Permission denied.";
+"Permission denied: %@" = "Permission denied: %@";
+"Invalid file name." = "Invalid file name.";
+"TLS/SSL error: %@" = "TLS/SSL error: %@";
+"the server's certificate could not be verified." = "the server's certificate could not be verified.";
+"S3 error (HTTP %@): %@" = "S3 error (HTTP %@): %@";
+"S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field.";
+"This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions." = "This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions.";
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.";
+
+/* FTP and SFTP */
+"FTP command failed." = "FTP command failed.";
+"Could not connect — check the host, port, and that FTP is reachable." = "Could not connect — check the host, port, and that FTP is reachable.";
+"Could not resolve host. Check the server address." = "Could not resolve host. Check the server address.";
+"Connection timed out." = "Connection timed out.";
+"SFTP command failed." = "SFTP command failed.";
+"Connection refused — is the SSH daemon running on this host and port?" = "Connection refused — is the SSH daemon running on this host and port?";
+"Connection timed out. Check the hostname, port, and your network." = "Connection timed out. Check the hostname, port, and your network.";
+"Could not resolve hostname. Check spelling or DNS." = "Could not resolve hostname. Check spelling or DNS.";
+"SSH authentication failed. Check the username and password." = "SSH authentication failed. Check the username and password.";
+"SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong." = "SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.";
+"SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)." = "SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).";
+"The private key is protected by a passphrase. Enter it and try again." = "The private key is protected by a passphrase. Enter it and try again.";
+"Wrong passphrase for the private key." = "Wrong passphrase for the private key.";
+"Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).";
+"This SFTP operation is not supported by the bundled SSH library." = "This SFTP operation is not supported by the bundled SSH library.";
+"Host key changed" = "Host key changed";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key.";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?";
+
+/* Seafile */
+"Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." = "Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.";
+"Cannot share the Seafile library list — pick a file or folder inside a library." = "Cannot share the Seafile library list — pick a file or folder inside a library.";
+"Cannot upload directly to the Seafile library root — pick a library first." = "Cannot upload directly to the Seafile library root — pick a library first.";
+"Create a library in the Seafile web UI before adding folders." = "Create a library in the Seafile web UI before adding folders.";
+"Rename a Seafile library from its web UI." = "Rename a Seafile library from its web UI.";
+"This library is encrypted. Unlock it in the Seafile web interface, then try again." = "This library is encrypted. Unlock it in the Seafile web interface, then try again.";
+
+/* Filen */
+"Filen API error" = "Filen API error";
+"Filen /v3/auth/info returned an unexpected payload." = "Filen /v3/auth/info returned an unexpected payload.";
+"Filen /v3/user/baseFolder didn't return a root UUID." = "Filen /v3/user/baseFolder didn't return a root UUID.";
+"Filen /v3/user/baseFolder failed (HTTP %@)" = "Filen /v3/user/baseFolder failed (HTTP %@)";
+"Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented." = "Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.";
+"Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet." = "Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.";
+"Filen file metadata not cached — listing didn't populate chunk info." = "Filen file metadata not cached — listing didn't populate chunk info.";
+"Filen file metadata not cached — re-open the folder and try again." = "Filen file metadata not cached — re-open the folder and try again.";
+"Filen login succeeded but the server didn't return an apiKey." = "Filen login succeeded but the server didn't return an apiKey.";
+
+/* Synology */
+"Synology login failed (code %@)." = "Synology login failed (code %@).";
+"Synology rejected the file path." = "Synology rejected the file path.";
+"Synology administrator must enforce 2-factor authentication." = "Synology administrator must enforce 2-factor authentication.";
+"No such account or incorrect password." = "No such account or incorrect password.";
+"Account is disabled." = "Account is disabled.";
+"Insufficient user privilege." = "Insufficient user privilege.";
+"Password expired — please reset it from DSM." = "Password expired — please reset it from DSM.";
+"Password must be changed at first login." = "Password must be changed at first login.";
+"This account requires a 2-factor authentication (OTP) code." = "This account requires a 2-factor authentication (OTP) code.";
+"OTP code is incorrect." = "OTP code is incorrect.";
+"OTP code authentication has failed too many times." = "OTP code authentication has failed too many times.";
+"Maximum number of OTP retries reached. Try again later." = "Maximum number of OTP retries reached. Try again later.";
+"Multiple login detected." = "Multiple login detected.";
+"Unknown API method." = "Unknown API method.";
+"Invalid API method." = "Invalid API method.";
+"Invalid API method version." = "Invalid API method version.";
+"Invalid parameter for the request." = "Invalid parameter for the request.";
+"Request denied — too many connections." = "Request denied — too many connections.";
+"Connection time out." = "Connection timed out.";

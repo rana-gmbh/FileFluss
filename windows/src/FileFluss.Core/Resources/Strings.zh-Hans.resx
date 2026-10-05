@@ -261,10 +261,10 @@
     <value>移动到另一面板</value>
   </data>
   <data name="Copy Path" xml:space="preserve">
-    <value>拷贝路径</value>
+    <value>复制路径</value>
   </data>
   <data name="Move to Trash" xml:space="preserve">
-    <value>移到废纸篓</value>
+    <value>移到回收站</value>
   </data>
   <data name="Delete Immediately?" xml:space="preserve">
     <value>立即删除？</value>
@@ -273,16 +273,16 @@
     <value>永久删除</value>
   </data>
   <data name="&quot;{0}&quot; can&apos;t be moved to the Trash because its volume doesn&apos;t have one. Delete it permanently? This can&apos;t be undone." xml:space="preserve">
-    <value>“{0}”无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。</value>
+    <value>“{0}”无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。</value>
   </data>
   <data name="{0} items can&apos;t be moved to the Trash because their volume doesn&apos;t have one. Delete them permanently? This can&apos;t be undone." xml:space="preserve">
-    <value>{0} 个项目无法移到废纸篓，因为其所在的宗卷没有废纸篓。要永久删除吗？此操作无法撤销。</value>
+    <value>{0} 个项目无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。</value>
   </data>
   <data name="Cut" xml:space="preserve">
     <value>剪切</value>
   </data>
   <data name="Copy" xml:space="preserve">
-    <value>拷贝</value>
+    <value>复制</value>
   </data>
   <data name="Paste" xml:space="preserve">
     <value>粘贴</value>
@@ -471,7 +471,7 @@
     <value>打开文件</value>
   </data>
   <data name="FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks." xml:space="preserve">
-    <value>FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需点按几下，即可在二者之间复制、移动、同步和比较文件。</value>
+    <value>FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需单击几下，即可在二者之间复制、移动、同步和比较文件。</value>
   </data>
   <data name="At a glance" xml:space="preserve">
     <value>概要</value>
@@ -513,7 +513,7 @@
     <value>**复制模式** / **移动模式**——强制每次拖放都执行该操作。</value>
   </data>
   <data name="Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." xml:space="preserve">
-    <value>右键点按工具栏并选择 *自定工具栏…* 以重新排列或隐藏按钮。</value>
+    <value>将鼠标悬停在工具栏按钮上，大多数按钮都会显示简短说明。</value>
   </data>
   <data name="FileFluss shows a left panel and a right panel. The active panel is marked with a thin accent line at the top — most actions (toolbar buttons, keyboard shortcuts, the search target) apply to whichever panel is active." xml:space="preserve">
     <value>FileFluss 显示一个左面板和一个右面板。活动面板顶部带有一条细的强调线标记——大多数操作（工具栏按钮、键盘快捷键、搜索目标）都作用于当前活动的面板。</value>
@@ -558,7 +558,7 @@
     <value>点按 **添加云账户** 并选择服务商（kDrive、pCloud、OneDrive、Google Drive、Dropbox、MEGA、Koofr、NextCloud、WebDAV、SFTP、GMX Cloud、WordPress……）。</value>
   </data>
   <data name="Sign in via the provider&apos;s authentication flow. FileFluss stores the tokens securely in your macOS Keychain." xml:space="preserve">
-    <value>通过服务商的认证流程登录。FileFluss 会将令牌安全地存储在你的 Windows 钥匙串中。</value>
+    <value>通过服务商的认证流程登录。FileFluss 会将令牌存储在 Windows 凭据存储中，并针对你的 Windows 用户账户加密。</value>
   </data>
   <data name="The new account immediately appears in both panels&apos; sidebars." xml:space="preserve">
     <value>新账户会立即出现在两个面板的边栏中。</value>
@@ -576,7 +576,7 @@
     <value>移除账户</value>
   </data>
   <data name="In **Settings → Cloud Accounts**, click the trash icon next to the account." xml:space="preserve">
-    <value>在 **设置 → 云账户** 中，点按账户旁边的垃圾桶图标。</value>
+    <value>在 **设置 → 云账户** 中，单击账户旁边的 **移除**。</value>
   </data>
   <data name="FileFluss disconnects the account, removes the cached login, and clears its panels." xml:space="preserve">
     <value>FileFluss 会断开该账户、移除缓存的登录信息并清空其面板。</value>
@@ -744,7 +744,7 @@
     <value>运行搜索</value>
   </data>
   <data name="Click **Search** in the toolbar, or press **⌘F**." xml:space="preserve">
-    <value>点按工具栏中的 **搜索**，或按 **Ctrl+F**。</value>
+    <value>单击工具栏中的 **搜索**，或按 **Ctrl+F**。</value>
   </data>
   <data name="Type a query — results stream in as each source responds." xml:space="preserve">
     <value>输入查询——结果会随着每个来源响应而陆续显示。</value>
@@ -768,7 +768,7 @@
     <value>关闭</value>
   </data>
   <data name="Click the round X close button, press **Esc**, or click the red traffic‑light button." xml:space="preserve">
-    <value>点按圆形的 X 关闭按钮、按 **Esc**，或点按红色的交通灯按钮。</value>
+    <value>单击圆形的 X 关闭按钮、按 **Esc**，或单击窗口的关闭按钮。</value>
   </data>
   <data name="The search window is movable and resizable — its size is remembered across launches." xml:space="preserve">
     <value>搜索窗口可移动且可调整大小——其大小会在多次启动之间被记住。</value>
@@ -780,7 +780,7 @@
     <value>用默认应用打开</value>
   </data>
   <data name="**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." xml:space="preserve">
-    <value>**双击** 任意文件。Word 文档会在 Word 中打开，PDF 在“预览”中打开，图像在你的图像查看器中打开，依此类推。</value>
+    <value>**双击** 任意文件。Word 文档会在 Word 中打开，PDF 在你的 PDF 阅读器中打开，图像在“照片”应用中打开，依此类推。</value>
   </data>
   <data name="Cloud files are downloaded to a temporary cache the first time, so reopening the same file is instant." xml:space="preserve">
     <value>云文件会在首次打开时下载到临时缓存，因此再次打开同一文件会很快。</value>
@@ -822,10 +822,10 @@
     <value>你想对“{0}”中的 {1} 个项目执行什么操作？</value>
   </data>
   <data name="Are you sure you want to move &quot;{0}&quot; to the Trash?" xml:space="preserve">
-    <value>确定要将“{0}”移到废纸篓吗？</value>
+    <value>确定要将“{0}”移到回收站吗？</value>
   </data>
   <data name="Are you sure you want to move {0} items to the Trash?" xml:space="preserve">
-    <value>确定要将 {0} 个项目移到废纸篓吗？</value>
+    <value>确定要将 {0} 个项目移到回收站吗？</value>
   </data>
   <data name="Folder name" xml:space="preserve">
     <value>文件夹名称</value>
@@ -969,7 +969,7 @@
     <value>这会断开 {0} 与 FileFluss 的连接。云端的文件不会被删除。</value>
   </data>
   <data name="Could not mount in Finder" xml:space="preserve">
-    <value>无法在访达中装载</value>
+    <value>无法映射为网络驱动器</value>
   </data>
   <data name="OK" xml:space="preserve">
     <value>好</value>
@@ -990,10 +990,10 @@
     <value>忘记驱动器</value>
   </data>
   <data name="Reveal in Finder" xml:space="preserve">
-    <value>在访达中显示</value>
+    <value>在文件资源管理器中显示</value>
   </data>
   <data name="Open this account as a drive in Finder" xml:space="preserve">
-    <value>在访达中将此账户作为驱动器打开</value>
+    <value>将此账户映射为网络驱动器</value>
   </data>
   <data name="Go Online" xml:space="preserve">
     <value>上线</value>
@@ -1323,13 +1323,13 @@
     <value>驱动器</value>
   </data>
   <data name="Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." xml:space="preserve">
-    <value>你在访达中装载的每个云账户会在本地保留最近下载的文件，上限为此大小，以便再次打开同一文件时即时完成。新值将在下次装载时生效。</value>
+    <value>每个映射为网络驱动器的云账户会在本地保留最近下载的文件，上限为此大小，以便再次打开同一文件时即时完成。新值将在下次映射驱动器时生效。</value>
   </data>
   <data name="Edit…" xml:space="preserve">
     <value>编辑…</value>
   </data>
   <data name="Eject this drive from Finder" xml:space="preserve">
-    <value>从访达中推出此驱动器</value>
+    <value>断开此网络驱动器</value>
   </data>
   <data name="Erase All Indexes" xml:space="preserve">
     <value>清除所有索引</value>
@@ -1338,7 +1338,7 @@
     <value>全部清除</value>
   </data>
   <data name="Finder-Mount Read Cache" xml:space="preserve">
-    <value>访达装载读取缓存</value>
+    <value>网络驱动器读取缓存</value>
   </data>
   <data name="Index a drive or cloud account from its sidebar context menu to make its contents searchable while offline." xml:space="preserve">
     <value>从驱动器或云账户的边栏右键菜单中将其索引，以便离线时可搜索其内容。</value>
@@ -1347,7 +1347,7 @@
     <value>MB</value>
   </data>
   <data name="Mount in Finder" xml:space="preserve">
-    <value>在访达中装载</value>
+    <value>映射为网络驱动器</value>
   </data>
   <data name="No Cloud Accounts" xml:space="preserve">
     <value>没有云账户</value>
@@ -1410,16 +1410,16 @@
     <value>当缓存超过此大小时，会先移除最旧的文件。在启动时以及此值更改时应用。</value>
   </data>
   <data name="macOS / Finder Style" xml:space="preserve">
-    <value>Windows / 访达风格</value>
+    <value>Windows / 文件资源管理器风格</value>
   </data>
   <data name="Open in Finder" xml:space="preserve">
-    <value>在访达中打开</value>
+    <value>在文件资源管理器中打开</value>
   </data>
   <data name="Do you want to mount “{0}” in Finder?" xml:space="preserve">
-    <value>是否要在访达中装载“{0}”？</value>
+    <value>是否要将“{0}”映射为网络驱动器？</value>
   </data>
   <data name="This account isn&apos;t mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." xml:space="preserve">
-    <value>此账户尚未装载。装载后会将其作为驱动器添加到访达中，以便您在那里打开此项目。</value>
+    <value>此账户尚未映射为网络驱动器。映射后，它会作为驱动器出现在文件资源管理器中，以便你在那里打开此项目。</value>
   </data>
   <data name="Copying" xml:space="preserve">
     <value>正在复制</value>
@@ -1455,7 +1455,7 @@
     <value>1. 在浏览器中登录 my.pcloud.com</value>
   </data>
   <data name="2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" xml:space="preserve">
-    <value>2. 打开开发者工具（Chrome/Safari/Firefox 中按 ⌥Ctrl+I）</value>
+    <value>2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）</value>
   </data>
   <data name="3. Chrome/Edge: Application tab → Storage → Cookies → https://my.pcloud.com" xml:space="preserve">
     <value>3. Chrome/Edge：Application 标签 → Storage → Cookies → https://my.pcloud.com</value>
@@ -1503,7 +1503,7 @@
     <value>点按“连接”以在浏览器中打开你的 Nextcloud 服务器登录页面。在那里使用你的常规用户名和密码登录（支持双重认证）；FileFluss 会自动收到一个应用专用密码。</value>
   </data>
   <data name="Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." xml:space="preserve">
-    <value>点按“连接”以登录你的 Box 账户。你的浏览器将打开以进行认证。此版本中每个文件的上传上限为 50 MB。</value>
+    <value>单击“连接”以登录你的 Box 账户。你的浏览器将打开以进行认证。</value>
   </data>
   <data name="Click Connect to sign in with your Dropbox account. Your browser will open for authentication." xml:space="preserve">
     <value>点按“连接”以登录你的 Dropbox 账户。你的浏览器将打开以进行认证。</value>
@@ -1557,10 +1557,10 @@
     <value>输入你的 WordPress 站点 URL 和应用专用密码。在 WordPress 的 用户 → 个人资料 → 应用专用密码 中创建一个。</value>
   </data>
   <data name="FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won&apos;t affect this account." xml:space="preserve">
-    <value>FileFluss 只读取一次密钥文件并将其内容存储在 Windows 钥匙串中——之后移动或删除原始文件不会影响此账户。</value>
+    <value>FileFluss 只读取一次密钥文件，并将其内容存储在 Windows 凭据存储中，针对你的用户账户加密——之后移动或删除原始文件不会影响此账户。</value>
   </data>
   <data name="FileFluss uses your Mac&apos;s existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." xml:space="preserve">
-    <value>FileFluss 使用你 Mac 上现有的 iCloud 登录——此处无需密码。必须在 系统设置 → Apple 账户 → iCloud → iCloud 云盘 中开启 iCloud 云盘。</value>
+    <value>FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。</value>
   </data>
   <data name="Filen is end-to-end encrypted, so there&apos;s no browser OAuth — the password is used locally to derive your master key, then discarded. Only v2 accounts are supported in this release; new Filen accounts default to v2." xml:space="preserve">
     <value>Filen 是端到端加密的，因此没有浏览器 OAuth——密码在本地用于派生你的主密钥，然后被丢弃。此版本仅支持 v2 账户；新的 Filen 账户默认为 v2。</value>
@@ -1629,7 +1629,7 @@
     <value>个人登录令牌</value>
   </data>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in your keychain." xml:space="preserve">
-    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据并存储在您的钥匙串中。</value>
+    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。</value>
   </data>
   <data name="To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." xml:space="preserve">
     <value>要使用新的个人登录令牌重新连接 Jottacloud，请移除此帐户并重新添加。</value>
@@ -1818,7 +1818,7 @@
     <value>这看起来不像 PEM 私钥。</value>
   </data>
   <data name="iCloud uses your Mac&apos;s system sign-in — there&apos;s nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." xml:space="preserve">
-    <value>iCloud 使用你 Mac 的系统登录——此处无可编辑内容。请在 系统设置 → Apple 账户 → iCloud 中管理 iCloud 云盘。</value>
+    <value>iCloud 使用 Windows 版 iCloud 的登录——此处无可编辑内容。请在 Windows 版 iCloud 应用中管理 iCloud 云盘。</value>
   </data>
   <data name="{0} {1} into {2} may exceed the available space. Continue anyway?" xml:space="preserve">
     <value>{0} {1} 到 {2} 可能会超出可用空间。仍要继续吗？</value>
@@ -2025,13 +2025,13 @@
     <value>{0} 不是文件夹。</value>
   </data>
   <data name="Mount this account in Finder first — a cloud folder has no path a terminal can open." xml:space="preserve">
-    <value>请先在访达中装载此账户——云端文件夹没有终端可以打开的路径。</value>
+    <value>请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。</value>
   </data>
   <data name="Mount and Open in Terminal" xml:space="preserve">
     <value>装载并在终端中打开</value>
   </data>
   <data name="A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." xml:space="preserve">
-    <value>终端只能打开这台 Mac 上存在的文件夹。装载后，此账户会作为驱动器出现在访达中，终端将在其中打开。</value>
+    <value>终端只能打开这台电脑上存在的文件夹。将此账户映射为网络驱动器后，它会出现在文件资源管理器中，终端将在其中打开。</value>
   </data>
   <data name="Not authenticated. Please sign in." xml:space="preserve">
     <value>未认证。请登录。</value>
@@ -2071,5 +2071,1024 @@
   </data>
   <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
     <value>文件过大，无法上传（{0}）。服务商已拒绝。请尝试拆分文件或改用其他云服务。</value>
+  </data>
+  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in Windows Credential Manager." xml:space="preserve">
+    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。</value>
+  </data>
+  <data name="File" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Edit" xml:space="preserve">
+    <value>编辑</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>查看</value>
+  </data>
+  <data name="Help" xml:space="preserve">
+    <value>帮助</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="Open With…" xml:space="preserve">
+    <value>打开方式…</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Move to Recycle Bin" xml:space="preserve">
+    <value>移到回收站</value>
+  </data>
+  <data name="Show in Explorer" xml:space="preserve">
+    <value>在文件资源管理器中显示</value>
+  </data>
+  <data name="Sort By" xml:space="preserve">
+    <value>排序方式</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>文件夹</value>
+  </data>
+  <data name="Cloud" xml:space="preserve">
+    <value>云端</value>
+  </data>
+  <data name="Local" xml:space="preserve">
+    <value>本地</value>
+  </data>
+  <data name="This PC" xml:space="preserve">
+    <value>此电脑</value>
+  </data>
+  <data name="Local Disk" xml:space="preserve">
+    <value>本地磁盘</value>
+  </data>
+  <data name="USB Drive" xml:space="preserve">
+    <value>USB 驱动器</value>
+  </data>
+  <data name="DVD Drive" xml:space="preserve">
+    <value>DVD 驱动器</value>
+  </data>
+  <data name="Home" xml:space="preserve">
+    <value>主文件夹</value>
+  </data>
+  <data name="Desktop" xml:space="preserve">
+    <value>桌面</value>
+  </data>
+  <data name="Documents" xml:space="preserve">
+    <value>文档</value>
+  </data>
+  <data name="Downloads" xml:space="preserve">
+    <value>下载</value>
+  </data>
+  <data name="Pictures" xml:space="preserve">
+    <value>图片</value>
+  </data>
+  <data name="Music" xml:space="preserve">
+    <value>音乐</value>
+  </data>
+  <data name="Videos" xml:space="preserve">
+    <value>视频</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Show only the active panel" xml:space="preserve">
+    <value>仅显示活动面板</value>
+  </data>
+  <data name="Index for Offline Search" xml:space="preserve">
+    <value>为离线搜索编制索引</value>
+  </data>
+  <data name="Storage Analysis" xml:space="preserve">
+    <value>存储分析</value>
+  </data>
+  <data name="Storage Analysis…" xml:space="preserve">
+    <value>存储分析…</value>
+  </data>
+  <data name="Share Link…" xml:space="preserve">
+    <value>共享链接…</value>
+  </data>
+  <data name="Where" xml:space="preserve">
+    <value>位置</value>
+  </data>
+  <data name="Checksum" xml:space="preserve">
+    <value>校验和</value>
+  </data>
+  <data name="bytes" xml:space="preserve">
+    <value>字节</value>
+  </data>
+  <data name="1 byte" xml:space="preserve">
+    <value>1 字节</value>
+  </data>
+  <data name="{0} bytes" xml:space="preserve">
+    <value>{0} 字节</value>
+  </data>
+  <data name="1 file" xml:space="preserve">
+    <value>1 个文件</value>
+  </data>
+  <data name="1 folder" xml:space="preserve">
+    <value>1 个文件夹</value>
+  </data>
+  <data name="{0} items" xml:space="preserve">
+    <value>{0} 个项目</value>
+  </data>
+  <data name="{0} free" xml:space="preserve">
+    <value>可用 {0}</value>
+  </data>
+  <data name="{0} used" xml:space="preserve">
+    <value>已用 {0}</value>
+  </data>
+  <data name="{0} of {1} used" xml:space="preserve">
+    <value>已用 {0}，共 {1}</value>
+  </data>
+  <data name="{0} (offline)" xml:space="preserve">
+    <value>{0}（离线）</value>
+  </data>
+  <data name="Name of the new folder:" xml:space="preserve">
+    <value>新文件夹的名称：</value>
+  </data>
+  <data name="A file with that name already exists." xml:space="preserve">
+    <value>已存在同名文件。</value>
+  </data>
+  <data name="A name can&apos;t contain &quot;/&quot;." xml:space="preserve">
+    <value>名称不能包含“/”。</value>
+  </data>
+  <data name="A file name can&apos;t contain any of the following characters: {0}" xml:space="preserve">
+    <value>文件名不能包含下列任何字符：{0}</value>
+  </data>
+  <data name="&quot;{0}&quot; isn&apos;t a valid name on Windows." xml:space="preserve">
+    <value>“{0}”在 Windows 上不是有效的名称。</value>
+  </data>
+  <data name="Couldn&apos;t open &quot;{0}&quot;" xml:space="preserve">
+    <value>无法打开“{0}”</value>
+  </data>
+  <data name="You don&apos;t have permission to open &quot;{0}&quot;." xml:space="preserve">
+    <value>你没有打开“{0}”的权限。</value>
+  </data>
+  <data name="The folder &quot;{0}&quot; can&apos;t be found." xml:space="preserve">
+    <value>找不到文件夹“{0}”。</value>
+  </data>
+  <data name="This location is read-only." xml:space="preserve">
+    <value>此位置为只读。</value>
+  </data>
+  <data name="Loading preview…" xml:space="preserve">
+    <value>正在加载预览…</value>
+  </data>
+  <data name="Mount this account first — a cloud folder has no path a terminal can open." xml:space="preserve">
+    <value>请先将此账户装载为驱动器——云端文件夹没有终端可以打开的路径。</value>
+  </data>
+  <data name="Transfers are still running" xml:space="preserve">
+    <value>传输仍在进行</value>
+  </data>
+  <data name="Quitting cancels them. Files already transferred will remain." xml:space="preserve">
+    <value>退出将取消这些传输。已传输的文件会保留。</value>
+  </data>
+  <data name="Quit Anyway" xml:space="preserve">
+    <value>仍要退出</value>
+  </data>
+  <data name="Are you sure you want to move &quot;{0}&quot; to the Recycle Bin?" xml:space="preserve">
+    <value>确定要将“{0}”移到回收站吗？</value>
+  </data>
+  <data name="Are you sure you want to move {0} items to the Recycle Bin?" xml:space="preserve">
+    <value>确定要将 {0} 个项目移到回收站吗？</value>
+  </data>
+  <data name="&quot;{0}&quot; couldn&apos;t be moved to the Recycle Bin." xml:space="preserve">
+    <value>无法将“{0}”移到回收站。</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its drive doesn&apos;t have one. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0}无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。</value>
+  </data>
+  <data name="&quot;{0}&quot; can&apos;t be moved." xml:space="preserve">
+    <value>无法移动“{0}”。</value>
+  </data>
+  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
+    <value>无法将文件夹复制或移动到其自身中。</value>
+  </data>
+  <data name="An item named “{0}” already exists at the destination." xml:space="preserve">
+    <value>目标位置已存在名为“{0}”的项目。</value>
+  </data>
+  <data name="The items need {0}, but only {1} is available at the destination." xml:space="preserve">
+    <value>这些项目需要 {0}，但目标位置只有 {1} 可用空间。</value>
+  </data>
+  <data name="Copy Anyway" xml:space="preserve">
+    <value>仍要复制</value>
+  </data>
+  <data name="Move Anyway" xml:space="preserve">
+    <value>仍要移动</value>
+  </data>
+  <data name="Replace or Skip" xml:space="preserve">
+    <value>替换或跳过</value>
+  </data>
+  <data name="Source" xml:space="preserve">
+    <value>源</value>
+  </data>
+  <data name="Destination" xml:space="preserve">
+    <value>目标</value>
+  </data>
+  <data name="Transfer" xml:space="preserve">
+    <value>传输</value>
+  </data>
+  <data name="Cloud account not connected" xml:space="preserve">
+    <value>云账户未连接</value>
+  </data>
+  <data name="The file changed while it was being uploaded." xml:space="preserve">
+    <value>文件在上传过程中发生了更改。</value>
+  </data>
+  <data name="The server returned an unsafe file name (&quot;{0}&quot;), so the download was stopped." xml:space="preserve">
+    <value>服务器返回了不安全的文件名（“{0}”），因此已停止下载。</value>
+  </data>
+  <data name="Copied" xml:space="preserve">
+    <value>已复制</value>
+  </data>
+  <data name="Moved" xml:space="preserve">
+    <value>已移动</value>
+  </data>
+  <data name="Downloaded" xml:space="preserve">
+    <value>已下载</value>
+  </data>
+  <data name="Uploaded" xml:space="preserve">
+    <value>已上传</value>
+  </data>
+  <data name="Opened" xml:space="preserve">
+    <value>已打开</value>
+  </data>
+  <data name="Synced" xml:space="preserve">
+    <value>已同步</value>
+  </data>
+  <data name="Done" xml:space="preserve">
+    <value>完成</value>
+  </data>
+  <data name="Cancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="Cancelling…" xml:space="preserve">
+    <value>正在取消…</value>
+  </data>
+  <data name="Downloading {0}" xml:space="preserve">
+    <value>正在下载 {0}</value>
+  </data>
+  <data name="Uploading {0}" xml:space="preserve">
+    <value>正在上传 {0}</value>
+  </data>
+  <data name="{0} {1} — {2} of {3} files" xml:space="preserve">
+    <value>{0}：{1}——{2}/{3} 个文件</value>
+  </data>
+  <data name="Cancelled: {0} {1}" xml:space="preserve">
+    <value>已取消——{0}：{1}</value>
+  </data>
+  <data name="{0} {1} of {2} — {3} failed" xml:space="preserve">
+    <value>{0}：{1}/{2}——{3} 个失败</value>
+  </data>
+  <data name="Failed: {0} {1} — {2}" xml:space="preserve">
+    <value>失败——{0}：{1}——{2}</value>
+  </data>
+  <data name="Skipped: {0}" xml:space="preserve">
+    <value>已跳过：{0}</value>
+  </data>
+  <data name="Done: {0} {1}" xml:space="preserve">
+    <value>完成——{0}：{1}</value>
+  </data>
+  <data name="Done: {0} {1} ({2} files)" xml:space="preserve">
+    <value>完成——{0}：{1}（{2} 个文件）</value>
+  </data>
+  <data name="Done: {0} {1} +{2} more" xml:space="preserve">
+    <value>完成——{0}：{1} 及另外 {2} 项</value>
+  </data>
+  <data name="{0} of {1}" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="~{0} left" xml:space="preserve">
+    <value>剩余约 {0}</value>
+  </data>
+  <data name="{0} of {1} files failed: {2}" xml:space="preserve">
+    <value>{0} 个文件失败（共 {1} 个）：{2}</value>
+  </data>
+  <data name="Unknown error" xml:space="preserve">
+    <value>未知错误</value>
+  </data>
+  <data name="Bidirectional" xml:space="preserve">
+    <value>双向</value>
+  </data>
+  <data name="Upload Only" xml:space="preserve">
+    <value>仅上传</value>
+  </data>
+  <data name="Download Only" xml:space="preserve">
+    <value>仅下载</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>已暂停</value>
+  </data>
+  <data name="Syncing..." xml:space="preserve">
+    <value>正在同步…</value>
+  </data>
+  <data name="Sync needs a live folder on both sides." xml:space="preserve">
+    <value>同步需要两侧都有可访问的文件夹。</value>
+  </data>
+  <data name="Could not compute plan: {0}" xml:space="preserve">
+    <value>无法计算同步计划：{0}</value>
+  </data>
+  <data name="Could not read folders: {0}" xml:space="preserve">
+    <value>无法读取文件夹：{0}</value>
+  </data>
+  <data name="Left newer" xml:space="preserve">
+    <value>左侧较新</value>
+  </data>
+  <data name="Right newer" xml:space="preserve">
+    <value>右侧较新</value>
+  </data>
+  <data name="{0} different" xml:space="preserve">
+    <value>{0} 个不同</value>
+  </data>
+  <data name="{0} only left" xml:space="preserve">
+    <value>{0} 个仅在左侧</value>
+  </data>
+  <data name="{0} only right" xml:space="preserve">
+    <value>{0} 个仅在右侧</value>
+  </data>
+  <data name="{0} same" xml:space="preserve">
+    <value>{0} 个相同</value>
+  </data>
+  <data name="Current Folder" xml:space="preserve">
+    <value>当前文件夹</value>
+  </data>
+  <data name="This Source" xml:space="preserve">
+    <value>此来源</value>
+  </data>
+  <data name="All Sources" xml:space="preserve">
+    <value>所有来源</value>
+  </data>
+  <data name="Local Files" xml:space="preserve">
+    <value>本地文件</value>
+  </data>
+  <data name="Account not connected" xml:space="preserve">
+    <value>账户未连接</value>
+  </data>
+  <data name="Could not save the index: {0}" xml:space="preserve">
+    <value>无法保存索引：{0}</value>
+  </data>
+  <data name="Failed to open search index: {0}" xml:space="preserve">
+    <value>无法打开搜索索引：{0}</value>
+  </data>
+  <data name="Search index error: {0}" xml:space="preserve">
+    <value>搜索索引错误：{0}</value>
+  </data>
+  <data name="&quot;{0}&quot; is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed." xml:space="preserve">
+    <value>“{0}”处于离线状态。可以浏览和搜索其已索引的内容，但无法打开、复制或更改。</value>
+  </data>
+  <data name="Pick a cloud account or a folder, then choose Analyse." xml:space="preserve">
+    <value>选择一个云账户或文件夹，然后选择“分析”。</value>
+  </data>
+  <data name="All sizes" xml:space="preserve">
+    <value>所有大小</value>
+  </data>
+  <data name="1 MB and up" xml:space="preserve">
+    <value>1 MB 及以上</value>
+  </data>
+  <data name="10 MB and up" xml:space="preserve">
+    <value>10 MB 及以上</value>
+  </data>
+  <data name="100 MB and up" xml:space="preserve">
+    <value>100 MB 及以上</value>
+  </data>
+  <data name="1 GB and up" xml:space="preserve">
+    <value>1 GB 及以上</value>
+  </data>
+  <data name="No files above this size." xml:space="preserve">
+    <value>没有超过此大小的文件。</value>
+  </data>
+  <data name="{0} files · {1}" xml:space="preserve">
+    <value>{0} 个文件 · {1}</value>
+  </data>
+  <data name="{0} files · {1} · {2}" xml:space="preserve">
+    <value>{0} 个文件 · {1} · {2}</value>
+  </data>
+  <data name="{0} · {1} files · {2} folders" xml:space="preserve">
+    <value>{0} · {1} 个文件 · {2} 个文件夹</value>
+  </data>
+  <data name="{0}% of the total" xml:space="preserve">
+    <value>占总量的 {0}%</value>
+  </data>
+  <data name="Stopped early, so these totals are a lower bound — the real figures are larger." xml:space="preserve">
+    <value>已提前停止，因此这些总数只是下限——实际数值更大。</value>
+  </data>
+  <data name="Files" xml:space="preserve">
+    <value>文件</value>
+  </data>
+  <data name="Sidebar" xml:space="preserve">
+    <value>侧边栏</value>
+  </data>
+  <data name="Updates" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="Welcome" xml:space="preserve">
+    <value>欢迎</value>
+  </data>
+  <data name="Show" xml:space="preserve">
+    <value>显示</value>
+  </data>
+  <data name="When FileFluss opens" xml:space="preserve">
+    <value>FileFluss 启动时</value>
+  </data>
+  <data name="Home folder" xml:space="preserve">
+    <value>主文件夹</value>
+  </data>
+  <data name="The folders from last time" xml:space="preserve">
+    <value>上次的文件夹</value>
+  </data>
+  <data name="Specific folders" xml:space="preserve">
+    <value>指定的文件夹</value>
+  </data>
+  <data name="A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead." xml:space="preserve">
+    <value>已不存在的文件夹（已删除的文件夹、已拔出的驱动器、已断开的云账户）将改为打开你的主文件夹。</value>
+  </data>
+  <data name="Programs" xml:space="preserve">
+    <value>程序</value>
+  </data>
+  <data name="Check for updates automatically" xml:space="preserve">
+    <value>自动检查更新</value>
+  </data>
+  <data name="FileFluss checks daily and asks before installing." xml:space="preserve">
+    <value>FileFluss 每天检查一次，并在安装前询问你。</value>
+  </data>
+  <data name="Up to date" xml:space="preserve">
+    <value>已是最新版本</value>
+  </data>
+  <data name="Copy direct download links when available" xml:space="preserve">
+    <value>尽可能复制直接下载链接</value>
+  </data>
+  <data name="&quot;Copy Share Link&quot; then copies a link that downloads the file straight away, instead of the provider&apos;s preview page. Providers that offer no direct link always give their own page." xml:space="preserve">
+    <value>这样，“复制共享链接”会复制一个可直接下载文件的链接，而不是服务商的预览页面。不提供直接链接的服务商始终给出其自己的页面。</value>
+  </data>
+  <data name="System Default follows the language selected in Windows." xml:space="preserve">
+    <value>“跟随系统”将使用 Windows 中设置的语言。</value>
+  </data>
+  <data name="Cloud files opened or previewed are kept here so reopening them is instant." xml:space="preserve">
+    <value>打开或预览过的云文件会保存在这里，以便再次打开时即时完成。</value>
+  </data>
+  <data name="Open Cache Folder" xml:space="preserve">
+    <value>打开缓存文件夹</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>清除</value>
+  </data>
+  <data name="Automatic management~2" xml:space="preserve">
+    <value>自动管理</value>
+  </data>
+  <data name="At launch, delete old cached files and keep the cache under its size limit." xml:space="preserve">
+    <value>启动时删除旧的缓存文件，并使缓存保持在大小上限以内。</value>
+  </data>
+  <data name="Maximum cache size" xml:space="preserve">
+    <value>最大缓存大小</value>
+  </data>
+  <data name="3 days" xml:space="preserve">
+    <value>3 天</value>
+  </data>
+  <data name="1 week" xml:space="preserve">
+    <value>1 周</value>
+  </data>
+  <data name="2 weeks" xml:space="preserve">
+    <value>2 周</value>
+  </data>
+  <data name="1 month" xml:space="preserve">
+    <value>1 个月</value>
+  </data>
+  <data name="3 months" xml:space="preserve">
+    <value>3 个月</value>
+  </data>
+  <data name="Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn&apos;t available, the system temporary folder is used." xml:space="preserve">
+    <value>下载内容会先暂存在此文件夹中。将其指向外部驱动器上的文件夹，可使传输到该驱动器的大文件不占用系统磁盘。如果此文件夹不可用，则使用系统临时文件夹。</value>
+  </data>
+  <data name="System temporary folder" xml:space="preserve">
+    <value>系统临时文件夹</value>
+  </data>
+  <data name="Use Default" xml:space="preserve">
+    <value>使用默认值</value>
+  </data>
+  <data name="Edit Account" xml:space="preserve">
+    <value>编辑账户</value>
+  </data>
+  <data name="Remove Account" xml:space="preserve">
+    <value>移除账户</value>
+  </data>
+  <data name="Remove from FileFluss" xml:space="preserve">
+    <value>从 FileFluss 中移除</value>
+  </data>
+  <data name="Remove &quot;{0}&quot; from FileFluss? Files in the account are not touched." xml:space="preserve">
+    <value>要从 FileFluss 中移除“{0}”吗？账户中的文件不受影响。</value>
+  </data>
+  <data name="App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)" xml:space="preserve">
+    <value>应用图标由 @JohnnyFireOne 设计 · 文件类型图标来自 redbooth/free-file-icons（MIT）</value>
+  </data>
+  <data name="GNU General Public License v3.0 ↗" xml:space="preserve">
+    <value>GNU 通用公共许可证 v3.0 ↗</value>
+  </data>
+  <data name="github.com/rana-gmbh/filefluss" xml:space="preserve">
+    <value>github.com/rana-gmbh/filefluss</value>
+  </data>
+  <data name="www.filefluss.de" xml:space="preserve">
+    <value>www.filefluss.de</value>
+  </data>
+  <data name="Preset" xml:space="preserve">
+    <value>预设</value>
+  </data>
+  <data name="Windows / Explorer Style" xml:space="preserve">
+    <value>Windows / 文件资源管理器风格</value>
+  </data>
+  <data name="None" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Space" xml:space="preserve">
+    <value>空格键</value>
+  </data>
+  <data name="Press a shortcut…" xml:space="preserve">
+    <value>请按快捷键…</value>
+  </data>
+  <data name="Shortcut in use" xml:space="preserve">
+    <value>快捷键已被占用</value>
+  </data>
+  <data name="{0} is already used by {1}. Use it for {2} instead?" xml:space="preserve">
+    <value>{0} 已被“{1}”使用。要改为用于“{2}”吗？</value>
+  </data>
+  <data name="Reassign" xml:space="preserve">
+    <value>重新分配</value>
+  </data>
+  <data name="Panel Navigation" xml:space="preserve">
+    <value>面板导航</value>
+  </data>
+  <data name="File Operations" xml:space="preserve">
+    <value>文件操作</value>
+  </data>
+  <data name="Clipboard" xml:space="preserve">
+    <value>剪贴板</value>
+  </data>
+  <data name="Selection" xml:space="preserve">
+    <value>选择</value>
+  </data>
+  <data name="View &amp; Sort" xml:space="preserve">
+    <value>视图和排序</value>
+  </data>
+  <data name="Cross-panel &amp; Tools" xml:space="preserve">
+    <value>跨面板和工具</value>
+  </data>
+  <data name="Misc" xml:space="preserve">
+    <value>其他</value>
+  </data>
+  <data name="Cloud Storage Providers" xml:space="preserve">
+    <value>云存储服务商</value>
+  </data>
+  <data name="Other Protocols" xml:space="preserve">
+    <value>其他协议</value>
+  </data>
+  <data name="Cameras &amp; Devices" xml:space="preserve">
+    <value>相机和设备</value>
+  </data>
+  <data name="(optional)" xml:space="preserve">
+    <value>（可选）</value>
+  </data>
+  <data name="Continue" xml:space="preserve">
+    <value>继续</value>
+  </data>
+  <data name="Save Changes" xml:space="preserve">
+    <value>保存更改</value>
+  </data>
+  <data name="Choose File…" xml:space="preserve">
+    <value>选择文件…</value>
+  </data>
+  <data name="No file chosen" xml:space="preserve">
+    <value>未选择文件</value>
+  </data>
+  <data name="All files" xml:space="preserve">
+    <value>所有文件</value>
+  </data>
+  <data name="Leave empty to keep the stored secret access key." xml:space="preserve">
+    <value>留空以保留已存储的秘密访问密钥。</value>
+  </data>
+  <data name="This account type isn&apos;t available in this version." xml:space="preserve">
+    <value>此版本不支持该账户类型。</value>
+  </data>
+  <data name="Select the folders for FileFluss in your browser…" xml:space="preserve">
+    <value>请在浏览器中为 FileFluss 选择文件夹…</value>
+  </data>
+  <data name="Timed out waiting for browser sign-in." xml:space="preserve">
+    <value>等待浏览器登录超时。</value>
+  </data>
+  <data name="Authorization code invalid or expired." xml:space="preserve">
+    <value>授权码无效或已过期。</value>
+  </data>
+  <data name="Server URL is not a valid URL." xml:space="preserve">
+    <value>服务器 URL 不是有效的 URL。</value>
+  </data>
+  <data name="Several cameras were found. Choose the one to add." xml:space="preserve">
+    <value>找到了多台相机。请选择要添加的相机。</value>
+  </data>
+  <data name="2. Open DevTools (F12 in Chrome/Edge/Firefox)" xml:space="preserve">
+    <value>2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）</value>
+  </data>
+  <data name="FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." xml:space="preserve">
+    <value>FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。</value>
+  </data>
+  <data name="iCloud Drive wasn&apos;t found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." xml:space="preserve">
+    <value>在这台电脑上找不到 iCloud 云盘。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘，然后重试。</value>
+  </data>
+  <data name="pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the &apos;pcauth&apos; cookie value, and paste it into the Access Token field." xml:space="preserve">
+    <value>pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。</value>
+  </data>
+  <data name="This Nextcloud server doesn&apos;t expose Login Flow v2. Use the App Password sign-in option instead." xml:space="preserve">
+    <value>此 Nextcloud 服务器未提供 Login Flow v2。请改用应用专用密码登录方式。</value>
+  </data>
+  <data name="Waiting for authorization in the TeraBox app." xml:space="preserve">
+    <value>正在等待 TeraBox 应用中的授权。</value>
+  </data>
+  <data name="Authorization timed out — the QR code expired before it was scanned." xml:space="preserve">
+    <value>授权超时——二维码在扫描前已过期。</value>
+  </data>
+  <data name="Box authentication failed: {0}" xml:space="preserve">
+    <value>Box 认证失败：{0}</value>
+  </data>
+  <data name="Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it." xml:space="preserve">
+    <value>打开相机，然后通过 USB 连接，或加入相机的 Wi-Fi 网络。再扫描以查找相机。</value>
+  </data>
+  <data name="Scan for Cameras" xml:space="preserve">
+    <value>扫描相机</value>
+  </data>
+  <data name="Scanning…" xml:space="preserve">
+    <value>正在扫描…</value>
+  </data>
+  <data name="No camera found. Make sure it&apos;s on and connected by USB or Wi-Fi, then scan again." xml:space="preserve">
+    <value>未找到相机。请确保相机已开机并通过 USB 或 Wi-Fi 连接，然后再次扫描。</value>
+  </data>
+  <data name="GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again." xml:space="preserve">
+    <value>GoPro 相机在开机且可访问时会自动连接。要配对其他相机，请移除此相机后重新添加。</value>
+  </data>
+  <data name="USB or Wi-Fi" xml:space="preserve">
+    <value>USB 或 Wi-Fi</value>
+  </data>
+  <data name="Home Wi-Fi (COHN)" xml:space="preserve">
+    <value>家庭 Wi-Fi（COHN）</value>
+  </data>
+  <data name="Set up &quot;Camera on Home Network&quot; in the GoPro Quik app, then enter the camera&apos;s IP address and the COHN username and password it shows." xml:space="preserve">
+    <value>在 GoPro Quik 应用中设置“家庭网络上的相机”（COHN），然后输入相机的 IP 地址以及应用显示的 COHN 用户名和密码。</value>
+  </data>
+  <data name="Camera IP address" xml:space="preserve">
+    <value>相机 IP 地址</value>
+  </data>
+  <data name="COHN Username" xml:space="preserve">
+    <value>COHN 用户名</value>
+  </data>
+  <data name="COHN Password" xml:space="preserve">
+    <value>COHN 密码</value>
+  </data>
+  <data name="Create Link" xml:space="preserve">
+    <value>创建链接</value>
+  </data>
+  <data name="Copy Link" xml:space="preserve">
+    <value>复制链接</value>
+  </data>
+  <data name="Stop Sharing" xml:space="preserve">
+    <value>停止共享</value>
+  </data>
+  <data name="Allow downloading" xml:space="preserve">
+    <value>允许下载</value>
+  </data>
+  <data name="Set an expiry date" xml:space="preserve">
+    <value>设置过期日期</value>
+  </data>
+  <data name="Protect with password" xml:space="preserve">
+    <value>使用密码保护</value>
+  </data>
+  <data name="Expires" xml:space="preserve">
+    <value>过期时间</value>
+  </data>
+  <data name="expiry dates" xml:space="preserve">
+    <value>过期日期</value>
+  </data>
+  <data name="password protection" xml:space="preserve">
+    <value>密码保护</value>
+  </data>
+  <data name=" and " xml:space="preserve">
+    <value>和</value>
+  </data>
+  <data name="{0} usually need a paid plan." xml:space="preserve">
+    <value>{0}通常需要付费套餐。</value>
+  </data>
+  <data name="Create a public link to this file and copy it to the clipboard." xml:space="preserve">
+    <value>为此文件创建公开链接并将其复制到剪贴板。</value>
+  </data>
+  <data name="Anyone with this link can download the file until it expires. The link cannot be revoked early." xml:space="preserve">
+    <value>在链接过期之前，任何拥有此链接的人都可以下载该文件。此链接无法提前撤销。</value>
+  </data>
+  <data name="The link is on the clipboard." xml:space="preserve">
+    <value>链接已复制到剪贴板。</value>
+  </data>
+  <data name="This file is shared. The link is on the clipboard." xml:space="preserve">
+    <value>此文件已共享。链接已复制到剪贴板。</value>
+  </data>
+  <data name="This file is no longer shared." xml:space="preserve">
+    <value>此文件已不再共享。</value>
+  </data>
+  <data name="People with the link will no longer be able to open &quot;{0}&quot;." xml:space="preserve">
+    <value>拥有此链接的人将无法再打开“{0}”。</value>
+  </data>
+  <data name="Couldn&apos;t create the share link: {0}" xml:space="preserve">
+    <value>无法创建共享链接：{0}</value>
+  </data>
+  <data name="Couldn&apos;t change sharing: {0}" xml:space="preserve">
+    <value>无法更改共享设置：{0}</value>
+  </data>
+  <data name="Checked just now: {0}" xml:space="preserve">
+    <value>刚刚检查：{0}</value>
+  </data>
+  <data name="The link couldn&apos;t be checked from here: {0}" xml:space="preserve">
+    <value>无法从此处检查链接：{0}</value>
+  </data>
+  <data name="the link is not reachable without signing in." xml:space="preserve">
+    <value>未登录时无法访问该链接。</value>
+  </data>
+  <data name="the server didn&apos;t answer." xml:space="preserve">
+    <value>服务器没有响应。</value>
+  </data>
+  <data name="Links from this account have needed a sign-in before. Check the link before you send it." xml:space="preserve">
+    <value>此账户的链接以前需要登录才能访问。发送前请先检查链接。</value>
+  </data>
+  <data name="This link only works for people who can sign in to the account." xml:space="preserve">
+    <value>此链接仅对能够登录该账户的人有效。</value>
+  </data>
+  <data name="This account can&apos;t serve direct download links, so the share page link was copied instead." xml:space="preserve">
+    <value>此账户无法提供直接下载链接，因此已改为复制共享页面链接。</value>
+  </data>
+  <data name="This file already had a public link, so the requested settings were not applied." xml:space="preserve">
+    <value>此文件已有公开链接，因此未应用所请求的设置。</value>
+  </data>
+  <data name="This file already had a share link, so that one was returned." xml:space="preserve">
+    <value>此文件已有共享链接，因此返回了该链接。</value>
+  </data>
+  <data name="This file already has a public link. Open it in Dropbox to copy that link." xml:space="preserve">
+    <value>此文件已有公开链接。请在 Dropbox 中打开它以复制该链接。</value>
+  </data>
+  <data name="This file doesn&apos;t have a public link." xml:space="preserve">
+    <value>此文件没有公开链接。</value>
+  </data>
+  <data name="This item doesn&apos;t have a public link." xml:space="preserve">
+    <value>此项目没有公开链接。</value>
+  </data>
+  <data name="This file has no public link to update. Create one first." xml:space="preserve">
+    <value>此文件没有可更新的公开链接。请先创建一个。</value>
+  </data>
+  <data name="This file isn&apos;t shared with anyone who has the link." xml:space="preserve">
+    <value>此文件未与拥有链接的人共享。</value>
+  </data>
+  <data name="This file was already public — WordPress media has no private state." xml:space="preserve">
+    <value>此文件已经是公开的——WordPress 媒体没有私有状态。</value>
+  </data>
+  <data name="OneDrive can&apos;t change a link&apos;s settings in place, so the previous link was revoked and a new one created — the old address no longer works." xml:space="preserve">
+    <value>OneDrive 无法直接更改链接的设置，因此已撤销之前的链接并创建了新链接——旧地址已失效。</value>
+  </data>
+  <data name="OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation." xml:space="preserve">
+    <value>OneDrive 拒绝为此文件创建公开链接。账户可能关闭了通过链接共享的功能，而且企业账户通常只允许组织内部人员使用链接。</value>
+  </data>
+  <data name="This link is not public: OneDrive granted it as &quot;{0}&quot;, so opening it asks for a Microsoft sign-in." xml:space="preserve">
+    <value>此链接不是公开的：OneDrive 以“{0}”方式授予了它，因此打开时需要登录 Microsoft 账户。</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to change a file&apos;s existing link. Open the file in OneDrive on the web to change or remove it." xml:space="preserve">
+    <value>此 Microsoft 账户不允许应用更改文件的现有链接。请在 OneDrive 网页版中打开该文件以更改或移除链接。</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to manage a file&apos;s existing links. Open the file in OneDrive on the web and remove the link there." xml:space="preserve">
+    <value>此 Microsoft 账户不允许应用管理文件的现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。</value>
+  </data>
+  <data name="This Microsoft account doesn&apos;t allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there." xml:space="preserve">
+    <value>此 Microsoft 账户不允许应用移除现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。</value>
+  </data>
+  <data name="Box kept the public link in place — check whether your administrator manages sharing for this item." xml:space="preserve">
+    <value>Box 保留了公开链接——请确认你的管理员是否管理此项目的共享。</value>
+  </data>
+  <data name="Your Box administrator disabled downloads for shared links — recipients can only preview the file." xml:space="preserve">
+    <value>你的 Box 管理员已禁用共享链接的下载——收件人只能预览该文件。</value>
+  </data>
+  <data name="Your Box administrator restricted this link to people in your company — it is not publicly accessible." xml:space="preserve">
+    <value>你的 Box 管理员已将此链接限制为仅公司内部人员可用——它无法公开访问。</value>
+  </data>
+  <data name="Your Box administrator restricted this link to the file&apos;s collaborators — it is not publicly accessible." xml:space="preserve">
+    <value>你的 Box 管理员已将此链接限制为仅文件的协作者可用——它无法公开访问。</value>
+  </data>
+  <data name="Seafile cannot change a link&apos;s settings, so the link was replaced — the previous URL no longer works." xml:space="preserve">
+    <value>Seafile 无法更改链接的设置，因此已替换该链接——之前的 URL 已失效。</value>
+  </data>
+  <data name="Jottacloud accepted the request but returned no public link for this file." xml:space="preserve">
+    <value>Jottacloud 接受了请求，但没有返回此文件的公开链接。</value>
+  </data>
+  <data name="kDrive created the link without download permission — recipients can view the file only." xml:space="preserve">
+    <value>kDrive 创建的链接没有下载权限——收件人只能查看该文件。</value>
+  </data>
+  <data name="The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM&apos;s external access settings if recipients can&apos;t open it." xml:space="preserve">
+    <value>NAS 根据 DSM 自认为的地址生成了此链接，因此它可能只能在你的本地网络中使用。如果收件人无法打开，请检查 DSM 的外部访问设置。</value>
+  </data>
+  <data name="The NAS has reached its maximum number of sharing links — delete some in File Station and try again." xml:space="preserve">
+    <value>NAS 的共享链接数量已达上限——请在 File Station 中删除一些后重试。</value>
+  </data>
+  <data name="Failed to access the NAS&apos;s sharing links." xml:space="preserve">
+    <value>无法访问 NAS 的共享链接。</value>
+  </data>
+  <data name="The sharing link does not exist." xml:space="preserve">
+    <value>共享链接不存在。</value>
+  </data>
+  <data name="The request timed out." xml:space="preserve">
+    <value>请求超时。</value>
+  </data>
+  <data name="Could not connect to the server." xml:space="preserve">
+    <value>无法连接到服务器。</value>
+  </data>
+  <data name="Network is unreachable from this PC." xml:space="preserve">
+    <value>从这台电脑无法访问网络。</value>
+  </data>
+  <data name="Permission denied." xml:space="preserve">
+    <value>权限被拒绝。</value>
+  </data>
+  <data name="Permission denied: {0}" xml:space="preserve">
+    <value>权限被拒绝：{0}</value>
+  </data>
+  <data name="Invalid file name." xml:space="preserve">
+    <value>文件名无效。</value>
+  </data>
+  <data name="TLS/SSL error: {0}" xml:space="preserve">
+    <value>TLS/SSL 错误：{0}</value>
+  </data>
+  <data name="the server&apos;s certificate could not be verified." xml:space="preserve">
+    <value>无法验证服务器的证书。</value>
+  </data>
+  <data name="S3 error (HTTP {0}): {1}" xml:space="preserve">
+    <value>S3 错误（HTTP {0}）：{1}</value>
+  </data>
+  <data name="S3 endpoint URL is invalid (host: &quot;{0}&quot;). Double-check the Endpoint URL field." xml:space="preserve">
+    <value>S3 端点 URL 无效（主机：“{0}”）。请检查“端点 URL”字段。</value>
+  </data>
+  <data name="This key isn&apos;t allowed to list the account&apos;s buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won&apos;t ask for account-wide permissions." xml:space="preserve">
+    <value>此密钥无权列出账户的存储桶（s3:ListAllMyBuckets）。请在“路径”字段中输入存储桶名称——FileFluss 将只使用该存储桶，不会请求账户范围的权限。</value>
+  </data>
+  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
+    <value>下载的文件已损坏：其 MEGA 完整性校验（MAC）不匹配。</value>
+  </data>
+  <data name="FTP command failed." xml:space="preserve">
+    <value>FTP 命令失败。</value>
+  </data>
+  <data name="Could not connect — check the host, port, and that FTP is reachable." xml:space="preserve">
+    <value>无法连接——请检查主机、端口以及 FTP 是否可访问。</value>
+  </data>
+  <data name="Could not resolve host. Check the server address." xml:space="preserve">
+    <value>无法解析主机。请检查服务器地址。</value>
+  </data>
+  <data name="Connection timed out." xml:space="preserve">
+    <value>连接超时。</value>
+  </data>
+  <data name="SFTP command failed." xml:space="preserve">
+    <value>SFTP 命令失败。</value>
+  </data>
+  <data name="Connection refused — is the SSH daemon running on this host and port?" xml:space="preserve">
+    <value>连接被拒绝——此主机和端口上是否运行着 SSH 服务？</value>
+  </data>
+  <data name="Connection timed out. Check the hostname, port, and your network." xml:space="preserve">
+    <value>连接超时。请检查主机名、端口和你的网络。</value>
+  </data>
+  <data name="Could not resolve hostname. Check spelling or DNS." xml:space="preserve">
+    <value>无法解析主机名。请检查拼写或 DNS。</value>
+  </data>
+  <data name="SSH authentication failed. Check the username and password." xml:space="preserve">
+    <value>SSH 认证失败。请检查用户名和密码。</value>
+  </data>
+  <data name="SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong." xml:space="preserve">
+    <value>SSH 认证失败。服务器可能未授权你的公钥，或者密码短语错误。</value>
+  </data>
+  <data name="SSH key was rejected by the server. Make sure the public key is in the server&apos;s ~/.ssh/authorized_keys (or added to the provider&apos;s SSH-keys panel for managed services like Hetzner Storage Box)." xml:space="preserve">
+    <value>服务器拒绝了 SSH 密钥。请确保公钥位于服务器的 ~/.ssh/authorized_keys 中（对于 Hetzner Storage Box 等托管服务，请将其添加到服务商的 SSH 密钥面板中）。</value>
+  </data>
+  <data name="The private key is protected by a passphrase. Enter it and try again." xml:space="preserve">
+    <value>私钥受密码短语保护。请输入密码短语后重试。</value>
+  </data>
+  <data name="Wrong passphrase for the private key." xml:space="preserve">
+    <value>私钥的密码短语错误。</value>
+  </data>
+  <data name="Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." xml:space="preserve">
+    <value>私钥格式不受支持。请将其转换为 OpenSSH 格式（例如使用 `puttygen key.ppk -O private-openssh -o id_rsa`）。</value>
+  </data>
+  <data name="This SFTP operation is not supported by the bundled SSH library." xml:space="preserve">
+    <value>内置的 SSH 库不支持此 SFTP 操作。</value>
+  </data>
+  <data name="Host key changed" xml:space="preserve">
+    <value>主机密钥已更改</value>
+  </data>
+  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
+    <value>主机密钥验证失败——服务器的主机密钥已更改。如果这在你的预料之中，请编辑账户并重新连接以接受新密钥。</value>
+  </data>
+  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
+    <value>自上次连接以来，{0} 的 SSH 主机密钥已更改。服务器重新安装后会出现这种情况——也可能是有人在拦截连接。
+
+之前：{1}
+现在：{2}
+
+要信任新密钥吗？</value>
+  </data>
+  <data name="Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." xml:space="preserve">
+    <value>无法在 FileFluss 中删除 Seafile 资料库。请使用 Seafile 网页界面。</value>
+  </data>
+  <data name="Cannot share the Seafile library list — pick a file or folder inside a library." xml:space="preserve">
+    <value>无法共享 Seafile 资料库列表——请选择资料库中的文件或文件夹。</value>
+  </data>
+  <data name="Cannot upload directly to the Seafile library root — pick a library first." xml:space="preserve">
+    <value>无法直接上传到 Seafile 资料库的根目录——请先选择一个资料库。</value>
+  </data>
+  <data name="Create a library in the Seafile web UI before adding folders." xml:space="preserve">
+    <value>添加文件夹之前，请先在 Seafile 网页界面中创建资料库。</value>
+  </data>
+  <data name="Rename a Seafile library from its web UI." xml:space="preserve">
+    <value>请在 Seafile 网页界面中重命名资料库。</value>
+  </data>
+  <data name="This library is encrypted. Unlock it in the Seafile web interface, then try again." xml:space="preserve">
+    <value>此资料库已加密。请在 Seafile 网页界面中解锁后重试。</value>
+  </data>
+  <data name="Filen API error" xml:space="preserve">
+    <value>Filen API 错误</value>
+  </data>
+  <data name="Filen /v3/auth/info returned an unexpected payload." xml:space="preserve">
+    <value>Filen /v3/auth/info 返回了意外的数据。</value>
+  </data>
+  <data name="Filen /v3/user/baseFolder didn&apos;t return a root UUID." xml:space="preserve">
+    <value>Filen /v3/user/baseFolder 未返回根 UUID。</value>
+  </data>
+  <data name="Filen /v3/user/baseFolder failed (HTTP {0})" xml:space="preserve">
+    <value>Filen /v3/user/baseFolder 失败（HTTP {0}）</value>
+  </data>
+  <data name="Filen account uses auth version {0}. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented." xml:space="preserve">
+    <value>Filen 账户使用认证版本 {0}。FileFluss 目前仅支持 v2 账户——尚未实现 Filen v1 / v3（Argon2）。</value>
+  </data>
+  <data name="Filen file key isn&apos;t 32 ASCII bytes — encrypted with an auth-version we don&apos;t support yet." xml:space="preserve">
+    <value>Filen 文件密钥不是 32 个 ASCII 字节——它使用了尚不支持的认证版本加密。</value>
+  </data>
+  <data name="Filen file metadata not cached — listing didn&apos;t populate chunk info." xml:space="preserve">
+    <value>Filen 文件元数据未缓存——列表未提供分块信息。</value>
+  </data>
+  <data name="Filen file metadata not cached — re-open the folder and try again." xml:space="preserve">
+    <value>Filen 文件元数据未缓存——请重新打开文件夹后重试。</value>
+  </data>
+  <data name="Filen login succeeded but the server didn&apos;t return an apiKey." xml:space="preserve">
+    <value>Filen 登录成功，但服务器未返回 apiKey。</value>
+  </data>
+  <data name="Synology login failed (code {0})." xml:space="preserve">
+    <value>Synology 登录失败（代码 {0}）。</value>
+  </data>
+  <data name="Synology rejected the file path." xml:space="preserve">
+    <value>Synology 拒绝了该文件路径。</value>
+  </data>
+  <data name="Synology administrator must enforce 2-factor authentication." xml:space="preserve">
+    <value>Synology 管理员要求进行双重验证。</value>
+  </data>
+  <data name="No such account or incorrect password." xml:space="preserve">
+    <value>账户不存在或密码错误。</value>
+  </data>
+  <data name="Account is disabled." xml:space="preserve">
+    <value>账户已停用。</value>
+  </data>
+  <data name="Insufficient user privilege." xml:space="preserve">
+    <value>用户权限不足。</value>
+  </data>
+  <data name="Password expired — please reset it from DSM." xml:space="preserve">
+    <value>密码已过期——请在 DSM 中重置。</value>
+  </data>
+  <data name="Password must be changed at first login." xml:space="preserve">
+    <value>首次登录时必须更改密码。</value>
+  </data>
+  <data name="This account requires a 2-factor authentication (OTP) code." xml:space="preserve">
+    <value>此账户需要双重验证（OTP）代码。</value>
+  </data>
+  <data name="OTP code is incorrect." xml:space="preserve">
+    <value>OTP 代码不正确。</value>
+  </data>
+  <data name="OTP code authentication has failed too many times." xml:space="preserve">
+    <value>OTP 代码验证失败次数过多。</value>
+  </data>
+  <data name="Maximum number of OTP retries reached. Try again later." xml:space="preserve">
+    <value>已达到 OTP 最大重试次数。请稍后再试。</value>
+  </data>
+  <data name="Multiple login detected." xml:space="preserve">
+    <value>检测到多处登录。</value>
+  </data>
+  <data name="Unknown API method." xml:space="preserve">
+    <value>未知的 API 方法。</value>
+  </data>
+  <data name="Invalid API method." xml:space="preserve">
+    <value>无效的 API 方法。</value>
+  </data>
+  <data name="Invalid API method version." xml:space="preserve">
+    <value>无效的 API 方法版本。</value>
+  </data>
+  <data name="Invalid parameter for the request." xml:space="preserve">
+    <value>请求参数无效。</value>
+  </data>
+  <data name="Request denied — too many connections." xml:space="preserve">
+    <value>请求被拒绝——连接过多。</value>
+  </data>
+  <data name="Connection time out." xml:space="preserve">
+    <value>连接超时。</value>
   </data>
 </root>

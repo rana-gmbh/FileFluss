@@ -8,95 +8,157 @@ were left alone and want a human decision.
 
 | Language | Key | Status | Value |
 | --- | --- | --- | --- |
-| `en` | `System Default follows the language selected in macOS.` | auto-rewritten | System Default follows the language selected in Windows. |
-| `en` | `Search all sources (⌘F)` | auto-rewritten | Search all sources (Ctrl+F) |
+| `en` | `System Default follows the language selected in macOS.` | windows override | System Default follows the language selected in Windows. |
+| `en` | `Search all sources (⌘F)` | windows override | Search all sources (Ctrl+F) |
 | `en` | `Open System Settings…` | auto-rewritten | Open Settings… |
 | `en` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time. |
 | `en` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | auto-rewritten | Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect. |
 | `en` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | auto-rewritten | Or click the **+** button in Settings and pick FileFluss from your Applications folder. |
+| `en` | `Move to Trash` | windows override | Move to Recycle Bin |
+| `en` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | "%@" can't be moved to the Recycle Bin because its drive doesn't have one. Delete it permanently? This can't be undone. |
+| `en` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d items can't be moved to the Recycle Bin because their drive doesn't have one. Delete them permanently? This can't be undone. |
 | `en` | `The menu bar and window titles change after relaunching FileFluss.` | needs review | The menu bar and window titles change after relaunching FileFluss. |
 | `en` | `The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches.` | needs review | The app window updated immediately. The menu bar and window titles switch after FileFluss relaunches. |
-| `en` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | auto-rewritten | FileFluss is a dual‑panel file manager for Windows that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks. |
-| `en` | `**Search** (⌘F) — open the search window.` | auto-rewritten | **Search** (Ctrl+F) — open the search window. |
-| `en` | `Open **Settings → Cloud Accounts** (⌘,).` | auto-rewritten | Open **Settings → Cloud Accounts** (Ctrl+,). |
-| `en` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | auto-rewritten | Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your Windows Credential Manager. |
-| `en` | `Click **Search** in the toolbar, or press **⌘F**.` | auto-rewritten | Click **Search** in the toolbar, or press **Ctrl+F**. |
-| `en` | `Could not mount in Finder` | auto-rewritten | Could not mount in Explorer |
-| `en` | `Reveal in Finder` | auto-rewritten | Reveal in Explorer |
-| `en` | `Open this account as a drive in Finder` | auto-rewritten | Open this account as a drive in Explorer |
-| `en` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | auto-rewritten | Each cloud account you mount in Explorer keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount. |
-| `en` | `Eject this drive from Finder` | auto-rewritten | Eject this drive from Explorer |
-| `en` | `Finder-Mount Read Cache` | auto-rewritten | Explorer-Mount Read Cache |
-| `en` | `Mount in Finder` | auto-rewritten | Mount in Explorer |
-| `en` | `macOS / Finder Style` | auto-rewritten | Windows / Explorer Style |
-| `en` | `Open in Finder` | auto-rewritten | Open in Explorer |
-| `en` | `Do you want to mount “%@” in Finder?` | auto-rewritten | Do you want to mount “%@” in Explorer? |
-| `en` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | auto-rewritten | This account isn't mounted yet. Mounting it adds it as a drive in Explorer so you can open this item there. |
-| `en` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | auto-rewritten | 2. Open DevTools (⌥Ctrl+I in Chrome/Safari/Firefox) |
-| `en` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | auto-rewritten | FileFluss reads the key file once and stores its contents in the Windows Credential Manager — moving or deleting the original file later won't affect this account. |
-| `en` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | auto-rewritten | FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in Settings → Apple Account → iCloud → iCloud Drive. |
-| `en` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | auto-rewritten | iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in Settings → Apple Account → iCloud. |
-| `en` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | auto-rewritten | Mount this account in Explorer first — a cloud folder has no path a terminal can open. |
-| `en` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | auto-rewritten | A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Explorer, and the terminal opens inside it. |
-| `de` | `System Default follows the language selected in macOS.` | auto-rewritten | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
-| `de` | `Search all sources (⌘F)` | auto-rewritten | Alle Quellen durchsuchen (Ctrl+F) |
+| `en` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | windows override | FileFluss is a dual‑panel file manager for Windows that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks. |
+| `en` | `**Search** (⌘F) — open the search window.` | windows override | **Search** (Ctrl+F) — open the search window. |
+| `en` | `Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons.` | windows override | Most toolbar buttons explain themselves in a tooltip when you hover over them. |
+| `en` | `Open **Settings → Cloud Accounts** (⌘,).` | windows override | Open **Settings → Cloud Accounts** (Ctrl+,). |
+| `en` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | windows override | Sign in via the provider's authentication flow. FileFluss stores the tokens in the Windows credential store, encrypted for your Windows user account. |
+| `en` | `In **Settings → Cloud Accounts**, click the trash icon next to the account.` | windows override | In **Settings → Cloud Accounts**, click **Remove** next to the account. |
+| `en` | `Click **Search** in the toolbar, or press **⌘F**.` | windows override | Click **Search** in the toolbar, or press **Ctrl+F**. |
+| `en` | `Click the round X close button, press **Esc**, or click the red traffic‑light button.` | windows override | Click the round X close button, press **Esc**, or click the window's close button. |
+| `en` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **Double‑click** any file. Word documents open in Word, PDFs in your PDF viewer, images in Photos, and so on. |
+| `en` | `Are you sure you want to move "%@" to the Trash?` | windows override | Are you sure you want to move "%@" to the Recycle Bin? |
+| `en` | `Are you sure you want to move %d items to the Trash?` | windows override | Are you sure you want to move %d items to the Recycle Bin? |
+| `en` | `Could not mount in Finder` | windows override | Could not map as a network drive |
+| `en` | `Reveal in Finder` | windows override | Show in Explorer |
+| `en` | `Open this account as a drive in Finder` | windows override | Map this account as a network drive |
+| `en` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | windows override | Each cloud account you map as a network drive keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. A new value applies the next time a drive is mapped. |
+| `en` | `Eject this drive from Finder` | windows override | Disconnect this network drive |
+| `en` | `Finder-Mount Read Cache` | windows override | Network Drive Read Cache |
+| `en` | `Mount in Finder` | windows override | Map as Network Drive |
+| `en` | `macOS / Finder Style` | windows override | Windows / Explorer Style |
+| `en` | `Open in Finder` | windows override | Open in Explorer |
+| `en` | `Do you want to mount “%@” in Finder?` | windows override | Do you want to map “%@” as a network drive? |
+| `en` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | windows override | This account isn't mapped as a network drive yet. Mapping it adds it as a drive in File Explorer so you can open this item there. |
+| `en` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | windows override | 2. Open DevTools (F12 in Chrome/Edge/Firefox) |
+| `en` | `Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version.` | windows override | Click Connect to sign in with your Box account. Your browser will open for authentication. |
+| `en` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | windows override | FileFluss reads the key file once and stores its contents in the Windows credential store, encrypted for your user account — moving or deleting the original file later won't affect this account. |
+| `en` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | windows override | FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive. |
+| `en` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store. |
+| `en` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud uses the sign-in of iCloud for Windows — there's nothing to edit here. Manage iCloud Drive in the iCloud for Windows app. |
+| `en` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Map this account as a network drive first — a cloud folder has no path a terminal can open. |
+| `en` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | A terminal can only open a folder that exists on this PC. Mapping this account as a network drive adds it to File Explorer, and the terminal opens inside it. |
+| `de` | `System Default follows the language selected in macOS.` | windows override | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
+| `de` | `Search all sources (⌘F)` | windows override | Alle Quellen durchsuchen (Strg+F) |
 | `de` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows fragt einmal pro geschütztem Ordner (Schreibtisch, Dokumente, Downloads, …). Das erste Öffnen kann jeweils einige Sekunden dauern – aber nur beim ersten Mal. |
-| `de` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | auto-rewritten | FileFluss ist ein zweispaltiger Dateimanager für Windows, mit dem du lokale Ordner und mehrere Cloud-Speicherkonten nebeneinander nutzen kannst. Er ist um einen linken und einen rechten Bereich herum aufgebaut – kopiere, bewege, synchronisiere und vergleiche Dateien mit wenigen Klicks zwischen ihnen. |
-| `de` | `**Search** (⌘F) — open the search window.` | auto-rewritten | **Suchen** (Ctrl+F) – öffnet das Suchfenster. |
-| `de` | `Open **Settings → Cloud Accounts** (⌘,).` | auto-rewritten | Öffne **Einstellungen → Cloud-Konten** (Ctrl+,). |
-| `de` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | auto-rewritten | Melde dich über den Authentifizierungsablauf des Anbieters an. FileFluss speichert die Tokens sicher in deinem Windows-Schlüsselbund. |
-| `de` | `Click **Search** in the toolbar, or press **⌘F**.` | auto-rewritten | Klicke in der Symbolleiste auf **Suchen** oder drücke **Ctrl+F**. |
-| `de` | `Could not mount in Finder` | auto-rewritten | Konnte nicht im Explorer eingebunden werden |
-| `de` | `Reveal in Finder` | auto-rewritten | Im Explorer zeigen |
-| `de` | `Open this account as a drive in Finder` | auto-rewritten | Dieses Konto als Laufwerk im Explorer öffnen |
-| `de` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | auto-rewritten | Jedes im Explorer eingebundene Cloud-Konto behält kürzlich geladene Dateien lokal bis zu dieser Größe, sodass das erneute Öffnen derselben Datei sofort erfolgt. Der neue Wert gilt ab der nächsten Einbindung. |
-| `de` | `Eject this drive from Finder` | auto-rewritten | Dieses Laufwerk aus dem Explorer auswerfen |
-| `de` | `Finder-Mount Read Cache` | auto-rewritten | Lese-Cache für Explorer-Einbindung |
-| `de` | `Mount in Finder` | auto-rewritten | Im Explorer einbinden |
-| `de` | `macOS / Finder Style` | auto-rewritten | Windows- / Explorer-Stil |
-| `de` | `Open in Finder` | auto-rewritten | Im Explorer öffnen |
-| `de` | `Do you want to mount “%@” in Finder?` | auto-rewritten | Möchten Sie „%@“ im Explorer einbinden? |
-| `de` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | auto-rewritten | Dieses Konto ist noch nicht eingebunden. Beim Einbinden wird es als Laufwerk im Explorer hinzugefügt, damit Sie dieses Element dort öffnen können. |
-| `de` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | auto-rewritten | 2. Öffne die Entwicklertools (⌥Ctrl+I in Chrome/Safari/Firefox) |
-| `de` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | auto-rewritten | FileFluss liest die Schlüsseldatei einmal und speichert ihren Inhalt im Windows-Schlüsselbund — das spätere Verschieben oder Löschen der Originaldatei wirkt sich nicht auf dieses Konto aus. |
-| `de` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | auto-rewritten | Binde dieses Konto zuerst im Explorer ein — ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann. |
-| `de` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | auto-rewritten | Ein Terminal kann nur Ordner öffnen, die es auf diesem Mac gibt. Beim Einbinden erscheint dieses Konto als Laufwerk im Explorer, und das Terminal öffnet darin. |
-| `zh-Hans` | `System Default follows the language selected in macOS.` | auto-rewritten | “跟随系统”将使用 Windows 中设置的语言。 |
-| `zh-Hans` | `Search all sources (⌘F)` | auto-rewritten | 搜索所有来源（Ctrl+F） |
+| `de` | `Move to Trash` | windows override | In den Papierkorb verschieben |
+| `de` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | „%@“ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden. |
+| `de` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d Objekte können nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden. |
+| `de` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | windows override | FileFluss ist ein zweispaltiger Dateimanager für Windows, mit dem du lokale Ordner und mehrere Cloud-Speicherkonten nebeneinander nutzen kannst. Er ist um einen linken und einen rechten Bereich herum aufgebaut – kopiere, bewege, synchronisiere und vergleiche Dateien mit wenigen Klicks zwischen ihnen. |
+| `de` | `**Search** (⌘F) — open the search window.` | windows override | **Suchen** (Strg+F) – öffnet das Suchfenster. |
+| `de` | `Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons.` | windows override | Die meisten Schaltflächen der Symbolleiste erklären sich in einer QuickInfo, wenn du mit der Maus darauf zeigst. |
+| `de` | `Open **Settings → Cloud Accounts** (⌘,).` | windows override | Öffne **Einstellungen → Cloud-Konten** (Strg+,). |
+| `de` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | windows override | Melde dich über den Authentifizierungsablauf des Anbieters an. FileFluss speichert die Tokens im Windows-Anmeldedatenspeicher, verschlüsselt für dein Windows-Benutzerkonto. |
+| `de` | `In **Settings → Cloud Accounts**, click the trash icon next to the account.` | windows override | Klicke unter **Einstellungen → Cloud-Konten** neben dem Konto auf **Entfernen**. |
+| `de` | `Click **Search** in the toolbar, or press **⌘F**.` | windows override | Klicke in der Symbolleiste auf **Suchen** oder drücke **Strg+F**. |
+| `de` | `Click the round X close button, press **Esc**, or click the red traffic‑light button.` | windows override | Klicke auf den runden X-Schließknopf, drücke **Esc** oder klicke auf die Schließen-Schaltfläche des Fensters. |
+| `de` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **Doppelklick** auf eine beliebige Datei. Word-Dokumente öffnen sich in Word, PDFs in deinem PDF-Viewer, Bilder in der Fotos-App usw. |
+| `de` | `Are you sure you want to move "%@" to the Trash?` | windows override | Möchtest du „%@“ wirklich in den Papierkorb verschieben? |
+| `de` | `Are you sure you want to move %d items to the Trash?` | windows override | Möchtest du %d Objekte wirklich in den Papierkorb verschieben? |
+| `de` | `Could not mount in Finder` | windows override | Konnte nicht als Netzlaufwerk verbunden werden |
+| `de` | `Reveal in Finder` | windows override | Im Explorer anzeigen |
+| `de` | `Open this account as a drive in Finder` | windows override | Dieses Konto als Netzlaufwerk verbinden |
+| `de` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | windows override | Jedes als Netzlaufwerk verbundene Cloud-Konto behält kürzlich geladene Dateien lokal bis zu dieser Größe, sodass das erneute Öffnen derselben Datei sofort erfolgt. Ein neuer Wert gilt ab der nächsten Verbindung eines Laufwerks. |
+| `de` | `Eject this drive from Finder` | windows override | Dieses Netzlaufwerk trennen |
+| `de` | `Finder-Mount Read Cache` | windows override | Lese-Cache für Netzlaufwerke |
+| `de` | `Mount in Finder` | windows override | Als Netzlaufwerk verbinden |
+| `de` | `macOS / Finder Style` | windows override | Windows- / Explorer-Stil |
+| `de` | `Open in Finder` | windows override | Im Explorer öffnen |
+| `de` | `Do you want to mount “%@” in Finder?` | windows override | Möchtest du „%@“ als Netzlaufwerk verbinden? |
+| `de` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | windows override | Dieses Konto ist noch nicht als Netzlaufwerk verbunden. Dabei wird es als Laufwerk im Explorer hinzugefügt, damit du dieses Element dort öffnen kannst. |
+| `de` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | windows override | 2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox) |
+| `de` | `Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version.` | windows override | Klicke auf „Verbinden“, um dich mit deinem Box-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung. |
+| `de` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | windows override | FileFluss liest die Schlüsseldatei einmal und speichert ihren Inhalt im Windows-Anmeldedatenspeicher, verschlüsselt für dein Benutzerkonto – das spätere Verschieben oder Löschen der Originaldatei wirkt sich nicht auf dieses Konto aus. |
+| `de` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | windows override | FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive. |
+| `de` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird. |
+| `de` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“. |
+| `de` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann. |
+| `de` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin. |
+| `zh-Hans` | `System Default follows the language selected in macOS.` | windows override | “跟随系统”将使用 Windows 中设置的语言。 |
+| `zh-Hans` | `Search all sources (⌘F)` | windows override | 搜索所有来源（Ctrl+F） |
 | `zh-Hans` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 会对每个受保护的文件夹（桌面、文稿、下载……）询问一次。每个文件夹首次打开可能需要几秒钟——但仅限首次。 |
-| `zh-Hans` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | auto-rewritten | FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需点按几下，即可在二者之间复制、移动、同步和比较文件。 |
-| `zh-Hans` | `**Search** (⌘F) — open the search window.` | auto-rewritten | **搜索**（Ctrl+F）——打开搜索窗口。 |
-| `zh-Hans` | `Open **Settings → Cloud Accounts** (⌘,).` | auto-rewritten | 打开 **设置 → 云账户**（Ctrl+,）。 |
-| `zh-Hans` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | auto-rewritten | 通过服务商的认证流程登录。FileFluss 会将令牌安全地存储在你的 Windows 钥匙串中。 |
-| `zh-Hans` | `Click **Search** in the toolbar, or press **⌘F**.` | auto-rewritten | 点按工具栏中的 **搜索**，或按 **Ctrl+F**。 |
-| `zh-Hans` | `macOS / Finder Style` | auto-rewritten | Windows / 访达风格 |
-| `zh-Hans` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | auto-rewritten | 2. 打开开发者工具（Chrome/Safari/Firefox 中按 ⌥Ctrl+I） |
-| `zh-Hans` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | auto-rewritten | FileFluss 只读取一次密钥文件并将其内容存储在 Windows 钥匙串中——之后移动或删除原始文件不会影响此账户。 |
-| `zh-Hans` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | needs review | FileFluss 使用你 Mac 上现有的 iCloud 登录——此处无需密码。必须在 系统设置 → Apple 账户 → iCloud → iCloud 云盘 中开启 iCloud 云盘。 |
-| `zh-Hans` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | needs review | iCloud 使用你 Mac 的系统登录——此处无可编辑内容。请在 系统设置 → Apple 账户 → iCloud 中管理 iCloud 云盘。 |
-| `zh-Hans` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | needs review | 终端只能打开这台 Mac 上存在的文件夹。装载后，此账户会作为驱动器出现在访达中，终端将在其中打开。 |
-| `zh-Hant` | `System Default follows the language selected in macOS.` | auto-rewritten | 「跟隨系統」會使用 Windows 中設定的語言。 |
-| `zh-Hant` | `Search all sources (⌘F)` | auto-rewritten | 搜尋所有來源（Ctrl+F） |
+| `zh-Hans` | `Copy Path` | windows override | 复制路径 |
+| `zh-Hans` | `Move to Trash` | windows override | 移到回收站 |
+| `zh-Hans` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | “%@”无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。 |
+| `zh-Hans` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d 个项目无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。 |
+| `zh-Hans` | `Copy` | windows override | 复制 |
+| `zh-Hans` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | windows override | FileFluss 是一款适用于 Windows 的双面板文件管理器，可让你并排处理本地文件夹和多个云存储账户。它围绕左右两个面板构建——只需单击几下，即可在二者之间复制、移动、同步和比较文件。 |
+| `zh-Hans` | `**Search** (⌘F) — open the search window.` | windows override | **搜索**（Ctrl+F）——打开搜索窗口。 |
+| `zh-Hans` | `Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons.` | windows override | 将鼠标悬停在工具栏按钮上，大多数按钮都会显示简短说明。 |
+| `zh-Hans` | `Open **Settings → Cloud Accounts** (⌘,).` | windows override | 打开 **设置 → 云账户**（Ctrl+,）。 |
+| `zh-Hans` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | windows override | 通过服务商的认证流程登录。FileFluss 会将令牌存储在 Windows 凭据存储中，并针对你的 Windows 用户账户加密。 |
+| `zh-Hans` | `In **Settings → Cloud Accounts**, click the trash icon next to the account.` | windows override | 在 **设置 → 云账户** 中，单击账户旁边的 **移除**。 |
+| `zh-Hans` | `Click **Search** in the toolbar, or press **⌘F**.` | windows override | 单击工具栏中的 **搜索**，或按 **Ctrl+F**。 |
+| `zh-Hans` | `Click the round X close button, press **Esc**, or click the red traffic‑light button.` | windows override | 单击圆形的 X 关闭按钮、按 **Esc**，或单击窗口的关闭按钮。 |
+| `zh-Hans` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **双击** 任意文件。Word 文档会在 Word 中打开，PDF 在你的 PDF 阅读器中打开，图像在“照片”应用中打开，依此类推。 |
+| `zh-Hans` | `Are you sure you want to move "%@" to the Trash?` | windows override | 确定要将“%@”移到回收站吗？ |
+| `zh-Hans` | `Are you sure you want to move %d items to the Trash?` | windows override | 确定要将 %d 个项目移到回收站吗？ |
+| `zh-Hans` | `Could not mount in Finder` | windows override | 无法映射为网络驱动器 |
+| `zh-Hans` | `Reveal in Finder` | windows override | 在文件资源管理器中显示 |
+| `zh-Hans` | `Open this account as a drive in Finder` | windows override | 将此账户映射为网络驱动器 |
+| `zh-Hans` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | windows override | 每个映射为网络驱动器的云账户会在本地保留最近下载的文件，上限为此大小，以便再次打开同一文件时即时完成。新值将在下次映射驱动器时生效。 |
+| `zh-Hans` | `Eject this drive from Finder` | windows override | 断开此网络驱动器 |
+| `zh-Hans` | `Finder-Mount Read Cache` | windows override | 网络驱动器读取缓存 |
+| `zh-Hans` | `Mount in Finder` | windows override | 映射为网络驱动器 |
+| `zh-Hans` | `macOS / Finder Style` | windows override | Windows / 文件资源管理器风格 |
+| `zh-Hans` | `Open in Finder` | windows override | 在文件资源管理器中打开 |
+| `zh-Hans` | `Do you want to mount “%@” in Finder?` | windows override | 是否要将“%@”映射为网络驱动器？ |
+| `zh-Hans` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | windows override | 此账户尚未映射为网络驱动器。映射后，它会作为驱动器出现在文件资源管理器中，以便你在那里打开此项目。 |
+| `zh-Hans` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | windows override | 2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12） |
+| `zh-Hans` | `Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version.` | windows override | 单击“连接”以登录你的 Box 账户。你的浏览器将打开以进行认证。 |
+| `zh-Hans` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | windows override | FileFluss 只读取一次密钥文件，并将其内容存储在 Windows 凭据存储中，针对你的用户账户加密——之后移动或删除原始文件不会影响此账户。 |
+| `zh-Hans` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | windows override | FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。 |
+| `zh-Hans` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。 |
+| `zh-Hans` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登录——此处无可编辑内容。请在 Windows 版 iCloud 应用中管理 iCloud 云盘。 |
+| `zh-Hans` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。 |
+| `zh-Hans` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 终端只能打开这台电脑上存在的文件夹。将此账户映射为网络驱动器后，它会出现在文件资源管理器中，终端将在其中打开。 |
+| `zh-Hant` | `System Default follows the language selected in macOS.` | windows override | 「跟隨系統」會使用 Windows 中設定的語言。 |
+| `zh-Hant` | `Search all sources (⌘F)` | windows override | 搜尋所有來源（Ctrl+F） |
 | `zh-Hant` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 會對每個受保護的資料夾（桌面、文件、下載……）詢問一次。每個資料夾首次打開可能需要幾秒鐘——但僅限首次。 |
-| `zh-Hant` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | auto-rewritten | FileFluss 是一款適用於 Windows 的雙面板檔案管理程式，可讓你並排處理本機資料夾和多個雲端儲存帳戶。它圍繞左右兩個面板建構——只需點按幾下，即可在兩者之間複製、移動、同步和比較檔案。 |
-| `zh-Hant` | `**Search** (⌘F) — open the search window.` | auto-rewritten | **搜尋**（Ctrl+F）——打開搜尋視窗。 |
-| `zh-Hant` | `Open **Settings → Cloud Accounts** (⌘,).` | auto-rewritten | 打開 **設定 → 雲端帳戶**（Ctrl+,）。 |
-| `zh-Hant` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | auto-rewritten | 透過服務商的驗證流程登入。FileFluss 會將權杖安全地儲存在你的 Windows 鑰匙圈中。 |
-| `zh-Hant` | `Click **Search** in the toolbar, or press **⌘F**.` | auto-rewritten | 點按工具列中的 **搜尋**，或按 **Ctrl+F**。 |
-| `zh-Hant` | `Could not mount in Finder` | auto-rewritten | 無法在 Explorer 中裝載 |
-| `zh-Hant` | `Reveal in Finder` | auto-rewritten | 在 Explorer 中顯示 |
-| `zh-Hant` | `Open this account as a drive in Finder` | auto-rewritten | 在 Explorer 中將此帳戶作為磁碟機打開 |
-| `zh-Hant` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | auto-rewritten | 你在 Explorer 中裝載的每個雲端帳戶會在本機保留最近下載的檔案，上限為此大小，以便再次打開同一檔案時即時完成。新值將在下次裝載時生效。 |
-| `zh-Hant` | `Eject this drive from Finder` | auto-rewritten | 從 Explorer 推出此磁碟機 |
-| `zh-Hant` | `Finder-Mount Read Cache` | auto-rewritten | Explorer 裝載讀取快取 |
-| `zh-Hant` | `Mount in Finder` | auto-rewritten | 在 Explorer 中裝載 |
-| `zh-Hant` | `macOS / Finder Style` | auto-rewritten | Windows / Explorer 風格 |
-| `zh-Hant` | `Open in Finder` | auto-rewritten | 在 Explorer 中打開 |
-| `zh-Hant` | `Do you want to mount “%@” in Finder?` | auto-rewritten | 是否要在 Explorer 中裝載「%@」？ |
-| `zh-Hant` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | auto-rewritten | 此帳戶尚未裝載。裝載後會將其作為磁碟機加入 Explorer，以便您在該處打開此項目。 |
-| `zh-Hant` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | auto-rewritten | 2. 打開開發者工具（Chrome/Safari/Firefox 中按 ⌥Ctrl+I） |
-| `zh-Hant` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | auto-rewritten | FileFluss 只讀取一次金鑰檔案並將其內容儲存在 Windows 鑰匙圈中——之後移動或刪除原始檔案不會影響此帳戶。 |
-| `zh-Hant` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | needs review | FileFluss 使用你 Mac 上現有的 iCloud 登入——此處無需密碼。必須在 系統設定 → Apple 帳戶 → iCloud → iCloud 雲碟 中開啟 iCloud 雲碟。 |
-| `zh-Hant` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | needs review | iCloud 使用你 Mac 的系統登入——此處無可編輯內容。請在 系統設定 → Apple 帳戶 → iCloud 中管理 iCloud 雲碟。 |
-| `zh-Hant` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | auto-rewritten | 請先在 Explorer 中掛載此帳戶——雲端資料夾沒有終端機可以開啟的路徑。 |
-| `zh-Hant` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | auto-rewritten | 終端機只能開啟這台 Mac 上存在的資料夾。掛載後，此帳戶會以磁碟形式出現在 Explorer 中，終端機將在其中開啟。 |
+| `zh-Hant` | `Copy Path` | windows override | 複製路徑 |
+| `zh-Hant` | `Move to Trash` | windows override | 移到資源回收筒 |
+| `zh-Hant` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | 「%@」無法移到資源回收筒，因為其所在的磁碟機沒有資源回收筒。要永久刪除嗎？此操作無法復原。 |
+| `zh-Hant` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d 個項目無法移到資源回收筒，因為其所在的磁碟機沒有資源回收筒。要永久刪除嗎？此操作無法復原。 |
+| `zh-Hant` | `Copy` | windows override | 複製 |
+| `zh-Hant` | `Open Folder` | windows override | 開啟資料夾 |
+| `zh-Hant` | `FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks.` | windows override | FileFluss 是一款適用於 Windows 的雙面板檔案管理程式，可讓你並排處理本機資料夾和多個雲端儲存帳戶。它圍繞左右兩個面板建構——只需按幾下，即可在兩者之間複製、移動、同步和比較檔案。 |
+| `zh-Hant` | `**Search** (⌘F) — open the search window.` | windows override | **搜尋**（Ctrl+F）——開啟搜尋視窗。 |
+| `zh-Hant` | `Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons.` | windows override | 將滑鼠指標停留在工具列按鈕上，大多數按鈕都會顯示簡短說明。 |
+| `zh-Hant` | `Open **Settings → Cloud Accounts** (⌘,).` | windows override | 開啟 **設定 → 雲端帳戶**（Ctrl+,）。 |
+| `zh-Hant` | `Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain.` | windows override | 透過服務商的驗證流程登入。FileFluss 會將權杖儲存在 Windows 認證存放區中，並針對你的 Windows 使用者帳戶加密。 |
+| `zh-Hant` | `In **Settings → Cloud Accounts**, click the trash icon next to the account.` | windows override | 在 **設定 → 雲端帳戶** 中，按一下帳戶旁邊的 **移除**。 |
+| `zh-Hant` | `Click **Search** in the toolbar, or press **⌘F**.` | windows override | 按一下工具列中的 **搜尋**，或按 **Ctrl+F**。 |
+| `zh-Hant` | `Click the round X close button, press **Esc**, or click the red traffic‑light button.` | windows override | 按一下圓形的 X 關閉按鈕、按 **Esc**，或按一下視窗的關閉按鈕。 |
+| `zh-Hant` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **按兩下** 任意檔案。Word 文件會在 Word 中開啟，PDF 在你的 PDF 檢視器中開啟，影像在「相片」應用程式中開啟，依此類推。 |
+| `zh-Hant` | `Are you sure you want to move "%@" to the Trash?` | windows override | 確定要將「%@」移到資源回收筒嗎？ |
+| `zh-Hant` | `Are you sure you want to move %d items to the Trash?` | windows override | 確定要將 %d 個項目移到資源回收筒嗎？ |
+| `zh-Hant` | `Could not mount in Finder` | windows override | 無法連線為網路磁碟機 |
+| `zh-Hant` | `Reveal in Finder` | windows override | 在檔案總管中顯示 |
+| `zh-Hant` | `Open this account as a drive in Finder` | windows override | 將此帳戶連線為網路磁碟機 |
+| `zh-Hant` | `Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount.` | windows override | 每個連線為網路磁碟機的雲端帳戶會在本機保留最近下載的檔案，上限為此大小，以便再次開啟同一檔案時即時完成。新值將在下次連線磁碟機時生效。 |
+| `zh-Hant` | `Eject this drive from Finder` | windows override | 中斷此網路磁碟機的連線 |
+| `zh-Hant` | `Finder-Mount Read Cache` | windows override | 網路磁碟機讀取快取 |
+| `zh-Hant` | `Mount in Finder` | windows override | 連線為網路磁碟機 |
+| `zh-Hant` | `macOS / Finder Style` | windows override | Windows / 檔案總管風格 |
+| `zh-Hant` | `Open in Finder` | windows override | 在檔案總管中開啟 |
+| `zh-Hant` | `Do you want to mount “%@” in Finder?` | windows override | 是否要將「%@」連線為網路磁碟機？ |
+| `zh-Hant` | `This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there.` | windows override | 此帳戶尚未連線為網路磁碟機。連線後，它會以磁碟機的形式出現在檔案總管中，讓你可以在該處開啟此項目。 |
+| `zh-Hant` | `2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)` | windows override | 2. 開啟開發人員工具（Chrome/Edge/Firefox 中按 F12） |
+| `zh-Hant` | `Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version.` | windows override | 按一下「連接」以登入你的 Box 帳戶。你的瀏覽器將開啟以進行驗證。 |
+| `zh-Hant` | `FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account.` | windows override | FileFluss 只讀取一次金鑰檔案，並將其內容儲存在 Windows 認證存放區中，針對你的使用者帳戶加密——之後移動或刪除原始檔案不會影響此帳戶。 |
+| `zh-Hant` | `FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive.` | windows override | FileFluss 使用 Windows 版 iCloud——此處無需密碼。請從 Microsoft Store 安裝 Windows 版 iCloud，使用你的 Apple 帳戶登入並開啟 iCloud 雲碟。 |
+| `zh-Hant` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。 |
+| `zh-Hant` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登入——此處無可編輯內容。請在 Windows 版 iCloud 應用程式中管理 iCloud 雲碟。 |
+| `zh-Hant` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 請先將此帳戶連線為網路磁碟機——雲端資料夾沒有終端機可以開啟的路徑。 |
+| `zh-Hant` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 終端機只能開啟這台電腦上存在的資料夾。將此帳戶連線為網路磁碟機後，它會出現在檔案總管中，終端機將在其中開啟。 |

@@ -30,7 +30,7 @@
 //     that differ only in capitalization are stored under a "~N" suffixed name and
 //     reassembled at lookup time by Localization.L.
 //
-// Usage: dotnet run --project windows/tools/StringsToResx [-- --check]
+// Usage: dotnet run --project windows/tools/StringsToResx [-- --check | -- --missing]
 
 using System.Text;
 using System.Text.RegularExpressions;
@@ -68,17 +68,31 @@ internal static class Program
     private static readonly string[] PlatformTerms =
     [
         "macOS", "Mac ", "the Mac", "menu bar", "Menu bar", "Menu Bar",
-        "Keychain", "Finder", "Dock", "System Settings", "AirDrop",
+        "Keychain", "keychain", "Finder", "Dock", "System Settings", "AirDrop",
+        "Mac's", "Trash", "Preview", "traffic", "Customize Toolbar", "⌘", "⌥", "⇧", "⌃",
     ];
 
+    /// <summary>
+    /// Word swaps for Mac strings that have no Windows.strings override. A last resort: the
+    /// translations around the swapped word were written for the Mac, so every string that
+    /// matters should carry an explicit override instead.
+    /// </summary>
     private static readonly (string Term, string Substitute)[] PlatformOverrides =
     [
         ("macOS", "Windows"),
         ("System Settings", "Settings"),
-        ("Keychain", "Credential Manager"),
+        ("Keychain", "credential store"),
         ("Finder", "Explorer"),
-        ("⌘", "Ctrl+"),
     ];
+
+    /// <summary>
+    /// "⌘F" → "Ctrl+F", but only for a lone ⌘. A chord such as "⌥⌘I" has no mechanical
+    /// Windows equivalent ("⌥Ctrl+I" means nothing on a PC keyboard), so it is left as is —
+    /// the review report flags it and a Windows.strings override supplies the real shortcut.
+    /// Cocoa writes modifiers in the order ⌃⌥⇧⌘, so a chord always has its other modifiers
+    /// before the ⌘.
+    /// </summary>
+    private static readonly Regex LoneCommandKey = new("(?<![⌃⌥⇧])⌘(?=[A-Z0-9,.])", RegexOptions.CultureInvariant);
 
     private const string ResxHeader = """
         <?xml version="1.0" encoding="utf-8"?>
@@ -364,19 +378,34 @@ internal static class Program
     private static string Unescape(string text)
         => text.Replace("\\\"", "\"").Replace("\\n", "\n").Replace("\\t", "\t").Replace("\\\\", "\\");
 
-    /// <summary>Cocoa positional specifiers → composite format items, in source order.</summary>
-    /// <summary>Calls whose first string argument is a localization key the callee looks up.</summary>
+    /// <summary>
+    /// Calls whose first string argument is a localization key the callee looks up — L itself,
+    /// the connect form's Info/Warning/Link rows, and the help book's P/H/B/T blocks.
+    /// </summary>
     private static readonly Regex KeyCallPattern = new(
-        """(?<![A-Za-z0-9_])(?:L|Tile|InfoCard|DetailRow|Option|SectionTitle|Section|SliceColumn|Requirement|Header)\(\s*"((?:[^"\\]|\\.)*)"(?=\s*[,)])""",
+        """(?<![A-Za-z0-9_])(?:L|Tile|InfoCard|DetailRow|Option|SectionTitle|Section|SliceColumn|Requirement|Header|Info|Warning|Link|P|H|B|T)\(\s*"((?:[^"\\]|\\.)*)"(?=\s*[,)])""",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Connect-form keys that are not a first argument: a field's label (after its kind), a
+    /// sign-in mode's title (after its id), and the Placeholder/Help initialisers.
+    /// </summary>
+    private static readonly Regex ConnectKeyPattern = new(
+        """(?:ConnectFieldKind\.\w+\s*,\s*|ConnectMode\(\s*"[^"]*"\s*,\s*|(?<![A-Za-z0-9_])(?:Placeholder|Help)\s*=\s*)"((?:[^"\\]|\\.)*)"(?=\s*[,)}\r\n])""",
         RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Keys that reach L() one step removed: the arms of a ternary (<c>L(on ? "a" : "b")</c>)
     /// and the first element of a tuple table (<c>("Import…", VpnProtocol.OpenVpn)</c>).
-    /// Only sentence-like literals — a capital letter and a space — to keep ids out.
+    /// Only sentence-like literals — a capital letter and a space — to keep ids out, and not
+    /// the first argument of calls that never take a key (log lines, clipboard formats, …).
     /// </summary>
     private static readonly Regex SecondaryKeyPattern = new(
-        """(?:[?:]\s*|\(\s*)"([A-Z][^"\\]*\s[^"\\]*)"(?=\s*[,):?])""",
+        """(?:[?:]\s*|(?<!(?:Log|NotFound|SetData|GetData|FontFamily|Contains|StartsWith|EndsWith|Exception)\s*)\(\s*)"([A-Z][^"\\]*\s[^"\\]*)"(?=\s*[,):?])""",
+        RegexOptions.CultureInvariant);
+
+    private static readonly Regex XamlKeyPattern = new(
+        """\{u:Loc\s+(?:'([^']*)'|([^}\s]+))\}""",
         RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -399,8 +428,9 @@ internal static class Program
                 continue;
             }
 
-            var text = File.ReadAllText(file);
-            var matches = KeyCallPattern.Matches(text).Concat(
+            // Comment lines quote example values ("Dropbox (Robert)") that are not keys.
+            var text = string.Join('\n', File.ReadAllLines(file).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            var matches = KeyCallPattern.Matches(text).Concat(ConnectKeyPattern.Matches(text)).Concat(
                 text.Contains("L(", StringComparison.Ordinal) ? SecondaryKeyPattern.Matches(text) : Enumerable.Empty<Match>());
             foreach (var match in matches)
             {
@@ -412,9 +442,22 @@ internal static class Program
             }
         }
 
+        // XAML looks keys up through the {u:Loc Key} / {u:Loc 'Two words'} markup extension.
+        foreach (var file in Directory.EnumerateFiles(sources, "*.xaml", SearchOption.AllDirectories))
+        {
+            foreach (Match match in XamlKeyPattern.Matches(File.ReadAllText(file)))
+            {
+                var key = System.Net.WebUtility.HtmlDecode(match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value);
+                if (!known.Contains(key))
+                {
+                    missing.Add(key);
+                }
+            }
+        }
+
         foreach (var key in missing)
         {
-            var cocoa = Regex.Replace(key, @"\{\d+\}", "%@").Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+            var cocoa = Regex.Replace(key.Replace("%", "%%", StringComparison.Ordinal), @"\{\d+\}", "%@").Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
             Console.WriteLine($"\"{cocoa}\" = \"{cocoa}\";");
         }
 
@@ -424,6 +467,7 @@ internal static class Program
 
     private static readonly Regex LiteralPercentOrSpecifier = new("%%|" + SpecifierPattern, RegexOptions.CultureInvariant);
 
+    /// <summary>Cocoa positional specifiers → composite format items, in source order.</summary>
     private static string ConvertSpecifiers(string text)
     {
         var index = 0;
@@ -581,6 +625,7 @@ internal static class Program
             replaced = replaced.Replace(term, substitute, StringComparison.Ordinal);
         }
 
+        replaced = LoneCommandKey.Replace(replaced, "Ctrl+");
         return (replaced, replaced != value);
     }
 
