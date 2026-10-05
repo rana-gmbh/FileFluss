@@ -99,6 +99,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
         var root = new StackPanel();
         root.Children.Add(new TextBlock { Text = L("Add Cloud Account"), FontSize = 22, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center });
         root.Children.Add(new TextBlock { Text = L("Select a cloud provider to connect:"), Style = (Style)FindResource("Caption"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 8) });
+        var sections = new List<(TextBlock Heading, WrapPanel Grid)>();
 
         foreach (var (category, title) in new[]
                  {
@@ -116,15 +117,35 @@ public sealed class AccountDialog : Window, IConnectPrompt
                 continue;
             }
 
-            root.Children.Add(new TextBlock { Text = L(title), FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 16, 0, 8), Style = (Style)FindResource("Caption") });
-            var grid = new UniformGrid { Columns = 4 };
+            var heading = new TextBlock { Text = L(title), FontWeight = FontWeights.SemiBold, Margin = new Thickness(TileSpacing / 2, 18, 0, 6), Style = (Style)FindResource("Caption") };
+            var grid = new WrapPanel { ItemWidth = TileWidth + TileSpacing, ItemHeight = TileHeight + TileSpacing, HorizontalAlignment = HorizontalAlignment.Center };
             foreach (var type in types)
             {
                 grid.Children.Add(Tile(type));
             }
 
+            sections.Add((heading, grid));
+            root.Children.Add(heading);
             root.Children.Add(grid);
         }
+
+        // Every section uses the same columns, as many whole tiles as fit, centred as one block:
+        // tiles line up across sections, and resizing the window reflows them without stretching.
+        void Arrange()
+        {
+            var available = Math.Max(0, root.ActualWidth);
+            // At most six across: a maximised window shows a compact block, not one endless row.
+            var columns = Math.Clamp((int)(available / (TileWidth + TileSpacing)), 1, 6);
+            var width = columns * (TileWidth + TileSpacing);
+            foreach (var (heading, grid) in sections)
+            {
+                grid.Width = width;
+                heading.Width = width;
+                heading.HorizontalAlignment = HorizontalAlignment.Center;
+            }
+        }
+
+        root.SizeChanged += (_, _) => Arrange();
 
         var cancel = new Button { Content = L("Cancel"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 20, 0, 0), MinWidth = 100, IsCancel = true };
         cancel.Click += (_, _) => Close();
@@ -132,30 +153,52 @@ public sealed class AccountDialog : Window, IConnectPrompt
         _host.Content = root;
     }
 
+    private const double TileWidth = 124;
+    private const double TileHeight = 112;
+    private const double TileSpacing = 10;
+    private const double LogoBox = 44;
+
+    /// <summary>One provider: the logo in a fixed square, the name on up to two lines below — every tile the same size.</summary>
     private Button Tile(CloudProviderType type)
     {
-        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        var logo = IconCache.Logo(type);
-        if (logo is not null)
-        {
-            stack.Children.Add(new Image { Source = logo, Width = 40, Height = 40, Margin = new Thickness(0, 0, 0, 8) });
-        }
+        var layout = new Grid { Width = TileWidth - 16 };
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(LogoBox) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        stack.Children.Add(new TextBlock
+        FrameworkElement logo = IconCache.LogoTile(type, LogoBox, TileWidth - 28) as FrameworkElement ?? new TextBlock
+        {
+            Text = Glyphs.Cloud,
+            FontFamily = new FontFamily(Glyphs.FontFamily),
+            FontSize = 30,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        layout.Children.Add(logo);
+
+        var name = new TextBlock
         {
             Text = type.DisplayName(),
             FontWeight = FontWeights.SemiBold,
+            FontSize = 12.5,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 120,
-        });
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxHeight = 36,
+            VerticalAlignment = VerticalAlignment.Top,
+            ToolTip = type.DisplayName(),
+        };
+        Grid.SetRow(name, 2);
+        layout.Children.Add(name);
+
         var tile = new Button
         {
-            Content = stack,
-            Margin = new Thickness(5),
-            Padding = new Thickness(8, 14, 8, 12),
-            MinHeight = 104,
+            Content = layout,
+            Width = TileWidth,
+            Height = TileHeight,
+            Padding = new Thickness(8, 12, 8, 8),
             HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
         };
         System.Windows.Automation.AutomationProperties.SetName(tile, type.DisplayName());
         tile.Click += (_, _) => ShowForm(type);

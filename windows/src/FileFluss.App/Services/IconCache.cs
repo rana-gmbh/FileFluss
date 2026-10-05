@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -75,11 +76,89 @@ public static class IconCache
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.UriSource = new Uri(path);
-            image.DecodePixelWidth = 64;
             image.EndInit();
             image.Freeze();
-            return image;
+            return TrimTransparentMargins(image);
         });
+
+    /// <summary>
+    /// The logo with its empty border (transparent or plain white) cut off. The artwork comes padded by very different
+    /// amounts (Koofr fills two thirds of its canvas, most others all of it), so without this
+    /// logos drawn into the same box look like different sizes.
+    /// </summary>
+    private static BitmapSource TrimTransparentMargins(BitmapSource source)
+    {
+        var bitmap = source.Format == PixelFormats.Bgra32 ? source : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        var width = bitmap.PixelWidth;
+        var height = bitmap.PixelHeight;
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        bitmap.CopyPixels(pixels, stride, 0);
+
+        int left = width, top = height, right = -1, bottom = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                // Faint anti-aliasing haze doesn't count as artwork, and neither does a plain
+                // white canvas (the WebDAV, SFTP and Synology C2 logos are small marks on one).
+                var i = (y * stride) + (x * 4);
+                var isCanvas = pixels[i + 3] <= 16 || (pixels[i] >= 235 && pixels[i + 1] >= 235 && pixels[i + 2] >= 235);
+                if (!isCanvas)
+                {
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    top = Math.Min(top, y);
+                    bottom = Math.Max(bottom, y);
+                }
+            }
+        }
+
+        if (right < left || (left == 0 && top == 0 && right == width - 1 && bottom == height - 1))
+        {
+            return source;
+        }
+
+        var cropped = new CroppedBitmap(bitmap, new Int32Rect(left, top, right - left + 1, bottom - top + 1));
+        cropped.Freeze();
+        return cropped;
+    }
+
+    /// <summary>
+    /// A logo sized for a grid of tiles: every logo covers about the same area, whatever its
+    /// shape, so a wide wordmark and a square app icon look equally large; nothing exceeds
+    /// <paramref name="box"/> in height or <paramref name="maxWidth"/> (default: the box) in width — wordmarks may run wider than the square.
+    /// </summary>
+    public static Image? LogoTile(CloudProviderType type, double box, double? maxWidth = null)
+    {
+        if (Logo(type) is not BitmapSource logo || logo.PixelWidth == 0 || logo.PixelHeight == 0)
+        {
+            return null;
+        }
+
+        double width = logo.PixelWidth;
+        double height = logo.PixelHeight;
+
+        // Same visual weight: a square logo fills ~80% of the box; wider ones trade height for width.
+        var area = box * box * 0.64;
+        var scale = Math.Sqrt(area / (width * height));
+        width *= scale;
+        height *= scale;
+
+        // Then fit the box.
+        var fit = Math.Min(1, Math.Min((maxWidth ?? box) / width, box / height));
+        var image = new Image
+        {
+            Source = logo,
+            Width = Math.Round(width * fit),
+            Height = Math.Round(height * fit),
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        return image;
+    }
 
     /// <summary>
     /// A real thumbnail for a local file, or null (the caller keeps the icon). Blocks on the
