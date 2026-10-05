@@ -178,8 +178,11 @@ public sealed class AccountDialog : Window, IConnectPrompt
         }
 
         _spec = _provider.ConnectSpec;
-        _mode = _spec.Modes[0];
-        BuildForm(type, _editingId is null ? new Dictionary<string, string>() : _provider.GetEditableConnectValues());
+        var prefill = _editingId is null ? new Dictionary<string, string>() : _provider.GetEditableConnectValues();
+        _mode = prefill.TryGetValue(ConnectSpec.ModeKey, out var modeId) && _spec.Modes.FirstOrDefault(m => m.Id == modeId) is { } saved
+            ? saved
+            : _spec.Modes[0];
+        BuildForm(type, prefill);
     }
 
     private void BuildForm(CloudProviderType type, IReadOnlyDictionary<string, string> prefill)

@@ -127,6 +127,7 @@ public sealed class SftpProvider : CloudProvider
                 ["port"] = c.Port.ToString(CultureInfo.InvariantCulture),
                 ["username"] = c.Username,
                 ["remotePath"] = c.RemotePath,
+                [ConnectSpec.ModeKey] = c.AuthMethod == SftpAuthMethod.PrivateKey ? "privateKey" : "password",
             };
         }
     }

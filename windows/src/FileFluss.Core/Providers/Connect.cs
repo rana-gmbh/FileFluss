@@ -88,6 +88,12 @@ public sealed record ConnectMode(string Id, string Title, IReadOnlyList<ConnectF
 /// <summary>The Add/Edit Account form for one provider.</summary>
 public sealed record ConnectSpec(IReadOnlyList<ConnectMode> Modes)
 {
+    /// <summary>
+    /// A key <see cref="CloudProvider.GetEditableConnectValues"/> may include: the id of the mode the
+    /// account was set up with, so editing it opens that mode (an SFTP account signed in with a key).
+    /// </summary>
+    public const string ModeKey = "@mode";
+
     public ConnectSpec(params ConnectField[] fields)
         : this([new ConnectMode("default", string.Empty, fields)])
     {

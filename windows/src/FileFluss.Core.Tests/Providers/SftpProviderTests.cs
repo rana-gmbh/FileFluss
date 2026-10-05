@@ -826,6 +826,18 @@ public class SftpProviderTests
     }
 
     [Fact]
+    public void EditingReopensTheModeTheAccountWasSetUpWith()
+    {
+        using var password = Signed();
+        Assert.Equal("password", password.GetEditableConnectValues()[ConnectSpec.ModeKey]);
+
+        _store.Save(Key, Stored()! with { AuthMethod = SftpAuthMethod.PrivateKey, Password = null, PrivateKey = PemKey });
+        using var key = new SftpProvider(_accountId, _store, _server.ConnectAsync);
+        Assert.Equal("privateKey", key.GetEditableConnectValues()[ConnectSpec.ModeKey]);
+        Assert.Contains(key.ConnectSpec.Modes, m => m.Id == "privateKey");
+    }
+
+    [Fact]
     public void RegistryCreatesTheProvider()
     {
         using var provider = CloudProviderRegistry.Create(CloudProviderType.Sftp, _accountId, _store);
