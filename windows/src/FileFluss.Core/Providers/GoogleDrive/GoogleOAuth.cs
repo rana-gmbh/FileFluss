@@ -162,7 +162,7 @@ internal sealed class GoogleOAuthClient
         if (!response.IsSuccessStatusCode)
         {
             SupportLogger.Shared.Log($"Token refresh failed: HTTP {(int)response.StatusCode}", LogCategory, LogLevel.Error);
-            throw CloudProviderException.NotAuthenticated();
+            throw CloudProviderException.TokenRefreshFailed((int)response.StatusCode);
         }
 
         var body = await response.ReadJsonAsync<GoogleTokenResponse>(cancellationToken).ConfigureAwait(false);

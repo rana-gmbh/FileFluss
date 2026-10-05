@@ -238,8 +238,10 @@ internal sealed class TeraBoxApiClient
                     ("timestamp", timestamp),
                     ("sign", Sign(_app, timestamp))),
             };
-            using var response = await _http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
-            var body = await CheckHttpAsync(response, cancellationToken).ConfigureAwait(false);
+            // Not the caller's token: the refresh token is single-use, so abandoning a response
+            // the server already acted on (a cancelled listing) would lose the new pair for good.
+            using var response = await _http.SendApiAsync(request, CancellationToken.None).ConfigureAwait(false);
+            var body = await CheckHttpAsync(response, CancellationToken.None).ConfigureAwait(false);
             using var document = ParseJson(body);
             var errno = Int64(document.RootElement, "errno") ?? -1;
             var token = ParseToken(Object(document.RootElement, "data"));
