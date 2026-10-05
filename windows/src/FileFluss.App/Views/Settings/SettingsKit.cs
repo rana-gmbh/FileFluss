@@ -23,6 +23,7 @@ internal static class SettingsKit
         var row = new DockPanel();
         if (control is not null)
         {
+            System.Windows.Automation.AutomationProperties.SetName(control, title);
             control.VerticalAlignment = VerticalAlignment.Center;
             control.Margin = new Thickness(16, 0, 0, 0);
             DockPanel.SetDock(control, Dock.Right);

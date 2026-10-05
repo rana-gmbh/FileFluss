@@ -71,13 +71,7 @@ public sealed class SettingsWindow : Window
                 ShowPage(key);
             }
         };
-        foreach (var (key, glyph, label) in Pages)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 6, 4, 6) };
-            row.Children.Add(Glyph(glyph));
-            row.Children.Add(new TextBlock { Text = L(label), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-            _nav.Items.Add(new ListBoxItem { Content = row, Tag = key });
-        }
+        BuildNav();
 
         var scroller = new ScrollViewer
         {
@@ -115,9 +109,24 @@ public sealed class SettingsWindow : Window
             if (IsLoaded)
             {
                 Title = L("FileFluss Settings");
+                BuildNav();
                 ShowPage(_current);
             }
         };
+    }
+
+    private void BuildNav()
+    {
+        _nav.Items.Clear();
+        foreach (var (key, glyph, label) in Pages)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 6, 4, 6) };
+            row.Children.Add(Glyph(glyph));
+            row.Children.Add(new TextBlock { Text = L(label), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            var item = new ListBoxItem { Content = row, Tag = key, IsSelected = key == _current };
+            System.Windows.Automation.AutomationProperties.SetName(item, L(label));
+            _nav.Items.Add(item);
+        }
     }
 
     private void OnAccountsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)

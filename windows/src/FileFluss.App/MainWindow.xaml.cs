@@ -117,6 +117,13 @@ public partial class MainWindow : Window, IShell
             return;
         }
 
+        // A modal dialog owns the keyboard; a shortcut reaching the main window then (focus
+        // forced onto it) must not start a second operation underneath the dialog.
+        if (System.Windows.Interop.ComponentDispatcher.IsThreadModal)
+        {
+            return;
+        }
+
         if (Keyboard.FocusedElement is DependencyObject focused && FindParent<MenuBase>(focused) is not null)
         {
             return;

@@ -73,6 +73,7 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       VirtualizingPanel.ScrollUnit="Pixel"
                       ScrollViewer.IsDeferredScrollingEnabled="False"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       IsTextSearchEnabled="True"
                       TextSearch.TextPath="Name"
                       AllowDrop="True"
@@ -117,7 +118,7 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-                        <GridViewColumn x:Name="DateColumn" Width="140">
+                        <GridViewColumn x:Name="DateColumn" Width="128">
                             <GridViewColumn.Header>
                                 <GridViewColumnHeader Tag="Date" Click="OnHeaderClick" Content="{u:Loc 'Date Modified'}" />
                             </GridViewColumn.Header>
@@ -127,7 +128,7 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-                        <GridViewColumn x:Name="SizeColumn" Width="90">
+                        <GridViewColumn x:Name="SizeColumn" Width="78">
                             <GridViewColumn.Header>
                                 <GridViewColumnHeader Tag="Size" Click="OnHeaderClick" Content="{u:Loc Size}" />
                             </GridViewColumn.Header>
@@ -138,7 +139,7 @@
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
-                        <GridViewColumn x:Name="KindColumn" Width="150">
+                        <GridViewColumn x:Name="KindColumn" Width="120">
                             <GridViewColumn.Header>
                                 <GridViewColumnHeader Tag="Kind" Click="OnHeaderClick" Content="{u:Loc Kind}" />
                             </GridViewColumn.Header>

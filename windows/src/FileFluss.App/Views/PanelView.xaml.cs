@@ -43,6 +43,29 @@ public partial class PanelView : UserControl
         DataContextChanged += OnDataContextChanged;
         Localization.LanguageChanged += (_, _) => UpdateHeaders();
         Loaded += (_, _) => UpdateHeaders();
+        List.SizeChanged += (_, _) => FitNameColumn();
+        foreach (var column in new[] { DateColumn, SizeColumn, KindColumn })
+        {
+            System.ComponentModel.DependencyPropertyDescriptor
+                .FromProperty(GridViewColumn.WidthProperty, typeof(GridViewColumn))
+                .AddValueChanged(column, (_, _) => FitNameColumn());
+        }
+    }
+
+    /// <summary>
+    /// The Name column takes whatever the other columns leave, so all columns fit without a
+    /// horizontal scroll bar — the macOS "Auto Resize" name column, on by default.
+    /// </summary>
+    private void FitNameColumn()
+    {
+        if (Main?.Services.Settings.NameAutoResize == false || List.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        var others = DateColumn.ActualWidth + SizeColumn.ActualWidth + KindColumn.ActualWidth;
+        var available = List.ActualWidth - others - SystemParameters.VerticalScrollBarWidth - 26;
+        NameColumn.Width = Math.Max(140, available);
     }
 
     public MainViewModel Main { get; set; } = null!;

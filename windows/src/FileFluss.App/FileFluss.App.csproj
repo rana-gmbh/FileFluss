@@ -12,7 +12,12 @@
     <!-- WPF's Fluent theme (ThemeMode) is still flagged experimental. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <ApplicationIcon>Assets\FileFluss.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../FileFluss.Core/FileFluss.Core.csproj" />

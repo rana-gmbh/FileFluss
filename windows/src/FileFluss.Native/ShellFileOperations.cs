@@ -44,8 +44,9 @@ public static class ShellFileOperations
                 return false;
             }
 
-            var info = new ShQueryRbInfo { Size = Marshal.SizeOf<ShQueryRbInfo>() };
-            return SHQueryRecycleBin(root, ref info) == 0 && new DriveInfo(root).DriveType == DriveType.Fixed;
+            // Fixed volumes have a Recycle Bin; MoveToRecycleBin still verifies the file is gone,
+            // so a bin switched off by policy falls back to the permanent-delete question.
+            return new DriveInfo(root).DriveType == DriveType.Fixed;
         }
         catch (Exception e) when (e is ArgumentException or IOException)
         {
@@ -197,14 +198,6 @@ public static class ShellFileOperations
         [MarshalAs(UnmanagedType.LPWStr)] public string? ProgressTitle;
     }
 
-    [StructLayout(LayoutKind.Sequential, Pack = 4)]
-    private struct ShQueryRbInfo
-    {
-        public int Size;
-        public long SizeInBytes;
-        public long NumItems;
-    }
-
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct OpenAsInfo
     {
@@ -237,9 +230,6 @@ public static class ShellFileOperations
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperation(ref ShFileOpStruct operation);
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHQueryRecycleBin(string rootPath, ref ShQueryRbInfo info);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CopyFileEx(string existing, string target, CopyProgressRoutine progress, nint data, ref int cancel, uint flags);

@@ -83,7 +83,7 @@
                 <ToggleButton x:Name="CloudHeader" Style="{StaticResource SectionToggle}" Tag="cloud" Content="{u:Loc 'Cloud Accounts'}" Click="OnSectionToggled" />
                 <StackPanel x:Name="CloudSection">
                     <ListBox x:Name="AccountsList" Style="{StaticResource SidebarList}" ItemsSource="{Binding Accounts}" Tag="cloud" />
-                    <Button x:Name="AddAccountButton" Style="{StaticResource SidebarAddButton}" Click="OnAddAccount"
+                    <Button x:Name="AddAccountButton" Style="{StaticResource SidebarAddButton}" Click="OnAddAccount" AutomationProperties.Name="{u:Loc 'Add Cloud Account…'}"
                             Visibility="{Binding ShowAddAccount, Converter={StaticResource Visible}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Width="20" TextAlignment="Center" VerticalAlignment="Center" />
@@ -103,7 +103,7 @@
                                     <StackPanel>
                                         <DockPanel>
                                             <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Width="20" Height="20" FontSize="9"
-                                                    Content="&#xE711;" Click="OnTransferDismiss" ToolTip="{u:Loc 'Cancel this transfer'}" />
+                                                    Content="&#xE711;" Click="OnTransferDismiss" ToolTip="{u:Loc 'Cancel this transfer'}" AutomationProperties.Name="{u:Loc 'Cancel this transfer'}" />
                                             <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" FontSize="11.5" VerticalAlignment="Center"
                                                        ToolTip="{Binding StatusText}" />
                                         </DockPanel>

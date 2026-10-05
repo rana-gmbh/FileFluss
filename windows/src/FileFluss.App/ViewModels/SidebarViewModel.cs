@@ -64,6 +64,9 @@ public sealed class SidebarEntry : Observable
     }
 
     public bool AcceptsDrops => Location is not null && Kind != SidebarEntryKind.AddAccount && !(Account?.ProviderType.IsReadOnly() ?? false) && !IsOffline;
+
+    /// <summary>What screen readers announce for the row.</summary>
+    public override string ToString() => Title;
 }
 
 /// <summary>A folder whose size the user asked for, listed in the sidebar (macOS "Folder Sizes").</summary>

@@ -194,7 +194,9 @@ public sealed partial class HelpWindow : Window
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 6, 4, 6) };
             row.Children.Add(new TextBlock { Text = section.Glyph, FontFamily = new FontFamily(Glyphs.FontFamily), FontSize = 15, VerticalAlignment = VerticalAlignment.Center });
             row.Children.Add(new TextBlock { Text = L(section.Title), Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-            _nav.Items.Add(new ListBoxItem { Content = row, Tag = section });
+            var item = new ListBoxItem { Content = row, Tag = section };
+            System.Windows.Automation.AutomationProperties.SetName(item, L(section.Title));
+            _nav.Items.Add(item);
         }
 
         _nav.SelectionChanged += (_, _) =>

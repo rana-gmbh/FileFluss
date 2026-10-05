@@ -19,9 +19,9 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="BackButton" Style="{StaticResource GlyphButton}" Content="&#xE72B;" Click="OnBack" ToolTip="{u:Loc Back}" />
-                <Button x:Name="ForwardButton" Style="{StaticResource GlyphButton}" Content="&#xE72A;" Click="OnForward" ToolTip="{u:Loc Forward}" />
-                <Button x:Name="UpButton" Style="{StaticResource GlyphButton}" Content="&#xE74A;" Click="OnUp" ToolTip="{u:Loc 'Parent Directory'}" />
+                <Button x:Name="BackButton" Style="{StaticResource GlyphButton}" Content="&#xE72B;" Click="OnBack" ToolTip="{u:Loc Back}" AutomationProperties.Name="{u:Loc Back}" />
+                <Button x:Name="ForwardButton" Style="{StaticResource GlyphButton}" Content="&#xE72A;" Click="OnForward" ToolTip="{u:Loc Forward}" AutomationProperties.Name="{u:Loc Forward}" />
+                <Button x:Name="UpButton" Style="{StaticResource GlyphButton}" Content="&#xE74A;" Click="OnUp" ToolTip="{u:Loc 'Parent Directory'}" AutomationProperties.Name="{u:Loc 'Parent Directory'}" />
                 <TextBlock x:Name="PanelTitle" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"
                            TextTrimming="CharacterEllipsis" MaxWidth="360" />
             </StackPanel>
