@@ -1347,7 +1347,7 @@ public sealed class WebDavServer : IAsyncDisposable
     private Target? Classify(string path)
     {
         var components = CloudPath.Components(path);
-        if (components.Length == 0 || !SecretMatches(components[0]))
+        if (components.Length == 0 || !SecretMatches(components[0]) || components.Any(CloudPath.IsTraversalName))
         {
             return null;
         }
@@ -1450,8 +1450,10 @@ public sealed class WebDavServer : IAsyncDisposable
             return null;
         }
 
+        // A backslash is refused too: no Windows name contains one, and CloudPath treats it
+        // as a separator, so "%5C..%5C" would otherwise become ".." segments further down.
         var segments = decoded.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Any(s => s is "." or ".." || s.Contains('\0')))
+        if (segments.Any(s => s is "." or ".." || s.Contains('\0') || s.Contains('\\')))
         {
             return null;
         }

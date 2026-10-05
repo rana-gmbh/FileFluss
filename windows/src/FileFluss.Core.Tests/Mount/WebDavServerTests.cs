@@ -202,6 +202,52 @@ public sealed class WebDavServerTests : IAsyncLifetime
         Assert.StartsWith("HTTP/1.1 400", answer);
     }
 
+    [Theory]
+    [InlineData("/folder/%2e%2e/hello.txt")]
+    [InlineData("/folder/%2E%2E/%2E%2E/hello.txt")]
+    [InlineData("/folder%2F..%2F..%2Fhello.txt")]
+    [InlineData("/folder%5C..%5C..%5Chello.txt")]
+    [InlineData("/folder\\..\\..\\hello.txt")]
+    [InlineData("/a%00b")]
+    public async Task EncodedTraversalIsRejected(string suffix)
+    {
+        var answer = await RawAsync($"GET {_t.Root}{suffix} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        Assert.StartsWith("HTTP/1.1 400", answer);
+    }
+
+    [Theory]
+    [InlineData("/a/%2e%2e/b", null)]
+    [InlineData("/a%5Cb", null)]
+    [InlineData("/a/./b", null)]
+    [InlineData("http://127.0.0.1:1/x/..%2Fy", null)]
+    [InlineData("/a%20b/c", "/a b/c")]
+    [InlineData("/a/b/", "/a/b/")]
+    [InlineData("http://127.0.0.1:1/x/y?q=1#f", "/x/y")]
+    public void DecodeTargetRefusesTraversal(string raw, string? expected)
+        => Assert.Equal(expected, WebDavServer.DecodeTarget(raw));
+
+    [Theory]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("127.0.0.1:8080", true)]
+    [InlineData("localhost:8080", true)]
+    [InlineData("[::1]:8080", true)]
+    [InlineData("127.0.0.1.evil.example", false)]
+    [InlineData("evil.example", false)]
+    [InlineData("localhost.evil.example:80", false)]
+    public void OnlyLoopbackHostHeadersPass(string host, bool expected)
+        => Assert.Equal(expected, WebDavServer.IsLoopbackHost(host));
+
+    [Fact]
+    public async Task WithoutTheSecretNothingIsServed()
+    {
+        var (response, _) = await _t.SendAsync("GET", "/FileFluss-00000000000000000000000000000000/hello.txt");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // The redirector's probe of the server root gets an empty collection that names nothing.
+        var (_, listing) = await _t.SendAsync("PROPFIND", "/", H(("Depth", "1")));
+        Assert.DoesNotContain(_t.Server.Secret, listing, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hello.txt", listing, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void SecretsAreRandomAndRecognisable()
     {

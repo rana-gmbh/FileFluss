@@ -287,7 +287,8 @@ public sealed class MountService
     /// </summary>
     private static async Task ProbeAsync(WebDavServer server, CancellationToken cancellationToken)
     {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        // Never via a proxy: the URL carries the mount secret, and only we may see it.
+        using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Options, server.BaseUri);
