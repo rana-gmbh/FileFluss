@@ -102,7 +102,17 @@ internal static class SettingsKit
             button.Style = style;
         }
 
-        button.Click += (_, _) => click();
+        button.Click += (_, _) =>
+        {
+            try
+            {
+                click();
+            }
+            catch (Exception e)
+            {
+                FileFluss.App.Services.TaskFailures.ShowFailure(e, caption, Window.GetWindow(button));
+            }
+        };
         return button;
     }
 

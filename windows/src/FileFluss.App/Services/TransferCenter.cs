@@ -75,13 +75,28 @@ public sealed class TransferCenter : Observable
     /// <summary>Shows an externally driven progress (sync, opening a cloud file).</summary>
     public void Track(TransferProgress progress, Action<TransferProgress>? onFinished = null)
     {
+        // The list is bound in the UI: changing it from another thread throws there.
+        if (!_pump.Dispatcher.CheckAccess())
+        {
+            _pump.Dispatcher.BeginInvoke(() => Track(progress, onFinished));
+            return;
+        }
+
         All.Insert(0, progress);
-        progress.Completed += (_, _) => App.Current.Dispatcher.BeginInvoke(() =>
+
+        // Completed is raised on the transfer's thread; the list and its observers live on this one.
+        progress.Completed += (_, _) => _pump.Dispatcher.BeginInvoke(() =>
         {
             Reorder();
-            onFinished?.Invoke(progress);
-            TransferCompleted?.Invoke(this, progress);
-            OnAllPropertiesChanged();
+            try
+            {
+                onFinished?.Invoke(progress);
+            }
+            finally
+            {
+                TransferCompleted?.Invoke(this, progress);
+                OnAllPropertiesChanged();
+            }
         });
         _pump.Start();
         OnAllPropertiesChanged();

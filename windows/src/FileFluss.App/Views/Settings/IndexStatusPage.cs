@@ -24,6 +24,9 @@ internal sealed class IndexStatusPage : ContentControl
     private readonly Button _refreshAll;
     private readonly Button _eraseAll;
 
+    /// <summary>The running jobs' rows listen to them; every reload (and leaving the page) lets go.</summary>
+    private readonly List<Action> _jobSubscriptions = [];
+
     public IndexStatusPage(AppServices services)
     {
         _services = services;
@@ -51,12 +54,24 @@ internal sealed class IndexStatusPage : ContentControl
         {
             indexing.IndexingFinished -= finished;
             indexing.Jobs.CollectionChanged -= jobs;
+            ReleaseJobs();
         };
+    }
+
+    private void ReleaseJobs()
+    {
+        foreach (var unsubscribe in _jobSubscriptions)
+        {
+            unsubscribe();
+        }
+
+        _jobSubscriptions.Clear();
     }
 
     private void Load()
     {
         var search = _services.Search;
+        ReleaseJobs();
         var entries = search.Safe(search.Index.GetIndexStatus) ?? [];
         _rows.Children.Clear();
         if (entries.Count == 0)
@@ -122,7 +137,9 @@ internal sealed class IndexStatusPage : ContentControl
             progress.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 4 });
             var processed = Caption(job.FilesProcessed.ToString("N0", Culture));
             processed.HorizontalAlignment = HorizontalAlignment.Center;
-            job.PropertyChanged += (_, _) => processed.Text = job.FilesProcessed.ToString("N0", Culture);
+            System.ComponentModel.PropertyChangedEventHandler changed = (_, _) => processed.Text = job.FilesProcessed.ToString("N0", Culture);
+            job.PropertyChanged += changed;
+            _jobSubscriptions.Add(() => job.PropertyChanged -= changed);
             progress.Children.Add(processed);
             action = progress;
         }
