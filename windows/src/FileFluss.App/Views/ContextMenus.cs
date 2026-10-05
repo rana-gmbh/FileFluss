@@ -332,15 +332,32 @@ public static class ContextMenus
             item.Icon = new TextBlock { Text = glyph, FontFamily = new FontFamily(Glyphs.FontFamily), FontSize = 14 };
         }
 
-        item.Click += (_, _) => action();
+        item.Click += (_, _) => Run(header, action, item);
         return item;
     }
 
     public static MenuItem Check(string header, bool isChecked, Action action)
     {
         var item = new MenuItem { Header = header, IsCheckable = true, IsChecked = isChecked };
-        item.Click += (_, _) => action();
+        item.Click += (_, _) => Run(header, action, item);
         return item;
+    }
+
+    /// <summary>
+    /// A menu command that fails (Explorer refusing a path that's gone, a clipboard held by
+    /// another app) says so under the command's name, rather than doing nothing.
+    /// </summary>
+    private static void Run(string header, Action action, MenuItem item)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            var owner = ItemsControl.ItemsControlFromItemContainer(item) is { } parent ? Window.GetWindow(parent) : null;
+            TaskFailures.ShowFailure(e, header.Replace("_", string.Empty, StringComparison.Ordinal).TrimEnd('…'), owner);
+        }
     }
 
     private static MenuItem Bold(MenuItem item)

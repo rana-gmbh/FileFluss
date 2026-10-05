@@ -81,8 +81,8 @@ public sealed class MainViewModel : Observable
         LeftSidebar = new SidebarViewModel(PanelSide.Left, Left, services);
         RightSidebar = new SidebarViewModel(PanelSide.Right, Right, services);
         services.Transfers.All.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Transfers));
-        services.Accounts.AccountRemoved += (_, id) => _ = OnAccountRemovedAsync(id);
-        services.Accounts.AccountRemoved += (_, id) => _ = services.Mount.UnmountAsync(id);
+        services.Accounts.AccountRemoved += (_, id) => OnAccountRemovedAsync(id).Forget("leaving a removed account");
+        services.Accounts.AccountRemoved += (_, id) => services.Mount.UnmountAsync(id).Forget("unmounting a removed account");
         services.Mount.NeedsReauthentication += (_, id) => services.Accounts.MarkNeedsReauthentication(id);
         services.Hub.ProviderChanged += (_, id) =>
         {
@@ -203,13 +203,18 @@ public sealed class MainViewModel : Observable
         };
 
         var home = PanelLocation.Local(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+        // Both panels at once: each takes its location straight away (so whatever navigates a
+        // panel next — a folder from the command line — wins), and a slow listing on one side
+        // doesn't hold up the other.
+        var loads = new List<Task>();
         foreach (var (panel, target) in new[] { (Left, left), (Right, right) })
         {
             if (target is null)
             {
                 if (!cloudOnly)
                 {
-                    await panel.NavigateAsync(home);
+                    loads.Add(panel.NavigateAsync(home));
                 }
 
                 continue;
@@ -220,7 +225,7 @@ public sealed class MainViewModel : Observable
                 if (!cloudOnly)
                 {
                     // Show home while the account reconnects rather than an empty panel.
-                    await panel.NavigateAsync(home);
+                    loads.Add(panel.NavigateAsync(home));
                 }
 
                 continue;
@@ -230,8 +235,10 @@ public sealed class MainViewModel : Observable
                 : target.IsCloud
                 ? _services.Hub.Get(target.AccountId!.Value) is not null
                 : target.Path.Length == 0 || Directory.Exists(target.Path);
-            await panel.NavigateAsync(usable ? target : home);
+            loads.Add(panel.NavigateAsync(usable ? target : home));
         }
+
+        await Task.WhenAll(loads);
     }
 
     /// <summary>Called as the app closes; written once per session, only read at launch.</summary>
@@ -486,11 +493,23 @@ public sealed class MainViewModel : Observable
             return null;
         }
 
-        var folder = Path.Combine(StagingLocation.OpenCacheDirectory(accountId), Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(CloudPath.Parent(item.Path))))[..12]);
-        Directory.CreateDirectory(folder);
-        var requested = SafeLocalPath.Destination(item.Name, folder);
-        var target = DownloadedFile.Locate(requested);
-        var cached = new FileInfo(target);
+        string requested, target;
+        FileInfo cached;
+        try
+        {
+            var folder = Path.Combine(StagingLocation.OpenCacheDirectory(accountId), Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(CloudPath.Parent(item.Path))))[..12]);
+            Directory.CreateDirectory(folder);
+            requested = SafeLocalPath.Destination(item.Name, folder);
+            target = DownloadedFile.Locate(requested);
+            cached = new FileInfo(target);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // The cache folder can't be written (a full disk, a custom cache folder gone missing).
+            MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", item.Name), e.Message);
+            return null;
+        }
+
         var fresh = cached.Exists && cached.Length == item.Size &&
                     (!item.HasKnownModificationDate || Math.Abs((cached.LastWriteTimeUtc - item.ModificationDate.UtcDateTime).TotalSeconds) < 2);
         if (!fresh)
@@ -602,9 +621,14 @@ public sealed class MainViewModel : Observable
             return;
         }
 
+        var dispatcher = Application.Current.Dispatcher;
         var request = new TransferRequest(source, items, target, destination.Path, isMove)
         {
-            ResolveConflict = (conflict, _) => Application.Current.Dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict)).Task,
+            // Asked from the transfer's thread. Once FileFluss is closing there is nobody to
+            // ask (and no window to own the question): stop instead of waiting forever.
+            ResolveConflict = (conflict, _) => dispatcher.HasShutdownStarted
+                ? Task.FromResult(new ConflictResolution(ConflictChoice.Stop, false))
+                : dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict)).Task,
         };
         _services.Transfers.Start(request, panel, _ => RefreshAfterTransfer(source, destination));
     }
@@ -654,6 +678,13 @@ public sealed class MainViewModel : Observable
         {
             SupportLogger.Shared.Log("Space check cancelled; transfer not started", "Transfers");
             return false;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The check is advice, not a gate: a folder that can't be summed or a quota that
+            // can't be read leaves the transfer to report its own problems, file by file.
+            SupportLogger.Shared.Log($"Space check failed ({e.Message}); transferring without it", "Transfers", LogLevel.Notice);
+            return true;
         }
         finally
         {
@@ -766,7 +797,15 @@ public sealed class MainViewModel : Observable
             var data = new DataObject();
             data.SetFileDropList(paths);
             data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(isCut ? 2 : 5)));
-            System.Windows.Clipboard.SetDataObject(data, copy: true);
+            try
+            {
+                System.Windows.Clipboard.SetDataObject(data, copy: true);
+            }
+            catch (System.Runtime.InteropServices.ExternalException e)
+            {
+                // Another app holds the clipboard open: Explorer can't paste these, FileFluss still can.
+                SupportLogger.Shared.Log($"The Windows clipboard is busy: {e.Message}", "Clipboard", LogLevel.Notice);
+            }
         }
     }
 
@@ -885,7 +924,14 @@ public sealed class MainViewModel : Observable
             paths.Add(panel.CurrentPath);
         }
 
-        System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, paths));
+        try
+        {
+            System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, paths));
+        }
+        catch (System.Runtime.InteropServices.ExternalException e)
+        {
+            MessageDialog.Error(Shell.Window, L(KeyboardCommand.CopyPath.DisplayName()), e.Message);
+        }
     }
 
     // MARK: - Create, rename, delete, duplicate
@@ -1124,7 +1170,9 @@ public sealed class MainViewModel : Observable
         return Path.Combine(mount.DrivePath, relative.TrimStart('/').Replace('/', '\\'));
     }
 
-    private async void OpenTerminal(PanelViewModel panel)
+    private void OpenTerminal(PanelViewModel panel) => OpenTerminalAsync(panel).ReportFailure(L("Couldn't open a terminal"), Shell.Window);
+
+    private async Task OpenTerminalAsync(PanelViewModel panel)
     {
         string? directory = null;
 

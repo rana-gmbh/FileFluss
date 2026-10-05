@@ -80,6 +80,7 @@ public sealed class CompareWindow : Window
     private PanelSnapshot? _rightSide;
     private bool _updating;
     private bool _busy;
+    private bool _closed;
     private int _refreshQueued;
 
     private CompareWindow(MainViewModel vm)
@@ -113,6 +114,7 @@ public sealed class CompareWindow : Window
         };
         Closed += (_, _) =>
         {
+            _closed = true;
             _session.PropertyChanged -= OnSessionChanged;
             vm.Transfers.TransferCompleted -= OnTransferCompleted;
             Localization.LanguageChanged -= OnLanguageChanged;
@@ -792,9 +794,19 @@ public sealed class CompareWindow : Window
                 await _vm.TransferAsync(source.Provider, items, targetSide.LocationOf(group.Key), isMove: false, destination);
             }
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            TaskFailures.ShowFailure(e, CopyCaption(destination), this);
+        }
         finally
         {
             SetBusy(false);
+        }
+
+        if (_closed)
+        {
+            // The copies run on in the panels' transfer lists; there is nothing to compare again.
+            return;
         }
 
         // The transfers just started are ours; compare again when the last one finishes.
@@ -940,7 +952,11 @@ public sealed class CompareWindow : Window
             _vm.Services.Accounts.InvalidateQuota(id);
         }
 
-        await _session.CompareAgainAsync();
+        // Closed while deleting: the session was cancelled with the window; don't start it again.
+        if (!_closed)
+        {
+            await _session.CompareAgainAsync();
+        }
     }
 
     private void SetBusy(bool busy)

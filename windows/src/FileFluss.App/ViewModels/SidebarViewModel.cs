@@ -335,7 +335,7 @@ public sealed class SidebarViewModel : Observable
             {
                 ready = drive.IsReady;
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 ready = false;
             }
@@ -346,14 +346,24 @@ public sealed class SidebarViewModel : Observable
             }
 
             var root = drive.RootDirectory.FullName;
-            var title = LocalFileProvider.DriveLabel(root);
+            string title;
+            try
+            {
+                title = LocalFileProvider.DriveLabel(root);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A drive that went away between the listing and now.
+                title = root;
+            }
+
             var tooltip = title;
             try
             {
                 // macOS driveTooltip: "Name: 120 GB free of 500 GB".
                 tooltip = $"{title}: {Core.Storage.LocalVolumeFormatter.Summary(drive.AvailableFreeSpace, drive.TotalSize)}";
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
 
@@ -534,6 +544,7 @@ public sealed class SidebarViewModel : Observable
         var entry = new FolderSizeEntry { Name = folder.Name, Location = location };
         FolderSizes.Insert(0, entry);
         OnPropertyChanged(nameof(ShowFolderSizes));
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
         _ = Task.Run(async () =>
         {
             long size;
@@ -546,11 +557,16 @@ public sealed class SidebarViewModel : Observable
                 size = 0;
             }
 
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            // Queued, not waited for: a walk ending while FileFluss closes must not block on
+            // (or deadlock with) a UI thread that is shutting down.
+            if (!dispatcher.HasShutdownStarted)
             {
-                entry.Size = size;
-                onDone?.Invoke(size);
-            });
+                _ = dispatcher.BeginInvoke(() =>
+                {
+                    entry.Size = size;
+                    onDone?.Invoke(size);
+                });
+            }
         });
     }
 

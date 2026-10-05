@@ -811,7 +811,16 @@ public partial class SidebarView : UserControl
                 vm.AddFavorites(DroppedFolders(e.Data), InsertionIndex(hit));
                 break;
             case DropAction.Into when hit.Entry is { Location: { } destination } entry:
-                await TransferIntoAsync(vm, entry.Title, destination, e);
+                try
+                {
+                    await TransferIntoAsync(vm, entry.Title, destination, e);
+                }
+                catch (Exception failure) when (failure is not OperationCanceledException)
+                {
+                    // Another app's drag data that can't be read, a source that went away mid-drop.
+                    TaskFailures.ShowFailure(failure, L("Transfer"), Window.GetWindow(this));
+                }
+
                 break;
         }
     }

@@ -75,7 +75,16 @@ public sealed class ConflictDialog : Window
 
     public static ConflictResolution Ask(Window? owner, ConflictInfo conflict)
     {
-        var dialog = new ConflictDialog(conflict) { Owner = owner is { IsLoaded: true } ? owner : Application.Current.MainWindow };
+        // A closed window can't own a dialog (WPF throws), and neither can the main window
+        // while FileFluss closes: then the transfer stops instead.
+        var fallback = Application.Current?.MainWindow;
+        var parent = owner is { IsLoaded: true } ? owner : fallback is { IsLoaded: true } ? fallback : null;
+        if (parent is null || parent.Dispatcher.HasShutdownStarted)
+        {
+            return new ConflictResolution(ConflictChoice.Stop, false);
+        }
+
+        var dialog = new ConflictDialog(conflict) { Owner = parent };
         dialog.ShowDialog();
         return new ConflictResolution(dialog._choice, dialog._applyToAll.IsChecked == true);
     }
