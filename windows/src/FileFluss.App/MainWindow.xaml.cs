@@ -418,29 +418,37 @@ public partial class MainWindow : Window, IShell
         UpdateToolbar();
     }
 
+    /// <summary>Stored widths, snapped to the icon-only / narrowest detents; icon-only mode follows the width.</summary>
     private void ApplySidebarWidths()
     {
-        LeftSidebarColumn.Width = new GridLength(_services.Settings.LeftSidebarWidth);
-        RightSidebarColumn.Width = new GridLength(_services.Settings.RightSidebarWidth);
+        var s = _services.Settings;
+        s.LeftSidebarWidth = SidebarLayout.Snap(s.LeftSidebarWidth);
+        s.RightSidebarWidth = SidebarLayout.Snap(s.RightSidebarWidth);
+        s.LeftSidebarCompact = SidebarLayout.IsCompact(s.LeftSidebarWidth);
+        s.RightSidebarCompact = SidebarLayout.IsCompact(s.RightSidebarWidth);
+        LeftSidebarColumn.Width = new GridLength(s.LeftSidebarWidth);
+        RightSidebarColumn.Width = new GridLength(s.RightSidebarWidth);
     }
 
+    /// <summary>A sidebar drag (or double-click, which restores the default) ended: keep where it settled.</summary>
     private void OnSplitterMoved(object sender, DragCompletedEventArgs e)
     {
-        _services.SettingsStore.Batch(s =>
+        if (sender is not GridSplitter splitter || SidebarSplitter.Settle(splitter) is not { } width)
         {
-            if (LeftSidebarColumn.ActualWidth > 0)
-            {
-                s.LeftSidebarWidth = LeftSidebarColumn.ActualWidth;
-            }
+            return;
+        }
 
-            if (RightSidebarColumn.ActualWidth > 0)
-            {
-                s.RightSidebarWidth = RightSidebarColumn.ActualWidth;
-            }
-
-            s.LeftSidebarCompact = LeftSidebarColumn.ActualWidth < 90;
-            s.RightSidebarCompact = RightSidebarColumn.ActualWidth < 90;
-        });
+        var s = _services.Settings;
+        if (SidebarSplitter.IsLeftSidebar(splitter))
+        {
+            s.LeftSidebarWidth = width;
+            s.LeftSidebarCompact = SidebarLayout.IsCompact(width);
+        }
+        else
+        {
+            s.RightSidebarWidth = width;
+            s.RightSidebarCompact = SidebarLayout.IsCompact(width);
+        }
     }
 
     private void ApplyRowSize()

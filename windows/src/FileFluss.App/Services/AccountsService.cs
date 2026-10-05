@@ -22,6 +22,8 @@ public sealed class AccountsService : Observable
     private readonly ProviderHub _hub;
     private readonly ICredentialStore _credentials;
     private readonly Dictionary<Guid, CloudStorageQuota> _quotaCache = [];
+    private readonly HashSet<Guid> _staleQuotas = [];
+    private readonly Dictionary<Guid, Task<CloudStorageQuota?>> _quotaRequests = [];
 
     public AccountsService(AccountStore store, ProviderHub hub, ICredentialStore credentials)
     {
@@ -223,26 +225,73 @@ public sealed class AccountsService : Observable
         }
     }
 
+    /// <summary>
+    /// Moves an account to the gap <paramref name="insertionIndex"/> of the list as it is now
+    /// (macOS: drag to reorder in the sidebar). The order is the stored order, so it persists.
+    /// </summary>
+    public void Move(Guid id, int insertionIndex)
+    {
+        var from = Accounts.ToList().FindIndex(a => a.Id == id);
+        if (from < 0)
+        {
+            return;
+        }
+
+        var to = Reordering.TargetIndex(from, insertionIndex, Accounts.Count);
+        if (to == from)
+        {
+            return;
+        }
+
+        Accounts.Move(from, to);
+        Save();
+    }
+
     // MARK: - Quota
 
-    /// <summary>Cached for two minutes; on failure the last known figure stays rather than blanking.</summary>
-    public async Task<CloudStorageQuota?> QuotaAsync(Guid id)
+    /// <summary>
+    /// Raised on the UI thread when an account's quota was fetched afresh or went stale — the
+    /// sidebar tooltips follow it (macOS refreshes them through the same cache).
+    /// </summary>
+    public event EventHandler<Guid>? QuotaChanged;
+
+    /// <summary>The last known quota, however old; null when none was ever fetched.</summary>
+    public CloudStorageQuota? CachedQuota(Guid id) => _quotaCache.GetValueOrDefault(id);
+
+    /// <summary>
+    /// Cached for two minutes; on failure the last known figure stays rather than blanking.
+    /// Callers asking at the same time share one request.
+    /// </summary>
+    public Task<CloudStorageQuota?> QuotaAsync(Guid id)
     {
-        if (_quotaCache.TryGetValue(id, out var cached) && DateTimeOffset.Now - cached.FetchedAt < QuotaTtl)
+        if (!_staleQuotas.Contains(id) && _quotaCache.TryGetValue(id, out var cached) && DateTimeOffset.Now - cached.FetchedAt < QuotaTtl)
         {
-            return cached;
+            return Task.FromResult<CloudStorageQuota?>(cached);
         }
 
-        if (_hub.Get(id) is not { } provider)
+        if (_quotaRequests.TryGetValue(id, out var running))
         {
-            return _quotaCache.GetValueOrDefault(id);
+            return running;
         }
 
+        var request = FetchQuotaAsync(id);
+        if (!request.IsCompleted)
+        {
+            _quotaRequests[id] = request;
+        }
+
+        return request;
+    }
+
+    private async Task<CloudStorageQuota?> FetchQuotaAsync(Guid id)
+    {
         try
         {
-            if (await provider.StorageQuotaAsync() is { } fresh)
+            if (_hub.Get(id) is { } provider && await provider.StorageQuotaAsync() is { } fresh)
             {
                 _quotaCache[id] = fresh;
+                _staleQuotas.Remove(id);
+                QuotaChanged?.Invoke(this, id);
                 return fresh;
             }
         }
@@ -250,11 +299,23 @@ public sealed class AccountsService : Observable
         {
             // Best-effort.
         }
+        finally
+        {
+            _quotaRequests.Remove(id);
+        }
 
         return _quotaCache.GetValueOrDefault(id);
     }
 
-    public void InvalidateQuota(Guid id) => _quotaCache.Remove(id);
+    /// <summary>
+    /// The account's contents changed (a transfer or delete): the next ask fetches afresh. The
+    /// old figure stays as the fallback until then.
+    /// </summary>
+    public void InvalidateQuota(Guid id)
+    {
+        _staleQuotas.Add(id);
+        QuotaChanged?.Invoke(this, id);
+    }
 
     // MARK: - Persistence
 

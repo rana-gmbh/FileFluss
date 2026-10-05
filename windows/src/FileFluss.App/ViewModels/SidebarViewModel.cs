@@ -27,6 +27,7 @@ public sealed class SidebarEntry : Observable
     private bool _isSelected;
     private bool _isDropTarget;
     private string? _trailing;
+    private string? _toolTip;
 
     public required SidebarEntryKind Kind { get; init; }
 
@@ -40,6 +41,9 @@ public sealed class SidebarEntry : Observable
     public ImageSource? Image { get; init; }
 
     public Guid? FavoriteId { get; init; }
+
+    /// <summary>A favourite's stored icon name (<see cref="SidebarFavorite.Icon"/>).</summary>
+    public string? Icon { get; init; }
 
     public CloudAccount? Account { get; init; }
 
@@ -58,7 +62,12 @@ public sealed class SidebarEntry : Observable
     /// <summary>What <see cref="Trailing"/> shows when no indexing run is going.</summary>
     public string? RestingTrailing { get; init; }
 
-    public string? ToolTip { get; set; }
+    /// <summary>The hover text: a favourite's name and path, a drive's free space, an account's quota.</summary>
+    public string? ToolTip
+    {
+        get => _toolTip;
+        set => Set(ref _toolTip, value);
+    }
 
     /// <summary>Green when connected, grey when not; null hides the dot.</summary>
     public bool? IsConnected { get; init; }
@@ -127,6 +136,7 @@ public sealed class SidebarViewModel : Observable
         EnsureFavorites();
         Rebuild();
         services.Accounts.Accounts.CollectionChanged += (_, _) => RebuildAccounts();
+        services.Accounts.QuotaChanged += (_, id) => OnQuotaChanged(id);
         services.SettingsStore.Changed += (_, name) =>
         {
             if (name is null || name.Contains("Favorites", StringComparison.Ordinal))
@@ -224,34 +234,36 @@ public sealed class SidebarViewModel : Observable
         }
     }
 
-    public void AddFavorite(PanelLocation location, string name, int? index = null)
+    public void AddFavorite(PanelLocation location, string name, int? index = null) => AddFavorites([(location, name)], index);
+
+    /// <summary>
+    /// Adds folders as favourites, in order, at the gap <paramref name="index"/> (the end when
+    /// null) — macOS inserts a dropped folder where the insertion line was. Folders that are
+    /// already favourites are skipped.
+    /// </summary>
+    public void AddFavorites(IEnumerable<(PanelLocation Location, string Name)> folders, int? index = null)
     {
         var list = StoredFavorites.ToList();
-        if (list.Any(f => f.Location == location))
+        var at = index is { } i ? Math.Clamp(i, 0, list.Count) : list.Count;
+        var added = false;
+        foreach (var (location, name) in folders)
         {
-            return;
+            if (list.Any(f => f.Location == location))
+            {
+                continue;
+            }
+
+            var entry = location.IsCloud && _services.Accounts.Find(location.AccountId!.Value) is { } account
+                ? SidebarFavorite.ForCloud($"{name} ({account.ProviderType.DisplayName()})", account.ProviderType, account.Id, location.Path)
+                : SidebarFavorite.ForLocal(name, "folder", location.Path);
+            list.Insert(at++, entry);
+            added = true;
         }
 
-        SidebarFavorite entry;
-        if (location.IsCloud && _services.Accounts.Find(location.AccountId!.Value) is { } account)
+        if (added)
         {
-            entry = SidebarFavorite.ForCloud($"{name} ({account.ProviderType.DisplayName()})", account.ProviderType, account.Id, location.Path);
+            StoredFavorites = list;
         }
-        else
-        {
-            entry = SidebarFavorite.ForLocal(name, "folder", location.Path);
-        }
-
-        if (index is { } i && i >= 0 && i <= list.Count)
-        {
-            list.Insert(i, entry);
-        }
-        else
-        {
-            list.Add(entry);
-        }
-
-        StoredFavorites = list;
     }
 
     public void RemoveFavorite(Guid id) => StoredFavorites = StoredFavorites.Where(f => f.Id != id).ToList();
@@ -259,20 +271,23 @@ public sealed class SidebarViewModel : Observable
     public void RenameFavorite(Guid id, string name)
         => StoredFavorites = StoredFavorites.Select(f => f.Id == id ? f with { DisplayName = name } : f).ToList();
 
-    public void MoveFavorite(Guid id, int newIndex)
-    {
-        var list = StoredFavorites.ToList();
-        var index = list.FindIndex(f => f.Id == id);
-        if (index < 0)
-        {
-            return;
-        }
+    /// <summary>A glyph name <see cref="Glyphs.ForFavorite"/> knows, or "@logo:&lt;asset&gt;" (macOS "Change Icon").</summary>
+    public void SetFavoriteIcon(Guid id, string icon)
+        => StoredFavorites = StoredFavorites.Select(f => f.Id == id ? f with { Icon = icon } : f).ToList();
 
-        var item = list[index];
-        list.RemoveAt(index);
-        list.Insert(Math.Clamp(newIndex > index ? newIndex - 1 : newIndex, 0, list.Count), item);
-        StoredFavorites = list;
+    /// <summary>Moves a favourite to the gap <paramref name="insertionIndex"/> of the list as it is now.</summary>
+    public void MoveFavorite(Guid id, int insertionIndex)
+    {
+        var current = StoredFavorites;
+        var moved = Reordering.Move(current, f => f.Id == id, insertionIndex);
+        if (!moved.SequenceEqual(current))
+        {
+            StoredFavorites = moved;
+        }
     }
+
+    /// <summary>Accounts are one list for both sidebars, so moving one reorders both (macOS too).</summary>
+    public void MoveAccount(Guid id, int insertionIndex) => _services.Accounts.Move(id, insertionIndex);
 
     // MARK: - Building
 
@@ -288,15 +303,22 @@ public sealed class SidebarViewModel : Observable
         Favorites.Clear();
         foreach (var favorite in StoredFavorites)
         {
+            var title = favorite.IsCloud ? favorite.DisplayName : L(favorite.DisplayName);
+            var logo = Glyphs.LogoAsset(favorite.Icon) is { } asset ? IconCache.Logo(asset) : null;
             Favorites.Add(new SidebarEntry
             {
                 Kind = SidebarEntryKind.Favorite,
-                Title = favorite.IsCloud ? favorite.DisplayName : L(favorite.DisplayName),
+                Title = title,
                 Location = favorite.Location,
                 FavoriteId = favorite.Id,
-                Glyph = Glyphs.ForFavorite(favorite.Icon),
-                Image = favorite.Icon.StartsWith("@logo:", StringComparison.Ordinal) ? IconCache.Logo(favorite.Icon[6..]) : null,
-                ToolTip = favorite.IsCloud ? favorite.Location.Path : favorite.Location.Path,
+                Icon = favorite.Icon,
+
+                // The logo when there is one, the glyph otherwise — never both stacked.
+                Glyph = logo is null ? Glyphs.ForFavorite(favorite.Icon) : null,
+                Image = logo,
+
+                // The name too: in icon-only mode the tooltip is all there is (macOS .help(name)).
+                ToolTip = $"{title}{Environment.NewLine}{favorite.Location.Path}",
             });
         }
 
@@ -324,10 +346,12 @@ public sealed class SidebarViewModel : Observable
             }
 
             var root = drive.RootDirectory.FullName;
-            string? tooltip = null;
+            var title = LocalFileProvider.DriveLabel(root);
+            var tooltip = title;
             try
             {
-                tooltip = L("{0} free of {1}", ByteFormatter.Format(drive.AvailableFreeSpace), ByteFormatter.Format(drive.TotalSize));
+                // macOS driveTooltip: "Name: 120 GB free of 500 GB".
+                tooltip = $"{title}: {Core.Storage.LocalVolumeFormatter.Summary(drive.AvailableFreeSpace, drive.TotalSize)}";
             }
             catch (IOException)
             {
@@ -336,7 +360,7 @@ public sealed class SidebarViewModel : Observable
             Drives.Add(new SidebarEntry
             {
                 Kind = SidebarEntryKind.Drive,
-                Title = LocalFileProvider.DriveLabel(root),
+                Title = title,
                 Location = PanelLocation.Local(root),
                 Image = IconCache.ForPath(root, true),
                 ToolTip = tooltip,
@@ -389,12 +413,57 @@ public sealed class SidebarViewModel : Observable
                 IsOffline = account.IsOfflineMode,
                 RestingTrailing = account.IsOfflineMode ? L("Offline") : null,
                 Trailing = account.IsOfflineMode ? L("Offline") : null,
-                ToolTip = account.DisplayName,
+                ToolTip = AccountToolTip(account),
             });
         }
 
         UpdateIndexingBadges();
         UpdateSelection();
+        RefreshQuotas();
+    }
+
+    // MARK: - Quota tooltips (macOS cloudAccountTooltip)
+
+    /// <summary>"Dropbox: 12.0 GB of 2.00 TB used (1%)" once a quota is known, the name until then.</summary>
+    private string AccountToolTip(CloudAccount account)
+        => _services.Accounts.CachedQuota(account.Id) is { } quota ? CloudQuotaFormatter.Summary(quota, account.DisplayName) : account.DisplayName;
+
+    /// <summary>
+    /// Asks for every account's quota; fresh figures arrive through
+    /// <see cref="AccountsService.QuotaChanged"/>. The service's cache (two minutes) makes
+    /// rebuilds free, and both sidebars asking at once share one request.
+    /// </summary>
+    private void RefreshQuotas()
+    {
+        foreach (var account in _services.Accounts.Accounts)
+        {
+            if (account.IsConnected && !account.IsOfflineMode)
+            {
+                _ = _services.Accounts.QuotaAsync(account.Id);
+            }
+        }
+    }
+
+    private void OnQuotaChanged(Guid id)
+    {
+        UpdateQuotaToolTips();
+
+        // A transfer or delete made the figure stale: fetch it again so the tooltip follows.
+        if (_services.Accounts.Find(id) is { IsConnected: true, IsOfflineMode: false })
+        {
+            _ = _services.Accounts.QuotaAsync(id);
+        }
+    }
+
+    private void UpdateQuotaToolTips()
+    {
+        foreach (var entry in Accounts)
+        {
+            if (entry.Account is { } account && _services.Accounts.Find(account.Id) is { } current)
+            {
+                entry.ToolTip = AccountToolTip(current);
+            }
+        }
     }
 
     /// <summary>A running index shows its file count where "Offline" would be (macOS DriveRow).</summary>
