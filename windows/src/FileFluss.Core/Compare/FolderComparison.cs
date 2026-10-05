@@ -173,7 +173,9 @@ public static class FolderComparison
         bool compareDates = false,
         bool ignoreCase = false)
     {
-        var comparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        // Unicode-form-insensitive too: a folder written by a Mac (NFD) and its copy on a PC
+        // (NFC) hold the same names, and would otherwise compare as two lists of one-sided files.
+        var comparer = IO.FileNames.MatchComparer(ignoreCase);
         var leftMap = new Dictionary<string, SyncEntry>(left.Count, comparer);
         foreach (var entry in left)
         {

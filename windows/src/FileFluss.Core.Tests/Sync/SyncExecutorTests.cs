@@ -100,6 +100,52 @@ public sealed class SyncExecutorTests : IDisposable
     // MARK: - Execution
 
     [Fact]
+    public async Task MirrorCloudToLocalWithNamesWindowsCantHoldIsStable()
+    {
+        // "a:b" lands as "a_b", in a folder "Q?" that lands as "Q_". Matching the raw names
+        // made every run download the files again and then delete the copies as "extra".
+        var cloud = new MemoryCloudProvider();
+        var stamp = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+        cloud.AddFile("/Src/a:b.txt", "colon", stamp);
+        cloud.AddFile("/Src/Q?/inner.txt", "inner", stamp);
+        var target = LocalDir("mirror-illegal");
+        var source = new SyncEndpoint(cloud, "/Src");
+        var destination = new SyncEndpoint(_local, target);
+
+        var first = await RunAsync(await PlanAsync(source, destination, SyncMode.Mirror), source, destination);
+        Assert.True(first.CompletedCleanly, first.CompletionSummary);
+        Assert.Equal("colon", File.ReadAllText(Path.Combine(target, "a_b.txt")));
+        Assert.Equal("inner", File.ReadAllText(Path.Combine(target, "Q_", "inner.txt")));
+
+        var second = await PlanAsync(source, destination, SyncMode.Mirror);
+        Assert.True(second.IsEmpty, string.Join(", ", second.Operations.Select(o => $"{o.Kind} {o.RelativePath}")));
+    }
+
+    [Fact]
+    public async Task MirrorMatchesMacAndWindowsSpellingsOfTheSameName()
+    {
+        var nfd = "Café";
+        var nfc = "Café";
+        var cloud = new MemoryCloudProvider();
+        var stamp = new DateTime(2024, 5, 6, 7, 8, 9, DateTimeKind.Utc);
+        cloud.AddFile($"/Src/{nfd}/menu.txt", "new menu", new DateTimeOffset(stamp));
+        var target = LocalDir("mirror-nfc");
+        WriteFile(Path.Combine(target, nfc, "menu.txt"), "old", stamp.AddDays(-1));
+        var source = new SyncEndpoint(cloud, "/Src");
+        var destination = new SyncEndpoint(_local, target);
+
+        var plan = await PlanAsync(source, destination, SyncMode.Mirror);
+        Assert.DoesNotContain(plan.Operations, o => o.Kind == SyncOperationKind.Delete);
+
+        var progress = await RunAsync(plan, source, destination);
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        var folder = Assert.Single(Directory.GetDirectories(target));
+        Assert.Equal(nfc, Path.GetFileName(folder));
+        Assert.Equal("new menu", File.ReadAllText(Path.Combine(folder, "menu.txt")));
+    }
+
+    [Fact]
     public async Task MirrorLocalToCloudMakesTheDestinationMatchAndIsIdempotent()
     {
         var sourceDir = LocalDir("mirror-src");
