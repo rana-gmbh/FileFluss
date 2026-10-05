@@ -47,6 +47,17 @@ public partial class App : Application
         AppServices.Current = Services = services;
         Localization.Use(services.Settings.Language);
         ThemeBrushes.Install(this);
+
+        // Esc closes every secondary window (Help, About, Transfer Details, …), as on macOS. Bubbling,
+        // so a control that uses Esc itself — an open drop-down, an inline editor — gets it first.
+        EventManager.RegisterClassHandler(typeof(Window), UIElement.KeyDownEvent, new System.Windows.Input.KeyEventHandler((sender, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Escape && !e.Handled && sender is Window window && window != MainWindow)
+            {
+                e.Handled = true;
+                window.Close();
+            }
+        }));
         ICloudDriveLocator.Registry = new WindowsRegistryReader();
 #if DEBUG
         // Debug builds mirror the support log to a file, for diagnosing runs driven by UI automation.

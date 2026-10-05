@@ -139,8 +139,14 @@ public partial class MainWindow : Window, IShell
         }
 #endif
 
-        if (ShortcutFromKey(e) is not { } pressed || _services.Keyboard.CommandFor(pressed) is not { } command)
+        if (ShortcutFromKey(e) is not { } pressed)
         {
+            return;
+        }
+
+        if (_services.Keyboard.CommandFor(pressed) is not { } command)
+        {
+            e.Handled = HandleFixedShortcut(pressed);
             return;
         }
 
@@ -191,16 +197,49 @@ public partial class MainWindow : Window, IShell
         Key.PageUp => "pageup",
         Key.PageDown => "pagedown",
         Key.Insert => "insert",
-        Key.OemPlus or Key.Add => "plus",
-        Key.OemMinus or Key.Subtract => "minus",
+        Key.Add => "plus",
+        Key.Subtract => "minus",
         Key.Multiply => "multiply",
-        Key.OemPeriod or Key.Decimal => "period",
-        Key.OemComma => "comma",
-        Key.Oem2 or Key.Divide => "slash",
-        Key.Oem5 => "backslash",
-        Key.Oem6 => "equals",
+        Key.Decimal => "period",
+        Key.Divide => "slash",
+
+        // Punctuation keys sit in different places on every layout: name them by what they
+        // type here, so Ctrl+= is the key labelled "=" (VK_OEM_PLUS on US, Shift+0 on German).
+        _ when IsOemKey(key) => KeyboardLayout.CharFor(KeyInterop.VirtualKeyFromKey(key)) switch
+        {
+            '=' => "equals",
+            '+' => "plus",
+            '-' => "minus",
+            ',' => "comma",
+            '.' => "period",
+            '/' => "slash",
+            '\\' => "backslash",
+            _ => null,
+        },
         _ => null,
     };
+
+    private static bool IsOemKey(Key key) => key is >= Key.Oem1 and <= Key.Oem102;
+
+    /// <summary>Keys that are not keyboard-map commands: F1 for Help, Ctrl +/− for the row size (macOS ⌘? and ⌘+/⌘−).</summary>
+    private bool HandleFixedShortcut(ShortcutBinding pressed)
+    {
+        switch (pressed)
+        {
+            case { Key: "f1", Modifiers: ShortcutModifiers.None }:
+                ShowHelp();
+                return true;
+            case { Key: "plus", Modifiers: ShortcutModifiers.Control }:
+            case { Key: "equals", Modifiers: ShortcutModifiers.Control | ShortcutModifiers.Shift }:
+                StepRowSize(1);
+                return true;
+            case { Key: "minus", Modifiers: ShortcutModifiers.Control }:
+                StepRowSize(-1);
+                return true;
+            default:
+                return false;
+        }
+    }
 
     private static T? FindParent<T>(DependencyObject start)
         where T : DependencyObject
@@ -223,7 +262,11 @@ public partial class MainWindow : Window, IShell
         MainMenu.Items.Clear();
         string S(KeyboardCommand c) => _services.Keyboard.BindingFor(c)?.DisplayString ?? string.Empty;
         MenuItem Cmd(KeyboardCommand command, string? title = null)
-            => ContextMenus.Item(L(title ?? command.DisplayName()), null, S(command), () => _ = _vm.ExecuteAsync(command));
+        {
+            var item = ContextMenus.Item(L(title ?? command.DisplayName()), null, S(command), () => _ = _vm.ExecuteAsync(command));
+            item.Tag = command;
+            return item;
+        }
 
         var file = new MenuItem { Header = "_" + L("File") };
         file.Items.Add(Cmd(KeyboardCommand.NewFolder));
@@ -277,8 +320,12 @@ public partial class MainWindow : Window, IShell
         }));
         view.Items.Add(ContextMenus.Check(L("Single Pane"), _vm.SinglePaneMode, () => _vm.SinglePaneMode = !_vm.SinglePaneMode));
         view.Items.Add(new Separator());
-        view.Items.Add(ContextMenus.Item(L("Increase Row Size"), null, "Ctrl++", () => StepRowSize(1)));
-        view.Items.Add(ContextMenus.Item(L("Decrease Row Size"), null, "Ctrl+-", () => StepRowSize(-1)));
+        var bigger = ContextMenus.Item(L("Increase Row Size"), null, "Ctrl++", () => StepRowSize(1));
+        bigger.Tag = "row+";
+        view.Items.Add(bigger);
+        var smaller = ContextMenus.Item(L("Decrease Row Size"), null, "Ctrl+-", () => StepRowSize(-1));
+        smaller.Tag = "row-";
+        view.Items.Add(smaller);
         MainMenu.Items.Add(view);
 
         var go = new MenuItem { Header = "_" + L("Go") };
@@ -313,6 +360,26 @@ public partial class MainWindow : Window, IShell
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("About FileFluss"), null, null, ShowAbout));
         MainMenu.Items.Add(help);
+
+        foreach (var top in MainMenu.Items.OfType<MenuItem>())
+        {
+            top.SubmenuOpened += (_, _) => UpdateMenuState(top);
+        }
+    }
+
+    /// <summary>Greys out what can't apply right now, as the macOS menus do (no selection, read-only, single pane).</summary>
+    private void UpdateMenuState(MenuItem menu)
+    {
+        foreach (var item in menu.Items.OfType<MenuItem>())
+        {
+            item.IsEnabled = item.Tag switch
+            {
+                KeyboardCommand command => _vm.IsCommandEnabled(command),
+                "row+" => _services.Settings.RowSize < FileListRowSize.Large,
+                "row-" => _services.Settings.RowSize > FileListRowSize.Small,
+                _ => true,
+            };
+        }
     }
 
     /// <summary>Help → Check for Updates; wired by the app.</summary>

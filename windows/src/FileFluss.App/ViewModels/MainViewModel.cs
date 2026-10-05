@@ -255,6 +255,28 @@ public sealed class MainViewModel : Observable
             KeyboardCommand.TargetToSource or KeyboardCommand.CompareFolders or KeyboardCommand.SyncPanels or
             KeyboardCommand.CopyToOtherPanel or KeyboardCommand.MoveToOtherPanel or KeyboardCommand.ToggleActivePanel);
 
+    /// <summary>Whether a menu shows the command enabled — the macOS menus' <c>.disabled(…)</c> conditions.</summary>
+    public bool IsCommandEnabled(KeyboardCommand command)
+    {
+        var panel = ActivePanel;
+        var selected = panel.Selection.Count;
+        return CanExecute(command) && command switch
+        {
+            KeyboardCommand.NewFolder => panel.CanCreateFolders,
+            KeyboardCommand.Rename => selected == 1 && !panel.IsReadOnly,
+            KeyboardCommand.Duplicate or KeyboardCommand.CutFiles or KeyboardCommand.MoveToOtherPanel or KeyboardCommand.DeleteToTrash
+                => selected > 0 && !panel.IsReadOnly,
+            KeyboardCommand.GetInfo or KeyboardCommand.CopyToOtherPanel or KeyboardCommand.CopyPath or KeyboardCommand.CopyFiles
+                => selected > 0,
+            KeyboardCommand.PasteFiles => !panel.IsReadOnly,
+            KeyboardCommand.HistoryBack => panel.CanGoBack,
+            KeyboardCommand.HistoryForward => panel.CanGoForward,
+            KeyboardCommand.ParentDirectory => panel.CanGoUp,
+            KeyboardCommand.SyncPanels => !Left.IsOffline && !Right.IsOffline,
+            _ => true,
+        };
+    }
+
     public async Task ExecuteAsync(KeyboardCommand command)
     {
         if (!CanExecute(command))
