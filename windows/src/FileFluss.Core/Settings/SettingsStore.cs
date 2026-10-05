@@ -25,18 +25,29 @@ public sealed class SettingsStore
 
     private readonly string _path;
     private readonly Lock _gate = new();
+    private readonly Timer _saveTimer;
     private bool _suspended;
+    private int _unsaved;
 
     public SettingsStore(string path)
     {
         _path = path;
         Settings = Load();
         Settings.PropertyChanged += OnSettingsChanged;
+        _saveTimer = new Timer(_ => SaveIfUnsaved());
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Flush();
     }
+
+    /// <summary>
+    /// How long changes are collected before they are written. Settings change on the UI
+    /// thread, often several in a row (a window closing, a column drag); writing each one there
+    /// cost a JSON serialisation and a file replace — 50 ms the first time.
+    /// </summary>
+    public static TimeSpan SaveDelay { get; set; } = TimeSpan.FromMilliseconds(300);
 
     public AppSettings Settings { get; }
 
-    /// <summary>Raised after a change has been written.</summary>
+    /// <summary>Raised after a change, on the thread that made it; the write follows within <see cref="SaveDelay"/>, off that thread.</summary>
     public event EventHandler<string?>? Changed;
 
     /// <summary>%LOCALAPPDATA%\FileFluss — settings, accounts, the index and logs live here.</summary>
@@ -58,8 +69,40 @@ public sealed class SettingsStore
             _suspended = false;
         }
 
-        Save();
+        ScheduleSave();
         Changed?.Invoke(this, null);
+    }
+
+    /// <summary>Writes pending changes now (the app calls this as it exits; it also runs at process exit).</summary>
+    public void Flush()
+    {
+        _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        SaveIfUnsaved();
+    }
+
+    private void ScheduleSave()
+    {
+        Volatile.Write(ref _unsaved, 1);
+        _saveTimer.Change(SaveDelay, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>On the timer's thread: AppSettings replaces its collections rather than changing them, so reading it there is safe.</summary>
+    private void SaveIfUnsaved()
+    {
+        if (Interlocked.Exchange(ref _unsaved, 0) == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Save();
+        }
+        catch (Exception e) when (e is InvalidOperationException or NotSupportedException)
+        {
+            // A collection changed under the serializer after all: try again shortly.
+            ScheduleSave();
+        }
     }
 
     public void Save()
@@ -126,7 +169,7 @@ public sealed class SettingsStore
             return;
         }
 
-        Save();
+        ScheduleSave();
         Changed?.Invoke(this, e.PropertyName);
     }
 }

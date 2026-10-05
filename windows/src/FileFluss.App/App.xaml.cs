@@ -113,6 +113,9 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SingleInstance.Release();
+
+        // Settings are written shortly after they change; the last ones (window frame, session folders) now.
+        Services?.SettingsStore.Flush();
         Services?.Mount.UnmountAllOnExit();
 
         // Virtual files can't be pasted once FileFluss is gone; don't leave a dead promise behind.
