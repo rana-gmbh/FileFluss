@@ -643,7 +643,7 @@ public partial class SidebarView : UserControl
     /// </summary>
     private DropAction ActionFor(ListBox list, RowHit hit, IDataObject data)
     {
-        var payload = data.GetData(DragPayload.Format) as DragPayload;
+        var payload = DragPayload.From(data);
         if (payload is null && !data.GetDataPresent(DataFormats.FileDrop))
         {
             return DropAction.None;
@@ -671,7 +671,7 @@ public partial class SidebarView : UserControl
             return check.HasFolders;
         }
 
-        var has = data.GetData(DragPayload.Format) is DragPayload payload
+        var has = DragPayload.From(data) is { } payload
             ? payload.Items.Any(i => i.IsDirectory)
             : data.GetData(DataFormats.FileDrop) is string[] paths && paths.Any(System.IO.Directory.Exists);
         _folderCheck = (data, has);
@@ -681,7 +681,7 @@ public partial class SidebarView : UserControl
     /// <summary>The dragged folders as favourite locations and names.</summary>
     private static List<(PanelLocation Location, string Name)> DroppedFolders(IDataObject data)
     {
-        if (data.GetData(DragPayload.Format) is DragPayload payload)
+        if (DragPayload.From(data) is { } payload)
         {
             return payload.Items.Where(i => i.IsDirectory).Select(f => (payload.SourceFolder with { Path = f.Path }, f.Name)).ToList();
         }
@@ -819,7 +819,7 @@ public partial class SidebarView : UserControl
     private async Task TransferIntoAsync(SidebarViewModel vm, string destinationName, PanelLocation destination, DragEventArgs e)
     {
         var forced = (e.KeyStates & DragDropKeyStates.ShiftKey) != 0 ? true : (e.KeyStates & DragDropKeyStates.ControlKey) != 0 ? false : (bool?)null;
-        if (e.Data.GetData(DragPayload.Format) is DragPayload payload)
+        if (DragPayload.From(e.Data) is { } payload)
         {
             if (Main.ResolveDropVerb(payload.Items.Count, destinationName, forced) is { } isMove)
             {

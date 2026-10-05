@@ -65,6 +65,23 @@ public sealed class GoogleDriveProviderTests : IDisposable
 
     private void NoSharedDrives() => _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/drives", """{"drives":[]}""");
 
+    // MARK: - Export names
+
+    [Fact]
+    public async Task ExportExtensionComesFromTheListedMimeTypeWithoutAnotherRequest()
+    {
+        var provider = Provider();
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files?", RootListing);
+        NoSharedDrives();
+        var items = await provider.ListDirectoryAsync("/");
+        var before = _http.Requests.Count;
+
+        Assert.Equal("docx", await provider.ExportExtensionAsync(items.Single(i => i.Name == "Report")));
+        Assert.Null(await provider.ExportExtensionAsync(items.Single(i => i.Name == "a.txt")));
+        Assert.Null(await provider.ExportExtensionAsync(items.Single(i => i.Name == "Docs")));
+        Assert.Equal(before, _http.Requests.Count);
+    }
+
     // MARK: - Listing
 
     [Fact]

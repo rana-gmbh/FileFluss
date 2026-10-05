@@ -152,6 +152,17 @@ public abstract class FileProvider
     public virtual Task SetModificationDateAsync(string path, DateTimeOffset date, CancellationToken cancellationToken = default)
         => throw CloudProviderException.NotImplemented();
 
+    /// <summary>
+    /// The extension (without the dot) that <see cref="DownloadFileAsync"/> appends when it
+    /// writes <paramref name="item"/>, or null when the download lands under the requested
+    /// name. Google Workspace documents are exported ("Report" arrives as "Report.docx", see
+    /// <see cref="IO.DownloadedFile"/>); a size reported for such an item is not the size of
+    /// the export. Needed wherever a name must be promised before the bytes exist — dragging
+    /// cloud files out to Explorer names every file up front.
+    /// </summary>
+    public virtual ValueTask<string?> ExportExtensionAsync(CloudFileItem item, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult<string?>(null);
+
     /// <summary>Free space at <paramref name="path"/>, for the pre-flight space check; null when unknown.</summary>
     public virtual Task<long?> AvailableSpaceAsync(string path, CancellationToken cancellationToken = default)
         => Task.FromResult<long?>(null);

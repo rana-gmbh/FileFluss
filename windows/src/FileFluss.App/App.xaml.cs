@@ -101,6 +101,9 @@ public partial class App : Application
     {
         SingleInstance.Release();
         Services?.Mount.UnmountAllOnExit();
+
+        // Virtual files can't be pasted once FileFluss is gone; don't leave a dead promise behind.
+        Services?.Export.ReleaseClipboard(clear: true);
         foreach (var account in Services?.Accounts.Accounts.ToList() ?? [])
         {
             Services!.Hub.Get(account.Id)?.Dispose();

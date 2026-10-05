@@ -742,8 +742,24 @@ public sealed class MainViewModel : Observable
         }
 
         Clipboard = new FileClipboard(panel.Provider, panel.Location, items, isCut);
-        if (panel.IsLocal)
+        if (!panel.IsLocal)
         {
+            // Copied cloud files go on the Windows clipboard as virtual files too, so Explorer
+            // can paste them (downloading as it goes). A cut stays inside FileFluss: deleting
+            // the cloud originals after another app's paste is not something to do on its word.
+            if (!isCut && CloudFileExport.CanExport(panel))
+            {
+                _services.Export.CopyToClipboard(Shell?.Window, panel, items);
+            }
+            else
+            {
+                _services.Export.ReleaseClipboard(clear: true);
+            }
+        }
+        else
+        {
+            _services.Export.ReleaseClipboard(clear: false);
+
             // Also on the Windows clipboard, so Explorer can paste what FileFluss copied.
             var paths = new StringCollection();
             paths.AddRange(items.Select(i => i.Path).ToArray());
@@ -769,7 +785,11 @@ public sealed class MainViewModel : Observable
         }
 
         var external = ExternalClipboardFiles();
-        if (_clipboard is { } clip && (external.Count == 0 || !panel.IsLocal || clip.Source.IsLocal == false || SameSet(external, clip.Items)))
+
+        // Cloud files FileFluss put on the Windows clipboard, since replaced by files copied in
+        // Explorer: the newer copy wins, as it would anywhere else.
+        var replaced = external.Count > 0 && _clipboard is { Source.IsLocal: false } && _services.Export.ClipboardWasReplaced;
+        if (_clipboard is { } clip && !replaced && (external.Count == 0 || !panel.IsLocal || clip.Source.IsLocal == false || SameSet(external, clip.Items)))
         {
             var isCut = clip.IsCut;
             if (isCut)

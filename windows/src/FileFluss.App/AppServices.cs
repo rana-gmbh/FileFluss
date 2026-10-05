@@ -27,6 +27,7 @@ public sealed class AppServices
         Hub = new ProviderHub();
         Accounts = new AccountsService(new AccountStore(Path.Combine(dataDirectory, "accounts.json")), Hub, Credentials);
         Transfers = new TransferCenter();
+        Export = new CloudFileExport(Transfers);
         Keyboard = new KeyboardMap(Settings);
         Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
         Mount = new MountService(SettingsStore, dataDirectory);
@@ -59,6 +60,9 @@ public sealed class AppServices
     public AccountsService Accounts { get; }
 
     public TransferCenter Transfers { get; }
+
+    /// <summary>Cloud files dragged or copied out to Explorer and other apps.</summary>
+    public CloudFileExport Export { get; }
 
     public KeyboardMap Keyboard { get; }
 

@@ -468,6 +468,22 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
 
     // MARK: - Download / upload
 
+    /// <summary>
+    /// The export extension of a Workspace document. Paths resolve live here (no cache), so
+    /// only items that look like one — no size and no checksum, which every binary file has —
+    /// cost a lookup.
+    /// </summary>
+    public override async ValueTask<string?> ExportExtensionAsync(CloudFileItem item, CancellationToken cancellationToken = default)
+    {
+        if (item.IsDirectory || item.Size > 0 || item.Checksum is not null)
+        {
+            return null;
+        }
+
+        var resolved = await ResolveAsync(GoogleDriveApi.Trim(item.Path), cancellationToken).ConfigureAwait(false);
+        return ExportFormats.TryGetValue(resolved.MimeType, out var export) ? export.Extension : null;
+    }
+
     public override async Task DownloadFileAsync(string remotePath, string localPath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
     {
         var session = RequireSession();
