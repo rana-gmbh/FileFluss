@@ -51,8 +51,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     private bool _leftSidebarCompact;
     private bool _rightSidebarCompact;
     private Dictionary<string, bool> _sectionExpanded = [];
-    private List<FileListColumn> _localColumns = [FileListColumn.Name, FileListColumn.DateModified, FileListColumn.Size, FileListColumn.Kind];
-    private List<FileListColumn> _cloudColumns = [FileListColumn.Name, FileListColumn.DateModified, FileListColumn.Size, FileListColumn.Kind];
+    private List<FileListColumn> _localColumns = [.. FileListColumns.Defaults];
+    private List<FileListColumn> _cloudColumns = [.. FileListColumns.Defaults];
     private Dictionary<string, double> _columnWidths = [];
     private bool _nameAutoResize = true;
     private List<SidebarFavorite>? _leftFavorites;
@@ -138,6 +138,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     [JsonPropertyName("FileList.rowSize")]
     public FileListRowSize RowSize { get => _rowSize; set => Set(ref _rowSize, value); }
 
+    /// <summary>Visible columns in display order (macOS "FileList.local.visibleColumns"); see <see cref="FileListColumns"/>.</summary>
     public List<FileListColumn> LocalColumns { get => _localColumns; set => Set(ref _localColumns, value); }
 
     public List<FileListColumn> CloudColumns { get => _cloudColumns; set => Set(ref _cloudColumns, value); }

@@ -143,4 +143,5 @@ public enum SortField
     Date,
     Size,
     Kind,
+    DateCreated,
 }
