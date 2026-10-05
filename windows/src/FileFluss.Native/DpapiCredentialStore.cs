@@ -1,9 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Runtime.InteropServices;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 using FileFluss.Core.Security;
 
@@ -95,27 +93,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
         }
 
         _secured = true;
-        try
-        {
-            new DirectoryInfo(_directory).SetAccessControl(PrivateSecurity());
-        }
-        catch (Exception e) when (e is UnauthorizedAccessException or IOException or InvalidOperationException or PrivilegeNotHeldException or IdentityNotMappedException)
-        {
-        }
-    }
-
-    /// <summary>Full control for the current user and SYSTEM, inherited by everything inside; nothing else, nothing inherited from above.</summary>
-    internal static DirectorySecurity PrivateSecurity()
-    {
-        var security = new DirectorySecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        const InheritanceFlags inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
-        foreach (var identity in new IdentityReference[] { WindowsIdentity.GetCurrent().User!, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) })
-        {
-            security.AddAccessRule(new FileSystemAccessRule(identity, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
-        }
-
-        return security;
+        PrivateFolder.Apply(_directory);
     }
 
     private static void TryDelete(string path)

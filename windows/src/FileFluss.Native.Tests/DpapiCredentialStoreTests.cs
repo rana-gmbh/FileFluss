@@ -86,4 +86,32 @@ public sealed class DpapiCredentialStoreTests : IDisposable
         Assert.DoesNotContain(new SecurityIdentifier(WellKnownSidType.WorldSid, null), fileRules);
         Assert.DoesNotContain(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), fileRules);
     }
+
+    [Fact]
+    public void APrivateFolderTakesFilesAlreadyInsideWithIt()
+    {
+        // A cache folder on a data drive: other signed-in users could change what's in it.
+        Directory.CreateDirectory(_directory);
+        var shared = new DirectoryInfo(_directory).GetAccessControl();
+        shared.AddAccessRule(new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+            FileSystemRights.Modify,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+            PropagationFlags.None,
+            AccessControlType.Allow));
+        new DirectoryInfo(_directory).SetAccessControl(shared);
+        var staged = Path.Combine(_directory, "dl-1");
+        File.WriteAllText(staged, "x");
+
+        Assert.True(PrivateFolder.Apply(_directory));
+        Assert.True(PrivateFolder.Apply(_directory));
+
+        var rules = new FileInfo(staged).GetAccessControl()
+            .GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .Select(r => (SecurityIdentifier)r.IdentityReference)
+            .ToHashSet();
+        Assert.DoesNotContain(new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null), rules);
+        Assert.Contains(WindowsIdentity.GetCurrent().User!, rules);
+    }
 }

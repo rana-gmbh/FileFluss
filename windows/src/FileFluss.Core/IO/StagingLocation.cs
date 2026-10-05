@@ -28,11 +28,26 @@ public static class StagingLocation
         }
     }
 
+    /// <summary>
+    /// Makes a staging root private to the user; set by the app (Windows ACLs). Downloads wait
+    /// here before they are opened or moved on, so on a shared drive another account must not
+    /// be able to swap them.
+    /// </summary>
+    public static Action<string>? SecureFolder { get; set; }
+
+    private static string? _securedRoot;
+
     /// <summary>The staging root (always exists), inside a "FileFluss-Cache" subfolder to keep a shared folder tidy.</summary>
     public static string Base()
     {
         var root = Path.Combine(UsableCustomFolder ?? Path.GetTempPath(), "FileFluss-Cache");
         Directory.CreateDirectory(root);
+        if (SecureFolder is { } secure && !string.Equals(Volatile.Read(ref _securedRoot), root, StringComparison.OrdinalIgnoreCase))
+        {
+            Volatile.Write(ref _securedRoot, root);
+            secure(root);
+        }
+
         return root;
     }
 
