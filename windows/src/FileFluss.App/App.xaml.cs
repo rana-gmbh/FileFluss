@@ -6,6 +6,7 @@ using FileFluss.App.ViewModels;
 using FileFluss.Core;
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.IO;
+using FileFluss.Core.Models;
 using FileFluss.Core.Providers.ICloud;
 using FileFluss.Core.Settings;
 using FileFluss.Native;
@@ -43,8 +44,12 @@ public partial class App : Application
             return;
         }
 
+        StartupTrace.Mark("OnStartup");
         var services = new AppServices(SettingsStore.DataDirectory);
         AppServices.Current = Services = services;
+
+        // Logos and the shell's first icons are decoded on other threads while the window is built.
+        IconCache.Prewarm(services.Accounts.Accounts.Select(a => a.ProviderType.LogoAssetName()));
         Localization.Use(services.Settings.Language);
         ThemeBrushes.Install(this);
 
@@ -79,16 +84,24 @@ public partial class App : Application
         var vm = new MainViewModel(services);
         var window = new MainWindow(vm, services);
         MainWindow = window;
+#if DEBUG
+        window.ContentRendered += (_, _) => StartupTrace.Mark("first window rendered");
+#endif
         window.Show();
+        StartupTrace.Mark("window shown");
 
-        // The index knows unplugged drives a restored panel may be showing.
-        await services.Search.StartAsync(services.Accounts.Accounts.Select(a => a.Id).ToHashSet());
+        // The index opens on the thread pool meanwhile; only a panel restoring an unplugged
+        // drive waits for it (the index knows those drives).
+        var indexStarted = services.Search.StartAsync(services.Accounts.Accounts.Select(a => a.Id).ToHashSet());
 
         // Local folders first, before any network work: with a dozen accounts reconnecting,
         // a panel shouldn't wait on all of them to show the home folder.
-        await vm.RestoreStartupLocationsAsync(cloudOnly: false);
+        await vm.RestoreStartupLocationsAsync(cloudOnly: false, indexStarted);
+        StartupTrace.Mark("local panels listed");
+        await indexStarted;
         await services.Accounts.ReconnectSavedAccountsAsync();
         await vm.RestoreStartupLocationsAsync(cloudOnly: true);
+        StartupTrace.Mark("accounts reconnected, cloud panels restored");
         Features.AfterStartup(window, vm, services);
 
         if (services.Settings.CacheAutoManage)

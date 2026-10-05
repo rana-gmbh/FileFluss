@@ -619,7 +619,9 @@ public sealed class PanelViewModel : Observable
 
         try
         {
-            var items = await provider.ListDirectoryAsync(location.Path, ct);
+            // Started on the thread pool: a provider's synchronous first steps (reading its
+            // credentials, a token refresh, an SSH handshake) must not run on the UI thread.
+            var items = await Task.Run(() => provider.ListDirectoryAsync(location.Path, ct), ct);
             if (generation != _loadGeneration)
             {
                 return;

@@ -31,13 +31,26 @@ public sealed class PerformanceBenchmarks(ITestOutputHelper output)
             AppServices services = null!;
             MainViewModel vm = null!;
             Bench.Once(output, "AppServices constructor (settings, index, drive registry)", () => services = new AppServices(data));
+            Bench.Once(output, "  first string lookup (resources)", () => Core.Localization.L("Favorites"));
+            Bench.Once(output, "  WPF dispatcher (the real app has it already)", () => _ = System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            Bench.Once(output, "  a PanelViewModel", () => _ = new PanelViewModel(PanelSide.Left, services));
+            Bench.Once(output, "  a SidebarViewModel", () => _ = new SidebarViewModel(PanelSide.Left, new PanelViewModel(PanelSide.Left, services), services));
             Bench.Once(output, "MainViewModel constructor (panels, both sidebars)", () => vm = new MainViewModel(services));
             output.WriteLine($"{"  => UI thread busy before the first window",-58} {total.Elapsed.TotalMilliseconds,9:F2} ms");
-            Bench.Once(output, "Search.StartAsync (awaited before panels list)", () => services.Search.StartAsync(new HashSet<Guid>()).GetAwaiter().GetResult());
-            var home = PanelLocation.Local(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-            Bench.Once(output, "Left panel lists home", () => vm.Left.NavigateAsync(home).GetAwaiter().GetResult());
-            Bench.Once(output, "Right panel lists home", () => vm.Right.NavigateAsync(home).GetAwaiter().GetResult());
+
+            // As App.OnStartup does it: the index starts in the background, both panels list home meanwhile.
+            Task index = null!;
+            Bench.Once(output, "Search.StartAsync (UI-thread part)", () => index = services.Search.StartAsync(new HashSet<Guid>()));
+            Bench.Once(output, "Both panels list home", () => vm.RestoreStartupLocationsAsync(cloudOnly: false, index).GetAwaiter().GetResult());
             output.WriteLine($"{"  => time to listed home (in-process, excl. WPF window)",-58} {total.Elapsed.TotalMilliseconds,9:F2} ms");
+            Bench.Once(output, "Index start finished (awaited after)", () => index.GetAwaiter().GetResult());
+            var drives = Stopwatch.StartNew();
+            while (vm.LeftSidebar.Drives.Count == 0 && drives.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                Thread.Sleep(1);
+            }
+
+            output.WriteLine($"{"  sidebar drives listed",-58} {total.Elapsed.TotalMilliseconds,9:F2} ms after start");
         });
     }
 

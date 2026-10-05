@@ -191,8 +191,13 @@ public sealed class MainViewModel : Observable
 
     // MARK: - Startup
 
-    /// <summary>Opens each panel where the startup setting says (issue #49): local folders now, cloud folders once accounts are back.</summary>
-    public async Task RestoreStartupLocationsAsync(bool cloudOnly)
+    /// <summary>
+    /// Opens each panel where the startup setting says (issue #49): local folders now, cloud
+    /// folders once accounts are back. Both panels list at the same time; whether a remembered
+    /// folder still exists is asked off the UI thread (a network share may be slow to answer),
+    /// and only an unplugged drive's offline view waits for <paramref name="indexReady"/>.
+    /// </summary>
+    public async Task RestoreStartupLocationsAsync(bool cloudOnly, Task? indexReady = null)
     {
         var settings = _services.Settings;
         var (left, right) = settings.PanelStartupMode switch
@@ -203,7 +208,9 @@ public sealed class MainViewModel : Observable
         };
 
         var home = PanelLocation.Local(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        foreach (var (panel, target) in new[] { (Left, left), (Right, right) })
+        await Task.WhenAll(RestoreAsync(Left, left), RestoreAsync(Right, right));
+
+        async Task RestoreAsync(PanelViewModel panel, PanelLocation? target)
         {
             if (target is null)
             {
@@ -212,7 +219,7 @@ public sealed class MainViewModel : Observable
                     await panel.NavigateAsync(home);
                 }
 
-                continue;
+                return;
             }
 
             if (target.IsCloud != cloudOnly)
@@ -223,13 +230,29 @@ public sealed class MainViewModel : Observable
                     await panel.NavigateAsync(home);
                 }
 
-                continue;
+                return;
             }
 
-            var usable = target.IsOfflineDrive ? _services.Search.Drives.Find(target.DriveId!) is not null
-                : target.IsCloud
-                ? _services.Hub.Get(target.AccountId!.Value) is not null
-                : target.Path.Length == 0 || Directory.Exists(target.Path);
+            bool usable;
+            if (target.IsOfflineDrive)
+            {
+                if (indexReady is not null)
+                {
+                    await indexReady;
+                }
+
+                var drives = _services.Search.Drives;
+                usable = await Task.Run(() => drives.Find(target.DriveId!) is not null);
+            }
+            else if (target.IsCloud)
+            {
+                usable = _services.Hub.Get(target.AccountId!.Value) is not null;
+            }
+            else
+            {
+                usable = target.Path.Length == 0 || await Task.Run(() => Directory.Exists(target.Path));
+            }
+
             await panel.NavigateAsync(usable ? target : home);
         }
     }

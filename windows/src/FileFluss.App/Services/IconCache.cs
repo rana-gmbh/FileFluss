@@ -207,6 +207,49 @@ public static class IconCache
             }
         });
 
+    /// <summary>
+    /// Startup: decodes the given logos and makes the shell's first icons on background threads
+    /// while the window is being built, so the sidebar and the first listing find them ready.
+    /// </summary>
+    public static void Prewarm(IEnumerable<string> logoAssets)
+    {
+        var assets = logoAssets.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _ = Task.Run(() =>
+        {
+            foreach (var asset in assets)
+            {
+                Logo(asset);
+            }
+        });
+
+        var shell = new Thread(() =>
+        {
+            try
+            {
+                // The first SHGetFileInfo initialises the shell's image lists (~40 ms cold).
+                foreach (var size in new[] { ShellIconSize.Large, ShellIconSize.ExtraLarge })
+                {
+                    FromIndex(ShellIcons.IconIndex("folder", true, exists: false), size);
+                    FromIndex(ShellIcons.IconIndex("file.txt", false, exists: false), size);
+                }
+            }
+            catch (Exception)
+            {
+                // Only a head start; the UI thread makes them itself if this failed.
+            }
+        })
+        { IsBackground = true, Name = "Icon prewarm" };
+        shell.SetApartmentState(ApartmentState.STA);
+        shell.Start();
+    }
+
+    /// <summary>The logo if it has been decoded already (never blocks).</summary>
+    public static bool TryGetLogo(string assetName, out ImageSource? logo) => Logos.TryGetValue(assetName, out logo);
+
+    /// <summary>The logo, decoded on the thread pool the first time.</summary>
+    public static Task<ImageSource?> LogoAsync(string assetName)
+        => TryGetLogo(assetName, out var logo) ? Task.FromResult(logo) : Task.Run(() => Logo(assetName));
+
     /// <summary>A provider logo from Assets/ProviderLogos/&lt;Name&gt;.png, or null.</summary>
     public static ImageSource? Logo(CloudProviderType type) => Logo(type.LogoAssetName());
 

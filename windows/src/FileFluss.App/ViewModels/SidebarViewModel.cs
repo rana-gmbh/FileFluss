@@ -28,6 +28,7 @@ public sealed class SidebarEntry : Observable
     private bool _isDropTarget;
     private string? _trailing;
     private string? _toolTip;
+    private ImageSource? _image;
 
     public required SidebarEntryKind Kind { get; init; }
 
@@ -38,7 +39,12 @@ public sealed class SidebarEntry : Observable
     /// <summary>A Segoe Fluent glyph, used when there is no image.</summary>
     public string? Glyph { get; init; }
 
-    public ImageSource? Image { get; init; }
+    /// <summary>A logo or drive icon; a drive's arrives a moment after the row (it is read off the UI thread).</summary>
+    public ImageSource? Image
+    {
+        get => _image;
+        set => Set(ref _image, value);
+    }
 
     public Guid? FavoriteId { get; init; }
 
@@ -127,6 +133,7 @@ public sealed class SidebarViewModel : Observable
 {
     private readonly AppServices _services;
     private readonly PanelViewModel _panel;
+    private int _drivesGeneration;
 
     public SidebarViewModel(PanelSide side, PanelViewModel panel, AppServices services)
     {
@@ -304,8 +311,8 @@ public sealed class SidebarViewModel : Observable
         foreach (var favorite in StoredFavorites)
         {
             var title = favorite.IsCloud ? favorite.DisplayName : L(favorite.DisplayName);
-            var logo = Glyphs.LogoAsset(favorite.Icon) is { } asset ? IconCache.Logo(asset) : null;
-            Favorites.Add(new SidebarEntry
+            var asset = Glyphs.LogoAsset(favorite.Icon);
+            var entry = new SidebarEntry
             {
                 Kind = SidebarEntryKind.Favorite,
                 Title = title,
@@ -314,62 +321,77 @@ public sealed class SidebarViewModel : Observable
                 Icon = favorite.Icon,
 
                 // The logo when there is one, the glyph otherwise — never both stacked.
-                Glyph = logo is null ? Glyphs.ForFavorite(favorite.Icon) : null,
-                Image = logo,
+                Glyph = asset is null ? Glyphs.ForFavorite(favorite.Icon) : null,
 
                 // The name too: in icon-only mode the tooltip is all there is (macOS .help(name)).
                 ToolTip = $"{title}{Environment.NewLine}{favorite.Location.Path}",
-            });
+            };
+            if (asset is not null)
+            {
+                ShowLogo(entry, asset);
+            }
+
+            Favorites.Add(entry);
         }
 
         UpdateSelection();
     }
 
-    public void RebuildDrives()
+    /// <summary>
+    /// Lists the drives again. Which drives are ready, their names and free space, and the
+    /// index's drive records are all read off the UI thread (a sleeping disk or network share
+    /// answers in seconds); the list is swapped in when they are known.
+    /// </summary>
+    public void RebuildDrives() => _ = RebuildDrivesAsync();
+
+    private async Task RebuildDrivesAsync()
     {
-        Drives.Clear();
-        foreach (var drive in DriveInfo.GetDrives())
+        var generation = ++_drivesGeneration;
+        IReadOnlyList<LocalDriveInfo> ready;
+        IReadOnlyList<Core.Search.KnownDrive> online, offline;
+        try
         {
-            bool ready;
-            try
-            {
-                ready = drive.IsReady;
-            }
-            catch (IOException)
-            {
-                ready = false;
-            }
+            ready = await LocalDriveProbe.ProbeAsync();
+            var registry = _services.Search.Drives;
+            (online, offline) = await Task.Run(() => (registry.OnlineDrives, registry.OfflineIndexedDrives));
+        }
+        catch (Exception e)
+        {
+            Core.Diagnostics.SupportLogger.Shared.Log($"Listing drives failed: {e.Message}", "Sidebar", Core.Diagnostics.LogLevel.Error);
+            return;
+        }
 
-            if (!ready)
-            {
-                continue;
-            }
+        if (generation != _drivesGeneration)
+        {
+            return;
+        }
 
-            var root = drive.RootDirectory.FullName;
-            var title = LocalFileProvider.DriveLabel(root);
-            var tooltip = title;
-            try
-            {
-                // macOS driveTooltip: "Name: 120 GB free of 500 GB".
-                tooltip = $"{title}: {Core.Storage.LocalVolumeFormatter.Summary(drive.AvailableFreeSpace, drive.TotalSize)}";
-            }
-            catch (IOException)
-            {
-            }
+        Drives.Clear();
+        foreach (var drive in ready)
+        {
+            var root = drive.Root;
 
-            Drives.Add(new SidebarEntry
+            // macOS driveTooltip: "Name: 120 GB free of 500 GB".
+            var tooltip = drive is { Free: { } free, Total: { } total }
+                ? $"{drive.Label}: {Core.Storage.LocalVolumeFormatter.Summary(free, total)}"
+                : drive.Label;
+            var entry = new SidebarEntry
             {
                 Kind = SidebarEntryKind.Drive,
-                Title = title,
+                Title = drive.Label,
                 Location = PanelLocation.Local(root),
-                Image = IconCache.ForPath(root, true),
                 ToolTip = tooltip,
-                DriveId = _services.Search.DriveAt(root)?.Id,
-            });
+                DriveId = online.FirstOrDefault(d => d.RootPath is { } r && string.Equals(r.TrimEnd('\\'), root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))?.Id,
+            };
+
+            // The drive's own icon comes from the shell, off the UI thread.
+            var item = new CloudFileItem(root, drive.Label, root, isDirectory: true, 0, CloudFileItem.UnknownDate);
+            entry.Image = IconCache.ForRow(item, isLocal: true, isDrive: true, 16, icon => entry.Image = icon).Icon;
+            Drives.Add(entry);
         }
 
         // Unplugged drives with an index stay listed, browsable and searchable offline (macOS DriveRow).
-        foreach (var drive in _services.Search.Drives.OfflineIndexedDrives)
+        foreach (var drive in offline)
         {
             Drives.Add(new SidebarEntry
             {
@@ -401,25 +423,50 @@ public sealed class SidebarViewModel : Observable
         Accounts.Clear();
         foreach (var account in _services.Accounts.Accounts)
         {
-            Accounts.Add(new SidebarEntry
+            var entry = new SidebarEntry
             {
                 Kind = SidebarEntryKind.Account,
                 Title = account.DisplayName,
                 Location = PanelLocation.Cloud(account.Id, account.EffectiveRootPath),
                 Account = account,
-                Image = IconCache.Logo(account.ProviderType),
                 Glyph = Glyphs.Cloud,
                 IsConnected = account.IsConnected && !account.IsOfflineMode,
                 IsOffline = account.IsOfflineMode,
                 RestingTrailing = account.IsOfflineMode ? L("Offline") : null,
                 Trailing = account.IsOfflineMode ? L("Offline") : null,
                 ToolTip = AccountToolTip(account),
-            });
+            };
+            ShowLogo(entry, account.ProviderType.LogoAssetName());
+            Accounts.Add(entry);
         }
 
         UpdateIndexingBadges();
         UpdateSelection();
         RefreshQuotas();
+    }
+
+    /// <summary>A provider logo: at once when it was decoded before, otherwise as soon as the thread pool has it.</summary>
+    private static void ShowLogo(SidebarEntry entry, string asset)
+    {
+        if (IconCache.TryGetLogo(asset, out var logo))
+        {
+            entry.Image = logo;
+            return;
+        }
+
+        _ = LoadAsync();
+
+        async Task LoadAsync()
+        {
+            try
+            {
+                entry.Image = await IconCache.LogoAsync(asset);
+            }
+            catch (Exception e)
+            {
+                Core.Diagnostics.SupportLogger.Shared.Log($"Logo {asset} failed: {e.Message}", "Sidebar", Core.Diagnostics.LogLevel.Notice);
+            }
+        }
     }
 
     // MARK: - Quota tooltips (macOS cloudAccountTooltip)
