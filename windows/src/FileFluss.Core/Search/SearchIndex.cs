@@ -101,15 +101,82 @@ public sealed class SearchIndex : IDisposable
                     Directory.CreateDirectory(directory);
                 }
 
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
-                CreateSchema(connection);
-                _isOpen = true;
+                try
+                {
+                    OpenCore();
+                }
+                catch (SqliteException e) when (IsCorruption(e))
+                {
+                    // A damaged index is only a cache of what the providers and drives hold: set
+                    // it aside and start an empty one, rather than failing every search and
+                    // every launch from now on. The next indexing run fills it again.
+                    SupportLogger.Shared.Log($"[index] {Path.GetFileName(DatabasePath)} is damaged ({e.Message}); moving it aside and starting a new index", LogCategory, LogLevel.Error);
+                    SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
+                    MoveDamagedFilesAside();
+                    OpenCore();
+                }
             }
             catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
                 throw new SearchIndexException(SearchIndexErrorKind.OpenFailed, e.Message, e);
+            }
+        }
+    }
+
+    private void OpenCore()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        CreateSchema(connection);
+        _isOpen = true;
+    }
+
+    /// <summary>SQLITE_CORRUPT (11) or SQLITE_NOTADB (26): the file's contents, not its access, are the problem.</summary>
+    private static bool IsCorruption(SqliteException e) => e.SqliteErrorCode is 11 or 26;
+
+    /// <summary>
+    /// Renames the database to "index.sqlite.corrupt" (one kept, for a support case) and drops its
+    /// WAL and shared-memory files. Throws IOException when another connection still holds it.
+    /// </summary>
+    private void MoveDamagedFilesAside()
+    {
+        var aside = DatabasePath + ".corrupt";
+        File.Delete(aside);
+        if (File.Exists(DatabasePath))
+        {
+            File.Move(DatabasePath, aside);
+        }
+
+        foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
+        {
+            File.Delete(DatabasePath + suffix);
+        }
+    }
+
+    /// <summary>
+    /// Damage found by a query after the index opened: close it so the next use reopens — and,
+    /// once no connection holds the file any more, sets it aside and starts afresh.
+    /// </summary>
+    private void HandleCorruption(SqliteException e)
+    {
+        if (!IsCorruption(e))
+        {
+            return;
+        }
+
+        lock (_openGate)
+        {
+            _isOpen = false;
+            SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
+            try
+            {
+                MoveDamagedFilesAside();
+                SupportLogger.Shared.Log($"[index] damage found while in use ({e.Message}); the index was set aside and starts afresh", LogCategory, LogLevel.Error);
+            }
+            catch (Exception move) when (move is IOException or UnauthorizedAccessException)
+            {
+                // Still open elsewhere; the next corruption error tries again.
             }
         }
     }
@@ -1306,6 +1373,8 @@ public sealed class SearchIndex : IDisposable
             }
             catch (SqliteException e)
             {
+                connection.Dispose();
+                HandleCorruption(e);
                 throw new SearchIndexException(SearchIndexErrorKind.ExecutionFailed, $"could not {what}: {e.Message}", e);
             }
         }
@@ -1344,6 +1413,7 @@ public sealed class SearchIndex : IDisposable
         catch (SqliteException e)
         {
             LogFailure(caller, e);
+            HandleCorruption(e);
             return fallback;
         }
     }

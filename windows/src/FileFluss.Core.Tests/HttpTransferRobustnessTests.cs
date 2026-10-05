@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
+// Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Net;
 using FileFluss.Core.Net;
