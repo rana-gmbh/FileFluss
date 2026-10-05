@@ -2105,9 +2105,6 @@
   <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
     <value>File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud.</value>
   </data>
-  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in Windows Credential Manager." xml:space="preserve">
-    <value>Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.</value>
-  </data>
   <data name="File" xml:space="preserve">
     <value>File</value>
   </data>
@@ -2192,9 +2189,6 @@
   <data name="Show only the active panel" xml:space="preserve">
     <value>Show only the active panel</value>
   </data>
-  <data name="Index for Offline Search" xml:space="preserve">
-    <value>Index for Offline Search</value>
-  </data>
   <data name="Storage Analysis" xml:space="preserve">
     <value>Storage Analysis</value>
   </data>
@@ -2227,9 +2221,6 @@
   </data>
   <data name="{0} items" xml:space="preserve">
     <value>{0} items</value>
-  </data>
-  <data name="{0} free" xml:space="preserve">
-    <value>{0} free</value>
   </data>
   <data name="{0} used" xml:space="preserve">
     <value>{0} used</value>
@@ -2573,9 +2564,6 @@
   <data name="At launch, delete old cached files and keep the cache under its size limit." xml:space="preserve">
     <value>At launch, delete old cached files and keep the cache under its size limit.</value>
   </data>
-  <data name="Maximum cache size" xml:space="preserve">
-    <value>Maximum cache size</value>
-  </data>
   <data name="3 days" xml:space="preserve">
     <value>3 days</value>
   </data>
@@ -2788,9 +2776,6 @@
   </data>
   <data name="This file is no longer shared." xml:space="preserve">
     <value>This file is no longer shared.</value>
-  </data>
-  <data name="People with the link will no longer be able to open &quot;{0}&quot;." xml:space="preserve">
-    <value>People with the link will no longer be able to open "{0}".</value>
   </data>
   <data name="Couldn&apos;t create the share link: {0}" xml:space="preserve">
     <value>Couldn't create the share link: {0}</value>
@@ -3088,9 +3073,6 @@ Trust the new key?</value>
   <data name="Request denied — too many connections." xml:space="preserve">
     <value>Request denied — too many connections.</value>
   </data>
-  <data name="Connection time out." xml:space="preserve">
-    <value>Connection timed out.</value>
-  </data>
   <data name="Your files and your clouds, side by side." xml:space="preserve">
     <value>Your files and your clouds, side by side.</value>
   </data>
@@ -3246,5 +3228,113 @@ Trust the new key?</value>
   </data>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
     <value>Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.</value>
+  </data>
+  <data name="Copy Share Link" xml:space="preserve">
+    <value>Copy Share Link</value>
+  </data>
+  <data name="Shared" xml:space="preserve">
+    <value>Shared</value>
+  </data>
+  <data name="Change Sharing…" xml:space="preserve">
+    <value>Change Sharing…</value>
+  </data>
+  <data name="Share link copied" xml:space="preserve">
+    <value>Share link copied</value>
+  </data>
+  <data name="Link copied — not public" xml:space="preserve">
+    <value>Link copied — not public</value>
+  </data>
+  <data name="Expires {0}" xml:space="preserve">
+    <value>Expires {0}</value>
+  </data>
+  <data name="Sharing failed" xml:space="preserve">
+    <value>Sharing failed</value>
+  </data>
+  <data name="Stop sharing this file?" xml:space="preserve">
+    <value>Stop sharing this file?</value>
+  </data>
+  <data name="The link to &quot;{0}&quot; stops working for everyone who has it. This can&apos;t be undone." xml:space="preserve">
+    <value>The link to "{0}" stops working for everyone who has it. This can't be undone.</value>
+  </data>
+  <data name="Couldn&apos;t stop sharing: {0}" xml:space="preserve">
+    <value>Couldn't stop sharing: {0}</value>
+  </data>
+  <data name="Couldn&apos;t read this file&apos;s share link: {0}" xml:space="preserve">
+    <value>Couldn't read this file's share link: {0}</value>
+  </data>
+  <data name="This account refused {0} for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." xml:space="preserve">
+    <value>This account refused {0} for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.</value>
+  </data>
+  <data name="a password and an expiry date" xml:space="preserve">
+    <value>a password and an expiry date</value>
+  </data>
+  <data name="a password" xml:space="preserve">
+    <value>a password</value>
+  </data>
+  <data name="an expiry date" xml:space="preserve">
+    <value>an expiry date</value>
+  </data>
+  <data name="Support Log" xml:space="preserve">
+    <value>Support Log</value>
+  </data>
+  <data name="Support Log (Recording…)" xml:space="preserve">
+    <value>Support Log (Recording…)</value>
+  </data>
+  <data name="Save FileFluss Support Log" xml:space="preserve">
+    <value>Save FileFluss Support Log</value>
+  </data>
+  <data name="Last checked: {0}" xml:space="preserve">
+    <value>Last checked: {0}</value>
+  </data>
+  <data name="Clear the cache?" xml:space="preserve">
+    <value>Clear the cache?</value>
+  </data>
+  <data name="1 transfer — click for details" xml:space="preserve">
+    <value>1 transfer — click for details</value>
+  </data>
+  <data name="{0} transfers — click for details" xml:space="preserve">
+    <value>{0} transfers — click for details</value>
+  </data>
+  <data name="1 folder size — click for details" xml:space="preserve">
+    <value>1 folder size — click for details</value>
+  </data>
+  <data name="{0} folder sizes — click for details" xml:space="preserve">
+    <value>{0} folder sizes — click for details</value>
+  </data>
+  <data name="Document" xml:space="preserve">
+    <value>Document</value>
+  </data>
+  <data name="Text Document" xml:space="preserve">
+    <value>Text Document</value>
+  </data>
+  <data name="Star" xml:space="preserve">
+    <value>Star</value>
+  </data>
+  <data name="Heart" xml:space="preserve">
+    <value>Heart</value>
+  </data>
+  <data name="Flag" xml:space="preserve">
+    <value>Flag</value>
+  </data>
+  <data name="Bookmark" xml:space="preserve">
+    <value>Bookmark</value>
+  </data>
+  <data name="Tag" xml:space="preserve">
+    <value>Tag</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>Work</value>
+  </data>
+  <data name="Archive" xml:space="preserve">
+    <value>Archive</value>
+  </data>
+  <data name="Inbox" xml:space="preserve">
+    <value>Inbox</value>
+  </data>
+  <data name="Sent" xml:space="preserve">
+    <value>Sent</value>
+  </data>
+  <data name="Personal" xml:space="preserve">
+    <value>Personal</value>
   </data>
 </root>

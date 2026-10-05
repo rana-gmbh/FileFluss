@@ -2072,9 +2072,6 @@
   <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
     <value>文件过大，无法上传（{0}）。服务商已拒绝。请尝试拆分文件或改用其他云服务。</value>
   </data>
-  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in Windows Credential Manager." xml:space="preserve">
-    <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。</value>
-  </data>
   <data name="File" xml:space="preserve">
     <value>文件</value>
   </data>
@@ -2159,9 +2156,6 @@
   <data name="Show only the active panel" xml:space="preserve">
     <value>仅显示活动面板</value>
   </data>
-  <data name="Index for Offline Search" xml:space="preserve">
-    <value>为离线搜索编制索引</value>
-  </data>
   <data name="Storage Analysis" xml:space="preserve">
     <value>存储分析</value>
   </data>
@@ -2194,9 +2188,6 @@
   </data>
   <data name="{0} items" xml:space="preserve">
     <value>{0} 个项目</value>
-  </data>
-  <data name="{0} free" xml:space="preserve">
-    <value>可用 {0}</value>
   </data>
   <data name="{0} used" xml:space="preserve">
     <value>已用 {0}</value>
@@ -2540,9 +2531,6 @@
   <data name="At launch, delete old cached files and keep the cache under its size limit." xml:space="preserve">
     <value>启动时删除旧的缓存文件，并使缓存保持在大小上限以内。</value>
   </data>
-  <data name="Maximum cache size" xml:space="preserve">
-    <value>最大缓存大小</value>
-  </data>
   <data name="3 days" xml:space="preserve">
     <value>3 天</value>
   </data>
@@ -2788,9 +2776,6 @@
   </data>
   <data name="This file is no longer shared." xml:space="preserve">
     <value>此文件已不再共享。</value>
-  </data>
-  <data name="People with the link will no longer be able to open &quot;{0}&quot;." xml:space="preserve">
-    <value>拥有此链接的人将无法再打开“{0}”。</value>
   </data>
   <data name="Couldn&apos;t create the share link: {0}" xml:space="preserve">
     <value>无法创建共享链接：{0}</value>
@@ -3088,9 +3073,6 @@
   <data name="Request denied — too many connections." xml:space="preserve">
     <value>请求被拒绝——连接过多。</value>
   </data>
-  <data name="Connection time out." xml:space="preserve">
-    <value>连接超时。</value>
-  </data>
   <data name="Your files and your clouds, side by side." xml:space="preserve">
     <value>你的文件和你的云，并排呈现。</value>
   </data>
@@ -3243,6 +3225,114 @@
   </data>
   <data name="Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." xml:space="preserve">
     <value>在此类驱动器上，Windows 只能打开和保存不超过 {0} 的文件。更大的文件仍可通过 FileFluss 本身复制。管理员可以提高此限制（WebClient 服务的 FileSizeLimitInBytes）。</value>
+  </data>
+  <data name="Copy Share Link" xml:space="preserve">
+    <value>复制共享链接</value>
+  </data>
+  <data name="Shared" xml:space="preserve">
+    <value>已共享</value>
+  </data>
+  <data name="Change Sharing…" xml:space="preserve">
+    <value>更改共享…</value>
+  </data>
+  <data name="Share link copied" xml:space="preserve">
+    <value>共享链接已复制</value>
+  </data>
+  <data name="Link copied — not public" xml:space="preserve">
+    <value>链接已复制——非公开</value>
+  </data>
+  <data name="Expires {0}" xml:space="preserve">
+    <value>{0} 过期</value>
+  </data>
+  <data name="Sharing failed" xml:space="preserve">
+    <value>共享失败</value>
+  </data>
+  <data name="Stop sharing this file?" xml:space="preserve">
+    <value>要停止共享此文件吗？</value>
+  </data>
+  <data name="The link to &quot;{0}&quot; stops working for everyone who has it. This can&apos;t be undone." xml:space="preserve">
+    <value>指向“{0}”的链接将对所有拥有它的人失效。此操作无法撤销。</value>
+  </data>
+  <data name="Couldn&apos;t stop sharing: {0}" xml:space="preserve">
+    <value>无法停止共享：{0}</value>
+  </data>
+  <data name="Couldn&apos;t read this file&apos;s share link: {0}" xml:space="preserve">
+    <value>无法读取此文件的共享链接：{0}</value>
+  </data>
+  <data name="This account refused {0} for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." xml:space="preserve">
+    <value>此账户拒绝为链接设置{0}。大多数服务商仅在付费套餐中提供这些功能。不使用它们仍可共享，这些选项现已对此账户隐藏。</value>
+  </data>
+  <data name="a password and an expiry date" xml:space="preserve">
+    <value>密码和过期日期</value>
+  </data>
+  <data name="a password" xml:space="preserve">
+    <value>密码</value>
+  </data>
+  <data name="an expiry date" xml:space="preserve">
+    <value>过期日期</value>
+  </data>
+  <data name="Support Log" xml:space="preserve">
+    <value>支持日志</value>
+  </data>
+  <data name="Support Log (Recording…)" xml:space="preserve">
+    <value>支持日志（正在记录…）</value>
+  </data>
+  <data name="Save FileFluss Support Log" xml:space="preserve">
+    <value>保存 FileFluss 支持日志</value>
+  </data>
+  <data name="Last checked: {0}" xml:space="preserve">
+    <value>上次检查：{0}</value>
+  </data>
+  <data name="Clear the cache?" xml:space="preserve">
+    <value>要清除缓存吗？</value>
+  </data>
+  <data name="1 transfer — click for details" xml:space="preserve">
+    <value>1 个传输——单击查看详情</value>
+  </data>
+  <data name="{0} transfers — click for details" xml:space="preserve">
+    <value>{0} 个传输——单击查看详情</value>
+  </data>
+  <data name="1 folder size — click for details" xml:space="preserve">
+    <value>1 个文件夹大小——单击查看详情</value>
+  </data>
+  <data name="{0} folder sizes — click for details" xml:space="preserve">
+    <value>{0} 个文件夹大小——单击查看详情</value>
+  </data>
+  <data name="Document" xml:space="preserve">
+    <value>文档</value>
+  </data>
+  <data name="Text Document" xml:space="preserve">
+    <value>文本文档</value>
+  </data>
+  <data name="Star" xml:space="preserve">
+    <value>星标</value>
+  </data>
+  <data name="Heart" xml:space="preserve">
+    <value>心形</value>
+  </data>
+  <data name="Flag" xml:space="preserve">
+    <value>旗帜</value>
+  </data>
+  <data name="Bookmark" xml:space="preserve">
+    <value>书签</value>
+  </data>
+  <data name="Tag" xml:space="preserve">
+    <value>标签</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>工作</value>
+  </data>
+  <data name="Archive" xml:space="preserve">
+    <value>归档</value>
+  </data>
+  <data name="Inbox" xml:space="preserve">
+    <value>收件箱</value>
+  </data>
+  <data name="Sent" xml:space="preserve">
+    <value>已发送</value>
+  </data>
+  <data name="Personal" xml:space="preserve">
+    <value>个人</value>
   </data>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
     <value>Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。</value>

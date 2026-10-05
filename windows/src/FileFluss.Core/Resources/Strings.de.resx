@@ -2105,9 +2105,6 @@
   <data name="File is too large to upload ({0}). The provider rejected it. Try splitting the file or using a different cloud." xml:space="preserve">
     <value>Datei ist zu groß zum Hochladen ({0}). Der Anbieter hat sie abgelehnt. Teile die Datei auf oder verwende einen anderen Cloud-Dienst.</value>
   </data>
-  <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in Windows Credential Manager." xml:space="preserve">
-    <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
-  </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
   </data>
@@ -2192,9 +2189,6 @@
   <data name="Show only the active panel" xml:space="preserve">
     <value>Nur den aktiven Bereich anzeigen</value>
   </data>
-  <data name="Index for Offline Search" xml:space="preserve">
-    <value>Für die Offline-Suche indizieren</value>
-  </data>
   <data name="Storage Analysis" xml:space="preserve">
     <value>Speicheranalyse</value>
   </data>
@@ -2227,9 +2221,6 @@
   </data>
   <data name="{0} items" xml:space="preserve">
     <value>{0} Objekte</value>
-  </data>
-  <data name="{0} free" xml:space="preserve">
-    <value>{0} frei</value>
   </data>
   <data name="{0} used" xml:space="preserve">
     <value>{0} belegt</value>
@@ -2573,9 +2564,6 @@
   <data name="At launch, delete old cached files and keep the cache under its size limit." xml:space="preserve">
     <value>Beim Start alte Cache-Dateien löschen und den Cache unter seiner Größenbeschränkung halten.</value>
   </data>
-  <data name="Maximum cache size" xml:space="preserve">
-    <value>Maximale Cache-Größe</value>
-  </data>
   <data name="3 days" xml:space="preserve">
     <value>3 Tage</value>
   </data>
@@ -2788,9 +2776,6 @@
   </data>
   <data name="This file is no longer shared." xml:space="preserve">
     <value>Diese Datei ist nicht mehr freigegeben.</value>
-  </data>
-  <data name="People with the link will no longer be able to open &quot;{0}&quot;." xml:space="preserve">
-    <value>Personen mit dem Link können „{0}“ dann nicht mehr öffnen.</value>
   </data>
   <data name="Couldn&apos;t create the share link: {0}" xml:space="preserve">
     <value>Der Freigabelink konnte nicht erstellt werden: {0}</value>
@@ -3088,9 +3073,6 @@ Dem neuen Schlüssel vertrauen?</value>
   <data name="Request denied — too many connections." xml:space="preserve">
     <value>Anfrage abgelehnt – zu viele Verbindungen.</value>
   </data>
-  <data name="Connection time out." xml:space="preserve">
-    <value>Zeitüberschreitung der Verbindung.</value>
-  </data>
   <data name="Your files and your clouds, side by side." xml:space="preserve">
     <value>Deine Dateien und deine Clouds, Seite an Seite.</value>
   </data>
@@ -3243,6 +3225,114 @@ Dem neuen Schlüssel vertrauen?</value>
   </data>
   <data name="Windows only opens and saves files up to {0} on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." xml:space="preserve">
     <value>Windows öffnet und speichert auf solchen Laufwerken nur Dateien bis {0}. Größere Dateien lassen sich weiterhin mit FileFluss selbst kopieren. Ein Administrator kann das Limit erhöhen (FileSizeLimitInBytes des WebClient-Dienstes).</value>
+  </data>
+  <data name="Copy Share Link" xml:space="preserve">
+    <value>Freigabelink kopieren</value>
+  </data>
+  <data name="Shared" xml:space="preserve">
+    <value>Freigegeben</value>
+  </data>
+  <data name="Change Sharing…" xml:space="preserve">
+    <value>Freigabe ändern…</value>
+  </data>
+  <data name="Share link copied" xml:space="preserve">
+    <value>Freigabelink kopiert</value>
+  </data>
+  <data name="Link copied — not public" xml:space="preserve">
+    <value>Link kopiert – nicht öffentlich</value>
+  </data>
+  <data name="Expires {0}" xml:space="preserve">
+    <value>Läuft ab: {0}</value>
+  </data>
+  <data name="Sharing failed" xml:space="preserve">
+    <value>Freigabe fehlgeschlagen</value>
+  </data>
+  <data name="Stop sharing this file?" xml:space="preserve">
+    <value>Freigabe dieser Datei beenden?</value>
+  </data>
+  <data name="The link to &quot;{0}&quot; stops working for everyone who has it. This can&apos;t be undone." xml:space="preserve">
+    <value>Der Link zu „{0}“ funktioniert dann für niemanden mehr, der ihn hat. Dies kann nicht rückgängig gemacht werden.</value>
+  </data>
+  <data name="Couldn&apos;t stop sharing: {0}" xml:space="preserve">
+    <value>Die Freigabe konnte nicht beendet werden: {0}</value>
+  </data>
+  <data name="Couldn&apos;t read this file&apos;s share link: {0}" xml:space="preserve">
+    <value>Der Freigabelink dieser Datei konnte nicht gelesen werden: {0}</value>
+  </data>
+  <data name="This account refused {0} for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." xml:space="preserve">
+    <value>Dieses Konto hat {0} für den Link abgelehnt. Die meisten Anbieter bieten das nur in kostenpflichtigen Tarifen an. Teilen funktioniert auch ohne diese Optionen; sie werden für dieses Konto ab jetzt ausgeblendet.</value>
+  </data>
+  <data name="a password and an expiry date" xml:space="preserve">
+    <value>ein Passwort und ein Ablaufdatum</value>
+  </data>
+  <data name="a password" xml:space="preserve">
+    <value>ein Passwort</value>
+  </data>
+  <data name="an expiry date" xml:space="preserve">
+    <value>ein Ablaufdatum</value>
+  </data>
+  <data name="Support Log" xml:space="preserve">
+    <value>Supportprotokoll</value>
+  </data>
+  <data name="Support Log (Recording…)" xml:space="preserve">
+    <value>Supportprotokoll (Aufzeichnung läuft…)</value>
+  </data>
+  <data name="Save FileFluss Support Log" xml:space="preserve">
+    <value>FileFluss-Supportprotokoll speichern</value>
+  </data>
+  <data name="Last checked: {0}" xml:space="preserve">
+    <value>Zuletzt geprüft: {0}</value>
+  </data>
+  <data name="Clear the cache?" xml:space="preserve">
+    <value>Cache leeren?</value>
+  </data>
+  <data name="1 transfer — click for details" xml:space="preserve">
+    <value>1 Übertragung – für Details klicken</value>
+  </data>
+  <data name="{0} transfers — click for details" xml:space="preserve">
+    <value>{0} Übertragungen – für Details klicken</value>
+  </data>
+  <data name="1 folder size — click for details" xml:space="preserve">
+    <value>1 Ordnergröße – für Details klicken</value>
+  </data>
+  <data name="{0} folder sizes — click for details" xml:space="preserve">
+    <value>{0} Ordnergrößen – für Details klicken</value>
+  </data>
+  <data name="Document" xml:space="preserve">
+    <value>Dokument</value>
+  </data>
+  <data name="Text Document" xml:space="preserve">
+    <value>Textdokument</value>
+  </data>
+  <data name="Star" xml:space="preserve">
+    <value>Stern</value>
+  </data>
+  <data name="Heart" xml:space="preserve">
+    <value>Herz</value>
+  </data>
+  <data name="Flag" xml:space="preserve">
+    <value>Fahne</value>
+  </data>
+  <data name="Bookmark" xml:space="preserve">
+    <value>Lesezeichen</value>
+  </data>
+  <data name="Tag" xml:space="preserve">
+    <value>Etikett</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>Arbeit</value>
+  </data>
+  <data name="Archive" xml:space="preserve">
+    <value>Archiv</value>
+  </data>
+  <data name="Inbox" xml:space="preserve">
+    <value>Posteingang</value>
+  </data>
+  <data name="Sent" xml:space="preserve">
+    <value>Gesendet</value>
+  </data>
+  <data name="Personal" xml:space="preserve">
+    <value>Persönlich</value>
   </data>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
     <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>

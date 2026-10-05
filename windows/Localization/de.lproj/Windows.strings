@@ -39,7 +39,6 @@
 "FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." = "FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“.";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";
-"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";
 
 /* ---------------------------------------------------------------------------------------------
    Menus, toolbar, panels and sidebar
@@ -73,7 +72,6 @@
 "Videos" = "Videos";
 "Retry" = "Wiederholen";
 "Show only the active panel" = "Nur den aktiven Bereich anzeigen";
-"Index for Offline Search" = "Für die Offline-Suche indizieren";
 "Storage Analysis" = "Speicheranalyse";
 "Storage Analysis…" = "Speicheranalyse…";
 "Share Link…" = "Link teilen…";
@@ -85,7 +83,6 @@
 "1 file" = "1 Datei";
 "1 folder" = "1 Ordner";
 "%@ items" = "%@ Objekte";
-"%@ free" = "%@ frei";
 "%@ used" = "%@ belegt";
 "%@ of %@ used" = "%@ von %@ belegt";
 "%@ (offline)" = "%@ (offline)";
@@ -230,7 +227,6 @@
 "Clear" = "Leeren";
 "Automatic management" = "Automatische Verwaltung";
 "At launch, delete old cached files and keep the cache under its size limit." = "Beim Start alte Cache-Dateien löschen und den Cache unter seiner Größenbeschränkung halten.";
-"Maximum cache size" = "Maximale Cache-Größe";
 "3 days" = "3 Tage";
 "1 week" = "1 Woche";
 "2 weeks" = "2 Wochen";
@@ -314,7 +310,6 @@
 "The link is on the clipboard." = "Der Link ist in der Zwischenablage.";
 "This file is shared. The link is on the clipboard." = "Diese Datei ist freigegeben. Der Link ist in der Zwischenablage.";
 "This file is no longer shared." = "Diese Datei ist nicht mehr freigegeben.";
-"People with the link will no longer be able to open \"%@\"." = "Personen mit dem Link können „%@“ dann nicht mehr öffnen.";
 "Couldn't create the share link: %@" = "Der Freigabelink konnte nicht erstellt werden: %@";
 "Couldn't change sharing: %@" = "Die Freigabe konnte nicht geändert werden: %@";
 "Checked just now: %@" = "Gerade geprüft: %@";
@@ -425,7 +420,6 @@
 "Invalid API method version." = "Ungültige Version der API-Methode.";
 "Invalid parameter for the request." = "Ungültiger Parameter in der Anfrage.";
 "Request denied — too many connections." = "Anfrage abgelehnt – zu viele Verbindungen.";
-"Connection time out." = "Zeitüberschreitung der Verbindung.";
 
 /* ---------------------------------------------------------------------------------------------
    Welcome window
@@ -508,4 +502,53 @@
 "Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Der WebDAV-Redirector von Windows (der Dienst „WebClient“) konnte keine Verbindung zu FileFluss herstellen. Stelle sicher, dass der WebClient-Dienst nicht durch eine Richtlinie oder Sicherheitssoftware blockiert wird.";
 "Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "Windows öffnet und speichert auf solchen Laufwerken nur Dateien bis %@. Größere Dateien lassen sich weiterhin mit FileFluss selbst kopieren. Ein Administrator kann das Limit erhöhen (FileSizeLimitInBytes des WebClient-Dienstes).";
 
+/* ---------------------------------------------------------------------------------------------
+   One-click share links
+   --------------------------------------------------------------------------------------------- */
+
+"Copy Share Link" = "Freigabelink kopieren";
+"Shared" = "Freigegeben";
+"Change Sharing…" = "Freigabe ändern…";
+"Share link copied" = "Freigabelink kopiert";
+"Link copied — not public" = "Link kopiert – nicht öffentlich";
+"Expires %@" = "Läuft ab: %@";
+"Sharing failed" = "Freigabe fehlgeschlagen";
+"Stop sharing this file?" = "Freigabe dieser Datei beenden?";
+"The link to \"%@\" stops working for everyone who has it. This can't be undone." = "Der Link zu „%@“ funktioniert dann für niemanden mehr, der ihn hat. Dies kann nicht rückgängig gemacht werden.";
+"Couldn't stop sharing: %@" = "Die Freigabe konnte nicht beendet werden: %@";
+"Couldn't read this file's share link: %@" = "Der Freigabelink dieser Datei konnte nicht gelesen werden: %@";
+"This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." = "Dieses Konto hat %@ für den Link abgelehnt. Die meisten Anbieter bieten das nur in kostenpflichtigen Tarifen an. Teilen funktioniert auch ohne diese Optionen; sie werden für dieses Konto ab jetzt ausgeblendet.";
+"a password and an expiry date" = "ein Passwort und ein Ablaufdatum";
+"a password" = "ein Passwort";
+"an expiry date" = "ein Ablaufdatum";
+
+/* ---------------------------------------------------------------------------------------------
+   Support log, cache, status bar
+   --------------------------------------------------------------------------------------------- */
+
+"Support Log" = "Supportprotokoll";
+"Support Log (Recording…)" = "Supportprotokoll (Aufzeichnung läuft…)";
+"Save FileFluss Support Log" = "FileFluss-Supportprotokoll speichern";
+"Last checked: %@" = "Zuletzt geprüft: %@";
+"Clear the cache?" = "Cache leeren?";
+"1 transfer — click for details" = "1 Übertragung – für Details klicken";
+"%@ transfers — click for details" = "%@ Übertragungen – für Details klicken";
+"1 folder size — click for details" = "1 Ordnergröße – für Details klicken";
+"%@ folder sizes — click for details" = "%@ Ordnergrößen – für Details klicken";
+
+/* Favourite icons */
+"Document" = "Dokument";
+"Text Document" = "Textdokument";
+"Star" = "Stern";
+"Heart" = "Herz";
+"Flag" = "Fahne";
+"Bookmark" = "Lesezeichen";
+"Tag" = "Etikett";
+"Work" = "Arbeit";
+"Archive" = "Archiv";
+"Inbox" = "Posteingang";
+"Sent" = "Gesendet";
+"Personal" = "Persönlich";
+
+/* Jottacloud: FileFluss encrypts credentials with DPAPI per user; it does not use Credential Manager. */
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";

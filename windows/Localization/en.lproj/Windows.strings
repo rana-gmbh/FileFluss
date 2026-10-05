@@ -45,10 +45,6 @@
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud uses the sign-in of iCloud for Windows — there's nothing to edit here. Manage iCloud Drive in the iCloud for Windows app.";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
 
-/* The Windows call site says "Windows Credential Manager"; FileFluss encrypts credentials with
-   DPAPI per user and does not use Credential Manager. */
-"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in Windows Credential Manager." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
-
 /* ---------------------------------------------------------------------------------------------
    Menus, toolbar, panels and sidebar
    --------------------------------------------------------------------------------------------- */
@@ -81,7 +77,6 @@
 "Videos" = "Videos";
 "Retry" = "Retry";
 "Show only the active panel" = "Show only the active panel";
-"Index for Offline Search" = "Index for Offline Search";
 "Storage Analysis" = "Storage Analysis";
 "Storage Analysis…" = "Storage Analysis…";
 "Share Link…" = "Share Link…";
@@ -93,7 +88,6 @@
 "1 file" = "1 file";
 "1 folder" = "1 folder";
 "%@ items" = "%@ items";
-"%@ free" = "%@ free";
 "%@ used" = "%@ used";
 "%@ of %@ used" = "%@ of %@ used";
 "%@ (offline)" = "%@ (offline)";
@@ -238,7 +232,6 @@
 "Clear" = "Clear";
 "Automatic management" = "Automatic management";
 "At launch, delete old cached files and keep the cache under its size limit." = "At launch, delete old cached files and keep the cache under its size limit.";
-"Maximum cache size" = "Maximum cache size";
 "3 days" = "3 days";
 "1 week" = "1 week";
 "2 weeks" = "2 weeks";
@@ -322,7 +315,6 @@
 "The link is on the clipboard." = "The link is on the clipboard.";
 "This file is shared. The link is on the clipboard." = "This file is shared. The link is on the clipboard.";
 "This file is no longer shared." = "This file is no longer shared.";
-"People with the link will no longer be able to open \"%@\"." = "People with the link will no longer be able to open \"%@\".";
 "Couldn't create the share link: %@" = "Couldn't create the share link: %@";
 "Couldn't change sharing: %@" = "Couldn't change sharing: %@";
 "Checked just now: %@" = "Checked just now: %@";
@@ -433,7 +425,6 @@
 "Invalid API method version." = "Invalid API method version.";
 "Invalid parameter for the request." = "Invalid parameter for the request.";
 "Request denied — too many connections." = "Request denied — too many connections.";
-"Connection time out." = "Connection timed out.";
 
 /* ---------------------------------------------------------------------------------------------
    Welcome window
@@ -516,5 +507,53 @@
 "Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software.";
 "Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service).";
 
-/* The corrected Jottacloud wording, ready for when the call site switches to it. */
+/* Jottacloud: FileFluss encrypts credentials with DPAPI per user; it does not use Credential Manager. */
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store.";
+
+/* ---------------------------------------------------------------------------------------------
+   One-click share links
+   --------------------------------------------------------------------------------------------- */
+
+"Copy Share Link" = "Copy Share Link";
+"Shared" = "Shared";
+"Change Sharing…" = "Change Sharing…";
+"Share link copied" = "Share link copied";
+"Link copied — not public" = "Link copied — not public";
+"Expires %@" = "Expires %@";
+"Sharing failed" = "Sharing failed";
+"Stop sharing this file?" = "Stop sharing this file?";
+"The link to \"%@\" stops working for everyone who has it. This can't be undone." = "The link to \"%@\" stops working for everyone who has it. This can't be undone.";
+"Couldn't stop sharing: %@" = "Couldn't stop sharing: %@";
+"Couldn't read this file's share link: %@" = "Couldn't read this file's share link: %@";
+"This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." = "This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.";
+"a password and an expiry date" = "a password and an expiry date";
+"a password" = "a password";
+"an expiry date" = "an expiry date";
+
+/* ---------------------------------------------------------------------------------------------
+   Support log, cache, status bar
+   --------------------------------------------------------------------------------------------- */
+
+"Support Log" = "Support Log";
+"Support Log (Recording…)" = "Support Log (Recording…)";
+"Save FileFluss Support Log" = "Save FileFluss Support Log";
+"Last checked: %@" = "Last checked: %@";
+"Clear the cache?" = "Clear the cache?";
+"1 transfer — click for details" = "1 transfer — click for details";
+"%@ transfers — click for details" = "%@ transfers — click for details";
+"1 folder size — click for details" = "1 folder size — click for details";
+"%@ folder sizes — click for details" = "%@ folder sizes — click for details";
+
+/* Favourite icons (Change Icon menu); Home, Desktop, Downloads, … are above. */
+"Document" = "Document";
+"Text Document" = "Text Document";
+"Star" = "Star";
+"Heart" = "Heart";
+"Flag" = "Flag";
+"Bookmark" = "Bookmark";
+"Tag" = "Tag";
+"Work" = "Work";
+"Archive" = "Archive";
+"Inbox" = "Inbox";
+"Sent" = "Sent";
+"Personal" = "Personal";
