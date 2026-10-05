@@ -267,7 +267,7 @@ public sealed class MountService
             target = Path.Combine(mount.DrivePath, relative.TrimStart('/').Replace('/', '\\'));
         }
 
-        Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { target }, UseShellExecute = false });
+        Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { target }, UseShellExecute = false })?.Dispose();
     }
 
     /// <summary>

@@ -54,6 +54,11 @@ public static class IconCache
                 source.Freeze();
                 return source;
             }
+            catch (Exception e) when (e is COMException or ArgumentException)
+            {
+                // A damaged icon: the row goes without one rather than failing to draw.
+                return null;
+            }
             finally
             {
                 ShellIcons.DestroyIcon(handle);
@@ -72,13 +77,21 @@ public static class IconCache
                 return null;
             }
 
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.UriSource = new Uri(path);
-            image.EndInit();
-            image.Freeze();
-            return TrimTransparentMargins(image);
+            try
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.UriSource = new Uri(path);
+                image.EndInit();
+                image.Freeze();
+                return TrimTransparentMargins(image);
+            }
+            catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or ArgumentException or COMException or FileFormatException)
+            {
+                // A damaged install: the glyph stands in, as for a provider without a logo.
+                return null;
+            }
         });
 
     /// <summary>

@@ -16,8 +16,13 @@ namespace FileFluss.App.Views.Preview;
 public sealed class PreviewHandlerHost : HwndHost
 {
     private const string PreviewHandlerKey = "{8895b1c6-b41f-4c1c-a562-0d564250836f}";
+    private const uint ClsctxInprocServer = 0x1;
+    private const uint ClsctxLocalServer = 0x4;
     private nint _child;
     private IPreviewHandler? _handler;
+
+    /// <summary>The file a stream-initialised handler reads; closed once the handler is unloaded.</summary>
+    private Stream? _stream;
     private string? _pendingPath;
 
     /// <summary>True when Windows has a preview handler registered for the file's extension.</summary>
@@ -56,6 +61,11 @@ public sealed class PreviewHandlerHost : HwndHost
         Resize();
     }
 
+    /// <summary>
+    /// Loads the handler the way Explorer does: in its own surrogate process (prevhost.exe)
+    /// where it is registered for that, so a handler that crashes takes its host down rather
+    /// than FileFluss; in this process only for handlers that can't run elsewhere.
+    /// </summary>
     private void Load()
     {
         Unload();
@@ -64,12 +74,24 @@ public sealed class PreviewHandlerHost : HwndHost
             return;
         }
 
-        try
+        foreach (var context in new[] { ClsctxLocalServer, ClsctxInprocServer })
         {
-            var type = Type.GetTypeFromCLSID(clsid);
-            if (type is null || Activator.CreateInstance(type) is not IPreviewHandler handler)
+            if (TryLoad(clsid, context, path))
             {
                 return;
+            }
+        }
+    }
+
+    private bool TryLoad(Guid clsid, uint context, string path)
+    {
+        object? instance = null;
+        try
+        {
+            var iid = typeof(IPreviewHandler).GUID;
+            if (CoCreateInstance(clsid, 0, context, iid, out instance) < 0 || instance is not IPreviewHandler handler)
+            {
+                return false;
             }
 
             if (handler is IInitializeWithFile withFile)
@@ -78,23 +100,40 @@ public sealed class PreviewHandlerHost : HwndHost
             }
             else if (handler is IInitializeWithStream withStream)
             {
-                var stream = new ManagedIStream(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
-                withStream.Initialize(stream, 0);
+                _stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                withStream.Initialize(new ManagedIStream(_stream), 0);
             }
             else
             {
-                Marshal.FinalReleaseComObject(handler);
-                return;
+                return false;
             }
 
             _handler = handler;
+            instance = null;
             var rect = ClientRect();
             _handler.SetWindow(_child, ref rect);
             _handler.DoPreview();
+            return true;
         }
-        catch (Exception e) when (e is COMException or InvalidCastException or IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
+            // Third-party code: any failure (E_NOTIMPL arrives as NotImplementedException,
+            // E_INVALIDARG as ArgumentException, …) means "no preview", never a crash.
+            Core.Diagnostics.SupportLogger.Shared.Log($"Preview handler {clsid} failed ({(context == ClsctxLocalServer ? "out of process" : "in process")}): {e.GetType().Name}: {e.Message}", "QuickLook", Core.Diagnostics.LogLevel.Notice);
             Unload();
+            return false;
+        }
+        finally
+        {
+            if (instance is not null && Marshal.IsComObject(instance))
+            {
+                Marshal.FinalReleaseComObject(instance);
+            }
+
+            if (_handler is null)
+            {
+                CloseStream();
+            }
         }
     }
 
@@ -110,7 +149,7 @@ public sealed class PreviewHandlerHost : HwndHost
         {
             _handler.SetRect(ref rect);
         }
-        catch (COMException)
+        catch (Exception e) when (e is COMException or InvalidComObjectException or NotImplementedException)
         {
         }
     }
@@ -128,16 +167,33 @@ public sealed class PreviewHandlerHost : HwndHost
             return;
         }
 
+        var handler = _handler;
+        _handler = null;
         try
         {
-            _handler.Unload();
+            handler.Unload();
         }
-        catch (COMException)
+        catch (Exception e) when (e is COMException or InvalidComObjectException or NotImplementedException)
+        {
+            // A surrogate that died, or a handler without an Unload: released all the same.
+        }
+
+        try
+        {
+            Marshal.FinalReleaseComObject(handler);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidComObjectException)
         {
         }
 
-        Marshal.FinalReleaseComObject(_handler);
-        _handler = null;
+        // Only now: the handler may read the stream until it is unloaded.
+        CloseStream();
+    }
+
+    private void CloseStream()
+    {
+        _stream?.Dispose();
+        _stream = null;
     }
 
     private static Guid? HandlerClsid(string extension)
@@ -267,4 +323,7 @@ public sealed class PreviewHandlerHost : HwndHost
 
     [DllImport("user32.dll")]
     private static extern bool DestroyWindow(nint hwnd);
+
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object? instance);
 }

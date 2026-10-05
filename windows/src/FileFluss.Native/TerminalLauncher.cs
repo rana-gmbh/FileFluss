@@ -88,7 +88,7 @@ public static class TerminalLauncher
                 break;
         }
 
-        Process.Start(start);
+        Process.Start(start)?.Dispose();
     }
 
     private static void AddIfExists(List<TerminalApp> list, string id, string name, string path)
