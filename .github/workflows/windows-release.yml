@@ -1,0 +1,97 @@
+name: Windows Release
+
+# Windows releases are tagged win-vX.Y.Z, so this never runs for a macOS v* tag and the
+# macOS release workflow (release.yml, `v*`) never runs for this one. Create the release with:
+#
+#   gh release create win-v1.0.0 --title "FileFluss for Windows 1.0.0" --latest=false --notes "..."
+#
+# or just push the tag; the upload step below creates the release with --latest=false.
+#
+# --latest=false matters: the macOS app's Sparkle feed is
+# releases/latest/download/appcast.xml, so a Windows release marked "latest" would cut every
+# Mac off from updates. The last step below puts "latest" back on the newest macOS release
+# if it was moved anyway.
+
+on:
+  push:
+    tags:
+      - 'win-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # Secrets cannot appear in an if: condition; a flag derived from one can.
+      HAS_SIGNING: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".Substring("win-v".Length)
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must be win-vX.Y.Z, got ${{ github.ref_name }}" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Verify generated resources are current
+        run: dotnet run --project windows/tools/StringsToResx --configuration Release -- --check
+
+      - name: Test
+        run: dotnet test windows/FileFluss.sln --configuration Release
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Prepare signing certificate
+        if: env.HAS_SIGNING == 'true'
+        shell: pwsh
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          "FILEFLUSS_SIGN_PFX=$path" >> $env:GITHUB_ENV
+
+      - name: Build release files
+        # Windows PowerShell 5.1, the shell the script is verified with locally.
+        # -RequireInstaller: a release must never ship without its installers, which the
+        # in-app updater depends on.
+        shell: powershell
+        env:
+          FILEFLUSS_SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+        run: ./windows/Packaging/build-release.ps1 -Version ${{ steps.version.outputs.version }} -RequireInstaller
+
+      - name: Upload to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "FileFluss for Windows ${{ steps.version.outputs.version }}" --latest=false --notes "FileFluss for Windows ${{ steps.version.outputs.version }}"
+          }
+          gh release upload $tag (Get-ChildItem windows/artifacts/release -File).FullName --clobber
+
+      - name: Keep the newest macOS release marked latest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $latest = gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name
+          if ($latest -like 'win-v*') {
+            $mac = gh api "repos/${{ github.repository }}/releases?per_page=50" --jq '[.[] | select(.draft == false and .prerelease == false and (.tag_name | startswith("v")))][0].tag_name'
+            if ($mac) {
+              Write-Host "Restoring 'latest' to $mac (was $latest)"
+              gh release edit $mac --latest
+            }
+          }

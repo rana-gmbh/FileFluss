@@ -1,0 +1,55 @@
+name: Windows CI
+
+# Scoped to the Windows port so it never runs for macOS-only changes. The macOS release
+# workflow triggers on `v*` tags and is untouched by this. The two Localizable.strings
+# locations are listed because the Windows .resx files are generated from them.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "windows/**"
+      - "FileFluss/Resources/*.lproj/Localizable.strings"
+      - "Packages/FileFlussCore/Sources/FileFlussCore/Resources/*.lproj/Localizable.strings"
+      - ".github/workflows/windows-ci.yml"
+  pull_request:
+    paths:
+      - "windows/**"
+      - "FileFluss/Resources/*.lproj/Localizable.strings"
+      - "Packages/FileFlussCore/Sources/FileFlussCore/Resources/*.lproj/Localizable.strings"
+      - ".github/workflows/windows-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Verify generated resources are current
+        shell: bash
+        # The macOS .strings files are the single source of truth for both platforms.
+        # If someone edits a translation without regenerating, this fails here rather
+        # than shipping a Windows build with stale German or Chinese.
+        run: dotnet run --project windows/tools/StringsToResx --configuration Release -- --check
+
+      - name: Restore
+        run: dotnet restore windows/FileFluss.sln
+
+      - name: Build
+        run: dotnet build windows/FileFluss.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test windows/FileFluss.sln --configuration Release --no-build --logger "trx;LogFileName=results.trx" --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results
+          if-no-files-found: warn
