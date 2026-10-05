@@ -535,6 +535,9 @@ public sealed class MainViewModel : Observable
         {
             try
             {
+                // Downloaded from someone's server: SmartScreen and Protected View apply, as to
+                // a browser download. (Quick Look's own preview stays unmarked.)
+                MarkOfTheWeb.Apply(target);
                 ShellFileOperations.Open(target);
             }
             catch (Exception e)
