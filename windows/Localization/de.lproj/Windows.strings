@@ -552,3 +552,9 @@
 
 /* Jottacloud: FileFluss encrypts credentials with DPAPI per user; it does not use Credential Manager. */
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";
+
+/* Dragging or pasting cloud files into Explorer and other apps. */
+"Couldn't Hand Over Files" = "Dateien konnten nicht übergeben werden";
+"Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Einige Dateien dieser Auswahl sind zu tief verschachtelt, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.";
+"The files couldn't be prepared for the other app: %@" = "Die Dateien konnten nicht für die andere App vorbereitet werden: %@";
+"This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Diese Auswahl enthält mehr als %@ Dateien und Ordner – zu viele, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.";

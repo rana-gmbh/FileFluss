@@ -3337,4 +3337,16 @@ Trust the new key?</value>
   <data name="Personal" xml:space="preserve">
     <value>Personal</value>
   </data>
+  <data name="Couldn&apos;t Hand Over Files" xml:space="preserve">
+    <value>Couldn't Hand Over Files</value>
+  </data>
+  <data name="Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.</value>
+  </data>
+  <data name="The files couldn&apos;t be prepared for the other app: {0}" xml:space="preserve">
+    <value>The files couldn't be prepared for the other app: {0}</value>
+  </data>
+  <data name="This selection contains more than {0} files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>This selection contains more than {0} files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.</value>
+  </data>
 </root>

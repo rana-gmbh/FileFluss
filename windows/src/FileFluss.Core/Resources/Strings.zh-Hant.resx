@@ -3337,4 +3337,16 @@
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
     <value>Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。</value>
   </data>
+  <data name="Couldn&apos;t Hand Over Files" xml:space="preserve">
+    <value>無法移交檔案</value>
+  </data>
+  <data name="Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>此選取範圍中的部分檔案巢狀層級過深，無法移交給檔案總管或其他應用程式。請在另一個面板中開啟本機資料夾，然後用 FileFluss 將選取的項目複製到那裡。</value>
+  </data>
+  <data name="The files couldn&apos;t be prepared for the other app: {0}" xml:space="preserve">
+    <value>無法為其他應用程式準備檔案：{0}</value>
+  </data>
+  <data name="This selection contains more than {0} files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>此選取範圍包含超過 {0} 個檔案和資料夾，數量過多，無法移交給檔案總管或其他應用程式。請在另一個面板中開啟本機資料夾，然後用 FileFluss 將選取的項目複製到那裡。</value>
+  </data>
 </root>

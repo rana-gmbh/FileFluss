@@ -3337,4 +3337,16 @@ Dem neuen Schlüssel vertrauen?</value>
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored encrypted in the Windows credential store." xml:space="preserve">
     <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
   </data>
+  <data name="Couldn&apos;t Hand Over Files" xml:space="preserve">
+    <value>Dateien konnten nicht übergeben werden</value>
+  </data>
+  <data name="Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>Einige Dateien dieser Auswahl sind zu tief verschachtelt, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.</value>
+  </data>
+  <data name="The files couldn&apos;t be prepared for the other app: {0}" xml:space="preserve">
+    <value>Die Dateien konnten nicht für die andere App vorbereitet werden: {0}</value>
+  </data>
+  <data name="This selection contains more than {0} files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." xml:space="preserve">
+    <value>Diese Auswahl enthält mehr als {0} Dateien und Ordner – zu viele, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.</value>
+  </data>
 </root>

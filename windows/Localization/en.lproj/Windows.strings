@@ -557,3 +557,9 @@
 "Inbox" = "Inbox";
 "Sent" = "Sent";
 "Personal" = "Personal";
+
+/* Dragging or pasting cloud files into Explorer and other apps. */
+"Couldn't Hand Over Files" = "Couldn't Hand Over Files";
+"Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.";
+"The files couldn't be prepared for the other app: %@" = "The files couldn't be prepared for the other app: %@";
+"This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss.";
