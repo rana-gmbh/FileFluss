@@ -20,10 +20,24 @@ using Localization = FileFluss.Core.Localization;
 
 namespace FileFluss.App.Views;
 
-/// <summary>What is being dragged out of a panel (in-process; Explorer gets a FileDrop alongside).</summary>
+/// <summary>
+/// What is being dragged out of a panel, for drops inside FileFluss. Local items travel with a
+/// FileDrop for Explorer; cloud items with virtual files (<see cref="CloudFileExport"/>).
+/// </summary>
 public sealed record DragPayload(PanelViewModel? SourcePanel, FileProvider Provider, PanelLocation SourceFolder, IReadOnlyList<CloudFileItem> Items)
 {
     public const string Format = "FileFluss.DragPayload";
+
+    /// <summary>
+    /// The payload of the cloud drag FileFluss is running right now. A cloud drag hands OLE a
+    /// shell data object rather than a WPF one, so drop targets in this window find the payload
+    /// here instead of in the drag data; OLE drags are modal, so there is at most one.
+    /// </summary>
+    public static DragPayload? Outgoing { get; set; }
+
+    /// <summary>The FileFluss items in <paramref name="data"/>, if the drag came from a panel.</summary>
+    public static DragPayload? From(IDataObject data)
+        => Outgoing ?? (data.GetDataPresent(Format) ? data.GetData(Format) as DragPayload : null);
 }
 
 public partial class PanelView : UserControl
@@ -624,8 +638,17 @@ public partial class PanelView : UserControl
             return;
         }
 
+        var payload = new DragPayload(vm, provider, vm.Location, items);
+        if (CloudFileExport.CanExport(vm))
+        {
+            // Cloud items also go out to Explorer and other apps, as virtual files.
+            Main.Services.Export.Drag(Window.GetWindow(this), vm, items, payload);
+            ClearDropHighlight();
+            return;
+        }
+
         var data = new DataObject();
-        data.SetData(DragPayload.Format, new DragPayload(vm, provider, vm.Location, items));
+        data.SetData(DragPayload.Format, payload);
         if (vm.IsLocal)
         {
             var paths = new System.Collections.Specialized.StringCollection();
@@ -666,8 +689,7 @@ public partial class PanelView : UserControl
         return (vm.Location, vm.Title, null);
     }
 
-    private static DragPayload? DragData(DragEventArgs e)
-        => e.Data.GetDataPresent(DragPayload.Format) ? e.Data.GetData(DragPayload.Format) as DragPayload : null;
+    private static DragPayload? DragData(DragEventArgs e) => DragPayload.From(e.Data);
 
     private void OnListDragOver(object sender, DragEventArgs e)
     {

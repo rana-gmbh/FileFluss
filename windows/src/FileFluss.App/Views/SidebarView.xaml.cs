@@ -395,7 +395,7 @@ public partial class SidebarView : UserControl
             return;
         }
 
-        var payload = e.Data.GetData(DragPayload.Format) as DragPayload;
+        var payload = DragPayload.From(e.Data);
         var accepts = entry is { AcceptsDrops: true } && (payload is not null || e.Data.GetDataPresent(DataFormats.FileDrop)) &&
                       (payload is null || payload.SourceFolder != entry.Location);
         e.Effects = accepts ? ((e.KeyStates & DragDropKeyStates.ShiftKey) != 0 ? DragDropEffects.Move : DragDropEffects.Copy) : DragDropEffects.None;
@@ -475,7 +475,7 @@ public partial class SidebarView : UserControl
         }
 
         var forced = (e.KeyStates & DragDropKeyStates.ShiftKey) != 0 ? true : (e.KeyStates & DragDropKeyStates.ControlKey) != 0 ? false : (bool?)null;
-        if (e.Data.GetData(DragPayload.Format) is DragPayload payload)
+        if (DragPayload.From(e.Data) is { } payload)
         {
             if (Main.ResolveDropVerb(payload.Items.Count, entry.Title, forced) is { } isMove)
             {
@@ -507,7 +507,7 @@ public partial class SidebarView : UserControl
     private void OnFavoritesHeaderDragOver(object sender, DragEventArgs e)
     {
         e.Handled = true;
-        var payload = e.Data.GetData(DragPayload.Format) as DragPayload;
+        var payload = DragPayload.From(e.Data);
         e.Effects = payload?.Items.Any(i => i.IsDirectory) == true || e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Link : DragDropEffects.None;
     }
 
@@ -519,7 +519,7 @@ public partial class SidebarView : UserControl
             return;
         }
 
-        if (e.Data.GetData(DragPayload.Format) is DragPayload payload)
+        if (DragPayload.From(e.Data) is { } payload)
         {
             foreach (var folder in payload.Items.Where(i => i.IsDirectory))
             {

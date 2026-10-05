@@ -89,6 +89,9 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SingleInstance.Release();
+
+        // Virtual files can't be pasted once FileFluss is gone; don't leave a dead promise behind.
+        Services?.Export.ReleaseClipboard(clear: true);
         foreach (var account in Services?.Accounts.Accounts.ToList() ?? [])
         {
             Services!.Hub.Get(account.Id)?.Dispose();

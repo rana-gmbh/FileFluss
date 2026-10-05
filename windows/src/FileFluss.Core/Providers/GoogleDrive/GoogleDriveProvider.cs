@@ -398,6 +398,18 @@ public sealed class GoogleDriveProvider : CloudProvider
 
     // MARK: - Download
 
+    /// <summary>The export extension of a Workspace document (the listing that produced the item filled the path cache).</summary>
+    public override async ValueTask<string?> ExportExtensionAsync(CloudFileItem item, CancellationToken cancellationToken = default)
+    {
+        if (item.IsDirectory || IsVirtualSharedDriveNode(item.Path))
+        {
+            return null;
+        }
+
+        var file = await ResolveAsync(item.Path, cancellationToken).ConfigureAwait(false);
+        return ExportFormats.TryGetValue(file.MimeType, out var export) ? export.Extension : null;
+    }
+
     public override async Task DownloadFileAsync(string remotePath, string localPath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
     {
         var session = RequireSession();
