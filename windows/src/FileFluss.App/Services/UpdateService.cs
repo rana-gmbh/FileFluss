@@ -251,7 +251,7 @@ public sealed class UpdateService
         }
 
         _busy = true;
-        string? installer = null;
+        VerifiedInstaller? installer = null;
         string? failure = null;
         var progress = new DownloadProgressWindow(update.Version) { Owner = owner is { IsLoaded: true } ? owner : null };
         try
@@ -294,33 +294,38 @@ public sealed class UpdateService
             return;
         }
 
-        var main = Application.Current.MainWindow;
-        var closed = false;
-        if (main is not null)
+        // Held open (no writes, renames or deletes) from the checksum check until the setup
+        // is running, so the file launched is the file verified.
+        using (installer)
         {
-            main.Closed += (_, _) => closed = true;
-            main.Close();
-            if (!closed)
+            var main = Application.Current.MainWindow;
+            var closed = false;
+            if (main is not null)
             {
-                // The user chose to keep running transfers; the verified setup stays for next time.
-                return;
+                main.Closed += (_, _) => closed = true;
+                main.Close();
+                if (!closed)
+                {
+                    // The user chose to keep running transfers; the verified setup stays for next time.
+                    return;
+                }
             }
-        }
 
-        try
-        {
-            SupportLogger.Shared.Log($"Starting the {update.Version} setup", "Updates");
-            Process.Start(new ProcessStartInfo
+            try
             {
-                FileName = installer,
-                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LAUNCH",
-                UseShellExecute = false,
-                WorkingDirectory = Path.GetDirectoryName(installer)!,
-            })?.Dispose();
-        }
-        catch (Win32Exception e)
-        {
-            SupportLogger.Shared.Log($"The {update.Version} setup could not be started: {e.Message}", "Updates", LogLevel.Error);
+                SupportLogger.Shared.Log($"Starting the {update.Version} setup", "Updates");
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = installer.Path,
+                    Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LAUNCH",
+                    UseShellExecute = false,
+                    WorkingDirectory = Path.GetDirectoryName(installer.Path)!,
+                })?.Dispose();
+            }
+            catch (Win32Exception e)
+            {
+                SupportLogger.Shared.Log($"The {update.Version} setup could not be started: {e.Message}", "Updates", LogLevel.Error);
+            }
         }
 
         Application.Current.Shutdown();

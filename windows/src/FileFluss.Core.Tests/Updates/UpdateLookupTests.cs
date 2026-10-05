@@ -15,18 +15,18 @@ public class UpdateLookupTests
         [
           { "tag_name": "v0.9.0", "draft": false, "prerelease": false, "body": "Mac", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v0.9.0",
             "assets": [
-              { "name": "FileFluss-v0.9.0.dmg", "browser_download_url": "https://github.com/x/FileFluss-v0.9.0.dmg" },
-              { "name": "appcast.xml", "browser_download_url": "https://github.com/x/appcast.xml" }
+              { "name": "FileFluss-v0.9.0.dmg", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v0.9.0/FileFluss-v0.9.0.dmg" },
+              { "name": "appcast.xml", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v0.9.0/appcast.xml" }
             ] },
           { "tag_name": "win-v1.2.0", "draft": false, "prerelease": true, "body": "beta", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.2.0", "assets": [] },
           { "tag_name": "win-v1.3.0", "draft": true, "prerelease": false, "body": "draft", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.3.0", "assets": [] },
           { "tag_name": "win-v1.0.2", "draft": false, "prerelease": false, "body": "Fixes", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.0.2",
             "assets": [
-              { "name": "FileFluss-1.0.2-arm64-portable.zip", "browser_download_url": "https://github.com/x/FileFluss-1.0.2-arm64-portable.zip" },
-              { "name": "FileFluss-1.0.2-x64-portable.zip", "browser_download_url": "https://github.com/x/FileFluss-1.0.2-x64-portable.zip" },
-              { "name": "FileFluss-Setup-1.0.2-arm64.exe", "browser_download_url": "https://github.com/x/FileFluss-Setup-1.0.2-arm64.exe" },
-              { "name": "FileFluss-Setup-1.0.2-x64.exe", "browser_download_url": "https://github.com/x/FileFluss-Setup-1.0.2-x64.exe" },
-              { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/x/SHA256SUMS.txt" }
+              { "name": "FileFluss-1.0.2-arm64-portable.zip", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-1.0.2-arm64-portable.zip" },
+              { "name": "FileFluss-1.0.2-x64-portable.zip", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-1.0.2-x64-portable.zip" },
+              { "name": "FileFluss-Setup-1.0.2-arm64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-Setup-1.0.2-arm64.exe" },
+              { "name": "FileFluss-Setup-1.0.2-x64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-Setup-1.0.2-x64.exe" },
+              { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/SHA256SUMS.txt" }
             ] },
           { "tag_name": "win-v1.0.1", "draft": false, "prerelease": false, "body": "Older", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.0.1", "assets": [] }
         ]
@@ -69,9 +69,9 @@ public class UpdateLookupTests
     {
         var update = UpdateLookup.Newest(Releases, "1.0.0", architecture)!;
 
-        Assert.Equal($"https://github.com/x/FileFluss-Setup-1.0.2-{architecture}.exe", update.Installer!.ToString());
-        Assert.Equal($"https://github.com/x/FileFluss-1.0.2-{architecture}-portable.zip", update.Portable!.ToString());
-        Assert.Equal("https://github.com/x/SHA256SUMS.txt", update.Checksums!.ToString());
+        Assert.Equal($"https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-Setup-1.0.2-{architecture}.exe", update.Installer!.ToString());
+        Assert.Equal($"https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/FileFluss-1.0.2-{architecture}-portable.zip", update.Portable!.ToString());
+        Assert.Equal("https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.2/SHA256SUMS.txt", update.Checksums!.ToString());
     }
 
     [Fact]
@@ -79,8 +79,8 @@ public class UpdateLookupTests
     {
         const string json = """
             [{ "tag_name": "win-v2.0.0", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v2.0.0", "assets": [
-                { "name": "FileFluss-Setup-2.0.0-x64.exe", "browser_download_url": "https://github.com/x/FileFluss-Setup-2.0.0-x64.exe" },
-                { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/x/SHA256SUMS.txt" }
+                { "name": "FileFluss-Setup-2.0.0-x64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v2.0.0/FileFluss-Setup-2.0.0-x64.exe" },
+                { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/win-v2.0.0/SHA256SUMS.txt" }
             ] }]
             """;
 
@@ -185,12 +185,63 @@ public class UpdateLookupTests
         using var folder = new TemporaryFolder();
         var reports = new List<double>();
 
-        var path = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, new SynchronousProgress(reports.Add), http);
+        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, new SynchronousProgress(reports.Add), http))
+        {
+            Assert.Equal(Path.Combine(folder.Path, "FileFluss-Setup-1.0.2-x64.exe"), verified.Path);
+            Assert.Equal(installer, await File.ReadAllBytesAsync(verified.Path));
+            Assert.Equal(1.0, reports[^1]);
+            Assert.Single(Directory.GetFiles(folder.Path));
+        }
+    }
 
-        Assert.Equal(Path.Combine(folder.Path, "FileFluss-Setup-1.0.2-x64.exe"), path);
-        Assert.Equal(installer, await File.ReadAllBytesAsync(path));
-        Assert.Equal(1.0, reports[^1]);
-        Assert.Single(Directory.GetFiles(folder.Path));
+    [Fact]
+    public async Task AVerifiedInstaller_CannotBeSwappedBeforeItIsLaunched()
+    {
+        var installer = Encoding.UTF8.GetBytes("the real setup");
+        using var folder = new TemporaryFolder();
+
+        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, handler: Release(installer, Sha256(installer))))
+        {
+            // Another process trying to replace, rename or delete it while the handle is held.
+            Assert.ThrowsAny<IOException>(() => File.WriteAllBytes(verified.Path, [1, 2, 3]));
+            Assert.ThrowsAny<IOException>(() => File.Move(verified.Path, verified.Path + ".moved"));
+            Assert.ThrowsAny<IOException>(() => File.Delete(verified.Path));
+
+            // …while reading it (as starting the setup does) still works.
+            Assert.Equal(installer, await File.ReadAllBytesAsync(verified.Path));
+        }
+
+        // Released once disposed.
+        File.Delete(Path.Combine(folder.Path, "FileFluss-Setup-1.0.2-x64.exe"));
+    }
+
+    [Theory]
+    [InlineData("https://evil.example/rana-gmbh/FileFluss/releases/download/win-v9.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://github.com/someone-else/FileFluss/releases/download/win-v9.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://github.com/rana-gmbh/FileFluss/releases/download/win-v1.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://github.com/rana-gmbh/FileFluss/releases/download/win-v9.0.0/../../../../evil/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://github.com:8443/rana-gmbh/FileFluss/releases/download/win-v9.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://user@github.com/rana-gmbh/FileFluss/releases/download/win-v9.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    [InlineData("https://github.com.evil.example/rana-gmbh/FileFluss/releases/download/win-v9.0.0/FileFluss-Setup-9.0.0-x64.exe")]
+    public void AssetsOutsideThisReleaseOfThisRepository_AreIgnored(string url)
+    {
+        var json = $$"""
+            [{ "tag_name": "win-v9.0.0", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v9.0.0", "assets": [
+                { "name": "FileFluss-Setup-9.0.0-x64.exe", "browser_download_url": "{{url}}" },
+                { "name": "SHA256SUMS.txt", "browser_download_url": "{{url.Replace("FileFluss-Setup-9.0.0-x64.exe", "SHA256SUMS.txt", StringComparison.Ordinal)}}" }
+            ] }]
+            """;
+
+        var update = UpdateLookup.Newest(json, "1.0.0", "x64")!;
+        Assert.Null(update.Installer);
+        Assert.Null(update.Checksums);
+    }
+
+    [Fact]
+    public void AReleasePageOutsideTheRepository_IsNotOffered()
+    {
+        const string json = """[{ "tag_name": "win-v9.0.0", "html_url": "https://github.com/someone-else/FileFluss/releases/tag/win-v9.0.0", "assets": [] }]""";
+        Assert.Null(UpdateLookup.Newest(json, "1.0.0", "x64"));
     }
 
     [Fact]
