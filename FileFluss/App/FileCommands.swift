@@ -288,6 +288,12 @@ struct FileCommands: Commands {
             Button(L10n.text("GitHub Repository")) {
                 NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)
             }
+            // Points at the repository copy because that is the one that
+            // exists at every moment the app ships; switch it to the
+            // filefluss.de page once that is published.
+            Button(L10n.text("Privacy Policy")) {
+                NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss/blob/main/PRIVACY.md")!)
+            }
         }
 
         // Grouped together so the surrounding `commands { … }` builder stays

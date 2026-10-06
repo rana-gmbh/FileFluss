@@ -728,3 +728,4 @@
 "Mount this account in Finder first — a cloud folder has no path a terminal can open." = "請先在 Finder 中掛載此帳戶——雲端資料夾沒有終端機可以開啟的路徑。";
 "Mount and Open in Terminal" = "掛載並在終端機中開啟";
 "A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "終端機只能開啟這台 Mac 上存在的資料夾。掛載後，此帳戶會以磁碟形式出現在 Finder 中，終端機將在其中開啟。";
+"Privacy Policy" = "隱私權政策";
