@@ -204,6 +204,12 @@ Search the active local folder and every connected cloud account at once.
 - Light/Dark app icon variants — the dock icon swaps live when macOS toggles appearance.
 - Built-in **FileFluss Help** under the Help menu (⌘?).
 
+## Privacy
+
+FileFluss has no servers: no account, no analytics, no telemetry, no crash reporting. Your files stay on your Mac and on the services you connect. The only request FileFluss makes on its own is the update check against GitHub, which you can switch off.
+
+See [PRIVACY.md](PRIVACY.md) for what is stored where, and what leaves your Mac.
+
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
