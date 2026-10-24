@@ -663,7 +663,6 @@ public actor NextCloudAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        let fileData = try Data(contentsOf: localURL)
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
@@ -675,7 +674,9 @@ public actor NextCloudAPIClient {
             request.setValue("\(Int64(modDate.timeIntervalSince1970))", forHTTPHeaderField: "X-OC-Mtime")
         }
 
-        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
+        // Streamed from disk rather than read into memory first: a 1.5 GB
+        // video was a 1.5 GB allocation before a byte went out.
+        let (data, response) = try await session.uploadReportingProgress(for: request, fromFile: localURL, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let status = http?.statusCode ?? 0

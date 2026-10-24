@@ -243,7 +243,6 @@ public actor WebDAVAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        let fileData = try Data(contentsOf: localURL)
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
@@ -256,7 +255,8 @@ public actor WebDAVAPIClient {
             request.setValue("\(Int64(modDate.timeIntervalSince1970))", forHTTPHeaderField: "X-OC-Mtime")
         }
 
-        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
+        // Streamed from disk; see the Nextcloud client for why.
+        let (data, response) = try await session.uploadReportingProgress(for: request, fromFile: localURL, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let status = http?.statusCode ?? 0

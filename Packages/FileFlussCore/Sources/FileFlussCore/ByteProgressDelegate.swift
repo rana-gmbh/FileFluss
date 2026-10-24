@@ -142,7 +142,26 @@ extension URLSession {
         }
     }
 
+    /// Upload the contents of `fileURL` and return (responseData,
+    /// URLResponse), reporting byte progress if `onBytes` is non-nil.
+    ///
+    /// Streams from disk: URLSession reads the file as it sends it, so a
+    /// 10 GB upload costs no more memory than a 10 KB one. The `body: Data`
+    /// variant below reads the whole file first, which for a 1.5 GB video
+    /// means a 1.5 GB allocation before a single byte goes out — and
+    /// URLSession may hold its own copy on top of that.
+    public func uploadReportingProgress(for request: URLRequest, fromFile fileURL: URL, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
+        if let onBytes {
+            let delegate = ByteProgressDelegate(onBytes: onBytes)
+            return try await upload(for: request, fromFile: fileURL, delegate: delegate)
+        }
+        return try await upload(for: request, fromFile: fileURL)
+    }
+
     /// Upload `body` and return (responseData, URLResponse). Reports byte progress if `onBytes` is non-nil.
+    ///
+    /// Prefer `uploadReportingProgress(for:fromFile:onBytes:)` when the body
+    /// is a file on disk — this one holds all of it in memory.
     public func uploadReportingProgress(for request: URLRequest, body: Data, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
         if let onBytes {
             let delegate = ByteProgressDelegate(onBytes: onBytes)
