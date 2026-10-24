@@ -66,6 +66,31 @@ public actor FileSystemService {
         (error as? CocoaError)?.code == .featureUnsupported
     }
 
+    /// True when the file system refused the operation for want of
+    /// permission — macOS withholding a protected folder such as Documents
+    /// or Desktop, or the item's own ownership.
+    ///
+    /// Worth telling apart from every other failure, because the remedy is
+    /// a setting the user can change rather than something the app can
+    /// retry. A customer whose support log showed three of these in a row
+    /// was told only "failed", which left him with nothing to do about it.
+    public nonisolated static func isPermissionError(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain,
+           ns.code == NSFileWriteNoPermissionError || ns.code == NSFileReadNoPermissionError {
+            return true
+        }
+        if ns.domain == NSPOSIXErrorDomain,
+           ns.code == Int(EPERM) || ns.code == Int(EACCES) {
+            return true
+        }
+        // Cocoa usually wraps the POSIX error that actually happened.
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return isPermissionError(underlying)
+        }
+        return false
+    }
+
     public func moveItem(from source: URL, to destination: URL) throws {
         do {
             try Foundation.FileManager.default.moveItem(at: source, to: destination)

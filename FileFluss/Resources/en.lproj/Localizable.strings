@@ -743,3 +743,8 @@
 "Record Support Log" = "Record Support Log";
 "Stop Support Log & Save…" = "Stop Support Log & Save…";
 "Stop & Save…" = "Stop & Save…";
+
+/* Trash refused for want of permission */
+"FileFluss isn't allowed to move this to the Trash" = "FileFluss isn't allowed to move this to the Trash";
+"Open Privacy Settings…" = "Open Privacy Settings…";
+"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason.";

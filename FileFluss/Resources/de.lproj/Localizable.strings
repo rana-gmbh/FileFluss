@@ -743,3 +743,8 @@
 "Record Support Log" = "Support-Log aufzeichnen";
 "Stop Support Log & Save…" = "Support-Log beenden & sichern …";
 "Stop & Save…" = "Beenden & sichern …";
+
+/* Trash refused for want of permission */
+"FileFluss isn't allowed to move this to the Trash" = "FileFluss darf das nicht in den Papierkorb legen";
+"Open Privacy Settings…" = "Datenschutz-Einstellungen öffnen …";
+"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Abhilfe schafft „Festplattenvollzugriff“ für FileFluss unter Systemeinstellungen → Datenschutz & Sicherheit; danach muss FileFluss neu gestartet werden. Das endgültige Löschen kann aus demselben Grund ebenfalls abgelehnt werden.";

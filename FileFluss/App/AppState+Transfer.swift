@@ -198,7 +198,12 @@ extension AppState {
                     } else {
                         await destFM.performCopy(items: items, to: destDir, progress: transfer)
                     }
+                    // Both panels, not just the destination: a move empties
+                    // the folder it came from, and the panel showing that
+                    // folder went on listing files that were no longer
+                    // there until the user refreshed it by hand.
                     await destFM.refresh()
+                    await self.refreshAllPanels()
                 }
             }
         }

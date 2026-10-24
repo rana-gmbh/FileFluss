@@ -20,6 +20,8 @@ struct FileListView: View {
     /// away — so the prompt silently never appeared (the no-Trash-volume bug).
     /// Instead we observe the array and flip this flag a beat later.
     @State private var showPermanentDeleteConfirmation: Bool = false
+    /// Presented when macOS refuses the Trash for want of permission.
+    @State private var showPermissionBlockedAlert: Bool = false
     @State private var showCloudDropConfirmation: Bool = false
     @State private var pendingCloudDrop: PendingCloudDrop?
     @State private var showNewFolderDialog: Bool = false
@@ -111,6 +113,43 @@ struct FileListView: View {
             } else {
                 Text(L10n.format("Are you sure you want to move %d items to the Trash?", items.count))
             }
+        }
+        .onChange(of: fm.itemsBlockedByPermission.isEmpty) { _, isEmpty in
+            guard !isEmpty else { return }
+            // Same deferral as below: the Move-to-Trash dialog has to be
+            // gone before another one can present.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                showPermissionBlockedAlert = true
+            }
+        }
+        .confirmationDialog(
+            L10n.text("FileFluss isn't allowed to move this to the Trash"),
+            isPresented: $showPermissionBlockedAlert
+        ) {
+            Button(L10n.text("Open Privacy Settings…")) {
+                // Full Disk Access: the setting that covers the protected
+                // folders this fails in, and the one macOS offers no prompt
+                // for once it has been refused.
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                    NSWorkspace.shared.open(url)
+                }
+                fm.itemsBlockedByPermission = []
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(L10n.text("Delete Permanently"), role: .destructive) {
+                let items = fm.itemsBlockedByPermission
+                fm.itemsBlockedByPermission = []
+                Task {
+                    await fm.permanentlyDelete(items)
+                    await appState.refreshAllPanels()
+                }
+            }
+            Button(L10n.text("Cancel"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+        } message: {
+            let items = fm.itemsBlockedByPermission
+            let name = items.count == 1 ? "\"\(items[0].name)\"" : L10n.format("%d items", items.count)
+            Text(L10n.format("macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason.", name))
         }
         .onChange(of: fm.itemsNeedingPermanentDelete.isEmpty) { _, isEmpty in
             guard !isEmpty else { return }

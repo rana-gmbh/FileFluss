@@ -283,17 +283,26 @@ final class FileManagerViewModel {
     /// Items whose volume has no Trash, so they couldn't be moved there. When
     /// non-empty the view offers an immediate permanent delete (like Finder).
     var itemsNeedingPermanentDelete: [FileItem] = []
+    /// Items macOS refused to let FileFluss move to the Trash. Drives a
+    /// prompt that explains the refusal and offers the setting that fixes
+    /// it, rather than a bare "failed".
+    var itemsBlockedByPermission: [FileItem] = []
 
     func trashSelectedItems() async {
         var needPermanent: [FileItem] = []
+        var needPermission: [FileItem] = []
         for item in selectedItems {
             do {
                 try await FileSystemService.shared.trashItem(at: item.url)
             } catch {
-                // On a volume without a Trash, offer to delete immediately
-                // instead of just failing. Any other failure is surfaced.
+                // Two failures are worth handling rather than reporting: a
+                // volume with no Trash, where deleting outright is the only
+                // way; and macOS refusing access, where the user has a
+                // setting to change and no way of knowing it.
                 if FileSystemService.isNoTrashOnVolumeError(error) {
                     needPermanent.append(item)
+                } else if FileSystemService.isPermissionError(error) {
+                    needPermission.append(item)
                 } else {
                     self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
                 }
@@ -305,6 +314,10 @@ final class FileManagerViewModel {
             SupportLogger.shared.log("trash fell back to permanent-delete prompt for \(needPermanent.count) item(s) on a no-Trash volume", category: "fs")
             itemsNeedingPermanentDelete = needPermanent
         }
+        if !needPermission.isEmpty {
+            SupportLogger.shared.log("trash refused for \(needPermission.count) item(s) — macOS withheld permission", category: "fs", level: .error)
+            itemsBlockedByPermission = needPermission
+        }
     }
 
     /// Permanently delete the items collected in `itemsNeedingPermanentDelete`
@@ -312,6 +325,12 @@ final class FileManagerViewModel {
     func permanentlyDeletePendingItems() async {
         let items = itemsNeedingPermanentDelete
         itemsNeedingPermanentDelete = []
+        await permanentlyDelete(items)
+    }
+
+    /// Deletes items outright. Shared by the no-Trash fallback and the
+    /// permission prompt, which offers it as a second choice.
+    func permanentlyDelete(_ items: [FileItem]) async {
         for item in items {
             do {
                 try await FileSystemService.shared.deleteItem(at: item.url)

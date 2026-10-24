@@ -732,3 +732,8 @@
 "Record Support Log" = "录制支持日志";
 "Stop Support Log & Save…" = "停止支持日志并存储……";
 "Stop & Save…" = "停止并存储……";
+
+/* Trash refused for want of permission */
+"FileFluss isn't allowed to move this to the Trash" = "FileFluss 无权将其移到废纸篓";
+"Open Privacy Settings…" = "打开隐私设置……";
+"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS 拒绝了 FileFluss 将 %@ 移到废纸篓。在“系统设置 → 隐私与安全性”中为 FileFluss 授予“完全磁盘访问权限”即可解决，之后需要重新启动 FileFluss。永久删除可能因同样的原因被拒绝。";
