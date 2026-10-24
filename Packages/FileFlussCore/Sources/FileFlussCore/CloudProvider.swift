@@ -55,6 +55,14 @@ public protocol CloudProvider: Sendable {
     /// Server-side copy on the same account. Same conventions as `moveItem`.
     func copyItem(at path: String, toPath newPath: String) async throws
 
+    /// Whether `copyItem` can copy a folder, not just a file.
+    ///
+    /// SFTP's server-side copy is one file per command and doesn't
+    /// recurse. A batch containing a folder therefore has to fall back
+    /// *before* anything is copied: deciding half way through would mean
+    /// the fallback redoing the items that already succeeded.
+    var canCopyDirectoriesServerSide: Bool { get async }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem
     func folderSize(at path: String) async throws -> Int64
 
@@ -124,6 +132,12 @@ extension CloudProvider {
 
     public func copyItem(at path: String, toPath newPath: String) async throws {
         throw CloudProviderError.notImplemented
+    }
+
+    /// True by default: a provider whose copy is a server-side API call
+    /// copies a folder as readily as a file.
+    public var canCopyDirectoriesServerSide: Bool {
+        get async { true }
     }
 
     /// Default no-op — providers without an API to set mtime simply skip

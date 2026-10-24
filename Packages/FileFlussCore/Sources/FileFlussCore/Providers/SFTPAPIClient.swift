@@ -141,7 +141,7 @@ public actor SFTPAPIClient {
         let client = SFTPAPIClient(credentials: creds)
         // Verify by listing the chosen remote path (or "/" if it's empty).
         let probePath = remotePath.isEmpty ? "/" : remotePath
-        _ = try await client.runBatch(commands: ["ls \(client.shellEscape(probePath))"])
+        _ = try await client.runBatch(commands: ["ls \(SFTPAPIClient.shellEscape(probePath))"])
         sftpLog.info("[SFTP] Authenticated as \(username)@\(host):\(port) via \(authMethod.rawValue)")
         return creds
     }
@@ -169,7 +169,7 @@ public actor SFTPAPIClient {
     /// zero items, no error was thrown, and nothing reached the support
     /// log. Sending plain `-la` is what Forklift/FileZilla effectively do.
     private func runListing(path: String) async throws -> String {
-        try await runBatch(commands: ["ls -la \(shellEscape(path))"])
+        try await runBatch(commands: ["ls -la \(Self.shellEscape(path))"])
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -177,7 +177,7 @@ public actor SFTPAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        _ = try await runBatch(commands: ["get \(shellEscape(remotePath)) \(shellEscape(localURL.path))"])
+        _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(localURL.path))"])
         if let onBytes,
            let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path),
            let size = attrs[.size] as? Int64 {
@@ -193,7 +193,7 @@ public actor SFTPAPIClient {
         let fileSize: Int64 = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
         // `put -p` preserves the source file's modification time and perms so
         // sync diffs stay stable across re-uploads.
-        _ = try await runBatch(commands: ["put -p \(shellEscape(localURL.path)) \(shellEscape(remotePath))"])
+        _ = try await runBatch(commands: ["put -p \(Self.shellEscape(localURL.path)) \(Self.shellEscape(remotePath))"])
         onBytes?(fileSize)
     }
 
@@ -204,15 +204,15 @@ public actor SFTPAPIClient {
             for item in items {
                 try await deleteItem(at: item.path, isDirectory: item.isDirectory)
             }
-            _ = try await runBatch(commands: ["rmdir \(shellEscape(path))"])
+            _ = try await runBatch(commands: ["rmdir \(Self.shellEscape(path))"])
         } else {
-            _ = try await runBatch(commands: ["rm \(shellEscape(path))"])
+            _ = try await runBatch(commands: ["rm \(Self.shellEscape(path))"])
         }
     }
 
     public func createFolder(at path: String) async throws {
         if (try? await getFileInfo(at: path)) != nil { return }
-        _ = try await runBatch(commands: ["mkdir \(shellEscape(path))"])
+        _ = try await runBatch(commands: ["mkdir \(Self.shellEscape(path))"])
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
@@ -223,7 +223,92 @@ public actor SFTPAPIClient {
         } else {
             destinationPath = "\(parentPath)/\(newName)"
         }
-        _ = try await runBatch(commands: ["rename \(shellEscape(path)) \(shellEscape(destinationPath))"])
+        _ = try await runBatch(commands: ["rename \(Self.shellEscape(path)) \(Self.shellEscape(destinationPath))"])
+    }
+
+    // MARK: - Server-side move and copy
+
+    /// Moves an item on the server. A rename, so it costs the same whether
+    /// the file is a kilobyte or a terabyte — which is what the operation
+    /// looked like to the user until now, when it downloaded the file and
+    /// uploaded it again (issue #62).
+    ///
+    /// The sftp client issues `posix-rename@openssh.com` where the server
+    /// offers it, so an overwrite is atomic.
+    public func moveItem(at path: String, toPath newPath: String) async throws {
+        do {
+            _ = try await runBatch(commands: [Self.renameCommand(from: path, to: newPath)])
+        } catch {
+            // A rename the server won't do — across filesystems, most
+            // often — is not a failure to report but a reason to fall back
+            // to copying the bytes through. `.notImplemented` is how a
+            // provider says that.
+            throw Self.isRefusedServerSideOperation(error) ? CloudProviderError.notImplemented : error
+        }
+    }
+
+    /// Copies an item on the server, where the server can.
+    ///
+    /// `cp` needs the `copy-data` extension, which OpenSSH's sftp-server
+    /// has had since 9.0 — and plenty of servers in use are older, or
+    /// aren't OpenSSH at all. The first attempt against an account settles
+    /// it; after that the answer is remembered, so a folder of a thousand
+    /// files doesn't pay a failed round trip a thousand times.
+    ///
+    /// Files only: `cp` does not recurse, so a directory is declined here
+    /// and the caller falls back to its own copy.
+    public func copyItem(at path: String, toPath newPath: String) async throws {
+        if serverRefusesCopyData { throw CloudProviderError.notImplemented }
+
+        let info = try? await getFileInfo(at: path)
+        if info?.isDirectory == true {
+            // Nothing to do server-side with one command; let the caller
+            // walk it instead.
+            throw CloudProviderError.notImplemented
+        }
+
+        do {
+            _ = try await runBatch(commands: [Self.copyCommand(from: path, to: newPath)])
+        } catch {
+            if Self.isUnsupportedCopy(error) {
+                serverRefusesCopyData = true
+                throw CloudProviderError.notImplemented
+            }
+            throw Self.isRefusedServerSideOperation(error) ? CloudProviderError.notImplemented : error
+        }
+    }
+
+    /// True once this server has shown it has no `copy-data` extension.
+    private var serverRefusesCopyData = false
+
+    /// The server having no server-side copy at all, as opposed to this
+    /// particular copy failing. OpenSSH says so in the client, before it
+    /// ever reaches the server.
+    static func isUnsupportedCopy(_ error: Error) -> Bool {
+        let text = message(from: error).lowercased()
+        return text.contains("copy-data")
+            || text.contains("does not support")
+            || text.contains("unknown command")
+            || text.contains("invalid command")
+    }
+
+    /// A server-side operation the server declined, where copying the bytes
+    /// through the client would still work: a rename across filesystems is
+    /// the usual one, and the reason the fallback has to stay.
+    static func isRefusedServerSideOperation(_ error: Error) -> Bool {
+        if case CloudProviderError.notImplemented = error { return true }
+        let text = message(from: error).lowercased()
+        return text.contains("cross-device")
+            || text.contains("invalid cross-device link")
+            || text.contains("operation unsupported")
+            || text.contains("op unsupported")
+            || isUnsupportedCopy(error)
+    }
+
+    private static func message(from error: Error) -> String {
+        if case CloudProviderError.commandFailed(let text) = error { return text }
+        if case CloudProviderError.notFound(let text) = error { return text }
+        return error.localizedDescription
     }
 
     public func getFileInfo(at path: String) async throws -> CloudFileItem {
@@ -717,7 +802,19 @@ public actor SFTPAPIClient {
 
     // MARK: - Helpers
 
-    private func shellEscape(_ path: String) -> String {
+    /// The command sent for a server-side move. Pure, so the quoting can
+    /// be tested: these strings are handed to another program, and a path
+    /// with a quote or a `$` in it is the case nobody tries by hand.
+    static func renameCommand(from path: String, to newPath: String) -> String {
+        "rename \(Self.shellEscape(path)) \(Self.shellEscape(newPath))"
+    }
+
+    /// The command sent for a server-side copy.
+    static func copyCommand(from path: String, to newPath: String) -> String {
+        "cp \(Self.shellEscape(path)) \(Self.shellEscape(newPath))"
+    }
+
+    static func shellEscape(_ path: String) -> String {
         // Wrap in double quotes and escape special chars
         let escaped = path
             .replacingOccurrences(of: "\\", with: "\\\\")

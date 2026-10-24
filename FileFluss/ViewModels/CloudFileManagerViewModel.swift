@@ -1436,6 +1436,20 @@ final class CloudFileManagerViewModel {
         var providerSupports = true
         let existingNames = Set(targetSiblings.map(\.name))
 
+        // A copy of a folder, to a provider whose server-side copy handles
+        // one file at a time, has to be declined now rather than part way
+        // through. Falling back mid-batch would hand the whole list to the
+        // download-and-upload path, including the items already copied.
+        if !deleteFromSource,
+           items.contains(where: { $0.isDirectory }),
+           await provider.canCopyDirectoriesServerSide == false {
+            SupportLogger.shared.log(
+                "server-side copy can't take a folder on this provider — falling back before copying anything",
+                category: cloudCategory
+            )
+            return false
+        }
+
         for (index, item) in items.enumerated() {
             if progress?.isCancelled == true || Task.isCancelled { return providerSupports }
             progress?.beginFile(item.name, size: item.size)
@@ -1469,9 +1483,15 @@ final class CloudFileManagerViewModel {
                     providerSupports = false
                     return false
                 }
-                // Mid-batch .notImplemented shouldn't happen in practice, but
-                // record it as a failure for that item and keep going.
-                progress?.recordFailure(item.name, error: "Server-side move not supported for this item.")
+                // Mid-batch: the items before this one are already moved,
+                // so handing the batch back to the fallback would redo
+                // them. Report this one and carry on with the rest.
+                progress?.recordFailure(
+                    item.name,
+                    error: deleteFromSource
+                        ? "The server wouldn't move this item — try copying it and deleting the original."
+                        : "The server wouldn't copy this item."
+                )
             } catch {
                 SupportLogger.shared.log(
                     "server-side \(deleteFromSource ? "move" : "copy") FAILED \(item.path) → \(destPath) — \(error.localizedDescription)",
