@@ -35,6 +35,74 @@ final class WebDAVServerTests: XCTestCase {
         XCTAssertTrue((response.value(forHTTPHeaderField: "Allow") ?? "").contains("PROPFIND"))
     }
 
+    // MARK: - How a document app saves
+
+    /// What Pages (and every other NSDocument app) does to save: write the
+    /// new copy into a temporary folder beside the original, swap it over
+    /// the original, then remove the folder. TextEdit saves the simple way,
+    /// which is why a user saw Pages lose its changes while TextEdit kept
+    /// them.
+    func testSafeSaveSequenceLeavesTheNewContents() async throws {
+        await stub.seedFile(path: "/Doc.pages", contents: Data("old".utf8))
+
+        let tempFolder = "/(A Document Being Saved By Pages 2)"
+        let (_, mkcol) = try await send(method: "MKCOL", path: tempFolder)
+        XCTAssertTrue((200...299).contains(mkcol.statusCode), "MKCOL for the save folder: \(mkcol.statusCode)")
+
+        let (_, put) = try await send(
+            method: "PUT", path: "\(tempFolder)/Doc.pages", body: Data("new".utf8)
+        )
+        XCTAssertTrue((200...299).contains(put.statusCode), "PUT of the new copy: \(put.statusCode)")
+
+        let (_, move) = try await send(
+            method: "MOVE", path: "\(tempFolder)/Doc.pages",
+            headers: ["Destination": "http://127.0.0.1:\(port)/Doc.pages", "Overwrite": "T"]
+        )
+        XCTAssertTrue((200...299).contains(move.statusCode), "MOVE over the original: \(move.statusCode)")
+
+        _ = try await send(method: "DELETE", path: tempFolder)
+
+        let stored = await stub.contents(at: "/Doc.pages")
+        XCTAssertEqual(stored.map { String(decoding: $0, as: UTF8.self) }, "new",
+                       "the document still holds its old contents after a safe save")
+
+        let (body, get) = try await send(method: "GET", path: "/Doc.pages")
+        XCTAssertEqual(get.statusCode, 200)
+        XCTAssertEqual(String(decoding: body, as: UTF8.self), "new",
+                       "reading the document back returned the old contents")
+    }
+
+    /// The same save with the paths encoded the way macOS sends them. The
+    /// folder NSDocument saves through is called "(A Document Being Saved
+    /// By Pages 2)" — spaces and parentheses — so every request in the
+    /// sequence carries a percent-encoded path, including the Destination
+    /// header of the MOVE.
+    func testSafeSaveWithEncodedPathsLeavesTheNewContents() async throws {
+        await stub.seedFile(path: "/My Report.pages", contents: Data("old".utf8))
+
+        let folder = "(A Document Being Saved By Pages 2)"
+        let encodedFolder = folder.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
+        let encodedDoc = "My Report.pages".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
+
+        _ = try await send(method: "MKCOL", path: "/\(encodedFolder)")
+        _ = try await send(method: "PUT", path: "/\(encodedFolder)/\(encodedDoc)", body: Data("new".utf8))
+
+        let (_, move) = try await send(
+            method: "MOVE", path: "/\(encodedFolder)/\(encodedDoc)",
+            headers: [
+                "Destination": "http://127.0.0.1:\(port)/\(encodedDoc)",
+                "Overwrite": "T",
+            ]
+        )
+        XCTAssertTrue((200...299).contains(move.statusCode), "MOVE over the original: \(move.statusCode)")
+
+        _ = try await send(method: "DELETE", path: "/\(encodedFolder)")
+
+        let stored = await stub.contents(at: "/My Report.pages")
+        XCTAssertEqual(stored.map { String(decoding: $0, as: UTF8.self) }, "new",
+                       "the document still holds its old contents after a safe save")
+    }
+
     // MARK: - Uploading through the client
 
     /// The upload path used to read the whole file into memory before
