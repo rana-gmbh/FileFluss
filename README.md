@@ -128,7 +128,7 @@ Settings → Keyboard lets you remap every common file-manager command. Pick one
 
 Settings → Storage shows a live cache size and offers a one-click *Clear*. Optional auto-management on launch prunes entries older than N days, then enforces a size cap. Slider + numeric field for the max size, and a separate slider for auto-delete age.
 
-**Choose where the cache lives.** Downloads are staged through this folder. If you're copying large files from a cloud account to an external drive on a Mac with limited internal storage, point the cache at a folder on that external drive — big transfers then stay off your internal disk. Defaults to the system temporary folder, and falls back to it automatically if the chosen folder isn't available.
+**Choose where the cache lives.** Downloads are staged through this folder. If you're copying large files from a cloud account to an external drive on a Mac with limited internal storage, point the cache at a folder on that external drive — big transfers then stay off your internal disk. Defaults to the system temporary folder, and falls back to it automatically if the chosen folder isn't available. Cloud-to-cloud transfers are staged here too, and are measured against this volume's free space before they begin.
 
 ### Drag & drop, with shortcuts
 
@@ -159,6 +159,10 @@ Make one folder match another — local↔local, local↔cloud, or cloud↔cloud
 - **Additive** — only copy files that are missing; never overwrite.
 
 A pre-flight plan shows file counts, total bytes, and direction before a single byte moves. Byte-weighted progress so a single large file doesn't stall the bar. Cancel any transfer with confirmation.
+
+**Both ends of the space question.** The plan shows what the destination has free and, when the files have to cross this Mac on the way, how much room they need *here* — a cloud-to-cloud transfer is downloaded in full before anything is uploaded, so a healthy cloud quota says nothing about a nearly full SSD. The figure depends on the shape of the transfer: cloud to cloud needs the whole thing at once, cloud to local needs only the largest single item (and nothing at all when it lands on the volume it staged on), local to cloud streams from the file and needs nothing. When space is short, the warning names which disk is short, because freeing space on your Mac and freeing space in an account are not the same errand.
+
+For copy and move, the check is opt-in — *Check available space before copy or move* in Settings → General, off by default because measuring sizes costs a moment. One case is always checked, switch or no switch: a cloud-to-cloud transfer that cannot fit in the staging folder stops before it starts and names the disk, rather than failing half way with a disk-full error.
 
 ### Compare Folders
 
