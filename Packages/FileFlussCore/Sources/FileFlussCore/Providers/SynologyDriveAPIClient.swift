@@ -9,6 +9,10 @@ public struct SynologyDriveCredentials: Codable, Sendable {
     let password: String
     let allowSelfSignedCertificate: Bool
     let displayName: String
+    /// Device token DSM hands out at an OTP login (`enable_device_token`).
+    /// Replaying it as `device_id` lets later logins skip the OTP prompt.
+    /// Optional so credentials saved by older versions still decode.
+    var deviceId: String?
 }
 
 /// Talks to the Synology DSM Web API (`SYNO.API.Auth` + `SYNO.FileStation.*`)
@@ -16,11 +20,13 @@ public struct SynologyDriveCredentials: Codable, Sendable {
 /// (rclone, Mountain Duck, the official Drive client) uses — works for
 /// any Synology NAS reachable on the network or via QuickConnect.
 public actor SynologyDriveAPIClient {
-    let credentials: SynologyDriveCredentials
+    private(set) var credentials: SynologyDriveCredentials
     private let session: URLSession
     /// Session ID returned by `SYNO.API.Auth` on login. Re-login when nil
     /// or after the server reports it has expired.
     private var sid: String?
+    /// Name DSM lists under "Trusted devices" for the token requested at OTP login.
+    private static let deviceName = "FileFluss"
 
     public init(credentials: SynologyDriveCredentials) {
         self.credentials = credentials
@@ -62,7 +68,31 @@ public actor SynologyDriveAPIClient {
         )
         let client = SynologyDriveAPIClient(credentials: creds)
         try await client.login(otp: otp)
-        return creds
+        return await client.credentials
+    }
+
+    /// Same login as `authenticate`, but hands back the client that performed
+    /// it, so the caller keeps the logged-in session. A fresh client would
+    /// start without a session and log in again without an OTP, which DSM
+    /// rejects for 2FA accounts right after the first successful login.
+    static func authenticatedClient(
+        serverURL: String,
+        username: String,
+        password: String,
+        otp: String? = nil,
+        allowSelfSignedCertificate: Bool
+    ) async throws -> SynologyDriveAPIClient {
+        let normalized = normalizeServerURL(serverURL)
+        let creds = SynologyDriveCredentials(
+            serverURL: normalized,
+            username: username,
+            password: password,
+            allowSelfSignedCertificate: allowSelfSignedCertificate,
+            displayName: "\(username)@\(host(from: normalized))"
+        )
+        let client = SynologyDriveAPIClient(credentials: creds)
+        try await client.login(otp: otp)
+        return client
     }
 
     private func login(otp: String? = nil) async throws {
@@ -75,8 +105,17 @@ public actor SynologyDriveAPIClient {
             URLQueryItem(name: "session", value: "FileStation"),
             URLQueryItem(name: "format", value: "sid")
         ]
-        if let otp, !otp.isEmpty {
+        let hasOTP = !(otp ?? "").isEmpty
+        if hasOTP, let otp {
             query.append(URLQueryItem(name: "otp_code", value: otp))
+            // Ask DSM for a device token so later logins can skip the OTP.
+            query.append(URLQueryItem(name: "enable_device_token", value: "yes"))
+            query.append(URLQueryItem(name: "device_name", value: Self.deviceName))
+        } else if let deviceId = credentials.deviceId, !deviceId.isEmpty {
+            // Re-login without an OTP (after a restart or an expired SID):
+            // present the stored device token instead.
+            query.append(URLQueryItem(name: "device_name", value: Self.deviceName))
+            query.append(URLQueryItem(name: "device_id", value: deviceId))
         }
         let url = try buildURL(path: "/webapi/auth.cgi", queryItems: query)
         let (data, _) = try await session.data(for: URLRequest(url: url))
@@ -86,6 +125,16 @@ public actor SynologyDriveAPIClient {
         }
         guard let newSid = decoded.data?.sid else { throw CloudProviderError.invalidResponse }
         self.sid = newSid
+        if hasOTP {
+            // API v6 names the token `did`, v7 `device_id`. The value itself
+            // is a credential and is never logged.
+            if let token = decoded.data?.did ?? decoded.data?.deviceId, !token.isEmpty {
+                self.credentials.deviceId = token
+                synologyLog.info("[Synology] DSM issued a device token; later logins skip the OTP")
+            } else {
+                synologyLog.warning("[Synology] OTP login worked but DSM issued no device token; a later re-login will ask for an OTP again")
+            }
+        }
         synologyLog.info("[Synology] Logged in as \(self.credentials.username) at \(self.credentials.serverURL)")
     }
 
@@ -837,7 +886,15 @@ private struct SynologyAuthResponse: Decodable {
     let data: AuthData?
     let error: ErrorCode?
 
-    struct AuthData: Decodable { let sid: String? }
+    struct AuthData: Decodable {
+        let sid: String?
+        let did: String?
+        let deviceId: String?
+        enum CodingKeys: String, CodingKey {
+            case sid, did
+            case deviceId = "device_id"
+        }
+    }
     struct ErrorCode: Decodable { let code: Int }
 }
 

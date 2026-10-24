@@ -1499,7 +1499,7 @@ struct AddCloudAccountView: View {
                     rootPath: s3Path
                 )
             case .synologyDrive:
-                let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                let otp = String(synologyOTP.filter { !$0.isWhitespace })
                 await appState.syncManager.addSynologyDriveAccount(
                     serverURL: serverURL,
                     username: username,

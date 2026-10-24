@@ -34,14 +34,17 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         otp: String? = nil,
         allowSelfSignedCertificate: Bool
     ) async throws {
-        let credentials = try await SynologyDriveAPIClient.authenticate(
+        let client = try await SynologyDriveAPIClient.authenticatedClient(
             serverURL: serverURL,
             username: username,
             password: password,
             otp: otp,
             allowSelfSignedCertificate: allowSelfSignedCertificate
         )
-        self.apiClient = SynologyDriveAPIClient(credentials: credentials)
+        let credentials = await client.credentials
+        // Keep the client that logged in: it already holds the session, so the
+        // first folder listing doesn't trigger a second login without an OTP.
+        self.apiClient = client
         try KeychainService.save(key: keychainKey, value: credentials)
         synologyDriveProviderLog.info("[Synology] Authenticated as \(credentials.displayName)")
     }
