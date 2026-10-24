@@ -61,9 +61,7 @@ public actor InternxtAPIClient {
 
     public init(credentials: InternxtCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 600
+        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 60)
         self.session = URLSession(configuration: config)
         self.nodeCache = ["/": Node(uuid: credentials.rootFolderUuid, isFolder: true, fileId: nil, bucket: nil, size: 0, type: nil)]
     }

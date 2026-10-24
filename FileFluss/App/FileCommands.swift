@@ -306,10 +306,17 @@ struct FileCommands: Commands {
             }
 
             CommandGroup(after: .help) {
-                Button(SupportLogService.shared.isRecording ? "Support Log (Recording…)" : "Support Log") {
-                    SupportLogService.shared.start()
+                // The same item starts and stops: a recording now runs
+                // until it is stopped, so there has to be a way to stop it.
+                if SupportLogService.shared.isRecording {
+                    Button(L10n.text("Stop Support Log & Save…")) {
+                        SupportLogService.shared.stop()
+                    }
+                } else {
+                    Button(L10n.text("Record Support Log")) {
+                        SupportLogService.shared.start()
+                    }
                 }
-                .disabled(SupportLogService.shared.isRecording)
 
                 #if DEBUG
                 Button(L10n.text("Run Version Test…")) {

@@ -165,9 +165,13 @@ struct ContentView: View {
                 .symbolEffect(.pulse)
             LText("Recording support log — reproduce the issue now")
                 .font(.callout)
-            Text("\(supportLog.secondsRemaining)s")
+            Text(supportLog.elapsedText)
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(.secondary)
+            Button(L10n.text("Stop & Save…")) {
+                supportLog.stop()
+            }
+            .font(.callout)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

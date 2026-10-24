@@ -86,9 +86,7 @@ public actor GoogleDrivePickerAPIClient {
 
     public init(credentials: GoogleDrivePickerCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 3600
+        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
         self.session = URLSession(configuration: config)
     }
 

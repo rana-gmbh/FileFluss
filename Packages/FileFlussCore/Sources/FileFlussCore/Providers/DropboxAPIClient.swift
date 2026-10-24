@@ -59,9 +59,7 @@ public actor DropboxAPIClient {
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
         self.session = URLSession(configuration: config)
     }
 

@@ -51,9 +51,7 @@ public actor TeraBoxAPIClient {
 
     public init(credentials: TeraBoxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 600
+        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 60)
         self.session = URLSession(configuration: config)
     }
 
