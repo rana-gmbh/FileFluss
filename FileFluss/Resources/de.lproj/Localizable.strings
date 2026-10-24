@@ -748,3 +748,18 @@
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss darf das nicht in den Papierkorb legen";
 "Open Privacy Settings…" = "Datenschutz-Einstellungen öffnen …";
 "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Abhilfe schafft „Festplattenvollzugriff“ für FileFluss unter Systemeinstellungen → Datenschutz & Sicherheit; danach muss FileFluss neu gestartet werden. Das endgültige Löschen kann aus demselben Grund ebenfalls abgelehnt werden.";
+
+/* Local staging space for transfers */
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "Die Dateien laufen unterwegs über diesen Mac: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen.";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen Mac: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner.";
+"The files pass through this Mac: %@ doesn't have room for that." = "Die Dateien laufen über diesen Mac: Auf %@ ist dafür kein Platz.";
+"Continue anyway?" = "Trotzdem fortfahren?";
+"Needs on this Mac:" = "Benötigt auf diesem Mac:";
+"free space unknown" = "freier Speicher unbekannt";
+"%@ free" = "%@ frei";
+"%@ to %@ — %@ free" = "%@ nach %@ – %@ frei";
+"%@ to %@" = "%@ nach %@";
+"needs %@ on %@ on the way (%@ free)" = "benötigt unterwegs %@ auf %@ (%@ frei)";
+"needs %@ on %@ on the way" = "benötigt unterwegs %@ auf %@";
+"%@ %@ into %@ would exceed the available space (only %@ free)." = "%@ von %@ nach %@ würde den verfügbaren Speicher überschreiten (nur %@ frei).";
+"%@ %@ into %@ may exceed the available space." = "%@ von %@ nach %@ könnte den verfügbaren Speicher überschreiten.";

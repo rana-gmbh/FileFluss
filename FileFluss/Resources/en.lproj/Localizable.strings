@@ -748,3 +748,18 @@
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss isn't allowed to move this to the Trash";
 "Open Privacy Settings…" = "Open Privacy Settings…";
 "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason.";
+
+/* Local staging space for transfers */
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.";
+"The files pass through this Mac: %@ doesn't have room for that." = "The files pass through this Mac: %@ doesn't have room for that.";
+"Continue anyway?" = "Continue anyway?";
+"Needs on this Mac:" = "Needs on this Mac:";
+"free space unknown" = "free space unknown";
+"%@ free" = "%@ free";
+"%@ to %@ — %@ free" = "%@ to %@ — %@ free";
+"%@ to %@" = "%@ to %@";
+"needs %@ on %@ on the way (%@ free)" = "needs %@ on %@ on the way (%@ free)";
+"needs %@ on %@ on the way" = "needs %@ on %@ on the way";
+"%@ %@ into %@ would exceed the available space (only %@ free)." = "%@ %@ into %@ would exceed the available space (only %@ free).";
+"%@ %@ into %@ may exceed the available space." = "%@ %@ into %@ may exceed the available space.";

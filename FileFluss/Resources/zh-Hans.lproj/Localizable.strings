@@ -737,3 +737,18 @@
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss 无权将其移到废纸篓";
 "Open Privacy Settings…" = "打开隐私设置……";
 "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS 拒绝了 FileFluss 将 %@ 移到废纸篓。在“系统设置 → 隐私与安全性”中为 FileFluss 授予“完全磁盘访问权限”即可解决，之后需要重新启动 FileFluss。永久删除可能因同样的原因被拒绝。";
+
+/* Local staging space for transfers */
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "文件会途经这台 Mac：这需要 %@ 位于 %@，而该处仅剩 %@。中转文件夹可在“设置 → 存储”中设置。";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "文件在两个账户之间会途经这台 Mac：这需要 %@ 位于 %@，而该处仅剩 %@。请释放空间，或在“设置 → 存储”中选择其他文件夹。";
+"The files pass through this Mac: %@ doesn't have room for that." = "文件会途经这台 Mac：%@ 上没有足够空间。";
+"Continue anyway?" = "仍要继续吗？";
+"Needs on this Mac:" = "本机所需：";
+"free space unknown" = "可用空间未知";
+"%@ free" = "剩余 %@";
+"%@ to %@ — %@ free" = "%@ 至 %@ — 剩余 %@";
+"%@ to %@" = "%@ 至 %@";
+"needs %@ on %@ on the way (%@ free)" = "途中需要 %@ 位于 %@（剩余 %@）";
+"needs %@ on %@ on the way" = "途中需要 %@ 位于 %@";
+"%@ %@ into %@ would exceed the available space (only %@ free)." = "将 %@ %@ 到 %@ 会超出可用空间（仅剩 %@）。";
+"%@ %@ into %@ may exceed the available space." = "将 %@ %@ 到 %@ 可能会超出可用空间。";

@@ -1160,8 +1160,11 @@ struct CloudFileListView: View {
         // Build lookup for resolution per item name
         let resolutionByName = Dictionary(resolutions.map { ($0.0.name, $0.1) }, uniquingKeysWith: { _, last in last })
 
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cloud-transfer-\(UUID().uuidString)")
+        // The folder the user chose in Settings → Storage, not the system
+        // temp folder: moving the cache to an external drive exists so a
+        // big transfer doesn't fill the internal disk, and this path was
+        // quietly ignoring it.
+        let tempDir = StagingLocation.stagingDirectory(prefix: "cloud-transfer")
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
         defer {
@@ -1180,6 +1183,35 @@ struct CloudFileListView: View {
                     expectedBytes += item.size
                 }
             }
+        }
+
+        // Everything is downloaded before anything is uploaded, so the
+        // staging folder has to hold the whole transfer at once. The
+        // destination's quota says nothing about that, and a cloud-to-cloud
+        // copy is an easy place to forget a nearly full disk — so this is
+        // checked whether or not the optional pre-flight is switched on.
+        // Stopping here with a reason beats failing half way with a disk
+        // full error.
+        if expectedBytes > 0,
+           let free = SpaceCheck.localVolumeFreeBytes(at: tempDir),
+           expectedBytes > free {
+            let needed = ByteCountFormatter.string(fromByteCount: expectedBytes, countStyle: .file)
+            let available = ByteCountFormatter.string(fromByteCount: max(0, free), countStyle: .file)
+            let volume = SpaceCheck.volumeName(at: tempDir)
+            let message = L10n.format(
+                "The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.",
+                needed, volume, available
+            )
+            SupportLogger.shared.log(
+                "cloud-to-cloud refused: needs \(expectedBytes) bytes staged on \(volume), \(free) free",
+                category: "transfer", level: .error
+            )
+            if let progress {
+                progress.errorMessage = message
+                progress.endTime = Date()
+                progress.isComplete = true
+            }
+            return
         }
 
         // Phase 1: Download only non-skipped items

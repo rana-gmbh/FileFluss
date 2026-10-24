@@ -200,6 +200,24 @@ struct SyncPlannerView: View {
                                 .foregroundStyle(after < 0 ? .red : .primary)
                         }
                     }
+                    // A sync that both downloads and uploads is passing the
+                    // files through this Mac, and the disk they cross is
+                    // not the destination's quota. Shown next to it, since
+                    // that is where someone is already looking.
+                    if let staging = stagingNeed(for: plan) {
+                        Divider().gridCellColumns(2)
+                        GridRow {
+                            LText("Needs on this Mac:").foregroundStyle(.secondary)
+                            Text(ByteCountFormatter.string(fromByteCount: staging.needed, countStyle: .file))
+                                .foregroundStyle(staging.wouldExceed ? .red : .primary)
+                        }
+                        GridRow {
+                            Text(verbatim: staging.volumeName).foregroundStyle(.secondary)
+                            Text(staging.free.map {
+                                L10n.format("%@ free", ByteCountFormatter.string(fromByteCount: max(0, $0), countStyle: .file))
+                            } ?? L10n.text("free space unknown"))
+                        }
+                    }
                 }
                 .font(.callout)
 
@@ -209,6 +227,15 @@ struct SyncPlannerView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.top, 2)
+                }
+                if let staging = stagingNeed(for: plan), staging.wouldExceed {
+                    Label(
+                        L10n.format("The files pass through this Mac: %@ doesn't have room for that.", staging.volumeName),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.top, 2)
                 }
             } else {
                 LText("Press Calculate to compute how many files will be added, replaced, or deleted.")
@@ -277,6 +304,20 @@ struct SyncPlannerView: View {
             plan = nil
             destAvailable = nil
         }
+    }
+
+    /// What this sync needs on the Mac while it runs, or nil when nothing
+    /// passes through: a plan that only uploads reads from files already
+    /// here, and one that only downloads writes straight to where they are
+    /// going.
+    private func stagingNeed(for plan: SyncPlan) -> SpaceImpact.Staging? {
+        guard plan.downloadBytes > 0, plan.uploadBytes > 0 else { return nil }
+        let staging = StagingLocation.base()
+        return SpaceImpact.Staging(
+            volumeName: SpaceCheck.volumeName(at: staging),
+            needed: plan.downloadBytes,
+            free: SpaceCheck.localVolumeFreeBytes(at: staging)
+        )
     }
 
     /// Free space at the destination: a cloud account's `total − used` quota,
