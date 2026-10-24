@@ -259,6 +259,10 @@ xcodebuild build -project FileFluss.xcodeproj -scheme FileFluss -destination 'pl
 
 If you want to support the FileFluss project, please consider [buying me a coffee](https://buymeacoffee.com/robertrudolph).
 
+## Contributors
+
+FileFluss is written by Robert Rudolph at Rana GmbH, with help from the people in [CONTRIBUTORS.md](CONTRIBUTORS.md). Pull requests are welcome — that file says what makes one easy to accept.
+
 ## License
 
 FileFluss is released under the [GNU General Public License v3.0](LICENSE).
