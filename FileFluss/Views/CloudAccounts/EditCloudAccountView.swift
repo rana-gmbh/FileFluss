@@ -944,7 +944,9 @@ struct EditCloudAccountView: View {
                     )
                 }
             case .synologyDrive:
-                let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Same as the Add sheet: authenticator apps show the code in
+                // two groups, and people paste it that way.
+                let otp = String(synologyOTP.filter { !$0.isWhitespace })
                 await appState.syncManager.updateSynologyDriveAccount(
                     accountId: id,
                     serverURL: serverURL,

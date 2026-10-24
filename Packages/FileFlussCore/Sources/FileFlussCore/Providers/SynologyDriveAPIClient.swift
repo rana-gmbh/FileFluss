@@ -48,8 +48,14 @@ public actor SynologyDriveAPIClient {
 
     // MARK: - Authentication
 
-    /// Validates credentials by logging in. Stores the SID for use by
-    /// subsequent calls. `otp` is required when the account has 2FA on.
+    /// Validates credentials by logging in and hands back the credentials.
+    ///
+    /// Prefer `authenticatedClient`, which hands back the logged-in client
+    /// as well: a caller that builds a new client from these credentials
+    /// starts without a session, and its first request logs in again
+    /// without an OTP — which DSM rejects on a 2FA account. That was the
+    /// bug in issue #66.
+    @available(*, deprecated, message: "Use authenticatedClient, which keeps the session the OTP login established.")
     public static func authenticate(
         serverURL: String,
         username: String,
@@ -75,12 +81,18 @@ public actor SynologyDriveAPIClient {
     /// it, so the caller keeps the logged-in session. A fresh client would
     /// start without a session and log in again without an OTP, which DSM
     /// rejects for 2FA accounts right after the first successful login.
+    /// `deviceId` is a token this account was given earlier. Pass it when
+    /// re-authenticating the same account — editing its password, say —
+    /// so a 2FA account doesn't have to produce a fresh OTP, and doesn't
+    /// lose the token it already has. The caller is responsible for only
+    /// passing a token that belongs to this server and user.
     static func authenticatedClient(
         serverURL: String,
         username: String,
         password: String,
         otp: String? = nil,
-        allowSelfSignedCertificate: Bool
+        allowSelfSignedCertificate: Bool,
+        deviceId: String? = nil
     ) async throws -> SynologyDriveAPIClient {
         let normalized = normalizeServerURL(serverURL)
         let creds = SynologyDriveCredentials(
@@ -88,7 +100,8 @@ public actor SynologyDriveAPIClient {
             username: username,
             password: password,
             allowSelfSignedCertificate: allowSelfSignedCertificate,
-            displayName: "\(username)@\(host(from: normalized))"
+            displayName: "\(username)@\(host(from: normalized))",
+            deviceId: deviceId
         )
         let client = SynologyDriveAPIClient(credentials: creds)
         try await client.login(otp: otp)
@@ -779,7 +792,10 @@ public actor SynologyDriveAPIClient {
         throw CloudProviderError.serverError(http.statusCode)
     }
 
-    private static func normalizeServerURL(_ raw: String) -> String {
+    /// Internal rather than private: the provider compares a stored
+    /// server URL against a freshly entered one before reusing a device
+    /// token, and both have to be normalised the same way.
+    static func normalizeServerURL(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") {
             s = "https://" + s
