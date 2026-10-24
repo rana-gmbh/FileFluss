@@ -164,3 +164,46 @@ struct TerminalLauncherTests {
         #expect(TerminalLauncher.installedTerminals().contains { $0.bundleID == TerminalLauncher.defaultBundleID })
     }
 }
+
+/// Where a remote path lands inside a mounted account, now that opening a
+/// file goes through the mount when there is one — so a save reaches the
+/// server instead of a copy on this Mac.
+@Suite("Mounted paths")
+@MainActor
+struct MountedPathTests {
+
+    private func mount(providerRoot: String) -> LoopbackMountService.ActiveMount {
+        LoopbackMountService.ActiveMount(
+            accountId: UUID(),
+            providerRoot: providerRoot,
+            displayName: "Storage Box",
+            mountPoint: URL(fileURLWithPath: "/Volumes/Storage Box.localhost", isDirectory: true),
+            port: 45_000
+        )
+    }
+
+    @Test("A file maps to its place inside the volume")
+    func fileInsideTheVolume() {
+        let m = mount(providerRoot: "/")
+
+        #expect(m.url(forRemotePath: "/Documents/Report.pages")
+                == m.mountPoint.appendingPathComponent("Documents/Report.pages"))
+    }
+
+    /// The mount serves its own root at the volume's root, so that prefix
+    /// has to come off — otherwise the file is looked for one level too
+    /// deep and the open silently falls back to a copy.
+    @Test("The mount's own root is not repeated in the path")
+    func providerRootIsStripped() {
+        let m = mount(providerRoot: "/Backups")
+
+        #expect(m.url(forRemotePath: "/Backups/2026/january.tar")
+                == m.mountPoint.appendingPathComponent("2026/january.tar"))
+        #expect(m.url(forRemotePath: "/Backups") == m.mountPoint)
+    }
+
+    @Test("The account root is the volume itself")
+    func rootIsTheVolume() {
+        #expect(mount(providerRoot: "/").url(forRemotePath: "/") == mount(providerRoot: "/").mountPoint)
+    }
+}

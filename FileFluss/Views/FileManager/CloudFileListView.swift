@@ -858,6 +858,26 @@ struct CloudFileListView: View {
     }
 
     private func openCloudFile(_ item: CloudFileItem) {
+        // When the account is mounted, open the file where it really is.
+        // The copy below is just that — a copy — and anything the user
+        // saves into it stays on this Mac: a user lost an afternoon of
+        // Pages edits that way. Through the mount the save goes back to
+        // the server, in Pages or anything else.
+        if let mount = appState.mountService.mount(for: accountId) {
+            let mounted = mount.url(forRemotePath: item.path)
+            if FileManager.default.fileExists(atPath: mounted.path) {
+                NSWorkspace.shared.open(mounted)
+                return
+            }
+            // The path didn't resolve inside the volume — a mount rooted
+            // somewhere else, or a listing from before it moved. Fall back
+            // to the copy rather than refusing to open anything.
+            SupportLogger.shared.log(
+                "open: \(item.path) not found inside the mount at \(mount.mountPoint.path); opening a copy instead",
+                category: "cloud"
+            )
+        }
+
         let transfer = TransferProgress(operation: "Opening", totalItems: 1)
         transfer.transferredFileNames = [item.name]
         transfer.totalFiles = 1

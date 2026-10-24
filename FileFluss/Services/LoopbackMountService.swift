@@ -21,6 +21,32 @@ public final class LoopbackMountService {
         public let port: UInt16
         nonisolated public static func == (lhs: ActiveMount, rhs: ActiveMount) -> Bool { lhs.id == rhs.id }
         nonisolated public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+        /// Where an account's remote path is to be found inside this mount.
+        nonisolated public func url(forRemotePath remotePath: String) -> URL {
+            LoopbackMountService.mountedURL(
+                forRemotePath: remotePath, mountPoint: mountPoint, providerRoot: providerRoot
+            )
+        }
+    }
+
+    /// Where a remote path is to be found inside a mounted volume.
+    ///
+    /// The mount serves `providerRoot` at the volume's root, so that prefix
+    /// comes off first: a mount rooted at `/Backups` makes `/Backups/2026`
+    /// into `<volume>/2026`, not `<volume>/Backups/2026`.
+    nonisolated public static func mountedURL(
+        forRemotePath remotePath: String,
+        mountPoint: URL,
+        providerRoot: String
+    ) -> URL {
+        var relative = remotePath
+        if providerRoot != "/", relative.hasPrefix(providerRoot) {
+            relative = String(relative.dropFirst(providerRoot.count))
+        }
+        while relative.hasPrefix("/") { relative.removeFirst() }
+        guard !relative.isEmpty else { return mountPoint }
+        return mountPoint.appendingPathComponent(relative)
     }
 
     public private(set) var mounts: [ActiveMount] = []
