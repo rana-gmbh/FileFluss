@@ -752,3 +752,8 @@
 "needs %@ on %@ on the way" = "途中需要 %@ 位於 %@";
 "%@ %@ into %@ would exceed the available space (only %@ free)." = "將 %@ %@ 到 %@ 會超出可用空間（僅剩 %@）。";
 "%@ %@ into %@ may exceed the available space." = "將 %@ %@ 到 %@ 可能會超出可用空間。";
+
+/* A locally edited cached copy, kept rather than overwritten */
+"Your changes were kept, but not uploaded" = "你的變更已保留，但未上傳";
+"Show in Finder" = "在 Finder 中顯示";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "FileFluss 開啟「%@」之後，該檔案在這台 Mac 上被修改過。FileFluss 尚不會將其他 App 中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請在 Finder 中掛載該帳戶。";

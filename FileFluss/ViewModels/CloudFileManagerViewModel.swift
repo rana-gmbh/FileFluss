@@ -117,6 +117,16 @@ final class CloudFileManagerViewModel {
     private var tempDownloadDir: URL
     private var quickLookTask: Task<Void, Never>?
 
+    /// An edited copy that was kept rather than overwritten, so the panel
+    /// can tell the user where their work went.
+    struct PreservedEdit: Identifiable, Equatable {
+        let id = UUID()
+        let fileName: String
+        let url: URL
+    }
+
+    var preservedEdit: PreservedEdit?
+
     enum SortOrder: String, CaseIterable {
         case name, date, size, kind
 

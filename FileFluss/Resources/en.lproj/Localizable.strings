@@ -763,3 +763,8 @@
 "needs %@ on %@ on the way" = "needs %@ on %@ on the way";
 "%@ %@ into %@ would exceed the available space (only %@ free)." = "%@ %@ into %@ would exceed the available space (only %@ free).";
 "%@ %@ into %@ may exceed the available space." = "%@ %@ into %@ may exceed the available space.";
+
+/* A locally edited cached copy, kept rather than overwritten */
+"Your changes were kept, but not uploaded" = "Your changes were kept, but not uploaded";
+"Show in Finder" = "Show in Finder";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.";

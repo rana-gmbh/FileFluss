@@ -313,6 +313,27 @@ struct CloudFileListView: View {
         } message: {
             Text(L10n.text("A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it."))
         }
+        // An edit FileFluss can't upload yet, kept rather than overwritten.
+        // Saying nothing would leave the user believing the work is gone.
+        .alert(
+            L10n.text("Your changes were kept, but not uploaded"),
+            isPresented: Binding(
+                get: { vm.preservedEdit != nil },
+                set: { if !$0 { vm.preservedEdit = nil } }
+            ),
+            presenting: vm.preservedEdit
+        ) { edit in
+            Button(L10n.text("Show in Finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([edit.url])
+                vm.preservedEdit = nil
+            }
+            Button(L10n.text("OK"), role: .cancel) { vm.preservedEdit = nil }
+        } message: { edit in
+            Text(L10n.format(
+                "“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.",
+                edit.fileName
+            ))
+        }
         .alert(L10n.text("Could not mount in Finder"), isPresented: $showMountError, presenting: mountErrorMessage) { _ in
             Button(L10n.text("OK"), role: .cancel) {}
         } message: { message in

@@ -763,3 +763,8 @@
 "needs %@ on %@ on the way" = "benötigt unterwegs %@ auf %@";
 "%@ %@ into %@ would exceed the available space (only %@ free)." = "%@ von %@ nach %@ würde den verfügbaren Speicher überschreiten (nur %@ frei).";
 "%@ %@ into %@ may exceed the available space." = "%@ von %@ nach %@ könnte den verfügbaren Speicher überschreiten.";
+
+/* A locally edited cached copy, kept rather than overwritten */
+"Your changes were kept, but not uploaded" = "Deine Änderungen wurden behalten, aber nicht hochgeladen";
+"Show in Finder" = "Im Finder zeigen";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "„%@“ wurde auf diesem Mac geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten das Konto im Finder einbinden.";
