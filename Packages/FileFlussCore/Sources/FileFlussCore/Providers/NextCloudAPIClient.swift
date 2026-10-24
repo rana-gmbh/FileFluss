@@ -625,9 +625,11 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
-        // PROPFIND depth 1 includes the folder itself as first entry — skip it
-        return items.dropFirst().map { $0 }
+        // Same as the generic WebDAV client: the folder's own entry goes by
+        // path, not by position (#64). Nextcloud happens to send it first
+        // and with a displayname, so this was safe here — but it is the
+        // same latent bug, one server-side change away.
+        return WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {

@@ -205,9 +205,9 @@ public actor WebDAVAPIClient {
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
-        // PROPFIND depth 1 includes the folder itself as first entry — skip it
-        return items.dropFirst().map { $0 }
+        // The folder's own entry is removed by path, not by position: it
+        // is not always first, and is sometimes not there at all (#64).
+        return WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {

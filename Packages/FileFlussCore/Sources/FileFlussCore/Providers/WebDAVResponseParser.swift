@@ -14,6 +14,37 @@ public enum WebDAVResponseParser {
         xmlParser.parse()
         return parser.items
     }
+
+    /// The contents of a folder: everything a `Depth: 1` PROPFIND returned
+    /// except the folder itself.
+    ///
+    /// Identified by path rather than by position. The callers used to drop
+    /// the first entry, on the assumption that a server lists the folder
+    /// before its children — but the parser also drops an entry whose name
+    /// works out empty, which is what the root's own entry does when the
+    /// server sends no `displayname` for it. Then the positional drop took
+    /// a real folder instead, and a Hetzner Storage Box with two folders
+    /// showed one (issue #64). Nothing in the spec fixes the ordering
+    /// either, so position was never a safe way to find it.
+    public static func children(data: Data, basePath: String, requestPath: String) -> [CloudFileItem] {
+        let all = parse(data: data, basePath: basePath, requestPath: requestPath)
+        let target = normalisedPath(requestPath)
+        let children = all.filter { normalisedPath($0.path) != target }
+        // A server that didn't list the folder itself leaves nothing to
+        // remove. Returning everything is right; removing something anyway
+        // is how this bug worked.
+        return children.count == all.count ? all : children
+    }
+
+    /// Percent-decoded, no trailing slash, empty means the root — so the
+    /// several spellings of one path compare equal.
+    static func normalisedPath(_ path: String) -> String {
+        var value = path.removingPercentEncoding ?? path
+        while value.count > 1 && value.hasSuffix("/") { value.removeLast() }
+        if value.isEmpty { value = "/" }
+        if !value.hasPrefix("/") { value = "/" + value }
+        return value
+    }
 }
 
 private final class WebDAVXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
