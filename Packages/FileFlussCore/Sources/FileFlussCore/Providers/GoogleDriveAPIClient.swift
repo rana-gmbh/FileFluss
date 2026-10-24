@@ -97,7 +97,7 @@ public actor GoogleDriveAPIClient {
 
     public init(credentials: GoogleDriveCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 

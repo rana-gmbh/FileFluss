@@ -103,7 +103,7 @@ public actor FilenAPIClient {
 
     public init(credentials: FilenCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 

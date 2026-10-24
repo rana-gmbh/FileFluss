@@ -30,7 +30,7 @@ public actor SynologyDriveAPIClient {
 
     public init(credentials: SynologyDriveCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 60)
+        let config = URLSessionConfiguration.fileTransfer()
         if credentials.allowSelfSignedCertificate {
             self.session = URLSession(
                 configuration: config,

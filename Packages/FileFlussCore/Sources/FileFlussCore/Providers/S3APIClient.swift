@@ -78,7 +78,7 @@ public actor S3APIClient {
 
     public init(credentials: S3Credentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 60)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config, delegate: NoRedirectDelegate(), delegateQueue: nil)
     }
 

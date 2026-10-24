@@ -22,7 +22,16 @@ struct TransferSessionTests {
     /// inactivity timeout is for, and it is the one worth setting.
     @Test("A stalled transfer is still cut off")
     func keepsInactivityTimeout() {
-        #expect(URLSessionConfiguration.fileTransfer().timeoutIntervalForRequest == 30)
+        #expect(URLSessionConfiguration.fileTransfer().timeoutIntervalForRequest == 300)
         #expect(URLSessionConfiguration.fileTransfer(inactivityTimeout: 60).timeoutIntervalForRequest == 60)
+    }
+
+    /// Thirty seconds was not enough. A 3.7 GB upload to Nextcloud sent
+    /// every byte and then failed waiting for the server's answer, which is
+    /// silence the client has to sit through — the work is happening at the
+    /// far end.
+    @Test("The guard allows for a server finishing with a large file")
+    func toleratesServerSideFinalisation() {
+        #expect(URLSessionConfiguration.fileTransfer().timeoutIntervalForRequest >= 120)
     }
 }

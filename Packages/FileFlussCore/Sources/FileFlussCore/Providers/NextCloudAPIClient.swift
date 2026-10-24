@@ -17,7 +17,7 @@ public actor NextCloudAPIClient {
 
     public init(credentials: NextCloudCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
 
         let base = credentials.serverURL.hasSuffix("/")

@@ -87,7 +87,7 @@ public actor BoxAPIClient {
 
     public init(credentials: BoxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 

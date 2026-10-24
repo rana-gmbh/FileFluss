@@ -59,7 +59,7 @@ public actor DropboxAPIClient {
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 

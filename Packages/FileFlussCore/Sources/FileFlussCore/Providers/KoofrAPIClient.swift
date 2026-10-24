@@ -18,7 +18,7 @@ public actor KoofrAPIClient {
 
     public init(credentials: KoofrCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 

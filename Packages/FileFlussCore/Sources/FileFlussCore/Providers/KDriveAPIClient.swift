@@ -18,7 +18,7 @@ public actor KDriveAPIClient {
 
     public init(credentials: KDriveCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer(inactivityTimeout: 30)
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
         // Root folder ID is typically the drive's root
         pathToId["/"] = credentials.driveId > 0 ? 0 : 0
