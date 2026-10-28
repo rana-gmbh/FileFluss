@@ -276,7 +276,11 @@ class FileTableView: NSTableView {
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
         onDragLeft?()
-        super.draggingEnded(sender)
+        // No `super` call. `draggingEnded(_:)` is an optional
+        // NSDraggingDestination method that NSTableView doesn't implement,
+        // so passing it on raised "unrecognized selector" and aborted the
+        // app the moment AppKit delivered it — which dragging an entry out
+        // of an archive to the other panel reliably did.
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
