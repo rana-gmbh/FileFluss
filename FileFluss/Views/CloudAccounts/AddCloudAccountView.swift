@@ -169,6 +169,12 @@ struct AddCloudAccountView: View {
         .gopro,
     ]
 
+    /// Source-code hosts. Repositories are browsed and copied out of, never
+    /// written back to, so they don't belong with the storage providers.
+    private let codeHostingProviders: [CloudProviderType] = [
+        .github,
+    ]
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -203,17 +209,22 @@ struct AddCloudAccountView: View {
                 .foregroundStyle(.secondary)
 
             providerSection(
-                title: "Cloud Storage Providers",
+                title: L10n.text("Cloud Storage Providers"),
                 providers: cloudStorageProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
-                title: "Other Protocols",
+                title: L10n.text("Other Protocols"),
                 providers: otherProtocolProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
-                title: "Cameras & Devices",
+                title: L10n.text("Code Hosting"),
+                providers: codeHostingProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: L10n.text("Cameras & Devices"),
                 providers: deviceProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
@@ -316,6 +327,8 @@ struct AddCloudAccountView: View {
                 ftpFields
             case .gopro:
                 goProFields
+            case .github:
+                gitHubFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -936,6 +949,35 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var gitHubFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LText("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                if let url = URL(string: "https://github.com/settings/tokens") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label(L10n.text("Open GitHub token settings"), systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
+            SecureField(L10n.text("Personal Access Token"), text: $apiToken)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            LText("FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     @ViewBuilder
     private var goProFields: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1359,6 +1401,7 @@ struct AddCloudAccountView: View {
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         case .filen: return email.isEmpty || password.isEmpty
         case .jottacloud: return apiToken.isEmpty
+        case .github: return apiToken.isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .gopro:
@@ -1556,6 +1599,10 @@ struct AddCloudAccountView: View {
             case .jottacloud:
                 await appState.syncManager.addJottacloudAccount(
                     personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            case .github:
+                await appState.syncManager.addGitHubAccount(
+                    token: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
             case .googleDrivePicker:
                 // Step 1: OAuth (system browser). Step 2: the Google Picker,

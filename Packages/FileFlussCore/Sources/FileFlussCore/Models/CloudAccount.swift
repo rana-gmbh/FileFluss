@@ -27,6 +27,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case jottacloud
     case googleDrivePicker
     case gopro
+    case github
 
     public var id: String { rawValue }
 
@@ -58,6 +59,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .jottacloud: return "Jottacloud"
         case .googleDrivePicker: return "Google Drive (Selected Folders)"
         case .gopro: return "GoPro Camera"
+        case .github: return "GitHub"
         }
     }
 
@@ -89,6 +91,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .jottacloud: return "cloud.fill"
         case .googleDrivePicker: return "externaldrive.connected.to.line.below"
         case .gopro: return "camera.fill"
+        case .github: return "chevron.left.forwardslash.chevron.right"
         }
     }
 
@@ -98,8 +101,22 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     /// GoPro camera whose HTTP API has no write path.
     public var isReadOnly: Bool {
         switch self {
-        case .gopro: return true
+        case .gopro, .github: return true
         default: return false
+        }
+    }
+
+    /// Whether items on this provider may be deleted from FileFluss.
+    ///
+    /// `isReadOnly` deliberately still allows deletion — a GoPro is an
+    /// import source you clear down after copying the footage off it. A
+    /// GitHub account is not: the only thing a delete could mean there is
+    /// deleting a repository or rewriting a branch, so the affordance is
+    /// withheld rather than offered and then refused.
+    public var allowsDeletion: Bool {
+        switch self {
+        case .github: return false
+        default: return true
         }
     }
 
@@ -133,6 +150,10 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         // Shares the Google Drive logo — it's the same service, different access model.
         case .googleDrivePicker: return "GoogleDriveLogo"
         case .gopro: return "GoProLogo"
+        // No GitHub mark ships with the app, and `Image(_:)` renders an
+        // empty frame for a missing asset — so this falls back to the SF
+        // Symbol until a logo is added to the asset catalog.
+        case .github: return nil
         }
     }
 }

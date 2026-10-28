@@ -10,11 +10,12 @@ import AppKit
 enum VersionTestRunner {
     private static let testFolderName = "FileFluss version test"
     private static let logCategory = "version-test"
-    // Providers whose storage model doesn't map to arbitrary folders (e.g.
-    // WordPress Media Library uses auto-generated date folders). Running the
-    // create/upload/delete flow against these accounts produces misleading
-    // failures, so we skip them and note that in the report.
-    private static let skippedProviders: Set<CloudProviderType> = [.wordpress]
+    // Providers the create/upload/delete flow can't say anything useful
+    // about, so they're skipped with a note in the report rather than
+    // filling it with failures that were never in doubt: WordPress, whose
+    // Media Library uses auto-generated date folders rather than arbitrary
+    // ones, and GitHub, which is a read-only source.
+    private static let skippedProviders: Set<CloudProviderType> = [.wordpress, .github]
 
     static func run(appState: AppState) async {
         guard let testfilesURL = locateTestfilesURL() else {
@@ -60,8 +61,11 @@ enum VersionTestRunner {
             progress.beginAccount(account.displayName, index: index + 1, of: accounts.count)
             if progress.isCancelled { break }
             if Self.skippedProviders.contains(account.providerType) {
+                let reason = account.providerType.isReadOnly
+                    ? "\(account.providerType.displayName) is read-only"
+                    : "\(account.providerType.displayName) has no folder concept"
                 let note = StepResult(
-                    label: "skipped (\(account.providerType.displayName) has no folder concept)",
+                    label: "skipped (\(reason))",
                     ok: true, durationMs: 0, error: nil, diagnostics: nil
                 )
                 accountResults.append(AccountResult(

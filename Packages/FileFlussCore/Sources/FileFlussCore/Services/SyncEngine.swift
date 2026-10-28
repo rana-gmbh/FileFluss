@@ -55,6 +55,7 @@ public actor SyncEngine {
         case .jottacloud: return JottacloudProvider()
         case .googleDrivePicker: return GoogleDrivePickerProvider()
         case .gopro: return GoProProvider()
+        case .github: return GitHubProvider()
         }
     }
 }

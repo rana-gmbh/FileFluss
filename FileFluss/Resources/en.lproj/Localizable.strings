@@ -882,3 +882,22 @@
 "the link is not reachable without signing in." = "the link is not reachable without signing in.";
 "the server didn't answer." = "the server didn't answer.";
 "·" = "·";
+
+/* GitHub account: repository overview, snapshot archives, provider groups */
+"1 repository" = "1 repository";
+"%d repositories" = "%d repositories";
+"Private repository" = "Private repository";
+"Public repository" = "Public repository";
+"Private repository (archived)" = "Private repository (archived)";
+"Public repository (archived)" = "Public repository (archived)";
+"Branch: %@" = "Branch: %@";
+"Snapshot archive (no history)" = "Snapshot archive (no history)";
+"Cloud Storage Providers" = "Cloud Storage Providers";
+"Other Protocols" = "Other Protocols";
+"Code Hosting" = "Code Hosting";
+"Cameras & Devices" = "Cameras & Devices";
+"Personal Access Token" = "Personal Access Token";
+"Open GitHub token settings" = "Open GitHub token settings";
+"Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories." = "Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories.";
+"FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." = "FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account.";
+"To use a different personal access token, remove this account and add it again." = "To use a different personal access token, remove this account and add it again.";

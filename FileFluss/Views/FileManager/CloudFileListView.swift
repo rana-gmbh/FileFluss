@@ -80,6 +80,10 @@ struct CloudFileListView: View {
         appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false
     }
 
+    private var canDelete: Bool {
+        appState.syncManager.accountFor(id: accountId)?.providerType.allowsDeletion ?? true
+    }
+
     private var incomingDirection: ConflictDirection {
         panelSide == .right ? .leftToRight : .rightToLeft
     }
@@ -509,7 +513,7 @@ struct CloudFileListView: View {
     /// kicks off the cloud delete straight away. Shared by the menu
     /// (`menuDelete` notification), keyboard, and context-menu paths.
     private func triggerDelete() {
-        guard !vm.selectedItems.isEmpty else { return }
+        guard canDelete, !vm.selectedItems.isEmpty else { return }
         if confirmDelete {
             showDeleteConfirmation = true
         } else {
@@ -1146,6 +1150,7 @@ struct CloudFileListView: View {
                     ? Set(vm.shareStates.compactMap { $0.value == nil ? nil : $0.key })
                     : [],
                 isReadOnly: isReadOnly,
+                canDelete: canDelete,
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode
             )

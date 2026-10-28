@@ -155,12 +155,21 @@ struct EditCloudAccountView: View {
             googleDrivePickerHint
         case .gopro:
             goProHint
+        case .github:
+            gitHubHint
         }
     }
 
     private var goProHint: some View {
         Text(L10n.text("GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again."))
             .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var gitHubHint: some View {
+        LText("To use a different personal access token, remove this account and add it again.")
+            .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -668,7 +677,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github:
             EmptyView()
         case .dropbox, .googleDrive, .oneDrive, .box:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
@@ -714,7 +723,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -838,7 +847,7 @@ struct EditCloudAccountView: View {
             return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github:
             return true
         }
     }
@@ -1004,7 +1013,7 @@ struct EditCloudAccountView: View {
                     useTLS: ftpUseTLS,
                     allowInvalidCertificate: ftpAllowSelfSigned
                 )
-            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github:
                 break
             }
 

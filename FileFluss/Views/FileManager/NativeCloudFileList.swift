@@ -54,6 +54,7 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// Import-only device (e.g. GoPro): suppress Paste / New Folder / Rename in
     /// the context menu since the camera has no write path.
     var isReadOnly: Bool = false
+    var canDelete: Bool = true
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
@@ -188,6 +189,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
         coordinator.isReadOnly = isReadOnly
+        coordinator.canDelete = canDelete
         coordinator.shareCapabilities = shareCapabilities
         coordinator.onCreateShareLink = onCreateShareLink
         coordinator.onCopyExistingShareLink = onCopyExistingShareLink
@@ -384,6 +386,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
+    var canDelete = true
     var shareCapabilities: ShareLinkCapabilities = .unsupported
     var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
     var onCopyExistingShareLink: ((CloudFileItem) -> Void)?
@@ -826,7 +829,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             }
         }
 
-        if !containsImmovable {
+        if !containsImmovable, canDelete {
             menu.addItem(.separator())
             let deleteItem = NSMenuItem(title: L10n.text("Delete"), action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
             deleteItem.target = self

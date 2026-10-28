@@ -882,3 +882,22 @@
 "Set up \"Camera on Home Network\" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows." = "請在 GoPro Quik App 中設定「家庭網路中的相機」，然後輸入相機的 IP 位址以及它顯示的 COHN 使用者名稱和密碼。";
 "Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it." = "打開相機，然後透過 USB 連接或加入其 Wi-Fi 網路，再進行掃描以找到它。";
 "USB or Wi-Fi" = "USB 或 Wi-Fi";
+
+/* GitHub account: repository overview, snapshot archives, provider groups */
+"1 repository" = "1 個儲存庫";
+"%d repositories" = "%d 個儲存庫";
+"Private repository" = "私有儲存庫";
+"Public repository" = "公開儲存庫";
+"Private repository (archived)" = "私有儲存庫（已封存）";
+"Public repository (archived)" = "公開儲存庫（已封存）";
+"Branch: %@" = "分支：%@";
+"Snapshot archive (no history)" = "快照封存（不含歷史記錄）";
+"Cloud Storage Providers" = "雲端儲存服務";
+"Other Protocols" = "其他協定";
+"Code Hosting" = "程式碼託管";
+"Cameras & Devices" = "相機與裝置";
+"Personal Access Token" = "個人存取權杖";
+"Open GitHub token settings" = "開啟 GitHub 權杖設定";
+"Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories." = "在 GitHub 上建立個人存取權杖，然後貼到下方。細緻權限的權杖需要 Contents 與 Metadata 的讀取權限；傳統權杖需要 repo 範圍才能看到私有儲存庫。";
+"FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." = "FileFluss 只會從 GitHub 讀取。你可以瀏覽儲存庫、取出單一檔案，每個儲存庫也提供其預設分支的快照封存，可複製到其他帳戶。";
+"To use a different personal access token, remove this account and add it again." = "若要改用其他個人存取權杖，請移除此帳戶後重新新增。";

@@ -41,6 +41,11 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
     public let symbolIconOverride: String?
     /// Navigational role — drives which context-menu actions are valid.
     public let role: CloudItemRole
+    /// Replaces the Kind column's derived-from-extension text. Providers
+    /// whose items aren't ordinary files use it to say what a row actually
+    /// is — a GitHub account labels a repository private or public there,
+    /// which is the one thing the overview has to make obvious.
+    public let kindOverride: String?
 
     public init(
         id: String,
@@ -52,7 +57,8 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
         checksum: String?,
         downloadStatus: CloudDownloadStatus = .local,
         symbolIconOverride: String? = nil,
-        role: CloudItemRole = .normal
+        role: CloudItemRole = .normal,
+        kindOverride: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -64,6 +70,7 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
         self.downloadStatus = downloadStatus
         self.symbolIconOverride = symbolIconOverride
         self.role = role
+        self.kindOverride = kindOverride
     }
 
     public var icon: String {
@@ -94,6 +101,7 @@ public struct CloudFileItem: Identifiable, Hashable, Sendable {
     }
 
     public var kind: String {
+        if let kindOverride { return kindOverride }
         if isDirectory { return "Folder" }
         let ext = (name as NSString).pathExtension
         if !ext.isEmpty, let utType = UTType(filenameExtension: ext),

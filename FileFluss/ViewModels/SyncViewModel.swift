@@ -597,6 +597,23 @@ final class SyncViewModel {
         }
     }
 
+    func addGitHubAccount(token: String) async {
+        let account = CloudAccount(providerType: .github)
+        let provider = GitHubProvider(accountId: account.id)
+        authError = nil
+        do {
+            let login = try await provider.authenticate(token: token)
+            var connectedAccount = account
+            connectedAccount.displayName = "GitHub (\(login))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     /// TeraBox device-code login: fetch a QR, surface it for the user to scan
     /// in the TeraBox app, then poll for the token and register the account.
     func connectTeraBox() async {
@@ -1109,6 +1126,11 @@ final class SyncViewModel {
                 }
             case .googleDrivePicker:
                 let provider = GoogleDrivePickerProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .github:
+                let provider = GitHubProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
