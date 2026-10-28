@@ -150,10 +150,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         // Shares the Google Drive logo — it's the same service, different access model.
         case .googleDrivePicker: return "GoogleDriveLogo"
         case .gopro: return "GoProLogo"
-        // No GitHub mark ships with the app, and `Image(_:)` renders an
-        // empty frame for a missing asset — so this falls back to the SF
-        // Symbol until a logo is added to the asset catalog.
-        case .github: return nil
+        case .github: return "GitHubLogo"
         }
     }
 }
