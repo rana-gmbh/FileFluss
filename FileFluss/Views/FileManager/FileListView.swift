@@ -236,17 +236,31 @@ struct FileListView: View {
                 onCancel: { showRenameDialog = false }
             )
         }
+        .alert(
+            L10n.text("Archive failed"),
+            isPresented: Binding(
+                get: { fm.archiveError != nil },
+                set: { if !$0 { fm.archiveError = nil } }
+            ),
+            presenting: fm.archiveError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { fm.archiveError = nil }
+        } message: { message in
+            Text(message)
+        }
         .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.quickFilter.notification)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             fm.isFilterBarVisible = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             newFolderName = L10n.text("New Folder")
             showNewFolderDialog = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             if let item = fm.selectedItems.first, fm.selectedItems.count == 1 {
                 renameItem = item
                 renameText = item.name
@@ -254,13 +268,18 @@ struct FileListView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             triggerDelete()
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             let items = fm.selectedItems
             guard !items.isEmpty else { return }
+            if fm.isBrowsingArchive {
+                extractToOtherPanel(items)
+                return
+            }
             let otherSide: PanelSide = panelSide == .left ? .right : .left
             let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
             appState.addTransfer(transfer, panel: otherSide)
@@ -278,7 +297,8 @@ struct FileListView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             let items = fm.selectedItems
             guard !items.isEmpty else { return }
             let otherSide: PanelSide = panelSide == .left ? .right : .left
@@ -342,8 +362,89 @@ struct FileListView: View {
     /// preference. Used by both the menu (`menuDelete` notification) and
     /// the keyboard / context-menu Delete callback so the preference takes
     /// effect everywhere a delete can be initiated from this view.
+    /// What a drag out of the open archive needs in order to unpack an
+    /// entry at the drop end.
+    private var archiveDragPlan: ArchiveDragPlan? {
+        guard let session = fm.archiveSession else { return nil }
+        return ArchiveDragPlan(
+            archiveURL: session.archiveURL,
+            format: session.format,
+            tree: session.tree,
+            innerPath: session.innerPath
+        )
+    }
+
+    /// Sends the selection to the other panel.
+    ///
+    /// Inside an archive the selected entries are unpacked and then moved on
+    /// — unpacking into FileFluss's staging folder first rather than straight
+    /// into the destination, so the usual conflict dialog gets its say about
+    /// a name that is already taken. The move costs nothing when staging and
+    /// destination share a volume, which is the normal case.
+    ///
+    /// Outside one, the selected archive is unpacked into the other panel's
+    /// folder — or, when that panel is a cloud account, into staging and then
+    /// uploaded.
+    private func extractToOtherPanel(_ items: [FileItem]) {
+        guard !items.isEmpty else { return }
+        let otherSide: PanelSide = panelSide == .left ? .right : .left
+        let cloudId = appState.cloudAccountId(for: otherSide)
+        let transfer = TransferProgress(operation: "Extracting", totalItems: items.count)
+        appState.addTransfer(transfer, panel: otherSide)
+        fm.conflictDirection = outgoingDirection
+
+        if fm.isBrowsingArchive {
+            transfer.task = Task {
+                let staged = await fm.materialiseFromArchive(items, progress: transfer)
+                guard !staged.isEmpty else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                if let cloudId {
+                    let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                    cloudVM.conflictDirection = outgoingDirection
+                    await cloudVM.uploadFiles(from: staged, progress: transfer)
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    await fm.performMove(
+                        items: staged.map { FileItem(url: $0) },
+                        to: otherFM.currentDirectory,
+                        progress: transfer
+                    )
+                    await appState.refreshAllPanels()
+                }
+            }
+            return
+        }
+
+        guard let archive = items.first else { return }
+        transfer.task = Task {
+            if let cloudId {
+                guard let extracted = await fm.extractArchiveToStaging(archive, progress: transfer) else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                cloudVM.conflictDirection = outgoingDirection
+                await cloudVM.uploadFiles(from: extracted.items, progress: transfer)
+                try? FileManager.default.removeItem(at: extracted.staging)
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                await fm.extractArchive(
+                    archive, into: otherFM.currentDirectory, progress: transfer
+                )
+                await appState.refreshAllPanels()
+            }
+        }
+    }
+
     private func triggerDelete() {
-        guard !fm.selectedItems.isEmpty else { return }
+        // Deleting inside an archive would mean rewriting it, which FileFluss
+        // doesn't do — the affordance is withheld rather than offered and
+        // then refused.
+        guard !fm.isBrowsingArchive, !fm.selectedItems.isEmpty else { return }
         if confirmDelete {
             showDeleteConfirmation = true
         } else {
@@ -355,6 +456,9 @@ struct FileListView: View {
     }
 
     private func handlePathDropURLs(_ urls: [URL], target: URL) -> Bool {
+        // A breadcrumb inside an archive points at a path with no folder
+        // behind it, so there is nowhere to drop.
+        guard !fm.isBrowsingArchive else { return false }
         let urlPaths = Set(urls.map { $0.standardizedFileURL.path() })
         let matched = fm.items.filter { urlPaths.contains($0.url.standardizedFileURL.path()) }
         let droppedItems: [FileItem]
@@ -385,7 +489,8 @@ struct FileListView: View {
     /// Drop a cloud-panel drag onto a breadcrumb component. Reuses
     /// `cloudDragSource*` state set by the cloud panel's drag-start hook.
     private func handlePathDropCloudPromise(target: URL) -> Bool {
-        guard !appState.cloudDragSourceItems.isEmpty,
+        guard !fm.isBrowsingArchive,
+              !appState.cloudDragSourceItems.isEmpty,
               let sourceAccountId = appState.cloudDragSourceAccountId else { return false }
         let drop = PendingCloudDrop(
             sourceItems: appState.cloudDragSourceItems,
@@ -603,16 +708,22 @@ struct FileListView: View {
                         appState.activePanel = panelSide
                     },
                     onReceivePromises: { targetDir in
-                        if !appState.cloudDragSourceItems.isEmpty,
-                           let sourceAccountId = appState.cloudDragSourceAccountId {
-                            let drop = PendingCloudDrop(
-                                sourceItems: appState.cloudDragSourceItems,
-                                sourceAccountId: sourceAccountId,
-                                targetDirectory: targetDir
-                            )
-                            presentOrRunCloudToLocalDrop(drop)
+                        // Only a cloud panel's drag is handled here. Say so,
+                        // so anything else on the pasteboard — an entry
+                        // dragged out of an archive — goes to the standard
+                        // promise receiver instead of being swallowed.
+                        guard !appState.cloudDragSourceItems.isEmpty,
+                              let sourceAccountId = appState.cloudDragSourceAccountId else {
+                            return false
                         }
+                        let drop = PendingCloudDrop(
+                            sourceItems: appState.cloudDragSourceItems,
+                            sourceAccountId: sourceAccountId,
+                            targetDirectory: targetDir
+                        )
+                        presentOrRunCloudToLocalDrop(drop)
                         Task { await fm.refresh() }
+                        return true
                     },
                     onCreateFolder: {
                         newFolderName = L10n.text("New Folder")
@@ -624,6 +735,12 @@ struct FileListView: View {
                         showRenameDialog = true
                     },
                     onOpenInFinder: { items in
+                        // Nothing inside an archive has a path Finder knows,
+                        // so the archive file itself is what gets revealed.
+                        if let archive = fm.archiveSession?.archiveURL, items.isEmpty {
+                            NSWorkspace.shared.activateFileViewerSelecting([archive])
+                            return
+                        }
                         // Local files always have a real Finder path — reveal directly.
                         let urls = items.map(\.url)
                         guard !urls.isEmpty else { return }
@@ -643,7 +760,34 @@ struct FileListView: View {
                         }
                     },
                     focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
-                    singlePaneMode: appState.singlePaneMode
+                    singlePaneMode: appState.singlePaneMode,
+                    archiveMode: fm.isBrowsingArchive,
+                    archiveDragPlan: archiveDragPlan,
+                    onCompress: { items, format in
+                        let transfer = TransferProgress(
+                            operation: "Compressing", totalItems: items.count
+                        )
+                        appState.addTransfer(transfer, panel: panelSide)
+                        transfer.task = Task {
+                            await fm.compress(items, format: format, progress: transfer)
+                        }
+                    },
+                    onExtractHere: { archive in
+                        let transfer = TransferProgress(operation: "Extracting", totalItems: 1)
+                        appState.addTransfer(transfer, panel: panelSide)
+                        transfer.task = Task {
+                            await fm.extractArchive(
+                                archive, into: fm.currentDirectory, progress: transfer
+                            )
+                        }
+                    },
+                    onExtractToOtherPanel: { items in
+                        extractToOtherPanel(items)
+                    },
+                    onPromisedFilesReceived: { error in
+                        if let error { fm.archiveError = error.localizedDescription }
+                        Task { await appState.refreshAllPanels() }
+                    }
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()

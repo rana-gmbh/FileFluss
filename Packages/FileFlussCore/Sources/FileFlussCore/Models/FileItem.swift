@@ -36,6 +36,38 @@ public struct FileItem: Identifiable, Hashable, Sendable {
         self.contentType = resourceValues.contentType
     }
 
+    /// Builds an item whose metadata comes from somewhere other than the
+    /// file system.
+    ///
+    /// Used for the rows inside an archive: those have a name, a size and a
+    /// date, but no file on disk until the user asks for one, so there are no
+    /// `URLResourceValues` to read. `url` is the path the item *would* have —
+    /// `…/photos.zip/holiday/beach.jpg` — which is what makes the breadcrumb,
+    /// the history and the selection work unchanged. Nothing may assume such
+    /// a URL exists; the panel materialises the entry before acting on it.
+    public init(
+        url: URL,
+        name: String,
+        isDirectory: Bool,
+        size: Int64,
+        modificationDate: Date,
+        creationDate: Date = .distantPast,
+        isHidden: Bool = false,
+        isSymlink: Bool = false,
+        contentType: UTType? = nil
+    ) {
+        self.id = url.path()
+        self.url = url
+        self.name = name
+        self.isDirectory = isDirectory
+        self.size = size
+        self.modificationDate = modificationDate
+        self.creationDate = creationDate
+        self.isHidden = isHidden
+        self.isSymlink = isSymlink
+        self.contentType = contentType
+    }
+
     public var icon: String {
         if isDirectory {
             return "folder.fill"

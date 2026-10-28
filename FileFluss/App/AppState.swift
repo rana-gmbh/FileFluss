@@ -1004,8 +1004,10 @@ final class AppState {
 
     private func duplicateActiveSelection() async {
         // Only meaningful for the local panel — cloud providers don't have
-        // a generic in-place copy primitive yet.
-        guard cloudAccountId(for: activePanel) == nil else { return }
+        // a generic in-place copy primitive yet — and not inside an archive,
+        // which FileFluss reads but never rewrites.
+        guard cloudAccountId(for: activePanel) == nil,
+              !activeFileManager.isBrowsingArchive else { return }
         let fm = activeFileManager
         for item in fm.selectedItems {
             let dir = item.url.deletingLastPathComponent()
@@ -1027,6 +1029,12 @@ final class AppState {
     private func revealActiveSelectionInFinder() {
         // For local files only; cloud items don't have a Finder path.
         guard cloudAccountId(for: activePanel) == nil else { return }
+        // Nothing inside an archive has a path Finder knows, so the archive
+        // file itself is what gets revealed.
+        if let archive = activeFileManager.archiveSession?.archiveURL {
+            NSWorkspace.shared.activateFileViewerSelecting([archive])
+            return
+        }
         let urls = activeFileManager.selectedItems.map(\.url)
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
@@ -1052,6 +1060,12 @@ final class AppState {
         NSLog("[FileFluss] captureFileClipboard op=\(operation.rawValue) activePanel=\(activePanel) isCloud=\(isActivePanelCloud)")
         // Local panel — selection has real file URLs.
         if cloudAccountId(for: activePanel) == nil {
+            // Except inside an archive, where the rows are entries with no
+            // files behind them yet. Putting those paths on the system
+            // pasteboard would hand Finder somewhere that doesn't exist;
+            // "Extract to … Panel" and dragging are the ways out of an
+            // archive.
+            guard !activeFileManager.isBrowsingArchive else { return }
             let urls = activeFileManager.selectedItems.map(\.url)
             guard !urls.isEmpty else { return }
             fileClipboard = FileClipboardSnapshot(urls: urls, operation: operation)
@@ -1064,7 +1078,9 @@ final class AppState {
         // pasteboard would have no useful URL representation.
         guard let accountId = cloudAccountId(for: activePanel) else { return }
         let vm = cloudFileManager(for: accountId, side: activePanel)
-        guard !vm.selectedItems.isEmpty else { return }
+        // Entries inside an archive aren't paths the provider knows, so a
+        // paste would try to download something that doesn't exist.
+        guard !vm.isBrowsingArchive, !vm.selectedItems.isEmpty else { return }
         // Wrap paths in URLs with a custom scheme so paste can decode them.
         let urls: [URL] = vm.selectedItems.compactMap { item in
             var components = URLComponents()
@@ -1095,6 +1111,12 @@ final class AppState {
         guard !isPasteInProgress else {
             NSLog("[FileFluss] pasteFileClipboard ignored: paste already in flight")
             return
+        }
+        // An archive is read-only: there is nowhere in it to paste into.
+        if let accountId = cloudAccountId(for: activePanel) {
+            guard !cloudFileManager(for: accountId, side: activePanel).isBrowsingArchive else { return }
+        } else {
+            guard !activeFileManager.isBrowsingArchive else { return }
         }
         isPasteInProgress = true
         defer { isPasteInProgress = false }
@@ -1622,7 +1644,15 @@ final class AppState {
         }
         switch sidebarSelection(for: side) {
         case .location, .home, .drive, .none:
-            return .local(path: fileManager(for: side).currentDirectory.path)
+            let panel = fileManager(for: side)
+            // A panel inside an archive is recorded as the folder the
+            // archive sits in: the path it is showing is a virtual one, and
+            // `PanelStartupState` would reject it at launch for not being a
+            // directory and send the panel home instead.
+            if let archive = panel.archiveSession?.archiveURL {
+                return .local(path: archive.deletingLastPathComponent().path)
+            }
+            return .local(path: panel.currentDirectory.path)
         default:
             return nil
         }
@@ -1867,6 +1897,8 @@ final class TransferByteInbox: @unchecked Sendable {
     private let lock = NSLock()
     private var download: Int64 = 0
     private var upload: Int64 = 0
+    private var files = 0
+    private var lastFileName = ""
 
     func addDownload(_ bytes: Int64) {
         guard bytes > 0 else { return }
@@ -1882,6 +1914,20 @@ final class TransferByteInbox: @unchecked Sendable {
         lock.lock()
         defer { download = 0; upload = 0; lock.unlock() }
         return (download, upload)
+    }
+
+    /// A file a helper tool has just finished with. `zip` reports one line
+    /// per file, which is the same problem as the byte deltas above: it
+    /// arrives off the main actor, and far more often than the display can
+    /// use.
+    func addFile(named name: String) {
+        lock.lock(); files += 1; lastFileName = name; lock.unlock()
+    }
+
+    func drainFiles() -> (count: Int, lastName: String?) {
+        lock.lock()
+        defer { files = 0; lastFileName = ""; lock.unlock() }
+        return (files, lastFileName.isEmpty ? nil : lastFileName)
     }
 }
 
@@ -2177,22 +2223,29 @@ final class TransferProgress: Identifiable {
         if batch.download > 0 { addDownloadBytes(batch.download) }
         if batch.upload > 0 { addUploadBytes(batch.upload) }
 
+        let fileBatch = byteInbox.drainFiles()
+        if fileBatch.count > 0 {
+            completedItems += fileBatch.count
+            if let name = fileBatch.lastName { currentFileName = name }
+        }
+        let didMove = batch.download + batch.upload > 0 || fileBatch.count > 0
+
         let now = Date()
         samples.append(ByteSample(time: now, bytes: movedBytes))
         samples.removeAll { now.timeIntervalSince($0.time) > Self.speedWindow }
 
         guard let first = samples.first, let last = samples.last else {
             liveBytesPerSecond = nil
-            return batch.download + batch.upload > 0
+            return didMove
         }
         let seconds = last.time.timeIntervalSince(first.time)
         let moved = last.bytes - first.bytes
         guard seconds >= 0.5, moved > 0 else {
             liveBytesPerSecond = nil
-            return batch.download + batch.upload > 0
+            return didMove
         }
         liveBytesPerSecond = Double(moved) / seconds
-        return batch.download + batch.upload > 0
+        return didMove
     }
 
     // MARK: - Live figures, as text

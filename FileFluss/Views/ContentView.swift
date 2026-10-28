@@ -129,6 +129,7 @@ struct ContentView: View {
         } message: { message in
             Text(message)
         }
+        .rarInstallPrompt()
         .onReceive(NotificationCenter.default.publisher(for: .requestShowStorageWindow)) { _ in
             openWindow(id: "storage")
         }

@@ -10,6 +10,17 @@ final class CloudFileManagerViewModel {
     let accountId: UUID
     let providerType: CloudProviderType?
     var currentPath: String = "/"
+
+    /// Non-nil while the panel shows the inside of an archive stored on this
+    /// account. The archive is downloaded once to the preview cache and
+    /// listed from there; `archiveRemotePath` is where it lives on the
+    /// account, and the panel's paths inside it are that path plus the
+    /// entry's — `/Photos/holiday.zip/beach` — so the breadcrumb and history
+    /// read like any other folder.
+    var archiveSession: ArchiveBrowseSession?
+    var archiveRemotePath: String?
+    /// An archive operation that failed, for the panel to show.
+    var archiveError: String?
     var items: [CloudFileItem] = [] { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     var selectedItemIDs: Set<String> = []
     var isLoading = false
@@ -234,6 +245,24 @@ final class CloudFileManagerViewModel {
 
     func loadDirectory(at path: String? = nil) async {
         let targetPath = path ?? currentPath
+
+        if archiveSession != nil {
+            if let inner = archiveInnerPath(for: targetPath) {
+                // Inside the archive: served from its entry list, with no
+                // provider call and nothing to wait for.
+                if let path, path != currentPath {
+                    currentPath = path
+                    pushToHistory(path)
+                }
+                items = archiveRows(at: inner)
+                selectedItemIDs.removeAll()
+                error = nil
+                isLoading = false
+                return
+            }
+            // The navigation left the archive.
+            closeArchive()
+        }
         // Explicit navigation (caller passed a path that's not where we
         // already are) flips the panel to the destination *immediately*:
         // path bar, items, selection all reset before the network call
@@ -971,6 +1000,18 @@ final class CloudFileManagerViewModel {
     }
 
     func downloadToTemp(_ item: CloudFileItem) async -> URL? {
+        // Inside an archive the file is unpacked rather than downloaded —
+        // the provider has never heard of this path. Everything that wants a
+        // local copy (opening, Quick Look, the drag-out fallback) comes
+        // through here, so this one branch covers them all.
+        if let session = archiveSession, let inner = archiveInnerPath(for: item.path) {
+            do {
+                return try await session.materialise(innerPaths: [inner], openedExternally: true).first
+            } catch {
+                archiveError = error.localizedDescription
+                return nil
+            }
+        }
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             cloudFileVMLog.debug("QuickLook: no provider for account \(self.accountId, privacy: .public)")
             return nil
@@ -1561,7 +1602,7 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Private
 
-    private func pushToHistory(_ path: String) {
+    func pushToHistory(_ path: String) {
         // No-op when the cursor is already on this path — navigateBack /
         // navigateForward funnel through loadDirectory(at:), which calls
         // pushToHistory after they've already moved the cursor. Without

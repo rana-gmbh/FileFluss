@@ -37,6 +37,22 @@ final class FileManagerViewModel {
     @ObservationIgnored private var _filteredItemsCache: [FileItem]?
     @ObservationIgnored private var _listingSummaryCache: ListingSummary?
 
+    /// Bumped by every navigation, so a listing that finishes after the
+    /// panel has gone somewhere else can tell it has been superseded.
+    ///
+    /// Without it the folder on screen and the rows below it can disagree:
+    /// the first listing at launch is the home folder, and on a large or
+    /// slow one it was still running when the user clicked somewhere else —
+    /// then landed and replaced that folder's rows with home's, under the
+    /// new folder's name. Opening an archive makes it easy to hit, because
+    /// the archive's own listing comes back at once.
+    ///
+    /// Only a navigation bumps it. A refresh — `loadDirectory()` with no
+    /// argument, which is also how the initialiser lists the home folder —
+    /// can be superseded but never supersedes, so the listing the user asked
+    /// for is always the one that wins.
+    @ObservationIgnored private var loadGeneration = 0
+
     /// One pass over the listing, cached alongside `filteredItems`.
     var listingSummary: ListingSummary {
         let items = filteredItems
@@ -56,6 +72,24 @@ final class FileManagerViewModel {
     /// Toggled by the Edit → Quick Filter… command; when true, the panel
     /// shows an inline filter bar bound to `searchText`.
     var isFilterBarVisible: Bool = false
+
+    // MARK: - Archive browsing
+
+    /// Non-nil while this panel is showing the inside of an archive. The
+    /// listing then comes from the archive's entry list rather than from the
+    /// file system, and every write action is withheld — see
+    /// `ArchiveBrowseSession` for why the rows still carry file URLs.
+    var archiveSession: ArchiveBrowseSession?
+
+    var isBrowsingArchive: Bool { archiveSession != nil }
+
+    /// An archive operation that failed, for the panel to show.
+    ///
+    /// Kept apart from `error` because that one has no presenter: the panel
+    /// has always set it and never displayed it. The first thing a user is
+    /// likely to meet here is a password-protected RAR, and "nothing
+    /// happened" is the one answer that can't be acted on.
+    var archiveError: String?
 
     // Drag & Drop
     var draggedItems: [FileItem] = []
@@ -120,6 +154,27 @@ final class FileManagerViewModel {
 
     func loadDirectory(at url: URL? = nil) async {
         let targetURL = url ?? currentDirectory
+        if url != nil { loadGeneration += 1 }
+        let generation = loadGeneration
+
+        if let session = archiveSession {
+            if let inner = session.innerPath(for: targetURL) {
+                // Still inside the archive: served from the entry list, with
+                // no file system access and nothing to wait for.
+                items = session.items(at: inner, showHidden: showHiddenFiles)
+                error = nil
+                isLoading = false
+                if let url, url != currentDirectory {
+                    currentDirectory = url
+                    pushToHistory(url)
+                }
+                selectedItemIDs.removeAll()
+                return
+            }
+            // The navigation left the archive — back out to the real folder.
+            closeArchive()
+        }
+
         isLoading = true
         error = nil
 
@@ -130,6 +185,7 @@ final class FileManagerViewModel {
             )
 
             await MainActor.run {
+                guard self.isCurrent(generation: generation, target: targetURL, wasNavigation: url != nil) else { return }
                 self.items = loadedItems
                 if let url, url != self.currentDirectory {
                     self.currentDirectory = url
@@ -140,10 +196,25 @@ final class FileManagerViewModel {
             }
         } catch {
             await MainActor.run {
+                guard self.isCurrent(generation: generation, target: targetURL, wasNavigation: url != nil) else { return }
                 self.error = error.localizedDescription
                 self.isLoading = false
             }
         }
+    }
+
+    /// Whether a listing that has just come back is still the one the panel
+    /// wants.
+    ///
+    /// Two ways it may not be. A newer navigation has been asked for, which
+    /// the generation catches. Or this was a refresh that started while a
+    /// navigation was already in flight — it then shares the navigation's
+    /// generation, because a refresh never takes one of its own, and would
+    /// win simply by finishing second. So a refresh also has to still be
+    /// about the folder on screen.
+    private func isCurrent(generation: Int, target: URL, wasNavigation: Bool) -> Bool {
+        guard generation == loadGeneration else { return false }
+        return wasNavigation || target == currentDirectory
     }
 
     func navigateTo(_ url: URL) async {
@@ -185,8 +256,85 @@ final class FileManagerViewModel {
     func openItem(_ item: FileItem) async {
         if item.isDirectory {
             await navigateTo(item.url)
-        } else {
-            NSWorkspace.shared.open(item.url)
+            return
+        }
+        if let session = archiveSession {
+            await openEntry(item, from: session)
+            return
+        }
+        // An archive opens into the panel rather than into Archive Utility.
+        // If it turns out not to be one after all — an extension that lies —
+        // `enterArchive` says so and the file goes to its own app.
+        if let format = ArchiveFormat.detect(item.url),
+           await enterArchive(at: item.url, format: format) {
+            return
+        }
+        NSWorkspace.shared.open(item.url)
+    }
+
+    /// Opens the archive at `url` in this panel. Returns false when the file
+    /// could not be read as an archive, so the caller can fall back.
+    @discardableResult
+    func enterArchive(at url: URL, format: ArchiveFormat) async -> Bool {
+        isLoading = true
+        do {
+            let tree = try await ArchiveService.list(url, format: format)
+            // An archive that lists nothing is nearly always a file whose
+            // extension lies. Showing an empty panel would be a worse answer
+            // than letting the file open in its own app.
+            guard !tree.isEmpty else {
+                isLoading = false
+                return false
+            }
+            archiveSession?.close()
+            // Opening an archive is a navigation: a folder listing still in
+            // flight must not land on top of it.
+            loadGeneration += 1
+            let session = ArchiveBrowseSession(archiveURL: url, format: format, tree: tree)
+            archiveSession = session
+            items = session.items(at: "", showHidden: showHiddenFiles)
+            currentDirectory = url
+            pushToHistory(url)
+            selectedItemIDs.removeAll()
+            error = nil
+            isLoading = false
+            SupportLogger.shared.log(
+                "opened archive \(url.lastPathComponent) — \(tree.entries.count) entries, format \(format.rawValue)",
+                category: "archive"
+            )
+            return true
+        } catch {
+            isLoading = false
+            // A file that isn't readable as an archive is not an error worth
+            // reporting; a readable one that is locked or broken is.
+            if let archiveError = error as? ArchiveError, case .unreadable = archiveError {
+                return false
+            }
+            self.archiveError = error.localizedDescription
+            return true
+        }
+    }
+
+    /// Leaves the archive and lets the staging folder go.
+    func closeArchive() {
+        archiveSession?.close()
+        archiveSession = nil
+    }
+
+    /// Opens one entry from inside an archive with its own app, unpacking it
+    /// first.
+    ///
+    /// An archive inside an archive is treated the same way, rather than
+    /// opened in the panel: a nested session's breadcrumb would have to show
+    /// the staging folder the inner archive was unpacked to, and a path into
+    /// FileFluss's cache is not something to put in front of the user.
+    private func openEntry(_ item: FileItem, from session: ArchiveBrowseSession) async {
+        do {
+            let staged = try await session.materialise([item], openedExternally: true)
+            guard let url = staged.first else { return }
+            NSWorkspace.shared.open(url)
+        } catch {
+            self.archiveError = error.localizedDescription
         }
     }
 
@@ -513,17 +661,259 @@ final class FileManagerViewModel {
         await loadDirectory()
     }
 
+    // MARK: - Archives
+
+    /// Unpacks `items` out of the open archive and hands back real files,
+    /// ready to be copied, dropped or previewed. Returns an empty array if
+    /// it failed, with `error` set.
+    func materialiseFromArchive(
+        _ items: [FileItem], progress: TransferProgress? = nil
+    ) async -> [URL] {
+        guard let session = archiveSession else { return items.map(\.url) }
+        progress?.expectedBytesSingle = session.uncompressedSize(of: items)
+        let inbox = progress?.byteInbox
+        do {
+            return try await session.materialise(items, onBytes: { inbox?.addDownload($0) })
+        } catch {
+            if !(error is CancellationError) {
+                self.archiveError = error.localizedDescription
+            }
+            return []
+        }
+    }
+
+    /// Packs the selection into the folder on screen, Finder-style: one item
+    /// becomes `<name>.<ext>`, several become `Archive.<ext>`.
+    func compress(
+        _ items: [FileItem],
+        format: ArchiveCreationFormat = .zip,
+        progress: TransferProgress? = nil
+    ) async {
+        guard !items.isEmpty, archiveSession == nil else { return }
+        let directory = currentDirectory
+        let fm = FileManager.default
+        let name = format.archiveName(forItemNames: items.map(\.name)) {
+            fm.fileExists(atPath: directory.appendingPathComponent($0).path)
+        }
+        let archiveURL = directory.appendingPathComponent(name)
+
+        progress?.beginFile(archiveURL.lastPathComponent)
+        // Counted in the background and applied when it arrives: the file
+        // count is only there to drive the progress bar, and walking a
+        // 50,000-file folder before the zip even starts would make the wait
+        // longer than the job.
+        let urls = items.map(\.url)
+        Task { [weak progress] in
+            let total = await Self.countEntries(in: urls)
+            progress?.totalFiles = total
+        }
+
+        let inbox = progress?.byteInbox
+        do {
+            let created = try await ArchiveService.createArchive(
+                names: items.map(\.name),
+                in: directory,
+                archiveName: archiveURL.lastPathComponent,
+                format: format,
+                onFileAdded: { name in inbox?.addFile(named: name) }
+            )
+            progress?.recordSuccess(created.lastPathComponent)
+        } catch is CancellationError {
+            // zip removes its own part-written archive on an interrupt; this
+            // is for the case where it got as far as the final rename.
+            try? FileManager.default.removeItem(at: archiveURL)
+            progress?.recordSkip(archiveURL.lastPathComponent)
+        } catch {
+            self.archiveError = error.localizedDescription
+            progress?.recordFailure(archiveURL.lastPathComponent, error: error.localizedDescription)
+        }
+        progress?.endTime = Date()
+        progress?.isComplete = true
+        await loadDirectory()
+    }
+
+    /// Unpacks an archive into `directory`, Finder-style: an archive holding
+    /// a single top-level item leaves that item there, anything else goes
+    /// into a folder named after the archive.
+    ///
+    /// Everything lands in a working folder first and is moved into place
+    /// afterwards. A failure or a cancel halfway through then leaves nothing
+    /// behind, and the move is a same-volume rename, so it costs nothing.
+    func extractArchive(
+        _ item: FileItem, into directory: URL, progress: TransferProgress? = nil
+    ) async {
+        guard let format = ArchiveFormat.detect(item.url) else { return }
+        progress?.beginFile(item.name, size: item.size)
+        do {
+            let tree = try await ArchiveService.list(item.url, format: format)
+            progress?.expectedBytesSingle = tree.totalSize
+            progress?.totalFiles = tree.fileCount
+            let inbox = progress?.byteInbox
+            let destination = try await Self.unpack(
+                archive: item.url, named: item.name, format: format, into: directory,
+                isTaken: { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) },
+                onBytes: { inbox?.addDownload($0) }
+            )
+            progress?.recordSuccess(destination.lastPathComponent)
+            SupportLogger.shared.log(
+                "extracted \(item.name) to \(destination.lastPathComponent)", category: "archive"
+            )
+        } catch {
+            if error is CancellationError {
+                progress?.recordSkip(item.name)
+            } else {
+                self.archiveError = error.localizedDescription
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+            }
+        }
+        progress?.endTime = Date()
+        progress?.isComplete = true
+        await loadDirectory()
+    }
+
+    /// Unpacks `archive` into `directory` by Finder's rule — an archive
+    /// holding one top-level item leaves that item there, anything else goes
+    /// into a folder named after the archive — and returns what landed.
+    ///
+    /// Everything is written to a working folder first and moved into place
+    /// afterwards, so a failure or a cancel halfway through leaves nothing
+    /// behind, and the move is a same-volume rename that costs nothing.
+    /// `isTaken` decides whether a name in `directory` is in use, which lets
+    /// a caller that will upload the result check against a cloud folder
+    /// rather than the disk.
+    nonisolated static func unpack(
+        archive: URL,
+        named archiveName: String,
+        format: ArchiveFormat,
+        into directory: URL,
+        isTaken: @escaping @Sendable (String) -> Bool,
+        onBytes: (@Sendable (Int64) -> Void)? = nil
+    ) async throws -> URL {
+        let fm = FileManager.default
+        let work = directory.appendingPathComponent(
+            ".FileFluss-extract-\(UUID().uuidString)", isDirectory: true
+        )
+        do {
+            try fm.createDirectory(at: work, withIntermediateDirectories: true)
+            try await ArchiveService.extractAll(
+                from: archive, format: format, into: work, onBytes: onBytes
+            )
+            let roots = try fm.contentsOfDirectory(at: work, includingPropertiesForKeys: nil)
+            let preferred = roots.count == 1
+                ? roots[0].lastPathComponent
+                : ArchiveFormat.baseName(ofArchive: archiveName)
+            let destination = directory.appendingPathComponent(
+                availableName(preferred, isTaken: isTaken)
+            )
+            if roots.count == 1 {
+                try fm.moveItem(at: roots[0], to: destination)
+                try? fm.removeItem(at: work)
+            } else {
+                try fm.moveItem(at: work, to: destination)
+            }
+            return destination
+        } catch {
+            try? fm.removeItem(at: work)
+            throw error
+        }
+    }
+
+    /// `name` itself when `isTaken` says it is free, otherwise the first free
+    /// " 2", " 3" … variant, numbered before the extension.
+    nonisolated static func availableName(_ name: String, isTaken: (String) -> Bool) -> String {
+        guard isTaken(name) else { return name }
+        let ext = (name as NSString).pathExtension
+        let stem = (name as NSString).deletingPathExtension
+        var counter = 2
+        while true {
+            let candidate = ext.isEmpty ? "\(stem) \(counter)" : "\(stem) \(counter).\(ext)"
+            if !isTaken(candidate) { return candidate }
+            counter += 1
+        }
+    }
+
+    /// Unpacks an archive into a staging folder and hands back its top-level
+    /// items, for a destination FileFluss has to upload to rather than write
+    /// to directly. The caller owns the staging folder and deletes it.
+    func extractArchiveToStaging(
+        _ item: FileItem, progress: TransferProgress? = nil
+    ) async -> (items: [URL], staging: URL)? {
+        guard let format = ArchiveFormat.detect(item.url) else { return nil }
+        let staging = StagingLocation.stagingDirectory(prefix: "extract")
+        progress?.beginFile(item.name, size: item.size)
+        do {
+            let tree = try await ArchiveService.list(item.url, format: format)
+            progress?.expectedBytesDownload = tree.totalSize
+            progress?.expectedBytesUpload = tree.totalSize
+            let inbox = progress?.byteInbox
+            try await ArchiveService.extractAll(
+                from: item.url, format: format, into: staging,
+                onBytes: { inbox?.addDownload($0) }
+            )
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: staging, includingPropertiesForKeys: nil
+            )
+            return (contents, staging)
+        } catch {
+            try? FileManager.default.removeItem(at: staging)
+            if !(error is CancellationError) {
+                self.archiveError = error.localizedDescription
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+            }
+            return nil
+        }
+    }
+
+    /// Files and folders at or below `urls`, for a progress bar that needs a
+    /// denominator. Folders count because every archiver reports a line for
+    /// each folder it adds as well as each file. Metadata only — nothing is
+    /// read.
+    static func countEntries(in urls: [URL]) async -> Int {
+        await Task.detached(priority: .utility) {
+            let fm = Foundation.FileManager.default
+            var count = 0
+            for url in urls {
+                if Task.isCancelled { return count }
+                count += 1
+                let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+                guard values?.isDirectory == true else { continue }
+                let walker = fm.enumerator(at: url, includingPropertiesForKeys: nil, options: [])
+                while walker?.nextObject() != nil {
+                    if Task.isCancelled { return count }
+                    count += 1
+                }
+            }
+            return count
+        }.value
+    }
+
     // MARK: - Quick Look
 
     func toggleQuickLook() {
-        let urls = selectedItems.filter { !$0.isDirectory }.map(\.url)
-        quickLookController.urls = urls
-        quickLookController.toggle()
+        let files = selectedItems.filter { !$0.isDirectory }
+        guard archiveSession != nil else {
+            quickLookController.urls = files.map(\.url)
+            quickLookController.toggle()
+            return
+        }
+        // Nothing inside an archive exists on disk yet, and Quick Look can
+        // only preview a real file.
+        Task {
+            quickLookController.urls = await materialiseFromArchive(files)
+            quickLookController.toggle()
+        }
     }
 
     func updateQuickLookSelection() {
-        let urls = selectedItems.filter { !$0.isDirectory }.map(\.url)
-        quickLookController.updateAndReload(urls: urls)
+        let files = selectedItems.filter { !$0.isDirectory }
+        guard archiveSession != nil else {
+            quickLookController.updateAndReload(urls: files.map(\.url))
+            return
+        }
+        guard quickLookController.isPanelVisible else { return }
+        Task {
+            quickLookController.updateAndReload(urls: await materialiseFromArchive(files))
+        }
     }
 
     // MARK: - Private
@@ -545,6 +935,17 @@ final class FileManagerViewModel {
             fileExtension: url.pathExtension,
             localURL: url
         )
+    }
+
+    /// `url` itself when nothing is there, otherwise the next free
+    /// " 2", " 3" … variant.
+    ///
+    /// Distinct from `uniqueDestination`, which always skips straight to a
+    /// variant because its callers have already found a conflict. A new
+    /// archive or a freshly extracted folder has no conflict to start with,
+    /// and naming the first one "Sample 2" is just wrong.
+    static func availableDestination(for url: URL) -> URL {
+        FileManager.default.fileExists(atPath: url.path) ? uniqueDestination(for: url) : url
     }
 
     static func uniqueDestination(for url: URL) -> URL {

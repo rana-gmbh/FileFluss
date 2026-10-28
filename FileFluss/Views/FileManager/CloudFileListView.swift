@@ -76,12 +76,19 @@ struct CloudFileListView: View {
 
     /// True for import-only devices (e.g. a GoPro camera): browse, download and
     /// delete are allowed, but New Folder / Rename / Paste / drops-in are not.
+    ///
+    /// Also true while the panel is inside an archive: FileFluss reads
+    /// archives but never rewrites them, and every write affordance this
+    /// panel withholds for a read-only account is wrong there for the same
+    /// reason.
     private var isReadOnly: Bool {
-        appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false
+        vm.isBrowsingArchive
+            || (appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false)
     }
 
     private var canDelete: Bool {
-        appState.syncManager.accountFor(id: accountId)?.providerType.allowsDeletion ?? true
+        !vm.isBrowsingArchive
+            && (appState.syncManager.accountFor(id: accountId)?.providerType.allowsDeletion ?? true)
     }
 
     private var incomingDirection: ConflictDirection {
@@ -100,6 +107,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !isReadOnly else { return }
                 guard appState.canCreateFolderInActivePanel else { return }
                 newFolderName = L10n.text("New Folder")
                 showNewFolderDialog = true
@@ -119,12 +127,17 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.openInTerminal.notification)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !vm.isBrowsingArchive else { return }
                 openInTerminal(vm.selectedItems)
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
+                if vm.isBrowsingArchive {
+                    extractToOtherPanel(items)
+                    return
+                }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
                 vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
@@ -145,6 +158,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !vm.isBrowsingArchive else { return }
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
@@ -198,6 +212,18 @@ struct CloudFileListView: View {
         }
         .onChange(of: vm.pendingConflict != nil) { _, hasConflict in
             showConflict = hasConflict
+        }
+        .alert(
+            L10n.text("Archive failed"),
+            isPresented: Binding(
+                get: { vm.archiveError != nil },
+                set: { if !$0 { vm.archiveError = nil } }
+            ),
+            presenting: vm.archiveError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { vm.archiveError = nil }
+        } message: { message in
+            Text(message)
         }
         .alert(L10n.text("New Folder"), isPresented: $showNewFolderDialog) {
             TextField(L10n.text("Folder name"), text: $newFolderName)
@@ -861,6 +887,86 @@ struct CloudFileListView: View {
         }
     }
 
+    /// What a drag out of the open archive needs in order to unpack an
+    /// entry at the drop end.
+    private var archiveDragPlan: ArchiveDragPlan? {
+        guard let session = vm.archiveSession else { return nil }
+        return ArchiveDragPlan(
+            archiveURL: session.archiveURL,
+            format: session.format,
+            tree: session.tree,
+            innerPath: session.innerPath
+        )
+    }
+
+    /// Opens an archive in this panel instead of handing it to Archive
+    /// Utility. It has to be downloaded first, so the transfer row shows
+    /// that; a second visit finds it in the preview cache. A file that turns
+    /// out not to be an archive opens the ordinary way.
+    private func openArchiveInPanel(_ item: CloudFileItem, format: ArchiveFormat) {
+        let transfer = TransferProgress(operation: "Opening", totalItems: 1)
+        transfer.transferredFileNames = [item.name]
+        transfer.totalFiles = 1
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            let opened = await vm.openArchive(item, format: format, progress: transfer)
+            transfer.completedItems = 1
+            transfer.endTime = Date()
+            transfer.isComplete = true
+            if opened {
+                transfer.recordSuccess(item.name)
+                appState.requestActivePanelFocus()
+            } else {
+                openCloudFile(item)
+            }
+        }
+    }
+
+    /// Sends the selection to the other panel by unpacking it: inside an
+    /// archive, the selected entries; outside one, the clicked archive.
+    private func extractToOtherPanel(_ items: [CloudFileItem]) {
+        guard !items.isEmpty else { return }
+        let otherSide: PanelSide = panelSide == .left ? .right : .left
+        let otherCloudId = appState.cloudAccountId(for: otherSide)
+        let transfer = TransferProgress(operation: "Extracting", totalItems: items.count)
+        appState.addTransfer(transfer, panel: otherSide)
+
+        if vm.isBrowsingArchive {
+            transfer.task = Task {
+                let staged = await vm.materialiseFromArchive(items, progress: transfer)
+                guard !staged.isEmpty else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                if let otherCloudId {
+                    let otherVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
+                    otherVM.conflictDirection = outgoingDirection
+                    await otherVM.uploadFiles(from: staged, progress: transfer)
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    otherFM.conflictDirection = outgoingDirection
+                    await otherFM.performMove(
+                        items: staged.map { FileItem(url: $0) },
+                        to: otherFM.currentDirectory,
+                        progress: transfer
+                    )
+                }
+                await appState.refreshAllPanels()
+            }
+            return
+        }
+
+        guard let archive = items.first else { return }
+        let destination: CloudFileManagerViewModel.ExtractDestination = otherCloudId.map {
+            .cloud(appState.cloudFileManager(for: $0, side: otherSide))
+        } ?? .local(appState.fileManager(for: otherSide).currentDirectory)
+        transfer.task = Task {
+            await vm.extract(archive, to: destination, progress: transfer)
+            await appState.refreshAllPanels()
+        }
+    }
+
     private func openCloudFile(_ item: CloudFileItem) {
         // When the account is mounted, open the file where it really is.
         // The copy below is just that — a copy — and anything the user
@@ -945,6 +1051,9 @@ struct CloudFileListView: View {
                             // arrow keys keep working without re-clicking.
                             appState.requestActivePanelFocus()
                         }
+                    } else if !vm.isBrowsingArchive,
+                              let format = ArchiveFormat.detect(fileName: item.name) {
+                        openArchiveInPanel(item, format: format)
                     } else {
                         openCloudFile(item)
                     }
@@ -1070,8 +1179,14 @@ struct CloudFileListView: View {
                     appState.cloudDragSourceSide = nil
                 },
                 onReceiveCloudDrop: { targetFolder in
+                    // Not a cloud-to-cloud drag: say so, so a promise that
+                    // really does write a file — an entry dragged out of an
+                    // archive — is written and uploaded instead of silently
+                    // doing nothing.
                     guard !appState.cloudDragSourceItems.isEmpty,
-                          let sourceAccountId = appState.cloudDragSourceAccountId else { return }
+                          let sourceAccountId = appState.cloudDragSourceAccountId else {
+                        return false
+                    }
                     let sourceItems = appState.cloudDragSourceItems
 
                     if sourceAccountId == accountId {
@@ -1086,10 +1201,11 @@ struct CloudFileListView: View {
                             return cloudFolder(forPath: path, name: name)
                         }()
 
-                        // No-op when the drop wouldn't move anything.
+                        // No-op when the drop wouldn't move anything — but
+                        // still this flow's drag, so it stays handled here.
                         let currentParents = Set(sourceItems.map { ($0.path as NSString).deletingLastPathComponent })
-                        if currentParents.contains(resolvedTarget.path) { return }
-                        if sourceItems.contains(where: { $0.path == resolvedTarget.path }) { return }
+                        if currentParents.contains(resolvedTarget.path) { return true }
+                        if sourceItems.contains(where: { $0.path == resolvedTarget.path }) { return true }
 
                         presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
                             sourceItems: sourceItems,
@@ -1102,6 +1218,7 @@ struct CloudFileListView: View {
                             targetFolder: targetFolder
                         ))
                     }
+                    return true
                 },
                 onInternalCloudDrop: { items, target in
                     presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
@@ -1125,7 +1242,7 @@ struct CloudFileListView: View {
                     openInTerminal(items)
                 },
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
-                shareCapabilities: vm.shareCapabilities,
+                shareCapabilities: vm.isBrowsingArchive ? .unsupported : vm.shareCapabilities,
                 onCreateShareLink: { item, wantsOptions in
                     if wantsOptions {
                         shareLinkItem = item
@@ -1151,6 +1268,27 @@ struct CloudFileListView: View {
                     : [],
                 isReadOnly: isReadOnly,
                 canDelete: canDelete,
+                onCompress: isReadOnly ? nil : { items, format in
+                    let transfer = TransferProgress(
+                        operation: "Compressing", totalItems: items.count
+                    )
+                    appState.addTransfer(transfer, panel: panelSide)
+                    transfer.task = Task {
+                        await vm.compress(items, format: format, progress: transfer)
+                    }
+                },
+                archiveMode: vm.isBrowsingArchive,
+                archiveDragPlan: archiveDragPlan,
+                onExtractHere: isReadOnly ? nil : { archive in
+                    let transfer = TransferProgress(operation: "Extracting", totalItems: 1)
+                    appState.addTransfer(transfer, panel: panelSide)
+                    transfer.task = Task {
+                        await vm.extract(archive, to: .here, progress: transfer)
+                    }
+                },
+                onExtractToOtherPanel: { items in
+                    extractToOtherPanel(items)
+                },
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode
             )

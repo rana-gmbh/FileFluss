@@ -58,6 +58,13 @@ targets:
         COMBINE_HIDPI_IMAGES: true
         SWIFT_EMIT_LOC_STRINGS: true
         ENABLE_PREVIEWS: true
+        # Archive browsing reads zip/rar/7z/tar through libarchive, which
+        # macOS ships as /usr/lib/libarchive.2.dylib and the SDK stubs as
+        # libarchive.2.tbd — a system library, like libsqlite3, not a new
+        # dependency. The SDK ships no archive.h, so the handful of entry
+        # points used are declared in the bridging header below.
+        SWIFT_OBJC_BRIDGING_HEADER: FileFluss/Services/Archives/libarchive-shim.h
+        OTHER_LDFLAGS: $(inherited) -larchive
       configs:
         # Debug builds use ad-hoc signing where $(AppIdentifierPrefix)
         # can't resolve, so the slim variant omits keychain-access-groups.
