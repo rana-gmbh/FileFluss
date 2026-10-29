@@ -967,6 +967,43 @@ struct CloudFileListView: View {
         }
     }
 
+    /// Right-click → Open With. Same route to a local file as a
+    /// double-click: through the mount when the account is mounted, so a
+    /// save goes back to the server; otherwise a downloaded copy, with the
+    /// download shown in the transfer list.
+    private func openCloudFiles(_ items: [CloudFileItem], withApplication app: URL) {
+        if !vm.isBrowsingArchive, let mount = appState.mountService.mount(for: accountId) {
+            let mounted = items.map { mount.url(forRemotePath: $0.path) }
+            if mounted.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                NSWorkspace.shared.open(mounted, withApplication: app)
+                return
+            }
+        }
+
+        let transfer = TransferProgress(operation: "Opening", totalItems: items.count)
+        transfer.transferredFileNames = items.map(\.name)
+        transfer.totalFiles = items.count
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            var local: [URL] = []
+            for item in items {
+                if transfer.isCancelled { break }
+                if let url = await vm.downloadToTemp(item) {
+                    local.append(url)
+                    transfer.recordSuccess(item.name)
+                } else {
+                    transfer.recordFailure(item.name, error: L10n.text("Could not download file"))
+                }
+                transfer.completedItems += 1
+            }
+            transfer.endTime = Date()
+            transfer.isComplete = true
+            if !transfer.isCancelled {
+                NSWorkspace.shared.open(local, withApplication: app)
+            }
+        }
+    }
+
     private func openCloudFile(_ item: CloudFileItem) {
         // When the account is mounted, open the file where it really is.
         // The copy below is just that — a copy — and anything the user
@@ -1288,6 +1325,9 @@ struct CloudFileListView: View {
                 },
                 onExtractToOtherPanel: { items in
                     extractToOtherPanel(items)
+                },
+                onOpenWith: { items, app in
+                    openCloudFiles(items, withApplication: app)
                 },
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode

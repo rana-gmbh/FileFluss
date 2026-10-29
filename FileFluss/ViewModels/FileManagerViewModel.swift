@@ -315,6 +315,24 @@ final class FileManagerViewModel {
         }
     }
 
+    /// Opens `items` in `app` — right-click → Open With. Inside an archive
+    /// the entries are unpacked first, and their staging folder is kept for
+    /// as long as the app might have them open.
+    func open(_ items: [FileItem], withApplication app: URL) async {
+        let files: [URL]
+        if let session = archiveSession {
+            do {
+                files = try await session.materialise(items, openedExternally: true)
+            } catch {
+                archiveError = error.localizedDescription
+                return
+            }
+        } else {
+            files = items.map(\.url)
+        }
+        NSWorkspace.shared.open(files, withApplication: app)
+    }
+
     /// Leaves the archive and lets the staging folder go.
     func closeArchive() {
         archiveSession?.close()

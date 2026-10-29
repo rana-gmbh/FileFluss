@@ -70,6 +70,8 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// Unpacks the clicked archive — or, inside one, the selected entries —
     /// into the other panel.
     var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([CloudFileItem], URL) -> Void)?
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
@@ -209,6 +211,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.archiveDragPlan = archiveDragPlan
         coordinator.onExtractHere = onExtractHere
         coordinator.onExtractToOtherPanel = onExtractToOtherPanel
+        coordinator.onOpenWith = onOpenWith
         coordinator.canDelete = canDelete
         coordinator.shareCapabilities = shareCapabilities
         coordinator.onCreateShareLink = onCreateShareLink
@@ -415,6 +418,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var archiveDragPlan: ArchiveDragPlan?
     var onExtractHere: ((CloudFileItem) -> Void)?
     var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onOpenWith: (([CloudFileItem], URL) -> Void)?
     let archivePromiseDelegate = ArchiveFilePromiseDelegate()
     var canDelete = true
     var shareCapabilities: ShareLinkCapabilities = .unsupported
@@ -713,7 +717,21 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
 
-        // Inside an archive the only thing to do with a row is unpack it.
+        // "Open With", first, where Finder keeps it. Files only, and real
+        // ones: a shared-drive row has nothing to open. Nothing is on this
+        // Mac yet, so the apps are looked up by type, from the names.
+        if onOpenWith != nil,
+           contextItems.allSatisfy({ !$0.isDirectory && $0.role == .normal }) {
+            let types = contextItems.map {
+                UTType(filenameExtension: ($0.name as NSString).pathExtension) ?? .data
+            }
+            menu.addItem(OpenWithMenu.item(for: .types(types)) { [weak self] app in
+                self?.onOpenWith?(contextItems, app)
+            })
+            menu.addItem(.separator())
+        }
+
+        // Inside an archive the only other thing to do with a row is unpack it.
         if archiveMode {
             if !singlePaneMode {
                 let extractItem = NSMenuItem(

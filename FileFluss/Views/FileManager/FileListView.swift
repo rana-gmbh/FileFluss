@@ -787,6 +787,9 @@ struct FileListView: View {
                     onPromisedFilesReceived: { error in
                         if let error { fm.archiveError = error.localizedDescription }
                         Task { await appState.refreshAllPanels() }
+                    },
+                    onOpenWith: { items, app in
+                        Task { await fm.open(items, withApplication: app) }
                     }
                 )
                 .onChange(of: fm.selectedItemIDs) {

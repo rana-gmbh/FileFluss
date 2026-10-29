@@ -56,6 +56,8 @@ struct NativeFileList: NSViewRepresentable {
     /// Called when a dropped file promise has been written. Returns the
     /// panel to a fresh listing and reports a failure.
     var onPromisedFilesReceived: ((Error?) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([FileItem], URL) -> Void)?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -211,6 +213,7 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onExtractHere = onExtractHere
         coordinator.onExtractToOtherPanel = onExtractToOtherPanel
         coordinator.onPromisedFilesReceived = onPromisedFilesReceived
+        coordinator.onOpenWith = onOpenWith
         coordinator.selectedIDs = _selectedIDs
 
         // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
@@ -431,6 +434,8 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onExtractHere: ((FileItem) -> Void)?
     var onExtractToOtherPanel: (([FileItem]) -> Void)?
     var onPromisedFilesReceived: ((Error?) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([FileItem], URL) -> Void)?
     var archiveMode = false
     var archiveDragPlan: ArchiveDragPlan?
     let archivePromiseDelegate = ArchiveFilePromiseDelegate()
@@ -738,9 +743,15 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
 
+        // First, where Finder keeps it.
+        if let openWith = openWithItem(for: contextItems) {
+            menu.addItem(openWith)
+            menu.addItem(.separator())
+        }
+
         // Inside an archive there is nothing to cut, paste, rename or trash,
-        // and the rows have no files behind them. All the menu offers is the
-        // one thing it can do: unpack what was clicked.
+        // and the rows have no files behind them. Beyond opening an entry,
+        // all the menu offers is unpacking what was clicked.
         if archiveMode {
             if !singlePaneMode {
                 let extractItem = NSMenuItem(
@@ -902,6 +913,22 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleOpenInTerminal(_ sender: NSMenuItem) {
         let contextItems = sender.representedObject as? [FileItem] ?? []
         onOpenInTerminal?(contextItems)
+    }
+
+    /// "Open With", for a selection of files. Folders are left out, as most
+    /// apps that claim to open one only mean "reveal it", and Finder's own
+    /// folder handling is a row's double-click away.
+    private func openWithItem(for contextItems: [FileItem]) -> NSMenuItem? {
+        guard onOpenWith != nil, !contextItems.isEmpty,
+              contextItems.allSatisfy({ !$0.isDirectory }) else { return nil }
+        // Inside an archive nothing exists on disk yet, so the apps are
+        // looked up by type, from the entry names.
+        let source: OpenWithCandidates.Source = archiveMode
+            ? .types(contextItems.map { $0.contentType ?? .data })
+            : .files(contextItems.map(\.url))
+        return OpenWithMenu.item(for: source) { [weak self] app in
+            self?.onOpenWith?(contextItems, app)
+        }
     }
 
     @objc func handleCompress(_ sender: NSMenuItem) {

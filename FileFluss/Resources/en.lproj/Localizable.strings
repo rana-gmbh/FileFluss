@@ -936,3 +936,9 @@
 "The rar tool could not be downloaded: %@" = "The rar tool could not be downloaded: %@";
 "The rar tool could not be installed" = "The rar tool could not be installed";
 "The rar tool is installed" = "The rar tool is installed";
+"%@ (default)" = "%@ (default)";
+"Choose Application" = "Choose Application";
+"No Suitable Applications" = "No Suitable Applications";
+"Open" = "Open";
+"Open With" = "Open With";
+"Other…" = "Other…";

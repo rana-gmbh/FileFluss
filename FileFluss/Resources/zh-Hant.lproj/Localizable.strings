@@ -936,3 +936,9 @@
 "The rar tool could not be downloaded: %@" = "無法下載 rar 工具：%@";
 "The rar tool could not be installed" = "無法安裝 rar 工具";
 "The rar tool is installed" = "rar 工具已安裝";
+"%@ (default)" = "%@（預設）";
+"Choose Application" = "選擇應用程式";
+"No Suitable Applications" = "沒有合適的應用程式";
+"Open" = "打開";
+"Open With" = "打開方式";
+"Other…" = "其他…";

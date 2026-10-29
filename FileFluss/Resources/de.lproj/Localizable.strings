@@ -936,3 +936,9 @@
 "The rar tool could not be downloaded: %@" = "Das rar-Tool konnte nicht geladen werden: %@";
 "The rar tool could not be installed" = "Das rar-Tool konnte nicht installiert werden";
 "The rar tool is installed" = "Das rar-Tool ist installiert";
+"%@ (default)" = "%@ (Standard)";
+"Choose Application" = "Programm auswählen";
+"No Suitable Applications" = "Keine passenden Programme";
+"Open" = "Öffnen";
+"Open With" = "Öffnen mit";
+"Other…" = "Andere …";
