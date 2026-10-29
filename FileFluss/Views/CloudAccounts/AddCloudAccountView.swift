@@ -230,7 +230,7 @@ struct AddCloudAccountView: View {
 
             providerSection(
                 title: L10n.text("Cloud Storage Providers"),
-                providers: cloudStorageProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+                providers: cloudStorageProviders.filter(isOffered).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
@@ -256,6 +256,12 @@ struct AddCloudAccountView: View {
             Button(L10n.text("Cancel")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
+    }
+
+    /// TeraBox stays out of the list until TeraBox issues the Open Platform
+    /// keys: without them sign-in can only fail.
+    private func isOffered(_ provider: CloudProviderType) -> Bool {
+        provider != .terabox || TeraBoxAPIClient.isAvailable
     }
 
     private func providerSection(title: String, providers: [CloudProviderType]) -> some View {

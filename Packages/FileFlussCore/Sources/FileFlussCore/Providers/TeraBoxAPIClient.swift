@@ -45,6 +45,10 @@ public struct TeraBoxDeviceCode: Sendable {
 }
 
 public actor TeraBoxAPIClient {
+    /// Whether this build carries the Open Platform keys sign-in needs.
+    /// Without them every login fails, so the account isn't offered.
+    public static var isAvailable: Bool { TeraBoxAppCredentials.isConfigured }
+
     private let authHost = "https://www.terabox.com"
     public private(set) var credentials: TeraBoxCredentials
     private let session: URLSession
