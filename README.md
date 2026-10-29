@@ -39,6 +39,9 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - Seafile
 - Synology Drive
 - Synology C2
+- QNAP (File Station, with 2-step verification)
+- UGREEN NAS (via its WebDAV service)
+- ASUSTOR NAS (via its WebDAV service)
 - WordPress (Media Library)
 - GMX Cloud (MediaCenter)
 - AWS S3
@@ -61,7 +64,7 @@ Right-click a file on a supported cloud account → **Share Link**. FileFluss as
 - Optional **password** and **expiry date**, offered only where that account can actually honour them.
 - Every link is fetched anonymously before you hand it out, so you find out here — not from the recipient — if it only works while signed in.
 - Copy an existing link again, change its password or expiry, or stop sharing entirely.
-- Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
+- Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, QNAP, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
 
 ### Storage Analysis
 

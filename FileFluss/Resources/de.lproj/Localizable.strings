@@ -955,3 +955,18 @@
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "Dieser Drime-Ordner enthält mehr Objekte, als Drime auflistet. Teile ihn in kleinere Ordner auf, um ihn hier zu durchsuchen.";
 "A folder named “%@” is already there." = "Dort gibt es bereits einen Ordner namens „%@“.";
 "The file changed while it was being uploaded." = "Die Datei hat sich während des Hochladens verändert.";
+
+/* NAS: QNAP, UGREEN, ASUSTOR */
+"NAS" = "NAS";
+"No WebDAV service answered at %@. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one." = "Unter %@ hat kein WebDAV-Dienst geantwortet. Schalte WebDAV auf dem NAS ein, prüfe den Port und erlaube ein selbstsigniertes Zertifikat, falls das NAS eines verwendet.";
+"The 2-step verification code is incorrect." = "Der Code für die Bestätigung in zwei Schritten ist falsch.";
+"The password has expired. Change it in QTS, then sign in again." = "Das Passwort ist abgelaufen. Ändere es in QTS und melde dich dann erneut an.";
+"This account is disabled on the NAS." = "Dieses Konto ist auf dem NAS deaktiviert.";
+"Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080." = "Gib die Adresse deines NAS und dein QTS-Konto ein. HTTPS verwendet Port 443, sofern du keinen anderen angibst; einfaches HTTP verwendet 8080.";
+"Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS." = "Schalte zuerst WebDAV auf dem NAS ein (Systemsteuerung → Dateidienst → WebDAV) und gib dann seine Adresse und dein UGOS-Konto ein. Der Standardport für HTTPS ist 5006.";
+"Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS." = "Schalte zuerst WebDAV auf dem NAS ein (in ADM unter Dienste → WebDAV) und gib dann seine Adresse und dein ADM-Konto ein. Der Standardport für HTTPS ist 9802.";
+"2-step verification code (only if it's on)" = "Code für die Bestätigung in zwei Schritten (nur falls aktiviert)";
+"Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "Die meisten NAS-Geräte für Zuhause verwenden ein selbstsigniertes Zertifikat. Schalte dies nur aus, wenn du ein echtes CA-signiertes Zertifikat installiert hast (z. B. Let’s Encrypt).";
+"Server URL (e.g. https://my-nas.local)" = "Server-URL (z. B. https://my-nas.local)";
+"Server URL (e.g. https://my-nas.local:5006)" = "Server-URL (z. B. https://my-nas.local:5006)";
+"Server URL (e.g. https://my-nas.local:9802)" = "Server-URL (z. B. https://my-nas.local:9802)";

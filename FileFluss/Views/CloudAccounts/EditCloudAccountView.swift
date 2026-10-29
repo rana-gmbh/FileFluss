@@ -133,8 +133,10 @@ struct EditCloudAccountView: View {
             webDAVFields
         case .sftp:
             sftpFields
-        case .synologyDrive:
+        case .synologyDrive, .ugreen, .asustor:
             synologyDriveFields
+        case .qnap:
+            qnapFields
         case .wordpress:
             wordPressFields
         case .s3:
@@ -446,7 +448,34 @@ struct EditCloudAccountView: View {
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField(L10n.text("OTP Code (only if 2-factor auth is on)"), text: $synologyOTP)
+            // UGREEN and ASUSTOR share this form; their WebDAV login has
+            // no second factor.
+            if account.providerType == .synologyDrive {
+                TextField(L10n.text("OTP Code (only if 2-factor auth is on)"), text: $synologyOTP)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { save() }
+            }
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $synologyAllowSelfSigned)
+                .disabled(isAuthenticating)
+        }
+    }
+
+    private var qnapFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(L10n.text("Server URL"), text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+            TextField(L10n.text("Username"), text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+            SecureField(L10n.text("Password"), text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+            TextField(L10n.text("2-step verification code (only if it's on)"), text: $synologyOTP)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -784,7 +813,7 @@ struct EditCloudAccountView: View {
                 || !password.isEmpty
                 || !sftpPrivateKeyContents.isEmpty
                 || !sftpPassphrase.isEmpty
-        case .synologyDrive:
+        case .synologyDrive, .qnap, .ugreen, .asustor:
             return serverURL != initial.serverURL
                 || username != initial.username
                 || !password.isEmpty
@@ -837,7 +866,7 @@ struct EditCloudAccountView: View {
             case .password: return !password.isEmpty
             case .privateKey: return !sftpPrivateKeyContents.isEmpty
             }
-        case .synologyDrive:
+        case .synologyDrive, .qnap, .ugreen, .asustor:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
         case .wordpress:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
@@ -971,6 +1000,25 @@ struct EditCloudAccountView: View {
                     username: username,
                     password: password,
                     otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .qnap:
+                let code = String(synologyOTP.filter { !$0.isWhitespace })
+                await appState.syncManager.updateQNAPAccount(
+                    accountId: id,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
+                    securityCode: code.isEmpty ? nil : code,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .ugreen, .asustor:
+                await appState.syncManager.updateNASWebDAVAccount(
+                    accountId: id,
+                    brand: account.providerType == .ugreen ? .ugreen : .asustor,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
                     allowSelfSignedCertificate: synologyAllowSelfSigned
                 )
             case .wordpress:

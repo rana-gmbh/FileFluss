@@ -174,7 +174,13 @@ struct AddCloudAccountView: View {
     /// Providers that show up under "Other Protocols" — generic transport
     /// or open-standard endpoints rather than a specific branded service.
     private let otherProtocolProviders: [CloudProviderType] = [
-        .ftp, .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
+        .ftp, .s3, .s3Compatible, .sftp, .webDAV, .wordpress,
+    ]
+
+    /// Network storage boxes on the user's own network, each signed in to
+    /// with a NAS account.
+    private let nasProviders: [CloudProviderType] = [
+        .asustor, .qnap, .synologyDrive, .ugreen,
     ]
 
     /// Local devices reached over their own HTTP API rather than a cloud
@@ -225,6 +231,11 @@ struct AddCloudAccountView: View {
             providerSection(
                 title: L10n.text("Cloud Storage Providers"),
                 providers: cloudStorageProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: L10n.text("NAS"),
+                providers: nasProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
@@ -319,6 +330,8 @@ struct AddCloudAccountView: View {
                 s3Fields
             case .synologyDrive:
                 synologyDriveFields
+            case .qnap, .ugreen, .asustor:
+                nasFields(for: provider)
             case .synologyC2:
                 synologyC2Fields
             case .s3Compatible:
@@ -1371,6 +1384,64 @@ struct AddCloudAccountView: View {
         }
     }
 
+    /// QNAP, UGREEN and ASUSTOR. QNAP signs in to File Station itself and
+    /// can ask for a 2-step code; UGREEN and ASUSTOR go through the box's
+    /// WebDAV service, which has to be switched on first. The OTP and
+    /// certificate state is shared with the Synology form — only one
+    /// provider's form is ever on screen.
+    private func nasFields(for provider: CloudProviderType) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Group {
+                switch provider {
+                case .qnap:
+                    LText("Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080.")
+                case .ugreen:
+                    LText("Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS.")
+                default:
+                    LText("Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            TextField(nasServerPlaceholder(for: provider), text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField(L10n.text("Username"), text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField(L10n.text("Password"), text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            if provider == .qnap {
+                TextField(L10n.text("2-step verification code (only if it's on)"), text: $synologyOTP)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { login() }
+            }
+
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $synologyAllowSelfSigned)
+                .help(L10n.text("Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)."))
+                .disabled(isAuthenticating)
+        }
+    }
+
+    private func nasServerPlaceholder(for provider: CloudProviderType) -> String {
+        switch provider {
+        case .qnap: return L10n.text("Server URL (e.g. https://my-nas.local)")
+        case .ugreen: return L10n.text("Server URL (e.g. https://my-nas.local:5006)")
+        default: return L10n.text("Server URL (e.g. https://my-nas.local:9802)")
+        }
+    }
+
     private var s3Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
             LText("Enter an AWS access key with S3 permissions and the region your buckets live in. You can create a key under IAM → Users → Security credentials → Access keys.")
@@ -1467,7 +1538,7 @@ struct AddCloudAccountView: View {
         case .mega: return email.isEmpty || password.isEmpty
         case .gmxCloud: return email.isEmpty || password.isEmpty
         case .s3: return s3AccessKeyId.isEmpty || s3SecretAccessKey.isEmpty || s3Region.isEmpty
-        case .synologyDrive: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .synologyDrive, .qnap, .ugreen, .asustor: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
         case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
         case .iCloud: return false
@@ -1623,6 +1694,23 @@ struct AddCloudAccountView: View {
                     username: username,
                     password: password,
                     otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .qnap:
+                let code = String(synologyOTP.filter { !$0.isWhitespace })
+                await appState.syncManager.addQNAPAccount(
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
+                    securityCode: code.isEmpty ? nil : code,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .ugreen, .asustor:
+                await appState.syncManager.addNASWebDAVAccount(
+                    brand: selectedProvider == .ugreen ? .ugreen : .asustor,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
                     allowSelfSignedCertificate: synologyAllowSelfSigned
                 )
             case .synologyC2:

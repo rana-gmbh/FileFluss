@@ -8,11 +8,41 @@ public struct WebDAVCredentials: Codable, Sendable {
     let username: String
     let password: String
     let displayName: String
+    /// Trust the server's certificate even when it doesn't chain to a
+    /// system CA — NAS boxes ship with self-signed ones. Optional so
+    /// credentials saved before the option existed still decode.
+    var allowSelfSignedCertificate: Bool? = nil
 }
 
 /// URLSession delegate that preserves the Authorization header on same-host redirects.
 /// WebDAV servers often redirect (e.g. /path → /path/) and URLSession strips auth headers by default.
+///
+/// With a `trustedHost` it also accepts that one host's certificate when it
+/// doesn't chain to a system CA, for servers the user said use a
+/// self-signed certificate. Every other host is evaluated normally.
 private final class WebDAVSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let trustedHost: String?
+
+    init(trustedHost: String? = nil) {
+        self.trustedHost = trustedHost
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard let trustedHost,
+              challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              challenge.protectionSpace.host == trustedHost,
+              let trust = challenge.protectionSpace.serverTrust
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
         if let originalHost = task.originalRequest?.url?.host,
@@ -28,11 +58,14 @@ private final class WebDAVSessionDelegate: NSObject, URLSessionTaskDelegate, @un
 public actor WebDAVAPIClient {
     let credentials: WebDAVCredentials
     private let session: URLSession
-    private let sessionDelegate = WebDAVSessionDelegate()
+    private let sessionDelegate: WebDAVSessionDelegate
     let davBaseURL: String
 
     public init(credentials: WebDAVCredentials) {
         self.credentials = credentials
+        self.sessionDelegate = WebDAVSessionDelegate(
+            trustedHost: credentials.allowSelfSignedCertificate == true ? URL(string: credentials.serverURL)?.host : nil
+        )
         let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config, delegate: sessionDelegate, delegateQueue: nil)
 
@@ -49,13 +82,20 @@ public actor WebDAVAPIClient {
 
     // MARK: - Authentication
 
-    public static func authenticate(serverURL: String, username: String, password: String) async throws -> WebDAVCredentials {
+    public static func authenticate(
+        serverURL: String,
+        username: String,
+        password: String,
+        allowSelfSignedCertificate: Bool = false
+    ) async throws -> WebDAVCredentials {
         var base = serverURL
         if base.hasSuffix("/") { base = String(base.dropLast()) }
 
         let cred = "\(username):\(password)"
         let encoded = Data(cred.utf8).base64EncodedString()
-        let authDelegate = WebDAVSessionDelegate()
+        let authDelegate = WebDAVSessionDelegate(
+            trustedHost: allowSelfSignedCertificate ? URL(string: base)?.host : nil
+        )
         let authSession = URLSession(configuration: .default, delegate: authDelegate, delegateQueue: nil)
 
         // Try the user-provided URL first, then common WebDAV sub-paths
@@ -120,7 +160,8 @@ public actor WebDAVAPIClient {
             serverURL: base,
             username: username,
             password: password,
-            displayName: username
+            displayName: username,
+            allowSelfSignedCertificate: allowSelfSignedCertificate ? true : nil
         )
     }
 

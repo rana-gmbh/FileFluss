@@ -765,6 +765,78 @@ final class SyncViewModel {
         }
     }
 
+    func addQNAPAccount(
+        serverURL: String,
+        username: String,
+        password: String,
+        securityCode: String?,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: .qnap)
+        let provider = QNAPProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                securityCode: securityCode,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finishAddingNASAccount(account, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// UGREEN and ASUSTOR NAS accounts, both reached over the box's WebDAV
+    /// service.
+    func addNASWebDAVAccount(
+        brand: NASWebDAVBrand,
+        serverURL: String,
+        username: String,
+        password: String,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: brand.providerType)
+        let provider = NASWebDAVProvider(brand: brand, accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finishAddingNASAccount(account, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// Names the account "<Maker> (user@host)", the way Synology accounts
+    /// are named, then registers it.
+    private func finishAddingNASAccount(_ account: CloudAccount, provider: any CloudProvider) async {
+        var connectedAccount = account
+        if let userName = try? await nasUserDisplayName(provider), !userName.isEmpty {
+            connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+        }
+        connectedAccount.isConnected = true
+        accounts.append(connectedAccount)
+        await syncEngine.registerProvider(for: account.id, provider: provider)
+        saveAccounts()
+    }
+
+    private func nasUserDisplayName(_ provider: any CloudProvider) async throws -> String? {
+        switch provider {
+        case let qnap as QNAPProvider: return try await qnap.userDisplayName()
+        case let nas as NASWebDAVProvider: return try await nas.userDisplayName()
+        default: return nil
+        }
+    }
+
     func addSynologyDriveAccount(
         serverURL: String,
         username: String,
@@ -1118,6 +1190,16 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
+            case .qnap:
+                let provider = QNAPProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .ugreen, .asustor:
+                let provider = NASWebDAVProvider(brand: account.providerType == .ugreen ? .ugreen : .asustor, accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             case .synologyC2:
                 let provider = SynologyC2Provider(accountId: account.id)
                 if await provider.isAuthenticated {
@@ -1399,6 +1481,39 @@ final class SyncViewModel {
                 username: username,
                 password: password,
                 otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateQNAPAccount(accountId: UUID, serverURL: String, username: String, password: String, securityCode: String?, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = QNAPProvider(accountId: accountId)
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                securityCode: securityCode,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateNASWebDAVAccount(accountId: UUID, brand: NASWebDAVBrand, serverURL: String, username: String, password: String, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = NASWebDAVProvider(brand: brand, accountId: accountId)
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
                 allowSelfSignedCertificate: allowSelfSignedCertificate
             )
             await finalizeUpdate(accountId: accountId, provider: provider)

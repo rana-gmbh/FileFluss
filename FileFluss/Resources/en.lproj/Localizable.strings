@@ -955,3 +955,18 @@
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here.";
 "A folder named “%@” is already there." = "A folder named “%@” is already there.";
 "The file changed while it was being uploaded." = "The file changed while it was being uploaded.";
+
+/* NAS: QNAP, UGREEN, ASUSTOR */
+"NAS" = "NAS";
+"No WebDAV service answered at %@. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one." = "No WebDAV service answered at %@. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one.";
+"The 2-step verification code is incorrect." = "The 2-step verification code is incorrect.";
+"The password has expired. Change it in QTS, then sign in again." = "The password has expired. Change it in QTS, then sign in again.";
+"This account is disabled on the NAS." = "This account is disabled on the NAS.";
+"Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080." = "Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080.";
+"Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS." = "Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS.";
+"Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS." = "Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS.";
+"2-step verification code (only if it's on)" = "2-step verification code (only if it's on)";
+"Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).";
+"Server URL (e.g. https://my-nas.local)" = "Server URL (e.g. https://my-nas.local)";
+"Server URL (e.g. https://my-nas.local:5006)" = "Server URL (e.g. https://my-nas.local:5006)";
+"Server URL (e.g. https://my-nas.local:9802)" = "Server URL (e.g. https://my-nas.local:9802)";

@@ -126,6 +126,21 @@ public enum CloudAccountEditLoader {
             snap.allowSelfSignedCertificate = c.allowSelfSignedCertificate
             return snap
 
+        case .qnap:
+            guard let c = KeychainService.load(key: "qnap.\(suffix)", as: QNAPCredentials.self) else { return nil }
+            snap.serverURL = c.serverURL
+            snap.username = c.username
+            snap.allowSelfSignedCertificate = c.allowSelfSignedCertificate
+            return snap
+
+        case .ugreen, .asustor:
+            let prefix = providerType == .ugreen ? "ugreen" : "asustor"
+            guard let c = KeychainService.load(key: "\(prefix).\(suffix)", as: WebDAVCredentials.self) else { return nil }
+            snap.serverURL = c.serverURL
+            snap.username = c.username
+            snap.allowSelfSignedCertificate = c.allowSelfSignedCertificate ?? false
+            return snap
+
         case .wordpress:
             guard let c = KeychainService.load(key: "wordpress.\(suffix)", as: WordPressCredentials.self) else { return nil }
             snap.serverURL = c.siteURL

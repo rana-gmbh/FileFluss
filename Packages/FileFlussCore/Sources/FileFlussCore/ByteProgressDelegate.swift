@@ -67,12 +67,32 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
     private var response: URLResponse?
     private var failure: Error?
     var ownedSession: URLSession?
+    /// The delegate of the session the caller asked to download with. This
+    /// handler runs on a session of its own, so without it a session that
+    /// trusts a NAS's self-signed certificate would lose that trust for
+    /// downloads — and every download from such a NAS would fail.
+    var trustDelegate: URLSessionDelegate?
 
     init(onBytes: (@Sendable (Int64) -> Void)?,
          completion: @escaping (Result<(URL, URLResponse), Error>) -> Void) {
         self.onBytes = onBytes
         self.completion = completion
         self.destURL = StagingLocation.downloadStagingFile()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trustDelegate,
+              trustDelegate.responds(to: #selector(URLSessionDelegate.urlSession(_:didReceive:completionHandler:)))
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        trustDelegate.urlSession?(session, didReceive: challenge, completionHandler: completionHandler)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
@@ -135,6 +155,7 @@ extension URLSession {
             // Dedicated session so the delegate is strongly retained and reliably
             // receives the streaming `didReceive` callbacks (a per-task delegate
             // on the async `data(for:delegate:)` doesn't always deliver them).
+            handler.trustDelegate = delegate
             let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
             handler.ownedSession = session
             let task = session.dataTask(with: request)

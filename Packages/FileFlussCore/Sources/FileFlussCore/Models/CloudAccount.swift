@@ -29,6 +29,9 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case gopro
     case github
     case drime
+    case qnap
+    case ugreen
+    case asustor
 
     public var id: String { rawValue }
 
@@ -62,6 +65,9 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .gopro: return "GoPro Camera"
         case .github: return "GitHub"
         case .drime: return "Drime"
+        case .qnap: return "QNAP"
+        case .ugreen: return "UGREEN NAS"
+        case .asustor: return "ASUSTOR"
         }
     }
 
@@ -95,6 +101,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .gopro: return "camera.fill"
         case .github: return "chevron.left.forwardslash.chevron.right"
         case .drime: return "cloud.fill"
+        case .qnap, .ugreen, .asustor: return "externaldrive.fill"
         }
     }
 
@@ -155,6 +162,9 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .gopro: return "GoProLogo"
         case .github: return "GitHubLogo"
         case .drime: return "DrimeLogo"
+        case .qnap: return "QNAPLogo"
+        case .ugreen: return "UGREENLogo"
+        case .asustor: return "ASUSTORLogo"
         }
     }
 }

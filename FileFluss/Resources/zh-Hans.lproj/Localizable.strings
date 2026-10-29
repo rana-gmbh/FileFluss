@@ -955,3 +955,18 @@
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "此 Drime 文件夹包含的项目超出了 Drime 可列出的数量。请将其拆分为较小的文件夹后在此浏览。";
 "A folder named “%@” is already there." = "那里已有名为“%@”的文件夹。";
 "The file changed while it was being uploaded." = "文件在上传过程中发生了变化。";
+
+/* NAS: QNAP, UGREEN, ASUSTOR */
+"NAS" = "NAS";
+"No WebDAV service answered at %@. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one." = "%@ 上没有 WebDAV 服务响应。请在 NAS 上开启 WebDAV，检查端口；如果 NAS 使用自签名证书，请允许自签名证书。";
+"The 2-step verification code is incorrect." = "两步验证码不正确。";
+"The password has expired. Change it in QTS, then sign in again." = "密码已过期。请在 QTS 中更改密码，然后重新登录。";
+"This account is disabled on the NAS." = "此帐户已在 NAS 上停用。";
+"Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080." = "请输入 NAS 地址和 QTS 帐户。HTTPS 默认使用端口 443，除非你另行指定；普通 HTTP 使用 8080。";
+"Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS." = "请先在 NAS 上开启 WebDAV（控制面板 → 文件服务 → WebDAV），然后输入其地址和你的 UGOS 帐户。HTTPS 的默认端口为 5006。";
+"Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS." = "请先在 NAS 上开启 WebDAV（ADM 中的“服务 → WebDAV”），然后输入其地址和你的 ADM 帐户。HTTPS 的默认端口为 9802。";
+"2-step verification code (only if it's on)" = "两步验证码（仅在已开启时）";
+"Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)." = "大多数家用 NAS 使用自签名证书。只有在你安装了真正的 CA 签名证书（例如 Let's Encrypt）时才关闭此项。";
+"Server URL (e.g. https://my-nas.local)" = "服务器 URL（例如 https://my-nas.local）";
+"Server URL (e.g. https://my-nas.local:5006)" = "服务器 URL（例如 https://my-nas.local:5006）";
+"Server URL (e.g. https://my-nas.local:9802)" = "服务器 URL（例如 https://my-nas.local:9802）";
