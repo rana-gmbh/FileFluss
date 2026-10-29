@@ -942,3 +942,16 @@
 "Open" = "打開";
 "Open With" = "打開方式";
 "Other…" = "其他…";
+
+/* Drime */
+"Access Token" = "存取權杖";
+"Click Connect to sign in with your Drime account. Your browser will open for authentication." = "點擊「連接」以使用你的 Drime 帳號登入。瀏覽器將開啟以進行身分驗證。";
+"Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "在你的 Drime 帳號中前往 設定 → 開發者 建立一個個人存取權杖，然後貼到下方。";
+"Open Drime token settings" = "開啟 Drime 權杖設定";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會儲存在你的鑰匙圈中。";
+"To connect Drime with a different token or account, remove this account and add it again." = "要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。";
+"Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime 未接受此權杖。請檢查它是否已完整複製且未被刪除。";
+"Drime sign-in failed: %@" = "Drime 登入失敗：%@";
+"This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "此 Drime 資料夾包含的項目超出了 Drime 可列出的數量。請將其拆分為較小的資料夾後在此瀏覽。";
+"A folder named “%@” is already there." = "那裡已有名為「%@」的資料夾。";
+"The file changed while it was being uploaded." = "檔案在上傳過程中發生了變化。";

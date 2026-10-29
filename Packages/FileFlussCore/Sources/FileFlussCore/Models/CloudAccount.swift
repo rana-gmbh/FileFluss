@@ -28,6 +28,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case googleDrivePicker
     case gopro
     case github
+    case drime
 
     public var id: String { rawValue }
 
@@ -60,6 +61,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .googleDrivePicker: return "Google Drive (Selected Folders)"
         case .gopro: return "GoPro Camera"
         case .github: return "GitHub"
+        case .drime: return "Drime"
         }
     }
 
@@ -92,6 +94,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .googleDrivePicker: return "externaldrive.connected.to.line.below"
         case .gopro: return "camera.fill"
         case .github: return "chevron.left.forwardslash.chevron.right"
+        case .drime: return "cloud.fill"
         }
     }
 
@@ -151,6 +154,7 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .googleDrivePicker: return "GoogleDriveLogo"
         case .gopro: return "GoProLogo"
         case .github: return "GitHubLogo"
+        case .drime: return "DrimeLogo"
         }
     }
 }

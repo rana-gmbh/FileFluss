@@ -113,6 +113,19 @@ struct AddCloudAccountView: View {
     }
     @State private var nextCloudMode: NextCloudAuthMode = .browser
 
+    enum DrimeAuthMode: String, CaseIterable, Hashable, Identifiable {
+        case browser = "Browser Login"
+        case token = "Access Token"
+        var id: String { rawValue }
+    }
+    @State private var drimeMode: DrimeAuthMode = DrimeAPIClient.isOAuthAvailable ? .browser : .token
+
+    /// Browser sign-in exists only once FileFluss has a Drime client ID;
+    /// until then the token is the only way in.
+    private var effectiveDrimeMode: DrimeAuthMode {
+        DrimeAPIClient.isOAuthAvailable ? drimeMode : .token
+    }
+
     @State private var synologyC2AccessKeyId = ""
     @State private var synologyC2SecretAccessKey = ""
     @State private var synologyC2Region = ""
@@ -138,6 +151,7 @@ struct AddCloudAccountView: View {
         case .oneDrive: return appState.syncManager.isAuthenticatingOneDrive
         case .nextCloud: return appState.syncManager.isAuthenticatingNextCloud
         case .box: return appState.syncManager.isAuthenticatingBox
+        case .drime: return appState.syncManager.isAuthenticatingDrime
         default: return false
         }
     }
@@ -153,7 +167,7 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .googleDrivePicker, .iCloud, .internxt,
+        .box, .drime, .dropbox, .filen, .gmxCloud, .googleDrive, .googleDrivePicker, .iCloud, .internxt,
         .jottacloud, .kDrive, .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
     ]
 
@@ -329,6 +343,8 @@ struct AddCloudAccountView: View {
                 goProFields
             case .github:
                 gitHubFields
+            case .drime:
+                drimeFields
             }
 
             if let authError = appState.syncManager.authError {
@@ -949,6 +965,64 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var drimeFields: some View {
+        VStack(spacing: 12) {
+            if DrimeAPIClient.isOAuthAvailable {
+                Picker(L10n.text("Sign-in method"), selection: $drimeMode) {
+                    ForEach(DrimeAuthMode.allCases) { mode in
+                        Text(L10n.text(mode.rawValue)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(isAuthenticating || appState.syncManager.isAuthenticatingDrime)
+                .labelsHidden()
+            }
+
+            switch effectiveDrimeMode {
+            case .browser:
+                if appState.syncManager.isAuthenticatingDrime {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7)
+                        LText("Waiting for sign-in in browser…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    LText("Click Connect to sign in with your Drime account. Your browser will open for authentication.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .token:
+                LText("Create a personal access token in your Drime account under Settings → Developers, then paste it below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    NSWorkspace.shared.open(DrimeAPIClient.tokenSettingsURL)
+                } label: {
+                    Label(L10n.text("Open Drime token settings"), systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+
+                SecureField(L10n.text("Personal Access Token"), text: $apiToken)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { login() }
+
+                LText("Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private var gitHubFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             LText("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories.")
@@ -1402,6 +1476,7 @@ struct AddCloudAccountView: View {
         case .filen: return email.isEmpty || password.isEmpty
         case .jottacloud: return apiToken.isEmpty
         case .github: return apiToken.isEmpty
+        case .drime: return effectiveDrimeMode == .token && apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .gopro:
@@ -1604,6 +1679,15 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addGitHubAccount(
                     token: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
+            case .drime:
+                switch effectiveDrimeMode {
+                case .browser:
+                    await appState.syncManager.addDrimeAccountViaBrowser()
+                case .token:
+                    await appState.syncManager.addDrimeAccount(
+                        personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
             case .googleDrivePicker:
                 // Step 1: OAuth (system browser). Step 2: the Google Picker,
                 // also in the system browser (it needs the user's signed-in

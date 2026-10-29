@@ -942,3 +942,16 @@
 "Open" = "Öffnen";
 "Open With" = "Öffnen mit";
 "Other…" = "Andere …";
+
+/* Drime */
+"Access Token" = "Zugriffstoken";
+"Click Connect to sign in with your Drime account. Your browser will open for authentication." = "Klicke auf „Verbinden“, um dich mit deinem Drime-Konto anzumelden. Dein Browser öffnet sich zur Anmeldung.";
+"Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "Erstelle in deinem Drime-Konto unter Einstellungen → Entwickler ein persönliches Zugriffstoken und füge es unten ein.";
+"Open Drime token settings" = "Drime-Token-Einstellungen öffnen";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird in deinem Schlüsselbund gespeichert.";
+"To connect Drime with a different token or account, remove this account and add it again." = "Um Drime mit einem anderen Token oder Konto zu verbinden, entferne dieses Konto und füge es erneut hinzu.";
+"Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime hat dieses Token nicht akzeptiert. Prüfe, ob es vollständig kopiert wurde und nicht gelöscht ist.";
+"Drime sign-in failed: %@" = "Anmeldung bei Drime fehlgeschlagen: %@";
+"This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "Dieser Drime-Ordner enthält mehr Objekte, als Drime auflistet. Teile ihn in kleinere Ordner auf, um ihn hier zu durchsuchen.";
+"A folder named “%@” is already there." = "Dort gibt es bereits einen Ordner namens „%@“.";
+"The file changed while it was being uploaded." = "Die Datei hat sich während des Hochladens verändert.";

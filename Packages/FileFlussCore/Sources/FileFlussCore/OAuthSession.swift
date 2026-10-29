@@ -61,6 +61,45 @@ public protocol OAuthAuthenticator: Sendable {
         callbackPath: String,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback
+
+    /// Same as above, with control over the shape of the macOS loopback
+    /// redirect. Authenticators that have no loopback (iOS) inherit the
+    /// default, which ignores `loopback`.
+    func authenticate(
+        callbackURLScheme: String,
+        callbackPath: String,
+        loopback: OAuthLoopbackRedirect,
+        authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
+    ) async throws -> OAuthCallback
+}
+
+/// How the macOS loopback redirect URI is spelled. OAuth servers compare
+/// it against what the app registered, and they disagree about what may
+/// vary.
+public enum OAuthLoopbackRedirect: Sendable {
+    /// `http://localhost:<port>` — what Box, Dropbox, Google and OneDrive
+    /// were registered with.
+    case localhost
+    /// `http://127.0.0.1:<port>/callback`. RFC 8252 §7.3 says the port of
+    /// an IP-literal loopback is ignored when matching, and some servers
+    /// (Drime) honour that only for the IP form, keeping the port of
+    /// `localhost` — so a random port works only this way.
+    case ipLiteralCallback
+}
+
+extension OAuthAuthenticator {
+    public func authenticate(
+        callbackURLScheme: String,
+        callbackPath: String,
+        loopback _: OAuthLoopbackRedirect,
+        authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
+    ) async throws -> OAuthCallback {
+        try await authenticate(
+            callbackURLScheme: callbackURLScheme,
+            callbackPath: callbackPath,
+            authURLBuilder: authURLBuilder
+        )
+    }
 }
 
 /// Process-wide registry. The host app (macOS or iOS) registers a
@@ -76,6 +115,7 @@ public enum OAuthSession {
     public static func authenticate(
         callbackURLScheme: String,
         callbackPath: String = "//callback",
+        loopback: OAuthLoopbackRedirect = .localhost,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback {
         guard let authenticator else {
@@ -85,6 +125,7 @@ public enum OAuthSession {
         return try await authenticator.authenticate(
             callbackURLScheme: callbackURLScheme,
             callbackPath: callbackPath,
+            loopback: loopback,
             authURLBuilder: authURLBuilder
         )
     }

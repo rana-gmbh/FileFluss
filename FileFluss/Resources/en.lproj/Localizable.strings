@@ -942,3 +942,16 @@
 "Open" = "Open";
 "Open With" = "Open With";
 "Other…" = "Other…";
+
+/* Drime */
+"Access Token" = "Access Token";
+"Click Connect to sign in with your Drime account. Your browser will open for authentication." = "Click Connect to sign in with your Drime account. Your browser will open for authentication.";
+"Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "Create a personal access token in your Drime account under Settings → Developers, then paste it below.";
+"Open Drime token settings" = "Open Drime token settings";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.";
+"To connect Drime with a different token or account, remove this account and add it again." = "To connect Drime with a different token or account, remove this account and add it again.";
+"Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime didn't accept this token. Check that it was copied completely and hasn't been deleted.";
+"Drime sign-in failed: %@" = "Drime sign-in failed: %@";
+"This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here.";
+"A folder named “%@” is already there." = "A folder named “%@” is already there.";
+"The file changed while it was being uploaded." = "The file changed while it was being uploaded.";

@@ -24,6 +24,9 @@ final class SyncViewModel {
     // Box OAuth state
     var isAuthenticatingBox: Bool = false
 
+    // Drime OAuth state
+    var isAuthenticatingDrime: Bool = false
+
     // NextCloud Login Flow v2 state (browser-based sign-in)
     var isAuthenticatingNextCloud: Bool = false
 
@@ -104,6 +107,7 @@ final class SyncViewModel {
         isAuthenticatingOneDrive = false
         isAuthenticatingNextCloud = false
         isAuthenticatingBox = false
+        isAuthenticatingDrime = false
         authError = nil
     }
 
@@ -614,6 +618,36 @@ final class SyncViewModel {
         }
     }
 
+    func addDrimeAccount(personalToken: String) async {
+        await connectDrime { try await $0.authenticate(personalToken: personalToken) }
+    }
+
+    func addDrimeAccountViaBrowser() async {
+        isAuthenticatingDrime = true
+        defer { isAuthenticatingDrime = false }
+        await connectDrime { try await $0.startOAuthFlow() }
+    }
+
+    private func connectDrime(_ signIn: (DrimeProvider) async throws -> DrimeCredentials) async {
+        let account = CloudAccount(providerType: .drime)
+        let provider = DrimeProvider(accountId: account.id)
+        authError = nil
+        do {
+            let credentials = try await signIn(provider)
+            var connectedAccount = account
+            let name = credentials.email.isEmpty ? credentials.displayName : credentials.email
+            if !name.isEmpty {
+                connectedAccount.displayName = "Drime (\(name))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     /// TeraBox device-code login: fetch a QR, surface it for the user to scan
     /// in the TeraBox app, then poll for the token and register the account.
     func connectTeraBox() async {
@@ -952,6 +986,7 @@ final class SyncViewModel {
     func providerSupportsInlineReauth(_ type: CloudProviderType) -> Bool {
         switch type {
         case .googleDrive, .dropbox, .box, .oneDrive: return true
+        case .drime: return DrimeAPIClient.isOAuthAvailable
         default: return false
         }
     }
@@ -980,6 +1015,10 @@ final class SyncViewModel {
                 await syncEngine.registerProvider(for: accountId, provider: provider)
             case .oneDrive:
                 let provider = OneDriveProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
+            case .drime where DrimeAPIClient.isOAuthAvailable:
+                let provider = DrimeProvider(accountId: accountId)
                 _ = try await provider.startOAuthFlow()
                 await syncEngine.registerProvider(for: accountId, provider: provider)
             default:
@@ -1131,6 +1170,11 @@ final class SyncViewModel {
                 }
             case .github:
                 let provider = GitHubProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .drime:
+                let provider = DrimeProvider(accountId: account.id)
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }

@@ -942,3 +942,16 @@
 "Open" = "打开";
 "Open With" = "打开方式";
 "Other…" = "其他…";
+
+/* Drime */
+"Access Token" = "访问令牌";
+"Click Connect to sign in with your Drime account. Your browser will open for authentication." = "点击“连接”以使用你的 Drime 账户登录。浏览器将打开以进行身份验证。";
+"Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "在你的 Drime 账户中前往 设置 → 开发者 创建一个个人访问令牌，然后粘贴到下方。";
+"Open Drime token settings" = "打开 Drime 令牌设置";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌保存在你的钥匙串中。";
+"To connect Drime with a different token or account, remove this account and add it again." = "要使用其他令牌或账户连接 Drime，请移除此账户后重新添加。";
+"Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime 未接受此令牌。请检查它是否已完整复制且未被删除。";
+"Drime sign-in failed: %@" = "Drime 登录失败：%@";
+"This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "此 Drime 文件夹包含的项目超出了 Drime 可列出的数量。请将其拆分为较小的文件夹后在此浏览。";
+"A folder named “%@” is already there." = "那里已有名为“%@”的文件夹。";
+"The file changed while it was being uploaded." = "文件在上传过程中发生了变化。";
