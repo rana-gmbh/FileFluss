@@ -991,3 +991,7 @@
 "Shortcut already in use" = "快速鍵已被使用";
 "This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "此快速鍵已指派給「%@」。取代後該指令將沒有快速鍵。";
 "This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "此位址使用一般 HTTP，你的密碼將以未加密方式透過網路傳輸。除非你信任途經的所有網路，否則請使用 https://。";
+
+/* Accounts */
+"Remove %@?" = "要移除 %@ 嗎？";
+"Remove Cloud Account?" = "要移除雲端帳號嗎？";

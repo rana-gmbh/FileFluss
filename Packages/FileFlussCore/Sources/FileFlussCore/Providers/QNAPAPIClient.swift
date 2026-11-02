@@ -341,8 +341,7 @@ public actor QNAPAPIClient {
             try? FileManager.default.removeItem(at: tmp)
             throw error
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tmp, to: localURL)
+        try FileSystemService.placeDownload(from: tmp, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {

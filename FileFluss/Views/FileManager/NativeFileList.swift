@@ -1128,7 +1128,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             // Dropping ON a specific row — must be a directory
             guard row >= 0, row < items.count else { return [] }
             let target = items[row]
-            guard target.isDirectory else { return [] }
+            // A file isn't a place to drop, so the row means the folder it's
+            // in. Refusing made a folder full of files nearly impossible to
+            // drop into.
+            guard target.isDirectory else {
+                guard currentDirectory != nil else { return [] }
+                tableView.setDropRow(-1, dropOperation: .on)
+                return .generic
+            }
             // Don't drop onto a dragged item itself
             if currentDragItemIDs.contains(target.id) {
                 return []

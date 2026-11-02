@@ -174,8 +174,7 @@ public actor PCloudAPIClient {
               (200...299).contains(httpResponse.statusCode) else {
             throw CloudProviderError.invalidResponse
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {

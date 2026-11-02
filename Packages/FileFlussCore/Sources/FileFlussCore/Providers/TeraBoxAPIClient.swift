@@ -241,8 +241,7 @@ public actor TeraBoxAPIClient {
         guard (resp as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) == true else {
             throw CloudProviderError.serverError((resp as? HTTPURLResponse)?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     // MARK: - Upload (precreate → superfile2 → create)

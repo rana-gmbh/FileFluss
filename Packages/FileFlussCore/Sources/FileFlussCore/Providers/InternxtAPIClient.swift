@@ -254,7 +254,7 @@ public actor InternxtAPIClient {
             throw CloudProviderError.invalidResponse
         }
         try? FileManager.default.removeItem(at: localURL)
-        try plaintext.write(to: localURL)
+        try plaintext.write(to: localURL, options: .atomic)
     }
 
     // MARK: - Upload

@@ -18,7 +18,6 @@ struct CloudFileListView: View {
     /// the cloud straight away. Kept in sync with `SettingsView`'s key.
     @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDeleteConfirmation = false
-    @State private var showConflict = false
     @State private var showDropConfirmation = false
     @State private var pendingUpload: PendingUpload?
     @State private var showCloudToCloudDropConfirmation = false
@@ -203,17 +202,6 @@ struct CloudFileListView: View {
             } else {
                 Text(L10n.format("Are you sure you want to delete %d items from %@?", items.count, accountDisplayName))
             }
-        }
-        .sheet(isPresented: $showConflict) {
-            if let conflict = vm.pendingConflict {
-                ConflictResolutionView(conflict: conflict) { resolution in
-                    showConflict = false
-                    vm.resolveConflict(resolution)
-                }
-            }
-        }
-        .onChange(of: vm.pendingConflict != nil) { _, hasConflict in
-            showConflict = hasConflict
         }
         .alert(
             L10n.text("Archive failed"),
@@ -1375,7 +1363,7 @@ struct CloudFileListView: View {
 
     /// Download items from source cloud to a temp directory, then upload to target cloud.
     /// Conflicts are resolved BEFORE downloading to avoid wasting bandwidth.
-    private static func cloudToCloudTransfer(
+    static func cloudToCloudTransfer(
         items: [CloudFileItem],
         from sourceVM: CloudFileManagerViewModel,
         to targetVM: CloudFileManagerViewModel,
@@ -1595,6 +1583,12 @@ struct CloudFileListView: View {
                         Button(L10n.text("Sign In Again")) {
                             Task {
                                 await appState.syncManager.reauthenticate(accountId: accountId)
+                                // Otherwise shown only in the account sheets,
+                                // which aren't open.
+                                if let failure = appState.syncManager.authError {
+                                    appState.syncManager.authError = nil
+                                    vm.actionError = failure
+                                }
                                 await vm.loadDirectory()
                             }
                         }
@@ -1602,6 +1596,7 @@ struct CloudFileListView: View {
                         .controlSize(.regular)
                     }
                     Button(canReauthInline ? L10n.text("Open Settings…") : L10n.text("Open Settings to Re-Connect…")) {
+                        appState.requestedSettingsTab = .cloud
                         openWindow(id: "settings")
                     }
                     .controlSize(.regular)

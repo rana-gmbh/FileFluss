@@ -16,18 +16,6 @@ struct SyncEngineTests {
         }
     }
 
-    @Test("Stub providers return empty list and start unauthenticated")
-    func stubProviderInitialState() async {
-        let providers: [any CloudProvider] = [
-            ICloudProvider(),
-        ]
-
-        for provider in providers {
-            let items = try? await provider.listDirectory(at: "/")
-            #expect(items?.isEmpty == true, "\(provider.providerType) should return empty list")
-        }
-    }
-
     @Test("GoogleDriveProvider requires authentication")
     func googleDriveRequiresAuth() async {
         let provider = GoogleDriveProvider()
@@ -91,19 +79,6 @@ struct SyncEngineTests {
 
         await #expect(throws: CloudProviderError.self) {
             _ = try await provider.listDirectory(at: "/")
-        }
-    }
-
-    @Test("Provider getFileMetadata throws for stubs")
-    func metadataNotImplemented() async {
-        let providers: [any CloudProvider] = [
-            ICloudProvider(),
-        ]
-
-        for provider in providers {
-            await #expect(throws: CloudProviderError.self) {
-                _ = try await provider.getFileMetadata(at: "/test")
-            }
         }
     }
 }

@@ -569,16 +569,17 @@ public actor GoogleDriveAPIClient {
             existingId = try? await findFileId(parentId: parentId, name: fileName, driveId: parentCached.driveId)
         }
 
-        let fileData = try Data(contentsOf: localURL)
+        let fileSize = try FileChunkReader.size(of: localURL)
         let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
         let modDate = attrs?[.modificationDate] as? Date
         let createdDate = attrs?[.creationDate] as? Date
 
         let uploaded: GoogleDriveFile
-        if fileData.count <= 5_000_000 {
+        if fileSize <= 5_000_000 {
+            let fileData = try Data(contentsOf: localURL)
             uploaded = try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         } else {
-            uploaded = try await resumableUpload(from: localURL, fileSize: fileData.count, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
+            uploaded = try await resumableUpload(from: localURL, fileSize: fileSize, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         }
 
         // Cache the uploaded file's ID so subsequent replace/delete don't need
@@ -746,13 +747,13 @@ public actor GoogleDriveAPIClient {
         // Step 2: Upload in 10MB chunks. The final chunk's 200/201 response
         // contains the file JSON; earlier chunks return 308 Resume Incomplete.
         let chunkSize = 10 * 1024 * 1024
-        let fileData = try Data(contentsOf: localURL)
+        let reader = try FileChunkReader(url: localURL)
         var offset = 0
         var finalResponseData: Data?
 
         while offset < fileSize {
             let end = min(offset + chunkSize, fileSize)
-            let chunk = fileData[offset..<end]
+            let chunk = try reader.read(offset: offset, length: end - offset)
 
             var chunkRequest = URLRequest(url: uploadURL)
             chunkRequest.httpMethod = "PUT"
@@ -760,7 +761,7 @@ public actor GoogleDriveAPIClient {
             chunkRequest.setValue("bytes \(offset)-\(end - 1)/\(fileSize)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
 
-            let (chunkData, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
+            let (chunkData, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: chunk, onBytes: onBytes)
             guard let chunkHttp = chunkResponse as? HTTPURLResponse,
                   (200...299).contains(chunkHttp.statusCode) || chunkHttp.statusCode == 308 else {
                 let chunkHttp = chunkResponse as? HTTPURLResponse

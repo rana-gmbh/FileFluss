@@ -232,8 +232,7 @@ public actor SynologyDriveAPIClient {
         let (tmp, response) = try await session.downloadReportingProgress(for: URLRequest(url: url), onBytes: onBytes)
         try validateHTTP(response)
 
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tmp, to: localURL)
+        try FileSystemService.placeDownload(from: tmp, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {

@@ -13,7 +13,6 @@ struct FileListView: View {
     @State private var showDropConfirmation: Bool = false
     @State private var showSlowLoadIndicator: Bool = false
     @State private var showDeleteConfirmation: Bool = false
-    @State private var showConflict: Bool = false
     /// Drives the "Delete Immediately?" dialog. We can't bind it straight to
     /// `fm.itemsNeedingPermanentDelete` because that array is populated the
     /// instant the "Move to Trash" dialog is dismissed, and SwiftUI refuses to
@@ -198,17 +197,6 @@ struct FileListView: View {
             } else {
                 Text(L10n.format("%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.", items.count))
             }
-        }
-        .sheet(isPresented: $showConflict) {
-            if let conflict = fm.pendingConflict {
-                ConflictResolutionView(conflict: conflict) { resolution in
-                    showConflict = false
-                    fm.resolveConflict(resolution)
-                }
-            }
-        }
-        .onChange(of: fm.pendingConflict != nil) { _, hasConflict in
-            showConflict = hasConflict
         }
         .confirmationDialog(
             L10n.text("Move or Copy?"),

@@ -991,3 +991,7 @@
 "Shortcut already in use" = "Kurzbefehl bereits belegt";
 "This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "Dieser Kurzbefehl ist „%@“ zugewiesen. Wenn du ihn ersetzt, hat dieser Befehl keinen mehr.";
 "This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "Diese Adresse verwendet einfaches HTTP, dein Passwort würde also unverschlüsselt übertragen. Verwende https://, außer du vertraust jedem Netzwerk dazwischen.";
+
+/* Accounts */
+"Remove %@?" = "%@ entfernen?";
+"Remove Cloud Account?" = "Cloud-Konto entfernen?";

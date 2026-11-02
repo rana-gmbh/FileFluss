@@ -324,10 +324,7 @@ actor GitHubAPIClient {
             try? FileManager.default.removeItem(at: tempURL)
             throw error
         }
-        if FileManager.default.fileExists(atPath: localURL.path) {
-            try? FileManager.default.removeItem(at: localURL)
-        }
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     // MARK: - Requests

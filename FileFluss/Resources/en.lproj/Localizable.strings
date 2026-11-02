@@ -991,3 +991,7 @@
 "Shortcut already in use" = "Shortcut already in use";
 "This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "This shortcut is assigned to “%@”. Replacing it leaves that command without one.";
 "This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between.";
+
+/* Accounts */
+"Remove %@?" = "Remove %@?";
+"Remove Cloud Account?" = "Remove Cloud Account?";

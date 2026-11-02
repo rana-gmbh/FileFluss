@@ -435,10 +435,13 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if isPendingBrowserAuth {
+                // Any sign-in can be stopped: one aimed at a wrong or unreachable
+                // server would otherwise hold the sheet until it timed out.
+                if isPendingBrowserAuth || isAuthenticating {
                     Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                         cancelPendingBrowserAuth()
                     }
+                    .keyboardShortcut(.cancelAction)
                 } else {
                     Button(L10n.text("Connect")) { login() }
                         .keyboardShortcut(.defaultAction)

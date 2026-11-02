@@ -94,12 +94,15 @@ public actor FTPAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        try? FileManager.default.removeItem(at: localURL)
+        // curl writes as it goes, so it gets a name of its own: a drop part
+        // way must not leave a short file, or cost the file already there.
+        let partial = localURL.deletingLastPathComponent()
+            .appendingPathComponent(FileSystemService.temporaryReplacementName(for: localURL.lastPathComponent))
         do {
-            _ = try await runCurl(["--output", localURL.path, fileURL(for: remotePath)])
+            _ = try await runCurl(["--output", partial.path, fileURL(for: remotePath)])
+            try FileSystemService.placeDownload(from: partial, at: localURL)
         } catch {
-            // curl writes to the final path, so what's there is only part.
-            try? FileManager.default.removeItem(at: localURL)
+            try? FileManager.default.removeItem(at: partial)
             throw error
         }
         if let onBytes,

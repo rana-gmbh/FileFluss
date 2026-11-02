@@ -192,6 +192,22 @@ public final class FileSystemService: Sendable {
         }
     }
 
+    /// Moves a finished download to where it belongs. The new file goes beside
+    /// the old one first, because a move to another volume is really a copy
+    /// and can fail part way, and removing the old file up front would then
+    /// lose both. A crash can't leave a short file under the real name either.
+    public static func placeDownload(from temporary: URL, at destination: URL) throws {
+        let fm = Foundation.FileManager.default
+        let sibling = temporarySibling(of: destination)
+        do {
+            try fm.moveItem(at: temporary, to: sibling)
+            try install(sibling, at: destination)
+        } catch {
+            try? fm.removeItem(at: sibling)
+            throw error
+        }
+    }
+
     /// Swaps a finished copy into place. `temporary` has to be on the same
     /// volume as `destination`, which is what makes this a rename.
     public func installReplacement(_ temporary: URL, at destination: URL) async throws {

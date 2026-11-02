@@ -307,7 +307,17 @@ public actor FilenAPIClient {
         guard let info = fileChunkInfo[uuid] else {
             throw CloudProviderError.commandFailed("Filen file metadata not cached — listing didn't populate chunk info.")
         }
-        try await downloadChunks(uuid: uuid, info: info, to: localURL, onBytes: onBytes)
+        // Chunks are appended as they arrive, so they go under a name of their
+        // own: a drop part way must not leave a short file under the real one.
+        let partial = localURL.deletingLastPathComponent()
+            .appendingPathComponent(FileSystemService.temporaryReplacementName(for: localURL.lastPathComponent))
+        do {
+            try await downloadChunks(uuid: uuid, info: info, to: partial, onBytes: onBytes)
+            try FileSystemService.placeDownload(from: partial, at: localURL)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            throw error
+        }
     }
 
     private func downloadChunks(uuid: String, info: FileChunkInfo, to localURL: URL, onBytes: ByteProgressHandler?) async throws {

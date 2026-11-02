@@ -424,7 +424,7 @@ struct SidebarView: View {
                                         .foregroundStyle(.secondary)
                                 } else {
                                     Circle()
-                                        .fill(account.isConnected ? .green : .gray)
+                                        .fill(appState.syncManager.isSignedIn(account) ? .green : .gray)
                                         .frame(width: 8, height: 8)
                                 }
                             }
@@ -462,6 +462,16 @@ struct SidebarView: View {
                         }
                         .help(cloudAccountTooltip(for: account))
                         .contextMenu {
+                            if appState.syncManager.accountsNeedingSignIn.contains(account.id),
+                               appState.syncManager.providerSupportsInlineReauth(account.providerType) {
+                                Button(L10n.text("Sign In Again")) {
+                                    Task {
+                                        await appState.syncManager.reauthenticate(accountId: account.id)
+                                        await appState.cloudFileManager(for: account.id, side: panelSide).refresh()
+                                    }
+                                }
+                                Divider()
+                            }
                             Button(L10n.text("Rename...")) {
                                 renamingAccountId = account.id
                                 renameAccountText = account.displayName
@@ -695,7 +705,7 @@ struct SidebarView: View {
             LText("Enter a new name for this cloud account.")
         }
         .confirmationDialog(
-            pendingRemoveAccount.map { "Remove \($0.displayName)?" } ?? "Remove Cloud Account?",
+            pendingRemoveAccount.map { L10n.format("Remove %@?", $0.displayName) } ?? L10n.text("Remove Cloud Account?"),
             isPresented: Binding(
                 get: { pendingRemoveAccount != nil },
                 set: { if !$0 { pendingRemoveAccount = nil } }

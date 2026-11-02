@@ -233,6 +233,7 @@ extension AppState {
                 )
                 self.addTransfer(transfer, panel: panel)
                 transfer.task = Task { [sourceVM, destFM] in
+                    guard let items = await self.resolvedCloudItems(items, accountId: sourceAccountId, transfer: transfer) else { return }
                     await sourceVM.downloadItems(items, to: destDir, progress: transfer)
                     if isMove {
                         // Same rule as everywhere else: only what arrived.

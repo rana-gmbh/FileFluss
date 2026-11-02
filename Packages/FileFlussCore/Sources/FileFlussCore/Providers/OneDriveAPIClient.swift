@@ -279,12 +279,13 @@ public actor OneDriveAPIClient {
         request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
 
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
-        guard let http = response as? HTTPURLResponse, (200...399).contains(http.statusCode) else {
+        // URLSession follows the redirect to the file itself, so a 3xx here
+        // means there's no file, only a page to save in its place.
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
@@ -292,17 +293,18 @@ public actor OneDriveAPIClient {
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
-        let fileData = try Data(contentsOf: localURL)
+        let fileSize = try FileChunkReader.size(of: localURL)
         let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? remotePath
         let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
         let modDate = attrs?[.modificationDate] as? Date
         let createdDate = attrs?[.creationDate] as? Date
 
         // Files up to 4MB use simple upload; larger files use upload session
-        if fileData.count <= 4_000_000 {
+        if fileSize <= 4_000_000 {
+            let fileData = try Data(contentsOf: localURL)
             try await simpleUpload(data: fileData, remotePath: encodedPath, onBytes: onBytes)
         } else {
-            try await largeFileUpload(from: localURL, fileSize: fileData.count, remotePath: encodedPath, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
+            try await largeFileUpload(from: localURL, fileSize: fileSize, remotePath: encodedPath, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
         }
 
         // OneDrive has no upload-time parameter for simple uploads, so we PATCH
@@ -392,12 +394,12 @@ public actor OneDriveAPIClient {
 
         // Upload in 10MB chunks
         let chunkSize = 10 * 1024 * 1024
-        let fileData = try Data(contentsOf: localURL)
+        let reader = try FileChunkReader(url: localURL)
         var offset = 0
 
         while offset < fileSize {
             let end = min(offset + chunkSize, fileSize)
-            let chunk = fileData[offset..<end]
+            let chunk = try reader.read(offset: offset, length: end - offset)
 
             var chunkRequest = URLRequest(url: uploadURL)
             chunkRequest.httpMethod = "PUT"
@@ -405,7 +407,7 @@ public actor OneDriveAPIClient {
             chunkRequest.setValue("bytes \(offset)-\(end - 1)/\(fileSize)", forHTTPHeaderField: "Content-Range")
             chunkRequest.setValue("\(chunk.count)", forHTTPHeaderField: "Content-Length")
 
-            let (_, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: Data(chunk), onBytes: onBytes)
+            let (_, chunkResponse) = try await session.uploadReportingProgress(for: chunkRequest, body: chunk, onBytes: onBytes)
             guard let chunkHttp = chunkResponse as? HTTPURLResponse,
                   (200...299).contains(chunkHttp.statusCode) || chunkHttp.statusCode == 308 else {
                 let chunkHttp = chunkResponse as? HTTPURLResponse

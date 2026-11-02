@@ -255,6 +255,7 @@ enum SyncExecutor {
             if let modificationDate {
                 try? FileManager.default.setAttributes([.modificationDate: modificationDate], ofItemAtPath: dst.path)
             }
+            Quarantine.mark(dst)
 
         case let (.cloud(srcAccountId, srcRoot), .cloud(dstAccountId, dstRoot)):
             guard let srcProvider = await SyncEngine.shared.provider(for: srcAccountId),

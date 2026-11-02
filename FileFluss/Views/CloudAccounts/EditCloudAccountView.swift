@@ -699,9 +699,14 @@ struct EditCloudAccountView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            Button(L10n.text("Cancel")) { dismiss() }
+            // Works during a save too: one aimed at a wrong or unreachable
+            // server would otherwise hold the sheet until it timed out.
+            Button(L10n.text("Cancel")) {
+                saveTask?.cancel()
+                saveTask = nil
+                dismiss()
+            }
                 .keyboardShortcut(.cancelAction)
-                .disabled(isAuthenticating)
 
             Spacer()
             if isAuthenticating {

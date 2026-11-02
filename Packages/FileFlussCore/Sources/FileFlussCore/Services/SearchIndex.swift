@@ -69,6 +69,10 @@ public actor SearchIndex {
     }
 
     public func open() throws {
+        try open(rebuildingIfCorrupt: true)
+    }
+
+    private func open(rebuildingIfCorrupt: Bool) throws {
         guard db == nil else { return }
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
             let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "could not open \(dbPath)"
@@ -80,6 +84,26 @@ public actor SearchIndex {
             throw SearchIndexError.openFailed(message)
         }
 
+        do {
+            try createSchema()
+        } catch {
+            // Setup failing leaves a handle that looks open and isn't usable.
+            let code = db.map { sqlite3_errcode($0) } ?? SQLITE_OK
+            if let db { sqlite3_close(db) }
+            db = nil
+            // SQLite opens a damaged file happily and only fails on the first
+            // statement. An index can be built again; a damaged one would
+            // stay broken across every launch.
+            guard rebuildingIfCorrupt, code == SQLITE_CORRUPT || code == SQLITE_NOTADB else { throw error }
+            searchIndexLog.error("[index] the database is damaged; starting a new one")
+            for suffix in ["", "-wal", "-shm", "-journal"] {
+                try? FileManager.default.removeItem(atPath: dbPath + suffix)
+            }
+            try open(rebuildingIfCorrupt: false)
+        }
+    }
+
+    private func createSchema() throws {
         try execute("""
             CREATE TABLE IF NOT EXISTS cloud_files (
                 account_id TEXT NOT NULL,

@@ -311,6 +311,7 @@ struct CloudSettingsView: View {
     @State private var showAddAccount = false
     @State private var editingAccount: CloudAccount?
     @State private var renamingAccount: CloudAccount?
+    @State private var pendingRemoveAccount: CloudAccount?
     @State private var renameText: String = ""
 
     var body: some View {
@@ -341,7 +342,7 @@ struct CloudSettingsView: View {
                             Text(account.displayName)
                             Spacer()
                             Circle()
-                                .fill(account.isConnected ? .green : .gray)
+                                .fill(appState.syncManager.isSignedIn(account) ? .green : .gray)
                                 .frame(width: 8, height: 8)
                             // Mount this account as a Finder drive via a
                             // local WebDAV server. iCloud already lives in
@@ -361,7 +362,7 @@ struct CloudSettingsView: View {
                                 renamingAccount = account
                             }
                             Button(L10n.text("Remove"), role: .destructive) {
-                                Task { await appState.syncManager.removeAccount(account) }
+                                pendingRemoveAccount = account
                             }
                         }
                     }
@@ -380,6 +381,25 @@ struct CloudSettingsView: View {
         }
         .sheet(isPresented: $showAddAccount) {
             AddCloudAccountView()
+        }
+        .confirmationDialog(
+            pendingRemoveAccount.map { L10n.format("Remove %@?", $0.displayName) } ?? L10n.text("Remove Cloud Account?"),
+            isPresented: Binding(
+                get: { pendingRemoveAccount != nil },
+                set: { if !$0 { pendingRemoveAccount = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingRemoveAccount
+        ) { account in
+            Button(L10n.text("Remove"), role: .destructive) {
+                Task { await appState.syncManager.removeAccount(account) }
+                pendingRemoveAccount = nil
+            }
+            Button(L10n.text("Cancel"), role: .cancel) {
+                pendingRemoveAccount = nil
+            }
+        } message: { account in
+            Text(L10n.format("This disconnects %@ from FileFluss. Files in the cloud aren't deleted.", account.displayName))
         }
         .sheet(item: $editingAccount) { account in
             EditCloudAccountView(account: account)

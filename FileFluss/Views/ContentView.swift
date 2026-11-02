@@ -1,6 +1,23 @@
 import SwiftUI
 import FileFlussCore
 
+/// Shows the questions `ConflictPrompter` asks. A view of its own for the same
+/// reason as the welcome sheet below: sheets stacked on one view don't surface
+/// reliably. The binding ignores writes, because only an answer ends a
+/// question, and the sheet can't be dismissed without one.
+private struct ConflictSheetHost: View {
+    private let prompter = ConflictPrompter.shared
+
+    var body: some View {
+        Color.clear.sheet(item: Binding(get: { prompter.current }, set: { _ in })) { question in
+            ConflictResolutionView(conflict: question.conflict) { resolution in
+                prompter.resolve(resolution)
+            }
+            .interactiveDismissDisabled()
+        }
+    }
+}
+
 /// Root wrapper that owns the first-launch welcome sheet. The sheet lives
 /// here rather than on `ContentView` because that view already presents two
 /// other sheets (sync planner, add account) and stacking three `.sheet`
@@ -12,6 +29,7 @@ struct RootView: View {
     var body: some View {
         ContentView()
             .background(WindowFrameAutosaver(defaultsKey: "mainWindowFrame"))
+            .background(ConflictSheetHost())
             .sheet(isPresented: $showWelcome) {
                 WelcomeView()
             }

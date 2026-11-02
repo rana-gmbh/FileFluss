@@ -161,6 +161,9 @@ enum ArchiveService {
 
         var written: [URL] = []
         var remaining = entryPaths
+        // Whatever came from the internet still did after unpacking. ditto
+        // carries the flag across by itself; this path has to do it by hand.
+        let quarantined = Quarantine.isMarked(url)
         var buffer = [UInt8](repeating: 0, count: blockSize)
         // Directory dates are applied at the end: writing into a directory
         // bumps its mtime, so one stamped at creation would be wrong again by
@@ -197,6 +200,7 @@ enum ArchiveService {
                         isExecutable: archive_entry_perm(next.pointer) & 0o100 != 0,
                         buffer: &buffer, onBytes: onBytes
                     )
+                    if quarantined { Quarantine.mark(target) }
                 }
 
                 archive_read_data_skip(handle)

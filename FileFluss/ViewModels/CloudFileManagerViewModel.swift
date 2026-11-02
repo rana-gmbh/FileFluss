@@ -113,20 +113,15 @@ final class CloudFileManagerViewModel {
     // MARK: - Per-item conflict resolution
 
     var conflictDirection: ConflictDirection = .leftToRight
-    var pendingConflict: PendingConflict?
-    private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
+
+    /// This view model told the app the sign-in stopped working, so a listing
+    /// that succeeds has to say otherwise.
+    private var reportedSignInProblem = false
 
     /// A failed action, for an alert. Kept apart from `error`, which replaces
     /// the file list and belongs to listing failures: a rename that clashes
     /// shouldn't hide the folder it happened in.
     var actionError: String?
-
-    func resolveConflict(_ resolution: ConflictResolution) {
-        conflictContinuation?.resume(returning: resolution)
-        conflictContinuation = nil
-        pendingConflict = nil
-    }
-
 
     private var pathHistory: [String] = ["/"]
     private var pathHistoryIndex: Int = 0
@@ -321,6 +316,10 @@ final class CloudFileManagerViewModel {
             // navigation has already cleared it.
             self.selectedItemIDs.formIntersection(loadedItems.map(\.id))
             self.isLoading = false
+            if reportedSignInProblem {
+                reportedSignInProblem = false
+                NotificationCenter.default.post(name: .cloudAccountSignInWorks, object: nil, userInfo: ["accountId": accountId])
+            }
         } catch {
             // Same staleness guard for the error path — if the user has
             // moved on, the failure was for the *previous* folder and
@@ -486,15 +485,12 @@ final class CloudFileManagerViewModel {
                 choice = saved
             } else {
                 let remaining = sourceItems[(index + 1)...].filter { existingByName[$0.name] != nil }.count
-                let resolution = await withCheckedContinuation { continuation in
-                    self.conflictContinuation = continuation
-                    self.pendingConflict = PendingConflict(
-                        source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
-                        destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
-                        remainingConflicts: remaining,
-                        direction: self.conflictDirection
-                    )
-                }
+                let resolution = await ConflictPrompter.shared.ask(PendingConflict(
+                    source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
+                    destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
+                    remainingConflicts: remaining,
+                    direction: self.conflictDirection
+                ))
                 choice = resolution.choice
                 if resolution.applyToAll { applyToAllChoice = choice }
             }
@@ -579,15 +575,12 @@ final class CloudFileManagerViewModel {
                         return Self.findExistingFile(base: nextBase, convertedExtensions: convertedExtensions) != nil
                     }.count
                     let destInfo = FileManagerViewModel.localFileInfo(at: existingURL!)
-                    let resolution = await withCheckedContinuation { continuation in
-                        self.conflictContinuation = continuation
-                        self.pendingConflict = PendingConflict(
-                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
-                            destination: destInfo,
-                            remainingConflicts: remaining,
-                            direction: self.conflictDirection
-                        )
-                    }
+                    let resolution = await ConflictPrompter.shared.ask(PendingConflict(
+                        source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: (item.name as NSString).pathExtension, localURL: nil),
+                        destination: destInfo,
+                        remainingConflicts: remaining,
+                        direction: self.conflictDirection
+                    ))
                     choice = resolution.choice
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
@@ -731,6 +724,7 @@ final class CloudFileManagerViewModel {
                 [.modificationDate: item.modificationDate],
                 ofItemAtPath: finalURL.path
             )
+            Quarantine.mark(finalURL)
             progress?.totalBytes += item.size
             downloadedCount += 1
             progress?.totalFiles = downloadedCount
@@ -937,6 +931,7 @@ final class CloudFileManagerViewModel {
     /// while this panel says otherwise (issue #46).
     private func flagNeedsReAuthentication() {
         needsReAuth = true
+        reportedSignInProblem = true
         NotificationCenter.default.post(
             name: .cloudAccountNeedsReAuthentication,
             object: nil,
@@ -1212,15 +1207,12 @@ final class CloudFileManagerViewModel {
                 } else {
                     let remaining = urls[(index + 1)...].filter { existingByName[$0.lastPathComponent] != nil }.count
                     let sourceInfo = FileManagerViewModel.localFileInfo(at: url)
-                    let resolution = await withCheckedContinuation { continuation in
-                        self.conflictContinuation = continuation
-                        self.pendingConflict = PendingConflict(
-                            source: sourceInfo,
-                            destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
-                            remainingConflicts: remaining,
-                            direction: self.conflictDirection
-                        )
-                    }
+                    let resolution = await ConflictPrompter.shared.ask(PendingConflict(
+                        source: sourceInfo,
+                        destination: ConflictFileInfo(name: existing.name, date: existing.modificationDate, size: existing.size, fileExtension: (existing.name as NSString).pathExtension, localURL: nil),
+                        remainingConflicts: remaining,
+                        direction: self.conflictDirection
+                    ))
                     choice = resolution.choice
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }

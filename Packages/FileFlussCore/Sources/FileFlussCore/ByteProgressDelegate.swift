@@ -67,6 +67,7 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
     private var handle: FileHandle?
     private var response: URLResponse?
     private var failure: Error?
+    private var bytesWritten: Int64 = 0
     var ownedSession: URLSession?
     /// The delegate of the session the caller asked to download with. This
     /// handler runs on a session of its own, so without it a session that
@@ -114,11 +115,23 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
         guard failure == nil, let handle else { return }
         do {
             try handle.write(contentsOf: data)
+            bytesWritten += Int64(data.count)
             onBytes?(Int64(data.count))
         } catch {
             failure = error
             dataTask.cancel()
         }
+    }
+
+    /// Whether fewer bytes arrived than the server promised. Skipped for a
+    /// compressed response, whose promise is about the bytes on the wire, and
+    /// for a failed one, whose body isn't the file anyway.
+    static func isTruncated(_ response: URLResponse, bytesWritten: Int64) -> Bool {
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              http.expectedContentLength > 0,
+              http.value(forHTTPHeaderField: "Content-Encoding") == nil else { return false }
+        return bytesWritten < http.expectedContentLength
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -136,6 +149,11 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
         guard let response else {
             try? FileManager.default.removeItem(at: destURL)
             completion(.failure(URLError(.cannotLoadFromNetwork)))
+            return
+        }
+        if Self.isTruncated(response, bytesWritten: bytesWritten) {
+            try? FileManager.default.removeItem(at: destURL)
+            completion(.failure(URLError(.networkConnectionLost)))
             return
         }
         completion(.success((destURL, response)))

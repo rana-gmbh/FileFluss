@@ -409,8 +409,7 @@ public actor DrimeAPIClient {
             drimeLog.error("[Drime] Download failed: HTTP \(http.statusCode)")
             throw Self.mapHTTPError(statusCode: http.statusCode, body: body)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     // MARK: - Upload

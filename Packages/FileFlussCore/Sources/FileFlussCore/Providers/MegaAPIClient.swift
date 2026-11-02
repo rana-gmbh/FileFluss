@@ -279,7 +279,7 @@ public actor MegaAPIClient {
 
         // Decrypt the downloaded file using the node key
         let decryptedData = try decryptFileData(data, handle: handle)
-        try decryptedData.write(to: localURL)
+        try decryptedData.write(to: localURL, options: .atomic)
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {

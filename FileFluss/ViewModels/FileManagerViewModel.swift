@@ -104,14 +104,6 @@ final class FileManagerViewModel {
     // MARK: - Per-item conflict resolution
 
     var conflictDirection: ConflictDirection = .leftToRight
-    var pendingConflict: PendingConflict?
-    private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
-
-    func resolveConflict(_ resolution: ConflictResolution) {
-        conflictContinuation?.resume(returning: resolution)
-        conflictContinuation = nil
-        pendingConflict = nil
-    }
 
     // Quick Look — controlled directly, no SwiftUI binding
     let quickLookController = QuickLookController()
@@ -200,6 +192,7 @@ final class FileManagerViewModel {
                     self.selectedItemIDs.formIntersection(loadedItems.map(\.id))
                 }
                 self.isLoading = false
+                self.watchCurrentDirectory()
             }
         } catch {
             await MainActor.run {
@@ -208,6 +201,48 @@ final class FileManagerViewModel {
                 self.isLoading = false
             }
         }
+    }
+
+    // MARK: - Watching the folder
+
+    private var watcher: FolderWatcher?
+    private var watchedDirectory: URL?
+    private var pendingWatchRefresh: Task<Void, Never>?
+
+    private func watchCurrentDirectory() {
+        guard watchedDirectory != currentDirectory else { return }
+        watchedDirectory = currentDirectory
+        watcher = FolderWatcher(url: currentDirectory) { [weak self] in
+            Task { @MainActor in self?.folderDidChange() }
+        }
+    }
+
+    /// Reloads shortly after a change. Runs at most once per interval, so a
+    /// copy dropping thousands of files in costs a few listings rather than
+    /// one per file, and the interval grows with the folder because a large
+    /// listing costs more.
+    private func folderDidChange() {
+        guard pendingWatchRefresh == nil, archiveSession == nil else { return }
+        let delay = min(0.3 + Double(items.count) / 5_000, 5)
+        pendingWatchRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self else { return }
+            self.pendingWatchRefresh = nil
+            if FileManager.default.fileExists(atPath: self.currentDirectory.path) {
+                await self.refresh()
+            } else {
+                await self.loadDirectory(at: self.nearestExistingFolder())
+            }
+        }
+    }
+
+    /// Where to go when the folder on screen has gone away.
+    private func nearestExistingFolder() -> URL {
+        var folder = currentDirectory
+        while folder.path != "/", !FileManager.default.fileExists(atPath: folder.path) {
+            folder = folder.deletingLastPathComponent()
+        }
+        return folder
     }
 
     /// Whether a listing that has just come back is still the one the panel
@@ -581,15 +616,12 @@ final class FileManagerViewModel {
                         FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
                     }.count
                     let destInfo = Self.localFileInfo(at: dest)
-                    let resolution = await withCheckedContinuation { continuation in
-                        self.conflictContinuation = continuation
-                        self.pendingConflict = PendingConflict(
-                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
-                            destination: destInfo,
-                            remainingConflicts: remaining,
-                            direction: self.conflictDirection
-                        )
-                    }
+                    let resolution = await ConflictPrompter.shared.ask(PendingConflict(
+                        source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
+                        destination: destInfo,
+                        remainingConflicts: remaining,
+                        direction: self.conflictDirection
+                    ))
                     choice = resolution.choice
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }
@@ -666,15 +698,12 @@ final class FileManagerViewModel {
                         FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
                     }.count
                     let destInfo = Self.localFileInfo(at: dest)
-                    let resolution = await withCheckedContinuation { continuation in
-                        self.conflictContinuation = continuation
-                        self.pendingConflict = PendingConflict(
-                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
-                            destination: destInfo,
-                            remainingConflicts: remaining,
-                            direction: self.conflictDirection
-                        )
-                    }
+                    let resolution = await ConflictPrompter.shared.ask(PendingConflict(
+                        source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
+                        destination: destInfo,
+                        remainingConflicts: remaining,
+                        direction: self.conflictDirection
+                    ))
                     choice = resolution.choice
                     if resolution.applyToAll { applyToAllChoice = choice }
                 }

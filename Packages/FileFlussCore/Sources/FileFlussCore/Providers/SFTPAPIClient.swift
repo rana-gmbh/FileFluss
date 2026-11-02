@@ -177,11 +177,15 @@ public actor SFTPAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
+        // `get` writes as it goes, so it gets a name of its own: a drop part
+        // way must not leave a short file, or cost the file already there.
+        let partial = localURL.deletingLastPathComponent()
+            .appendingPathComponent(FileSystemService.temporaryReplacementName(for: localURL.lastPathComponent))
         do {
-            _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(localURL.path))"])
+            _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(partial.path))"])
+            try FileSystemService.placeDownload(from: partial, at: localURL)
         } catch {
-            // `get` writes to the final path, so what's there is only part.
-            try? FileManager.default.removeItem(at: localURL)
+            try? FileManager.default.removeItem(at: partial)
             throw error
         }
         if let onBytes,

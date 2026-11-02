@@ -530,71 +530,73 @@ struct MoveTests {
         await vm.performMove(items: [FileItem(url: inner)], to: root, progress: progress)
 
         #expect(progress.failureCount == 1)
-        #expect(vm.pendingConflict == nil)
+        #expect(ConflictPrompter.shared.current?.conflict.source.name != "foo")
         #expect(read(inner.appendingPathComponent("a.txt")) == "keep")
         #expect(read(outer.appendingPathComponent("b.txt")) == "sibling")
     }
 
-    private func resolveWhenAsked(_ vm: CloudFileManagerViewModel, _ choice: ConflictChoice) async {
-        while vm.pendingConflict == nil { await Task.yield() }
-        vm.resolveConflict(ConflictResolution(choice: choice, applyToAll: false))
+    /// By name: the prompter is shared, and other suites running alongside
+    /// ask questions of their own.
+    private func answer(_ choice: ConflictChoice, about name: String) async {
+        while ConflictPrompter.shared.current?.conflict.source.name != name { await Task.yield() }
+        ConflictPrompter.shared.resolve(ConflictResolution(choice: choice, applyToAll: false))
     }
 
     @Test("Keep Both on a download keeps both")
     func keepBothDownload() async throws {
         let provider = FakeProvider()
-        provider.put("/a.txt", "cloud")
+        provider.put("/keepboth.txt", "cloud")
         let folder = try temporaryFolder()
-        try write("local", to: folder.appendingPathComponent("a.txt"))
+        try write("local", to: folder.appendingPathComponent("keepboth.txt"))
 
         try await withAccount(provider) { accountId in
             let vm = CloudFileManagerViewModel(accountId: accountId)
-            let item = CloudFileItem(id: "/a.txt", name: "a.txt", path: "/a.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
+            let item = CloudFileItem(id: "/keepboth.txt", name: "keepboth.txt", path: "/keepboth.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
             async let download = vm.downloadItems([item], to: folder)
-            await resolveWhenAsked(vm, .keepBoth)
+            await answer(.keepBoth, about: "keepboth.txt")
             _ = await download
         }
         let names = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         #expect(names.count == 2)
-        #expect(read(folder.appendingPathComponent("a.txt")) == "local")
+        #expect(read(folder.appendingPathComponent("keepboth.txt")) == "local")
     }
 
     @Test("A failed download doesn't cost the file it was replacing")
     func failedReplaceDownload() async throws {
         let provider = FakeProvider()
-        provider.put("/a.txt", "cloud")
-        provider.failDownload(of: "/a.txt")
+        provider.put("/failedreplace.txt", "cloud")
+        provider.failDownload(of: "/failedreplace.txt")
         let folder = try temporaryFolder()
-        try write("local", to: folder.appendingPathComponent("a.txt"))
+        try write("local", to: folder.appendingPathComponent("failedreplace.txt"))
 
         try await withAccount(provider) { accountId in
             let vm = CloudFileManagerViewModel(accountId: accountId)
-            let item = CloudFileItem(id: "/a.txt", name: "a.txt", path: "/a.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
+            let item = CloudFileItem(id: "/failedreplace.txt", name: "failedreplace.txt", path: "/failedreplace.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
             async let download = vm.downloadItems([item], to: folder)
-            await resolveWhenAsked(vm, .replace)
+            await answer(.replace, about: "failedreplace.txt")
             let downloaded = await download
             #expect(downloaded.isEmpty)
         }
-        #expect(read(folder.appendingPathComponent("a.txt")) == "local")
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["a.txt"])
+        #expect(read(folder.appendingPathComponent("failedreplace.txt")) == "local")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["failedreplace.txt"])
     }
 
     @Test("A download that replaces lands over the old file")
     func replaceDownload() async throws {
         let provider = FakeProvider()
-        provider.put("/a.txt", "cloud")
+        provider.put("/replaced.txt", "cloud")
         let folder = try temporaryFolder()
-        try write("local", to: folder.appendingPathComponent("a.txt"))
+        try write("local", to: folder.appendingPathComponent("replaced.txt"))
 
         try await withAccount(provider) { accountId in
             let vm = CloudFileManagerViewModel(accountId: accountId)
-            let item = CloudFileItem(id: "/a.txt", name: "a.txt", path: "/a.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
+            let item = CloudFileItem(id: "/replaced.txt", name: "replaced.txt", path: "/replaced.txt", isDirectory: false, size: 5, modificationDate: .distantPast, checksum: nil)
             async let download = vm.downloadItems([item], to: folder)
-            await resolveWhenAsked(vm, .replace)
-            #expect(await download == ["a.txt"])
+            await answer(.replace, about: "replaced.txt")
+            #expect(await download == ["replaced.txt"])
         }
-        #expect(read(folder.appendingPathComponent("a.txt")) == "cloud")
-        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["a.txt"])
+        #expect(read(folder.appendingPathComponent("replaced.txt")) == "cloud")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["replaced.txt"])
     }
 }
 

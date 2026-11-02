@@ -32,6 +32,7 @@ extension Notification.Name {
     static let requestShowStorageWindow = Notification.Name("FileFluss.requestShowStorageWindow")
     /// A cloud panel found its credentials no longer work.
     static let cloudAccountNeedsReAuthentication = Notification.Name("FileFluss.cloudAccountNeedsReAuthentication")
+    static let cloudAccountSignInWorks = Notification.Name("FileFluss.cloudAccountSignInWorks")
 }
 
 @Observable @MainActor
@@ -304,6 +305,38 @@ final class AppState {
         await rightFileManager.refresh()
     }
 
+    /// What's really at these paths. The clipboard and a sidebar drag carry
+    /// nothing but a path, and treating every one as a file sent folders down
+    /// the single-file path, which can't handle them. Listing the parent tells
+    /// the two apart on any provider, where a metadata call on a folder
+    /// doesn't always. Nil, with the transfer ended, when it can't be found out.
+    func resolvedCloudItems(_ items: [CloudFileItem], accountId: UUID, transfer: TransferProgress) async -> [CloudFileItem]? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            transfer.failAll(items.map(\.name), error: L10n.text("Cloud account not connected"))
+            return nil
+        }
+        var listings: [String: [CloudFileItem]] = [:]
+        var resolved: [CloudFileItem] = []
+        for item in items {
+            var parent = (item.path as NSString).deletingLastPathComponent
+            if parent.isEmpty { parent = "/" }
+            do {
+                if listings[parent] == nil {
+                    listings[parent] = try await provider.listDirectory(at: parent)
+                }
+            } catch {
+                transfer.failAll(items.map(\.name), error: error.localizedDescription)
+                return nil
+            }
+            guard let found = listings[parent]?.first(where: { $0.name == item.name }) else {
+                transfer.recordFailure(item.name, error: CloudProviderError.notFound(item.path).localizedDescription)
+                continue
+            }
+            resolved.append(found)
+        }
+        return resolved
+    }
+
     /// Reloads what both panels are showing, cloud folders included. For an
     /// explicit Refresh: `refreshAllPanels` skips the network, which is what
     /// the local operations that call it want.
@@ -405,6 +438,9 @@ final class AppState {
     /// would destroy it — the same failure that once wiped the cloud
     /// accounts (see `SyncViewModel.accountsLoadFailed`).
     private var favoritesLoadFailed = false
+    /// Favourites this version can't read, written back as they were.
+    private var unreadableLeftFavorites: [Data] = []
+    private var unreadableRightFavorites: [Data] = []
 
     private func saveFavorites() {
         if favoritesLoadFailed && leftFavorites.isEmpty && rightFavorites.isEmpty {
@@ -412,11 +448,10 @@ final class AppState {
             return
         }
         let defaults = UserDefaults.standard
-        let encoder = JSONEncoder()
-        if let leftData = try? encoder.encode(leftFavorites) {
+        if let leftData = try? StoredList.encode(leftFavorites, unreadable: unreadableLeftFavorites) {
             defaults.set(leftData, forKey: Self.leftFavoritesKey)
         }
-        if let rightData = try? encoder.encode(rightFavorites) {
+        if let rightData = try? StoredList.encode(rightFavorites, unreadable: unreadableRightFavorites) {
             defaults.set(rightData, forKey: Self.rightFavoritesKey)
         }
     }
@@ -427,15 +462,17 @@ final class AppState {
 
         if defaults.bool(forKey: Self.favoritesInitializedKey) {
             if let data = defaults.data(forKey: Self.leftFavoritesKey) {
-                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                    leftFavorites = decoded
+                if let decoded = StoredList.decode(data, as: SidebarFavorite.self) {
+                    leftFavorites = decoded.items
+                    unreadableLeftFavorites = decoded.unreadable
                 } else {
                     favoritesLoadFailed = true
                 }
             }
             if let data = defaults.data(forKey: Self.rightFavoritesKey) {
-                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                    rightFavorites = decoded
+                if let decoded = StoredList.decode(data, as: SidebarFavorite.self) {
+                    rightFavorites = decoded.items
+                    unreadableRightFavorites = decoded.unreadable
                 } else {
                     favoritesLoadFailed = true
                 }
@@ -1264,6 +1301,7 @@ final class AppState {
                     addTransfer(transfer, panel: activePanel)
                     let destDir = destFM.currentDirectory
                     transfer.task = Task { [sourceVM, destFM] in
+                        guard let items = await self.resolvedCloudItems(items, accountId: accountId, transfer: transfer) else { return }
                         await sourceVM.downloadItems(items, to: destDir, progress: transfer)
                         if isCut {
                             // Delete only what actually downloaded. A batch
@@ -1340,21 +1378,23 @@ final class AppState {
         // Fetch metadata for proper sizes (so the pre-flight dialog has
         // real numbers to display, and the progress bar can show
         // meaningful percentages).
-        var cloudItems: [CloudFileItem] = []
-        for src in sourceItems {
-            if let meta = try? await sourceProvider.getFileMetadata(at: src.remotePath) {
-                cloudItems.append(meta)
-            } else {
-                cloudItems.append(CloudFileItem(
-                    id: src.remotePath,
-                    name: src.name,
-                    path: src.remotePath,
-                    isDirectory: false,
-                    size: 0,
-                    modificationDate: Date(),
-                    checksum: nil
-                ))
+        let clipboardItems = sourceItems.map { src in
+            CloudFileItem(id: src.remotePath, name: src.name, path: src.remotePath, isDirectory: false,
+                          size: 0, modificationDate: Date(), checksum: nil)
+        }
+        guard let cloudItems = await resolvedCloudItems(clipboardItems, accountId: sourceAccountId, transfer: transfer) else { return }
+
+        // The raw transfer below handles single files. A folder needs its
+        // contents walked, which the panel-to-panel path already does.
+        if cloudItems.contains(where: \.isDirectory) {
+            transfer.task = Task {
+                await CloudFileListView.cloudToCloudTransfer(
+                    items: cloudItems, from: sourceVM, to: destVM,
+                    targetSubfolderPath: destPath, progress: transfer, deleteFromSource: isCut
+                )
+                await destVM.refresh()
             }
+            return
         }
 
         // List the destination directory if it differs from the VM's
@@ -1739,6 +1779,16 @@ final class AppState {
             MainActor.assumeIsolated {
                 guard let self, let accountId else { return }
                 self.syncManager.markNeedsReAuthentication(accountId: accountId)
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .cloudAccountSignInWorks, object: nil, queue: .main
+        ) { [weak self] note in
+            let accountId = note.userInfo?["accountId"] as? UUID
+            MainActor.assumeIsolated {
+                guard let self, let accountId else { return }
+                self.syncManager.markSignInWorks(accountId: accountId)
             }
         }
 

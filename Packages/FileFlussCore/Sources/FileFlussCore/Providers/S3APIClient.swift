@@ -379,8 +379,7 @@ public actor S3APIClient {
             let (tmp, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
             try validate(response, body: nil)
 
-            try? FileManager.default.removeItem(at: localURL)
-            try FileManager.default.moveItem(at: tmp, to: localURL)
+            try FileSystemService.placeDownload(from: tmp, at: localURL)
         }
     }
 

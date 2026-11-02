@@ -1100,12 +1100,28 @@ final class SyncViewModel {
                 accounts[idx].isConnected = true
                 saveAccounts()
             }
+            markSignInWorks(accountId: accountId)
         } catch {
             authError = error.localizedDescription
         }
     }
 
+    /// Accounts saved as disconnected by an expired sign-in, in versions that
+    /// recorded it that way. With credentials to try, they're live again, and
+    /// the panel shows Sign In if those credentials still don't work.
+    private func restoreDisconnectedAccounts() async {
+        var changed = false
+        for account in accounts where !account.isConnected {
+            guard await syncEngine.provider(for: account.id) != nil,
+                  let index = accounts.firstIndex(where: { $0.id == account.id }) else { continue }
+            accounts[index].isConnected = true
+            changed = true
+        }
+        if changed { saveAccounts() }
+    }
+
     func reconnectSavedAccounts() async {
+        defer { Task { await restoreDisconnectedAccounts() } }
         for account in accounts {
             switch account.providerType {
             case .googleDrive:
@@ -1272,6 +1288,19 @@ final class SyncViewModel {
         }
     }
 
+    /// Accounts whose sign-in stopped working this session.
+    ///
+    /// Apart from `isConnected`, which decides whether a panel shows the live
+    /// account or an offline snapshot. An expired sign-in used to clear that
+    /// flag, which took the panel, and the Sign In button with it, away, and
+    /// was saved, so the account stayed stuck after a relaunch.
+    private(set) var accountsNeedingSignIn: Set<UUID> = []
+
+    /// What the status dot shows.
+    func isSignedIn(_ account: CloudAccount) -> Bool {
+        account.isConnected && !accountsNeedingSignIn.contains(account.id)
+    }
+
     /// Records that an account's credentials stopped working, so the
     /// sidebar stops showing it as connected.
     ///
@@ -1279,10 +1308,11 @@ final class SyncViewModel {
     /// required" — the app contradicting itself in two places at once
     /// (issue #46).
     func markNeedsReAuthentication(accountId: UUID) {
-        guard let idx = accounts.firstIndex(where: { $0.id == accountId }),
-              accounts[idx].isConnected else { return }
-        accounts[idx].isConnected = false
-        saveAccounts()
+        accountsNeedingSignIn.insert(accountId)
+    }
+
+    func markSignInWorks(accountId: UUID) {
+        accountsNeedingSignIn.remove(accountId)
     }
 
     func accountFor(id: UUID) -> CloudAccount? {
@@ -1319,6 +1349,7 @@ final class SyncViewModel {
             }
             saveAccounts()
         }
+        markSignInWorks(accountId: accountId)
     }
 
     func updateDropboxAccount(accountId: UUID) async {
@@ -1725,7 +1756,7 @@ final class SyncViewModel {
             return
         }
         do {
-            let data = try JSONEncoder().encode(accounts)
+            let data = try StoredList.encode(accounts, unreadable: unreadableAccounts)
             Self.defaults.set(data, forKey: Self.accountsKey)
         } catch {
             // A silent failure here would lose accounts the user just added —
@@ -1734,16 +1765,24 @@ final class SyncViewModel {
         }
     }
 
+    /// Accounts in the store that this version can't read: one added in a
+    /// newer version, usually. Kept so that saving doesn't delete them.
+    private var unreadableAccounts: [Data] = []
+
     private func loadAccounts() {
         guard let data = Self.defaults.data(forKey: Self.accountsKey) else { return }
-        guard let saved = try? JSONDecoder().decode([CloudAccount].self, from: data) else {
-            // Stored data exists but doesn't decode — a model change, or a
-            // truncated write. Flag it so a later save can't replace the
-            // stored list with an empty one.
+        guard let saved = StoredList.decode(data, as: CloudAccount.self) else {
+            // Stored data exists but doesn't decode — a truncated write, say.
+            // Flag it so a later save can't replace the stored list with an
+            // empty one.
             accountsLoadFailed = true
             NSLog("[FileFluss] loadAccounts: stored account list could not be decoded — it will not be overwritten")
             return
         }
-        accounts = saved
+        accounts = saved.items
+        unreadableAccounts = saved.unreadable
+        if !saved.unreadable.isEmpty {
+            NSLog("[FileFluss] loadAccounts: keeping \(saved.unreadable.count) account(s) this version can't read")
+        }
     }
 }
