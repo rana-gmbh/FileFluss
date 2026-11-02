@@ -981,3 +981,13 @@
 "“%@” can't replace a folder it's inside." = "“%@”无法替换包含它自身的文件夹。";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "“%1$@”的新副本已上传，但无法重命名，仍名为“%2$@”。";
 "Couldn't check the destination for items with the same name: %@" = "无法检查目标中是否有同名项目：%@";
+
+/* Sync, transfers, shortcuts */
+"%@ can't be written to, so it can't be a sync destination." = "%@ 无法写入，因此不能作为同步目标。";
+"Leaving %d file(s) alone: a folder with the same name is at the destination." = "保留 %d 个文件不变：目标中有同名文件夹。";
+"Quit while transfers are running?" = "要在传输进行时退出吗？";
+"%d transfer(s) will stop where they are." = "%d 个传输将在当前位置停止。";
+"Quit Anyway" = "仍要退出";
+"Shortcut already in use" = "快捷键已被使用";
+"This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "此快捷键已分配给“%@”。替换后该命令将没有快捷键。";
+"This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "此地址使用普通 HTTP，你的密码将以未加密方式通过网络传输。除非你信任途经的所有网络，否则请使用 https://。";

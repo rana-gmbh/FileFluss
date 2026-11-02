@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Delegate for URLSession tasks that reports byte-level transfer progress.
 ///
@@ -145,21 +146,37 @@ extension URLSession {
     /// Download the request to a temp URL; reports byte progress if `onBytes` is non-nil.
     /// Returns (tempFileURL, URLResponse) like `session.download(for:)`.
     public func downloadReportingProgress(for request: URLRequest, onBytes: ByteProgressHandler?) async throws -> (URL, URLResponse) {
-        return try await withCheckedThrowingContinuation { continuation in
-            let handler = DownloadProgressHandler(onBytes: onBytes) { result in
-                switch result {
-                case .success(let value): continuation.resume(returning: value)
-                case .failure(let error): continuation.resume(throwing: error)
+        // The continuation knows nothing of task cancellation by itself, which
+        // left Cancel waiting for the current file to finish on its own.
+        let running = OSAllocatedUnfairLock<(task: URLSessionDataTask?, cancelled: Bool)>(initialState: (nil, false))
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let handler = DownloadProgressHandler(onBytes: onBytes) { result in
+                    switch result {
+                    case .success(let value): continuation.resume(returning: value)
+                    case .failure(let error): continuation.resume(throwing: error)
+                    }
                 }
+                // Dedicated session so the delegate is strongly retained and reliably
+                // receives the streaming `didReceive` callbacks (a per-task delegate
+                // on the async `data(for:delegate:)` doesn't always deliver them).
+                handler.trustDelegate = delegate
+                let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
+                handler.ownedSession = session
+                let task = session.dataTask(with: request)
+                let alreadyCancelled = running.withLock { state in
+                    state.task = task
+                    return state.cancelled
+                }
+                task.resume()
+                if alreadyCancelled { task.cancel() }
             }
-            // Dedicated session so the delegate is strongly retained and reliably
-            // receives the streaming `didReceive` callbacks (a per-task delegate
-            // on the async `data(for:delegate:)` doesn't always deliver them).
-            handler.trustDelegate = delegate
-            let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
-            handler.ownedSession = session
-            let task = session.dataTask(with: request)
-            task.resume()
+        } onCancel: {
+            let task = running.withLock { state in
+                state.cancelled = true
+                return state.task
+            }
+            task?.cancel()
         }
     }
 

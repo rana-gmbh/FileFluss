@@ -90,6 +90,19 @@ struct SyncPlan: Sendable {
     /// What each side held when the plan was made, hidden files aside.
     let sourceEntryCount: Int
     let destinationEntryCount: Int
+    /// Each source file's modification date, stamped onto its copy. Without
+    /// that a copy carries the time it was made, looks changed on the next
+    /// run, and every Mirror replaces everything again.
+    var sourceModificationDates: [String: Date] = [:]
+    /// Files left alone because a folder of the same name is at the
+    /// destination, in a mode that promises never to delete.
+    var typeClashes: Int = 0
+
+    /// Whether this is the plan for what's selected now. A plan calculated
+    /// for one direction or mode must not run under another.
+    func matches(mode: SyncMode, direction: PlanDirection) -> Bool {
+        self.mode == mode && self.direction == direction
+    }
 
     /// Mirroring nothing over something. This is what a scan gone wrong looks
     /// like far more often than a real wish to wipe the destination, so it

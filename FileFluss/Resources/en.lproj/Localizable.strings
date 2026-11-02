@@ -981,3 +981,13 @@
 "“%@” can't replace a folder it's inside." = "“%@” can't replace a folder it's inside.";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”.";
 "Couldn't check the destination for items with the same name: %@" = "Couldn't check the destination for items with the same name: %@";
+
+/* Sync, transfers, shortcuts */
+"%@ can't be written to, so it can't be a sync destination." = "%@ can't be written to, so it can't be a sync destination.";
+"Leaving %d file(s) alone: a folder with the same name is at the destination." = "Leaving %d file(s) alone: a folder with the same name is at the destination.";
+"Quit while transfers are running?" = "Quit while transfers are running?";
+"%d transfer(s) will stop where they are." = "%d transfer(s) will stop where they are.";
+"Quit Anyway" = "Quit Anyway";
+"Shortcut already in use" = "Shortcut already in use";
+"This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "This shortcut is assigned to “%@”. Replacing it leaves that command without one.";
+"This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between.";

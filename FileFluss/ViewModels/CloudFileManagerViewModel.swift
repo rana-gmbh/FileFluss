@@ -39,7 +39,7 @@ final class CloudFileManagerViewModel {
     /// SFTP server-side `lost+found`-style dotfiles) are hidden from the
     /// listing. Mirrored to the local `FileManagerViewModel.showHiddenFiles`
     /// flag by the toolbar toggle.
-    var showHiddenFiles: Bool = false { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
+    var showHiddenFiles: Bool = UserDefaults.standard.bool(forKey: "showHiddenFiles") { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
 
     /// Memoised result of `filteredItems` — recomputed lazily and invalidated
     /// (via the `didSet`s above) only when an input that affects it changes:
@@ -115,6 +115,11 @@ final class CloudFileManagerViewModel {
     var conflictDirection: ConflictDirection = .leftToRight
     var pendingConflict: PendingConflict?
     private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
+
+    /// A failed action, for an alert. Kept apart from `error`, which replaces
+    /// the file list and belongs to listing failures: a rename that clashes
+    /// shouldn't hide the folder it happened in.
+    var actionError: String?
 
     func resolveConflict(_ resolution: ConflictResolution) {
         conflictContinuation?.resume(returning: resolution)
@@ -312,7 +317,9 @@ final class CloudFileManagerViewModel {
             }
 
             self.items = loadedItems
-            self.selectedItemIDs.removeAll()
+            // A refresh keeps the selection, less anything now gone. A
+            // navigation has already cleared it.
+            self.selectedItemIDs.formIntersection(loadedItems.map(\.id))
             self.isLoading = false
         } catch {
             // Same staleness guard for the error path — if the user has
@@ -392,7 +399,7 @@ final class CloudFileManagerViewModel {
             await loadDirectory()
         } catch {
             SupportLogger.shared.log("createDirectory FAILED \(folderPath) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-            self.error = "Failed to create folder: \(error.localizedDescription)"
+            self.actionError = "Failed to create folder: \(error.localizedDescription)"
         }
     }
 
@@ -404,7 +411,7 @@ final class CloudFileManagerViewModel {
             await loadDirectory()
         } catch {
             SupportLogger.shared.log("renameItem FAILED \(item.path) → \(newName) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-            self.error = "Failed to rename: \(error.localizedDescription)"
+            self.actionError = "Failed to rename: \(error.localizedDescription)"
         }
     }
 
@@ -427,7 +434,7 @@ final class CloudFileManagerViewModel {
                 SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
                 SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.actionError = "Failed to delete \(item.name): \(error.localizedDescription)"
                 return
             }
         }
@@ -444,7 +451,7 @@ final class CloudFileManagerViewModel {
                 SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
                 SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.actionError = "Failed to delete \(item.name): \(error.localizedDescription)"
                 return
             }
         }
@@ -554,7 +561,7 @@ final class CloudFileManagerViewModel {
             // downloaded; the rest of the batch continues.
             guard let base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
                 let msg = "Unsafe file name from the server — download refused."
-                self.error = msg
+                self.actionError = msg
                 progress?.recordFailure(item.name, error: msg)
                 continue
             }
@@ -629,7 +636,13 @@ final class CloudFileManagerViewModel {
                     progress?.recordSuccess(item.name)
                 }
             } catch {
-                self.error = "Failed to download \(item.name): \(error.localizedDescription)"
+                // Cancelling isn't a failure to report. The loop stops at
+                // its next pass.
+                if Self.wasCancelled(progress) {
+                    progress?.recordSkip(item.name)
+                    continue
+                }
+                self.actionError = "Failed to download \(item.name): \(error.localizedDescription)"
                 // Failures must always be recorded so cloud-to-cloud
                 // download errors aren't silently dropped — the upload
                 // phase won't see those items.
@@ -680,7 +693,14 @@ final class CloudFileManagerViewModel {
         }
     }
 
+    private static func wasCancelled(_ progress: TransferProgress?) -> Bool {
+        progress?.isCancelled == true || Task.isCancelled
+    }
+
     private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int) async throws {
+        // Some providers make no call that notices a cancel, so a folder
+        // would otherwise go on fetching its remaining files.
+        if Self.wasCancelled(progress) { throw CancellationError() }
         if item.isDirectory {
             let folderURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
@@ -1132,7 +1152,7 @@ final class CloudFileManagerViewModel {
     func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false, replacing: [String: CloudFileItem] = [:]) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             SupportLogger.shared.log("uploadFiles aborted: provider unavailable", category: cloudCategory, level: .error)
-            self.error = "Cloud account not connected"
+            self.actionError = "Cloud account not connected"
             progress?.isComplete = true
             return
         }
@@ -1149,7 +1169,7 @@ final class CloudFileManagerViewModel {
                 // Not knowing what's there isn't the same as nothing being
                 // there: going on would overwrite without asking.
                 let message = L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription)
-                self.error = message
+                self.actionError = message
                 progress?.failAll(urls.map(\.lastPathComponent), error: message)
                 return
             }
@@ -1223,7 +1243,7 @@ final class CloudFileManagerViewModel {
                         // very file the user asked to keep. Skip the item
                         // and say so instead.
                         let msg = "Couldn't stage a copy for \"Keep Both\": \(error.localizedDescription)"
-                        self.error = msg
+                        self.actionError = msg
                         progress?.recordFailure(name, error: msg)
                         continue
                     }
@@ -1245,7 +1265,11 @@ final class CloudFileManagerViewModel {
                 if uploadURL != url { try? FileManager.default.removeItem(at: uploadURL) }
                 progress?.recordSuccess(name)
             } catch {
-                self.error = error.localizedDescription
+                if Self.wasCancelled(progress) {
+                    progress?.recordSkip(name)
+                    continue
+                }
+                self.actionError = error.localizedDescription
                 progress?.recordFailure(name, error: error.localizedDescription)
                 // Continue with the remaining items so a single bad file
                 // (e.g. a >4 GiB upload that the provider rejects) doesn't
@@ -1265,6 +1289,7 @@ final class CloudFileManagerViewModel {
     private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, remoteItemPath: String? = nil, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
         let fm = FileManager.default
         for url in urls {
+            if Self.wasCancelled(progress) { throw CancellationError() }
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else {
                 cloudFileVMLog.debug("Upload: file not found, skipping \(url.path, privacy: .public)")
@@ -1348,7 +1373,7 @@ final class CloudFileManagerViewModel {
             // Not knowing what's there isn't the same as nothing being there:
             // going on would overwrite without asking.
             let message = L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription)
-            self.error = message
+            self.actionError = message
             progress?.failAll(sourceItems.map(\.name), error: message)
             return
         }
@@ -1460,7 +1485,7 @@ final class CloudFileManagerViewModel {
                 landed.insert(item.name)
                 progress?.recordSuccess(item.name)
             } catch {
-                self.error = error.localizedDescription
+                self.actionError = error.localizedDescription
                 progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }

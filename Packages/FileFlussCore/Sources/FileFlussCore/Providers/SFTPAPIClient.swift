@@ -177,7 +177,13 @@ public actor SFTPAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(localURL.path))"])
+        do {
+            _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(localURL.path))"])
+        } catch {
+            // `get` writes to the final path, so what's there is only part.
+            try? FileManager.default.removeItem(at: localURL)
+            throw error
+        }
         if let onBytes,
            let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path),
            let size = attrs[.size] as? Int64 {
@@ -363,112 +369,118 @@ public actor SFTPAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+        let cancellation = ProcessCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
 
-            var args: [String] = [
-                "-oBatchMode=no",
-                "-oStrictHostKeyChecking=accept-new",
-                "-oControlMaster=auto",
-                "-oControlPath=\(controlPath)",
-                "-oControlPersist=600",
-                "-oConnectTimeout=10",
-                // ConnectTimeout only covers the handshake. These end a
-                // connection that goes silent later, about a minute on.
-                "-oServerAliveInterval=15",
-                "-oServerAliveCountMax=4",
-                "-P", "\(credentials.port)"
-            ]
+                var args: [String] = [
+                    "-oBatchMode=no",
+                    "-oStrictHostKeyChecking=accept-new",
+                    "-oControlMaster=auto",
+                    "-oControlPath=\(controlPath)",
+                    "-oControlPersist=600",
+                    "-oConnectTimeout=10",
+                    // ConnectTimeout only covers the handshake. These end a
+                    // connection that goes silent later, about a minute on.
+                    "-oServerAliveInterval=15",
+                    "-oServerAliveCountMax=4",
+                    "-P", "\(credentials.port)"
+                ]
 
-            // Auth-method-specific flags: tell sftp exactly which method
-            // to use so it doesn't fall back and prompt the user
-            // interactively when the chosen method fails.
-            switch credentials.authMethod {
-            case .password:
-                args.append(contentsOf: [
-                    "-oPubkeyAuthentication=no",
-                    "-oPreferredAuthentications=password,keyboard-interactive"
-                ])
-            case .privateKey:
-                if let keyPath = privateKeyPath {
-                    args.append(contentsOf: ["-i", keyPath])
+                // Auth-method-specific flags: tell sftp exactly which method
+                // to use so it doesn't fall back and prompt the user
+                // interactively when the chosen method fails.
+                switch credentials.authMethod {
+                case .password:
+                    args.append(contentsOf: [
+                        "-oPubkeyAuthentication=no",
+                        "-oPreferredAuthentications=password,keyboard-interactive"
+                    ])
+                case .privateKey:
+                    if let keyPath = privateKeyPath {
+                        args.append(contentsOf: ["-i", keyPath])
+                    }
+                    args.append(contentsOf: [
+                        "-oPasswordAuthentication=no",
+                        "-oPreferredAuthentications=publickey",
+                        "-oIdentitiesOnly=yes"
+                    ])
                 }
-                args.append(contentsOf: [
-                    "-oPasswordAuthentication=no",
-                    "-oPreferredAuthentications=publickey",
-                    "-oIdentitiesOnly=yes"
-                ])
-            }
 
-            args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
-            process.arguments = args
+                args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
+                process.arguments = args
 
-            var env: [String: String] = [
-                "DISPLAY": ":0",
-                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "HOME": NSHomeDirectory()
-            ]
-            if let askPass = askPassScriptPath {
-                env["SSH_ASKPASS"] = askPass
-                env["SSH_ASKPASS_REQUIRE"] = "force"
-            }
-            process.environment = env
-
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
-            process.standardInput = FileHandle.nullDevice
-
-            let stdoutDrain = PipeDrain(stdoutPipe)
-            let stderrDrain = PipeDrain(stderrPipe)
-
-            process.terminationHandler = { proc in
-                let stdoutData = stdoutDrain.collected()
-                let stderrData = stderrDrain.collected()
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-
-                // Diagnostic capture for the recurring "SFTP folder appears
-                // empty" reports (issue #31). Routed through SupportLogger so
-                // it lands in the user-exportable Support Log on notarized
-                // builds — the os.Logger output never reached that export,
-                // which is why earlier support logs came back empty. No secret
-                // is logged: the password / key passphrase travels via the
-                // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
-                // is the raw `ls` listing whose exact longname format is what
-                // we need to parse the affected (newer) servers correctly.
-                SupportLogger.shared.log(
-                    "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
-                        + "exit=\(proc.terminationStatus)\n"
-                        + "stdout (\(stdoutData.count) bytes):\n\(stdout.prefix(1800))\n"
-                        + "stderr:\n\(stderr.prefix(600))",
-                    category: "sftp",
-                    level: proc.terminationStatus == 0 ? .info : .error
-                )
-
-                if proc.terminationStatus != 0 {
-                    let exit = Int(proc.terminationStatus)
-                    let stderrTrim = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let combined = (stderrTrim + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
-                    let authMethod = self.credentials.authMethod
-                    let error = Self.mapSFTPFailure(exit: exit, stderr: stderrTrim, combined: combined, authMethod: authMethod)
-                    continuation.resume(throwing: error)
-                    return
+                var env: [String: String] = [
+                    "DISPLAY": ":0",
+                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                    "HOME": NSHomeDirectory()
+                ]
+                if let askPass = askPassScriptPath {
+                    env["SSH_ASKPASS"] = askPass
+                    env["SSH_ASKPASS_REQUIRE"] = "force"
                 }
-                continuation.resume(returning: stdout)
-            }
+                process.environment = env
 
-            do {
-                try process.run()
-            } catch {
-                // Never started, so nothing will close these; the drains
-                // would otherwise wait on them forever.
-                try? stdoutPipe.fileHandleForWriting.close()
-                try? stderrPipe.fileHandleForWriting.close()
-                continuation.resume(throwing: CloudProviderError.networkError(error))
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+                process.standardInput = FileHandle.nullDevice
+
+                let stdoutDrain = PipeDrain(stdoutPipe)
+                let stderrDrain = PipeDrain(stderrPipe)
+
+                process.terminationHandler = { proc in
+                    let stdoutData = stdoutDrain.collected()
+                    let stderrData = stderrDrain.collected()
+                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+
+                    // Diagnostic capture for the recurring "SFTP folder appears
+                    // empty" reports (issue #31). Routed through SupportLogger so
+                    // it lands in the user-exportable Support Log on notarized
+                    // builds — the os.Logger output never reached that export,
+                    // which is why earlier support logs came back empty. No secret
+                    // is logged: the password / key passphrase travels via the
+                    // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
+                    // is the raw `ls` listing whose exact longname format is what
+                    // we need to parse the affected (newer) servers correctly.
+                    SupportLogger.shared.log(
+                        "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
+                            + "exit=\(proc.terminationStatus)\n"
+                            + "stdout (\(stdoutData.count) bytes):\n\(stdout.prefix(1800))\n"
+                            + "stderr:\n\(stderr.prefix(600))",
+                        category: "sftp",
+                        level: proc.terminationStatus == 0 ? .info : .error
+                    )
+
+                    if proc.terminationStatus != 0 {
+                        let exit = Int(proc.terminationStatus)
+                        let stderrTrim = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let combined = (stderrTrim + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let authMethod = self.credentials.authMethod
+                        let error = Self.mapSFTPFailure(exit: exit, stderr: stderrTrim, combined: combined, authMethod: authMethod)
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    continuation.resume(returning: stdout)
+                }
+
+                do {
+                    try process.run()
+                    cancellation.started(process)
+                } catch {
+                    // Never started, so nothing will close these; the drains
+                    // would otherwise wait on them forever.
+                    try? stdoutPipe.fileHandleForWriting.close()
+                    try? stderrPipe.fileHandleForWriting.close()
+                    continuation.resume(throwing: CloudProviderError.networkError(error))
+                }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -790,7 +802,14 @@ public actor SFTPAPIClient {
             components.year = Int(timeOrYear) ?? currentYear
         }
 
-        return calendar.date(from: components) ?? .distantPast
+        guard let date = calendar.date(from: components) else { return .distantPast }
+        // `ls` omits the year for the last six months, so a December file
+        // listed in January comes out in the future until it's moved back.
+        if timeOrYear.contains(":"), date.timeIntervalSinceNow > 86_400,
+           let lastYear = calendar.date(byAdding: .year, value: -1, to: date) {
+            return lastYear
+        }
+        return date
     }
 
     /// ISO 8601-ish `YYYY-MM-DD [HH:MM[:SS]]` form used by ProFTPD

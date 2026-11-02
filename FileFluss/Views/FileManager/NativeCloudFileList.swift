@@ -282,7 +282,7 @@ class CloudTableView: NSTableView {
     var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
-        if event.charactersIgnoringModifiers == " " {
+        if KeyboardShortcutManager.shared.isQuickLook(event) {
             onSpaceKey?()
         } else if event.keyCode == 51 && event.modifierFlags.contains(.command) {
             onDelete?()

@@ -202,21 +202,21 @@ final class AppState {
     var hasSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return !cloudFileManager(for: cloudId, side: activePanel).selectedItems.isEmpty
+                return !cloudFileManager(for: cloudId, side: activePanel).selectedItemIDs.isEmpty
             }
             return false
         }
-        return !activeFileManager.selectedItems.isEmpty
+        return !activeFileManager.selectedItemIDs.isEmpty
     }
 
     var hasSingleSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return cloudFileManager(for: cloudId, side: activePanel).selectedItems.count == 1
+                return cloudFileManager(for: cloudId, side: activePanel).selectedItemIDs.count == 1
             }
             return false
         }
-        return activeFileManager.selectedItems.count == 1
+        return activeFileManager.selectedItemIDs.count == 1
     }
 
     func fileManager(for panel: PanelSide) -> FileManagerViewModel {
@@ -302,6 +302,18 @@ final class AppState {
     func refreshAllPanels() async {
         await leftFileManager.refresh()
         await rightFileManager.refresh()
+    }
+
+    /// Reloads what both panels are showing, cloud folders included. For an
+    /// explicit Refresh: `refreshAllPanels` skips the network, which is what
+    /// the local operations that call it want.
+    func refreshVisiblePanels() async {
+        await refreshAllPanels()
+        for side in [PanelSide.left, .right] where !isPanelOffline(side) {
+            if let accountId = cloudAccountId(for: side) {
+                await cloudFileManager(for: accountId, side: side).refresh()
+            }
+        }
     }
 
     // Per-panel favorites — fully customizable, persisted across launches.
@@ -689,6 +701,9 @@ final class AppState {
         on(.toggleActivePanel) { [weak self] in
             guard let self else { return }
             activePanel = (activePanel == .left) ? .right : .left
+            // The keyboard has to follow, or arrow keys drive one panel while
+            // F5 and ⌘C act on the other.
+            requestActivePanelFocus()
         }
 
         // --- Selection
@@ -1969,7 +1984,17 @@ final class TransferProgress: Identifiable {
     var completedItems: Int = 0
     var totalFiles: Int = 0 // actual file count discovered during recursive traversal
     var currentFileName: String = ""
-    var isComplete: Bool = false
+    var isComplete: Bool = false {
+        didSet {
+            if isComplete, let activity {
+                ProcessInfo.processInfo.endActivity(activity)
+                self.activity = nil
+            }
+        }
+    }
+    /// Keeps the Mac from idling to sleep while this runs, and macOS from
+    /// throttling the app in the background.
+    private var activity: NSObjectProtocol?
     /// Set when the entire transfer fails before any per-item work could be
     /// done (e.g. provider unavailable). For per-item failures during the
     /// loop, use `itemResults` instead.
@@ -2076,6 +2101,10 @@ final class TransferProgress: Identifiable {
     init(operation: String, totalItems: Int) {
         self.operation = operation
         self.totalItems = totalItems
+        self.activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled],
+            reason: "File transfer"
+        )
         startBytePump()
     }
 

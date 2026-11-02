@@ -5,8 +5,19 @@ import FileFlussCore
 
 /// A cloud account in memory, with switches for the failures that matter:
 /// the tests below are all about what's left when something goes wrong.
-private final class FakeProvider: CloudProvider, @unchecked Sendable {
-    let providerType: CloudProviderType = .webDAV
+final class FakeProvider: CloudProvider, @unchecked Sendable {
+    let providerType: CloudProviderType
+    private var stampedDates: [String: Date] = [:]
+
+    init(type: CloudProviderType = .webDAV) {
+        providerType = type
+    }
+
+    func stampedDate(of path: String) -> Date? { locked { stampedDates[path] } }
+
+    func setModificationDate(at remotePath: String, to date: Date) async throws {
+        locked { stampedDates[remotePath] = date }
+    }
     private let lock = NSLock()
     private var files: [String: Data] = [:]
     private var folders: Set<String> = ["/"]
@@ -101,23 +112,23 @@ private final class FakeProvider: CloudProvider, @unchecked Sendable {
     func folderSize(at path: String) async throws -> Int64 { 0 }
 }
 
-private func temporaryFolder() throws -> URL {
+func temporaryFolder() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent("fileflusstests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
 }
 
-private func write(_ text: String, to url: URL) throws {
+func write(_ text: String, to url: URL) throws {
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data(text.utf8).write(to: url)
 }
 
-private func read(_ url: URL) -> String? {
+func read(_ url: URL) -> String? {
     (try? Data(contentsOf: url)).map { String(decoding: $0, as: UTF8.self) }
 }
 
 /// Registers a fake under a fresh account for the length of a test.
-private func withAccount(_ provider: FakeProvider, isolation: isolated (any Actor)? = #isolation, _ body: (UUID) async throws -> Void) async throws {
+func withAccount(_ provider: FakeProvider, isolation: isolated (any Actor)? = #isolation, _ body: (UUID) async throws -> Void) async throws {
     let accountId = UUID()
     await SyncEngine.shared.registerProvider(for: accountId, provider: provider)
     defer { Task { await SyncEngine.shared.removeProvider(for: accountId) } }

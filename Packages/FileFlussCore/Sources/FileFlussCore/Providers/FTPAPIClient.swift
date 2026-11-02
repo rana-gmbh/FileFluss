@@ -95,7 +95,13 @@ public actor FTPAPIClient {
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         try? FileManager.default.removeItem(at: localURL)
-        _ = try await runCurl(["--output", localURL.path, fileURL(for: remotePath)])
+        do {
+            _ = try await runCurl(["--output", localURL.path, fileURL(for: remotePath)])
+        } catch {
+            // curl writes to the final path, so what's there is only part.
+            try? FileManager.default.removeItem(at: localURL)
+            throw error
+        }
         if let onBytes,
            let size = try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64 {
             onBytes(size)
@@ -254,39 +260,45 @@ public actor FTPAPIClient {
         }
         args.append(contentsOf: extraArgs)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            process.arguments = args
+        let cancellation = ProcessCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+                process.arguments = args
 
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
-            process.standardInput = FileHandle.nullDevice
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+                process.standardInput = FileHandle.nullDevice
 
-            let stdoutDrain = PipeDrain(stdoutPipe)
-            let stderrDrain = PipeDrain(stderrPipe)
+                let stdoutDrain = PipeDrain(stdoutPipe)
+                let stderrDrain = PipeDrain(stderrPipe)
 
-            process.terminationHandler = { proc in
-                let stdout = String(data: stdoutDrain.collected(), encoding: .utf8) ?? ""
-                let stderr = String(data: stderrDrain.collected(), encoding: .utf8) ?? ""
-                if proc.terminationStatus != 0 {
-                    continuation.resume(throwing: Self.mapCurlError(exit: Int(proc.terminationStatus), stderr: stderr))
-                    return
+                process.terminationHandler = { proc in
+                    let stdout = String(data: stdoutDrain.collected(), encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrDrain.collected(), encoding: .utf8) ?? ""
+                    if proc.terminationStatus != 0 {
+                        continuation.resume(throwing: Self.mapCurlError(exit: Int(proc.terminationStatus), stderr: stderr))
+                        return
+                    }
+                    continuation.resume(returning: stdout)
                 }
-                continuation.resume(returning: stdout)
-            }
 
-            do {
-                try process.run()
-            } catch {
-                // Never started, so nothing will close these; the drains
-                // would otherwise wait on them forever.
-                try? stdoutPipe.fileHandleForWriting.close()
-                try? stderrPipe.fileHandleForWriting.close()
-                continuation.resume(throwing: CloudProviderError.networkError(error))
+                do {
+                    try process.run()
+                    cancellation.started(process)
+                } catch {
+                    // Never started, so nothing will close these; the drains
+                    // would otherwise wait on them forever.
+                    try? stdoutPipe.fileHandleForWriting.close()
+                    try? stderrPipe.fileHandleForWriting.close()
+                    continuation.resume(throwing: CloudProviderError.networkError(error))
+                }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 

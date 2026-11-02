@@ -366,6 +366,14 @@ struct AddCloudAccountView: View {
                 drimeFields
             }
 
+            if CredentialScope.exposesPassword(address: serverURL) {
+                Label(L10n.text("This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between."),
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let authError = appState.syncManager.authError {
                 Text(authError)
                     .foregroundStyle(.red)

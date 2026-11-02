@@ -14,7 +14,8 @@ struct FileManagerViewModelTests {
         #expect(vm.currentDirectory == home)
         #expect(vm.sortOrder == .name)
         #expect(vm.sortAscending)
-        #expect(!vm.showHiddenFiles)
+        // Follows the "Show hidden files by default" setting.
+        #expect(vm.showHiddenFiles == UserDefaults.standard.bool(forKey: "showHiddenFiles"))
         #expect(vm.searchText.isEmpty)
         #expect(!vm.canGoBack)
         #expect(!vm.canGoForward)

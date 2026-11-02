@@ -87,6 +87,10 @@ struct SidebarView: View {
             get: { appState.sidebarSelection(for: panelSide) },
             set: { newValue in
                 let previous = appState.sidebarSelection(for: panelSide)
+                // A click here means this panel. Only clicks come through
+                // this binding, so opening something in the other panel
+                // doesn't move the active panel with it.
+                appState.activePanel = panelSide
                 appState.setSidebarSelection(newValue, for: panelSide)
                 // Selecting a cloud account in the sidebar should always land
                 // at the account root. Without this, re-clicking the account

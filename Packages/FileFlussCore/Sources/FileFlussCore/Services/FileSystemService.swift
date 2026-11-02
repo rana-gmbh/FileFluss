@@ -1,7 +1,27 @@
 import Foundation
+import os
 
-public actor FileSystemService {
+/// Local file operations, each run off the main thread.
+///
+/// Not an actor: an actor does one thing at a time, so a 50 GB copy or a
+/// folder-size walk used to make every folder opened in either panel wait
+/// for it to finish. This holds no state that needs guarding, so calls run
+/// side by side, on a queue because blocking disk work doesn't belong on the
+/// cooperative thread pool.
+public final class FileSystemService: Sendable {
     public static let shared = FileSystemService()
+
+    private static let queue = DispatchQueue(
+        label: "com.rana.FileFluss.fileSystem",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    private static func perform<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async { continuation.resume(with: Result(catching: work)) }
+        }
+    }
 
     private static let resourceKeys: Set<URLResourceKey> = [
         .nameKey, .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
@@ -9,49 +29,57 @@ public actor FileSystemService {
         .isSymbolicLinkKey, .contentTypeKey
     ]
 
-    public func listDirectory(at url: URL, showHidden: Bool = false) throws -> [FileItem] {
-        let contents = try Foundation.FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: Array(Self.resourceKeys),
-            options: showHidden ? [] : [.skipsHiddenFiles]
-        )
-
-        return try contents.map { itemURL in
-            let values = try itemURL.resourceValues(forKeys: Self.resourceKeys)
-            return FileItem(url: itemURL, resourceValues: values)
-        }
-    }
-
-    public func createDirectory(at url: URL) throws {
-        do {
-            try Foundation.FileManager.default.createDirectory(
+    public func listDirectory(at url: URL, showHidden: Bool = false) async throws -> [FileItem] {
+        try await Self.perform {
+            let contents = try Foundation.FileManager.default.contentsOfDirectory(
                 at: url,
-                withIntermediateDirectories: true
+                includingPropertiesForKeys: Array(Self.resourceKeys),
+                options: showHidden ? [] : [.skipsHiddenFiles]
             )
-            SupportLogger.shared.log("createDirectory: \(url.path)", category: "fs")
-        } catch {
-            SupportLogger.shared.log("createDirectory FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
-            throw error
+
+            return try contents.map { itemURL in
+                let values = try itemURL.resourceValues(forKeys: Self.resourceKeys)
+                return FileItem(url: itemURL, resourceValues: values)
+            }
         }
     }
 
-    public func deleteItem(at url: URL) throws {
-        do {
-            try Foundation.FileManager.default.removeItem(at: url)
-            SupportLogger.shared.log("deleteItem: \(url.path)", category: "fs")
-        } catch {
-            SupportLogger.shared.log("deleteItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
-            throw error
+    public func createDirectory(at url: URL) async throws {
+        try await Self.perform {
+            do {
+                try Foundation.FileManager.default.createDirectory(
+                    at: url,
+                    withIntermediateDirectories: true
+                )
+                SupportLogger.shared.log("createDirectory: \(url.path)", category: "fs")
+            } catch {
+                SupportLogger.shared.log("createDirectory FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                throw error
+            }
         }
     }
 
-    public func trashItem(at url: URL) throws {
-        do {
-            try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            SupportLogger.shared.log("trashItem: \(url.path)", category: "fs")
-        } catch {
-            SupportLogger.shared.log("trashItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
-            throw error
+    public func deleteItem(at url: URL) async throws {
+        try await Self.perform {
+            do {
+                try Foundation.FileManager.default.removeItem(at: url)
+                SupportLogger.shared.log("deleteItem: \(url.path)", category: "fs")
+            } catch {
+                SupportLogger.shared.log("deleteItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                throw error
+            }
+        }
+    }
+
+    public func trashItem(at url: URL) async throws {
+        try await Self.perform {
+            do {
+                try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                SupportLogger.shared.log("trashItem: \(url.path)", category: "fs")
+            } catch {
+                SupportLogger.shared.log("trashItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                throw error
+            }
         }
     }
 
@@ -62,7 +90,7 @@ public actor FileSystemService {
     /// error code (rather than probing for a `.Trashes` folder) is filename- and
     /// state-independent: the earlier probe wrongly reported "Trash supported"
     /// once a volume already had a `.Trashes`, or for names beginning with `~`.
-    public nonisolated static func isNoTrashOnVolumeError(_ error: Error) -> Bool {
+    public static func isNoTrashOnVolumeError(_ error: Error) -> Bool {
         (error as? CocoaError)?.code == .featureUnsupported
     }
 
@@ -74,7 +102,7 @@ public actor FileSystemService {
     /// a setting the user can change rather than something the app can
     /// retry. A customer whose support log showed three of these in a row
     /// was told only "failed", which left him with nothing to do about it.
-    public nonisolated static func isPermissionError(_ error: Error) -> Bool {
+    public static func isPermissionError(_ error: Error) -> Bool {
         let ns = error as NSError
         if ns.domain == NSCocoaErrorDomain,
            ns.code == NSFileWriteNoPermissionError || ns.code == NSFileReadNoPermissionError {
@@ -91,23 +119,27 @@ public actor FileSystemService {
         return false
     }
 
-    public func moveItem(from source: URL, to destination: URL) throws {
-        do {
-            try Foundation.FileManager.default.moveItem(at: source, to: destination)
-            SupportLogger.shared.log("moveItem: \(source.path) → \(destination.path)", category: "fs")
-        } catch {
-            SupportLogger.shared.log("moveItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
-            throw error
+    public func moveItem(from source: URL, to destination: URL) async throws {
+        try await Self.perform {
+            do {
+                try Foundation.FileManager.default.moveItem(at: source, to: destination)
+                SupportLogger.shared.log("moveItem: \(source.path) → \(destination.path)", category: "fs")
+            } catch {
+                SupportLogger.shared.log("moveItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                throw error
+            }
         }
     }
 
-    public func copyItem(from source: URL, to destination: URL) throws {
-        do {
-            try Foundation.FileManager.default.copyItem(at: source, to: destination)
-            SupportLogger.shared.log("copyItem: \(source.path) → \(destination.path)", category: "fs")
-        } catch {
-            SupportLogger.shared.log("copyItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
-            throw error
+    public func copyItem(from source: URL, to destination: URL) async throws {
+        try await Self.perform {
+            do {
+                try Foundation.FileManager.default.copyItem(at: source, to: destination)
+                SupportLogger.shared.log("copyItem: \(source.path) → \(destination.path)", category: "fs")
+            } catch {
+                SupportLogger.shared.log("copyItem FAILED: \(source.path) → \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                throw error
+            }
         }
     }
 
@@ -128,37 +160,45 @@ public actor FileSystemService {
 
     /// Replaces `destination` with `source`, removing `source`. The old item
     /// stays until the new one is ready, so a failure loses neither.
-    public func replaceItem(at destination: URL, withMoved source: URL) throws {
-        let temporary = Self.temporarySibling(of: destination)
-        let fm = Foundation.FileManager.default
-        // A move across volumes is a copy, which is the slow part that can
-        // fail. Doing it first leaves the swap as a single rename.
-        try fm.moveItem(at: source, to: temporary)
-        do {
-            try installReplacement(temporary, at: destination)
-        } catch {
-            try? fm.moveItem(at: temporary, to: source)
-            throw error
+    public func replaceItem(at destination: URL, withMoved source: URL) async throws {
+        try await Self.perform {
+            let temporary = Self.temporarySibling(of: destination)
+            let fm = Foundation.FileManager.default
+            // A move across volumes is a copy, which is the slow part that can
+            // fail. Doing it first leaves the swap as a single rename.
+            try fm.moveItem(at: source, to: temporary)
+            do {
+                try Self.install(temporary, at: destination)
+            } catch {
+                try? fm.moveItem(at: temporary, to: source)
+                throw error
+            }
         }
     }
 
     /// Replaces `destination` with a copy of `source`. As above: the old item
     /// stays until the copy is complete.
-    public func replaceItem(at destination: URL, withCopyOf source: URL) throws {
-        let temporary = Self.temporarySibling(of: destination)
-        let fm = Foundation.FileManager.default
-        do {
-            try fm.copyItem(at: source, to: temporary)
-            try installReplacement(temporary, at: destination)
-        } catch {
-            try? fm.removeItem(at: temporary)
-            throw error
+    public func replaceItem(at destination: URL, withCopyOf source: URL) async throws {
+        try await Self.perform {
+            let temporary = Self.temporarySibling(of: destination)
+            let fm = Foundation.FileManager.default
+            do {
+                try fm.copyItem(at: source, to: temporary)
+                try Self.install(temporary, at: destination)
+            } catch {
+                try? fm.removeItem(at: temporary)
+                throw error
+            }
         }
     }
 
     /// Swaps a finished copy into place. `temporary` has to be on the same
     /// volume as `destination`, which is what makes this a rename.
-    public func installReplacement(_ temporary: URL, at destination: URL) throws {
+    public func installReplacement(_ temporary: URL, at destination: URL) async throws {
+        try await Self.perform { try Self.install(temporary, at: destination) }
+    }
+
+    private static func install(_ temporary: URL, at destination: URL) throws {
         let fm = Foundation.FileManager.default
         do {
             if fm.fileExists(atPath: destination.path) {
@@ -177,24 +217,33 @@ public actor FileSystemService {
         url.deletingLastPathComponent().appendingPathComponent(temporaryReplacementName(for: url.lastPathComponent))
     }
 
-    public func itemExists(at url: URL) -> Bool {
-        Foundation.FileManager.default.fileExists(atPath: url.path())
+    public func itemExists(at url: URL) async -> Bool {
+        (try? await Self.perform { Foundation.FileManager.default.fileExists(atPath: url.path()) }) ?? false
     }
 
-    public func directorySize(at url: URL) throws -> Int64 {
-        let fm = Foundation.FileManager.default
-        let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-        var totalSize: Int64 = 0
-        while let fileURL = enumerator?.nextObject() as? URL {
-            let values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
-            if values.isDirectory != true {
-                totalSize += Int64(values.fileSize ?? 0)
+    /// Adds up a folder. Stops when the calling task is cancelled, so a size
+    /// nobody is waiting for any more doesn't keep walking a huge tree.
+    public func directorySize(at url: URL) async throws -> Int64 {
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
+        return try await withTaskCancellationHandler {
+            try await Self.perform {
+                let enumerator = Foundation.FileManager.default.enumerator(
+                    at: url,
+                    includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+                var totalSize: Int64 = 0
+                while let fileURL = enumerator?.nextObject() as? URL {
+                    if cancelled.withLock({ $0 }) { throw CancellationError() }
+                    let values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                    if values.isDirectory != true {
+                        totalSize += Int64(values.fileSize ?? 0)
+                    }
+                }
+                return totalSize
             }
+        } onCancel: {
+            cancelled.withLock { $0 = true }
         }
-        return totalSize
     }
 }

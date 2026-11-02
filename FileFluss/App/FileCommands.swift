@@ -186,7 +186,7 @@ struct FileCommands: Commands {
 
         CommandGroup(after: .toolbar) {
             applyShortcut(.refreshAll, to: Button(L10n.text("Refresh Both Panels")) {
-                Task { await appState.refreshAllPanels() }
+                Task { await appState.refreshVisiblePanels() }
             })
             applyShortcut(.refreshActive, to: Button(L10n.text("Refresh Active Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.refreshActive.notification, object: nil)
@@ -346,10 +346,14 @@ private struct HelpMenuButton: View {
 /// because its NSWindow refuses to resize on macOS Tahoe).
 private struct SettingsMenuButton: View {
     @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button(L10n.text("Settings…")) {
+    @ViewBuilder var body: some View {
+        let button = Button(L10n.text("Settings…")) {
             openWindow(id: "settings")
         }
-        .keyboardShortcut(",", modifiers: .command)
+        if let shortcut = KeyboardShortcutManager.shared.binding(for: .openSettings)?.swiftUIShortcut {
+            button.keyboardShortcut(shortcut)
+        } else {
+            button
+        }
     }
 }

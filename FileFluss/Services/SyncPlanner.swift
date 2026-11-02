@@ -49,6 +49,8 @@ enum SyncPlannerError: Error {
     /// A listing named a path that climbs out of the folder being synced.
     /// Stops the plan: skipping the entry would let Mirror delete it instead.
     case unsafeRemotePath(String)
+    /// The destination can be read from but not written to, like a GoPro.
+    case destinationReadOnly(String)
 }
 
 extension SyncPlannerError: LocalizedError {
@@ -62,6 +64,8 @@ extension SyncPlannerError: LocalizedError {
             return L10n.text("An offline source can't be changed.")
         case .unsafeRemotePath(let path):
             return L10n.format("The server listed an unsafe path (“%@”), so the sync was stopped.", path)
+        case .destinationReadOnly(let name):
+            return L10n.format("%@ can't be written to, so it can't be a sync destination.", name)
         }
     }
 }
@@ -253,7 +257,8 @@ actor SyncPlanner {
               mode: SyncMode,
               direction: PlanDirection,
               sourceIsCloud: Bool,
-              destIsCloud: Bool) -> SyncPlan {
+              destIsCloud: Bool,
+              dateTolerance: TimeInterval = SyncPlanner.defaultDateTolerance) -> SyncPlan {
         // A local scan skips hidden files, so without this the cloud's `.git`
         // and `.env` look like extras and Mirror deletes them. Scanning them
         // locally instead would upload secrets nobody chose to upload, so
@@ -275,6 +280,7 @@ actor SyncPlanner {
         var deletes = 0
         var folderAdds = 0
         var folderDeletes = 0
+        var typeClashes = 0
         var bytesMoved: Int64 = 0
         // Net bytes the destination gains (adds + replaced growth − replaced
         // old size − mirror deletes). Drives the planner's space projection.
@@ -292,13 +298,19 @@ actor SyncPlanner {
                     // Skip when source and destination look identical. Cloud
                     // providers often quantize mod dates to whole seconds, so
                     // use a small tolerance to avoid re-uploading every file.
-                    if Self.filesLookIdentical(entry, existing) { continue }
+                    if Self.filesLookIdentical(entry, existing, tolerance: dateTolerance) { continue }
                     ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                     replaces += 1
                     bytesMoved += entry.size
                     netDelta += entry.size - existing.size
                 case .newer:
-                    if entry.modificationDate.timeIntervalSince(existing.modificationDate) > Self.modDateTolerance {
+                    // Replacing a folder with a file would delete the folder,
+                    // and this mode promises never to delete.
+                    if existing.isDirectory {
+                        typeClashes += 1
+                        continue
+                    }
+                    if entry.modificationDate.timeIntervalSince(existing.modificationDate) > dateTolerance {
                         ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
                         replaces += 1
                         bytesMoved += entry.size
@@ -346,7 +358,13 @@ actor SyncPlanner {
             totalBytes: bytesMoved,
             netDestinationDelta: netDelta,
             sourceEntryCount: sourceEntries.count,
-            destinationEntryCount: destEntries.count
+            destinationEntryCount: destEntries.count,
+            sourceModificationDates: sourceEntries.reduce(into: [:]) { dates, entry in
+                if !entry.isDirectory, entry.modificationDate != .distantPast {
+                    dates[entry.relativePath] = entry.modificationDate
+                }
+            },
+            typeClashes: typeClashes
         )
     }
 
@@ -354,13 +372,15 @@ actor SyncPlanner {
     /// Cloud APIs typically truncate timestamps to whole seconds, and FAT-like
     /// filesystems have 2-second granularity — so anything within this window
     /// should be treated as equal.
-    private static let modDateTolerance: TimeInterval = 2.0
+    static let defaultDateTolerance: TimeInterval = 2.0
+    /// SFTP and FTP listings come from `ls -l`, which shows minutes at best.
+    static let minuteDateTolerance: TimeInterval = 60.0
 
     /// Returns true when the two entries look byte-identical for sync purposes:
-    /// same size and mod date within the tolerance above.
-    private static func filesLookIdentical(_ a: SyncEntry, _ b: SyncEntry) -> Bool {
+    /// same size and mod date within the tolerance.
+    private static func filesLookIdentical(_ a: SyncEntry, _ b: SyncEntry, tolerance: TimeInterval) -> Bool {
         guard a.size == b.size else { return false }
-        return abs(a.modificationDate.timeIntervalSince(b.modificationDate)) <= modDateTolerance
+        return abs(a.modificationDate.timeIntervalSince(b.modificationDate)) <= tolerance
     }
 
     private func uniqueName(for relativePath: String, existing: [String: SyncEntry]) -> String {

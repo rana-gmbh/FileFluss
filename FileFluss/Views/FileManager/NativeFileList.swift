@@ -260,6 +260,15 @@ struct NativeFileList: NSViewRepresentable {
             coordinator.suppressSelectionUpdate = false
         }
 
+        // The table outlives a navigation, so it has to be moved by hand: to
+        // the selected row when going up, otherwise to the top.
+        if coordinator.lastDirectory != currentDirectory {
+            coordinator.lastDirectory = currentDirectory
+            if tableView.numberOfRows > 0 {
+                tableView.scrollRowToVisible(tableView.selectedRowIndexes.first ?? 0)
+            }
+        }
+
         // A navigation asked this panel to keep keyboard focus. The token
         // changes once per request; whichever table is current (even one just
         // rebuilt by the navigation) re-takes real first responder here.
@@ -284,7 +293,7 @@ class FileTableView: NSTableView {
     var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
-        if event.charactersIgnoringModifiers == " " {
+        if KeyboardShortcutManager.shared.isQuickLook(event) {
             onSpaceKey?()
         } else if event.keyCode == 51 && event.modifierFlags.contains(.command) {
             // Cmd+Delete
@@ -486,6 +495,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// The last navigation focus token we acted on, so `updateNSView` only
     /// re-takes focus once per request (not on every unrelated update).
     var lastFocusToken: UUID?
+    var lastDirectory: URL?
 
     @MainActor
     func focusTableViewSoon() {

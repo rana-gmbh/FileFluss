@@ -79,6 +79,14 @@ final class KeyboardShortcutManager {
         return nil
     }
 
+    /// Whether a key event is the Quick Look shortcut. Handled by the file
+    /// tables rather than the menu: a menu item bound to Space would take the
+    /// key away from every text field in the app.
+    func isQuickLook(_ event: NSEvent) -> Bool {
+        guard let pressed = ShortcutBinding.from(event) else { return false }
+        return binding(for: .quickLook) == pressed
+    }
+
     /// Whether the user has overridden the preset default for this command.
     func isCustomised(_ command: KeyboardCommand) -> Bool {
         customBindings[command] != nil
@@ -240,7 +248,7 @@ final class KeyboardShortcutManager {
         .compareFolders:     .init(key: "f2", modifiers: .shift),
         .targetToSource:     .cmd("i"),
         .refreshActive:      .cmd("r"),
-        .refreshAll:         .fn("f2"),
+        .refreshAll:         .init(key: "r", modifiers: .control),
 
         // Search
         .openSearch:         .init(key: "f7", modifiers: .option),

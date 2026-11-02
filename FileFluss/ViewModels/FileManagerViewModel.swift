@@ -21,7 +21,7 @@ final class FileManagerViewModel {
     var selectedItemIDs: Set<String> = []
     var sortOrder: SortOrder = .name { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
     var sortAscending: Bool = true { didSet { _filteredItemsCache = nil; _listingSummaryCache = nil } }
-    var showHiddenFiles: Bool = false
+    var showHiddenFiles: Bool = UserDefaults.standard.bool(forKey: "showHiddenFiles")
     var isLoading: Bool = false
     var error: String?
     var pathHistory: [URL] = []
@@ -176,7 +176,9 @@ final class FileManagerViewModel {
         }
 
         isLoading = true
-        error = nil
+        // Only a navigation clears it: a refresh is what follows a failed
+        // rename or move, and would wipe the message before anyone saw it.
+        if url != nil { error = nil }
 
         do {
             let loadedItems = try await FileSystemService.shared.listDirectory(
@@ -188,10 +190,15 @@ final class FileManagerViewModel {
                 guard self.isCurrent(generation: generation, target: targetURL, wasNavigation: url != nil) else { return }
                 self.items = loadedItems
                 if let url, url != self.currentDirectory {
+                    // Going up lands on the folder just left, as in Finder.
+                    let left = self.currentDirectory.standardizedFileURL
+                    self.selectedItemIDs = Set(loadedItems.filter { $0.url.standardizedFileURL == left }.map(\.id))
                     self.currentDirectory = url
                     self.pushToHistory(url)
+                } else {
+                    // A refresh keeps the selection, less anything now gone.
+                    self.selectedItemIDs.formIntersection(loadedItems.map(\.id))
                 }
-                self.selectedItemIDs.removeAll()
                 self.isLoading = false
             }
         } catch {
@@ -539,6 +546,7 @@ final class FileManagerViewModel {
 
         var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
+            if progress?.isCancelled == true || Task.isCancelled { break }
             var dest = folder.appendingPathComponent(item.name)
             progress?.beginFile(item.name, size: item.size)
 
@@ -623,6 +631,7 @@ final class FileManagerViewModel {
 
         var applyToAllChoice: ConflictChoice?
         for (index, item) in items.enumerated() {
+            if progress?.isCancelled == true || Task.isCancelled { break }
             var dest = folder.appendingPathComponent(item.name)
             progress?.beginFile(item.name, size: item.size)
 

@@ -227,6 +227,18 @@ struct CloudFileListView: View {
         } message: { message in
             Text(message)
         }
+        .alert(
+            L10n.text("Error"),
+            isPresented: Binding(
+                get: { vm.actionError != nil },
+                set: { if !$0 { vm.actionError = nil } }
+            ),
+            presenting: vm.actionError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { vm.actionError = nil }
+        } message: { message in
+            Text(message)
+        }
         .alert(L10n.text("New Folder"), isPresented: $showNewFolderDialog) {
             TextField(L10n.text("Folder name"), text: $newFolderName)
             Button(L10n.text("Create")) {
@@ -1594,6 +1606,12 @@ struct CloudFileListView: View {
                     }
                     .controlSize(.regular)
                 }
+                .padding(.top, 4)
+            } else {
+                Button(L10n.text("Try Again")) {
+                    Task { await vm.loadDirectory() }
+                }
+                .controlSize(.regular)
                 .padding(.top, 4)
             }
         }

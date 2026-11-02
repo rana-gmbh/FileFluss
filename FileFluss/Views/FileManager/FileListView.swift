@@ -11,6 +11,7 @@ struct FileListView: View {
     /// straight away. Kept in sync with `SettingsView`'s @AppStorage key.
     @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDropConfirmation: Bool = false
+    @State private var showSlowLoadIndicator: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var showConflict: Bool = false
     /// Drives the "Delete Immediately?" dialog. We can't bind it straight to
@@ -64,6 +65,23 @@ struct FileListView: View {
                 Divider()
             }
             fileArea
+                .overlay(alignment: .topTrailing) {
+                    if showSlowLoadIndicator {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(8)
+                    }
+                }
+                // Only for a load that's noticeably slow: a spinner on every
+                // refresh would be its own kind of flicker.
+                .task(id: fm.isLoading) {
+                    guard fm.isLoading else {
+                        showSlowLoadIndicator = false
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if !Task.isCancelled, fm.isLoading { showSlowLoadIndicator = true }
+                }
             if showStatusBar {
                 Divider()
                 statusFooter
@@ -235,6 +253,18 @@ struct FileListView: View {
                 },
                 onCancel: { showRenameDialog = false }
             )
+        }
+        .alert(
+            L10n.text("Error"),
+            isPresented: Binding(
+                get: { fm.error != nil },
+                set: { if !$0 { fm.error = nil } }
+            ),
+            presenting: fm.error
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { fm.error = nil }
+        } message: { message in
+            Text(message)
         }
         .alert(
             L10n.text("Archive failed"),
@@ -592,7 +622,10 @@ struct FileListView: View {
 
     private var fileArea: some View {
         Group {
-            if fm.isLoading {
+            // Only with nothing to show. The table stays up during a refresh,
+            // so a finished transfer doesn't cost the scroll position, the
+            // sort arrow or the column widths.
+            if fm.isLoading && fm.items.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

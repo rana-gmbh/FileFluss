@@ -981,3 +981,13 @@
 "“%@” can't replace a folder it's inside." = "„%@“ kann keinen Ordner ersetzen, in dem es selbst liegt.";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "Die neue Kopie von „%@“ wurde hochgeladen, konnte aber nicht umbenannt werden und heißt noch „%@“.";
 "Couldn't check the destination for items with the same name: %@" = "Das Ziel konnte nicht auf gleichnamige Objekte geprüft werden: %@";
+
+/* Sync, transfers, shortcuts */
+"%@ can't be written to, so it can't be a sync destination." = "%@ kann nicht beschrieben werden und daher kein Sync-Ziel sein.";
+"Leaving %d file(s) alone: a folder with the same name is at the destination." = "%d Datei(en) bleiben unverändert: Am Ziel gibt es einen gleichnamigen Ordner.";
+"Quit while transfers are running?" = "Beenden, während Übertragungen laufen?";
+"%d transfer(s) will stop where they are." = "%d Übertragung(en) werden an der aktuellen Stelle abgebrochen.";
+"Quit Anyway" = "Trotzdem beenden";
+"Shortcut already in use" = "Kurzbefehl bereits belegt";
+"This shortcut is assigned to “%@”. Replacing it leaves that command without one." = "Dieser Kurzbefehl ist „%@“ zugewiesen. Wenn du ihn ersetzt, hat dieser Befehl keinen mehr.";
+"This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between." = "Diese Adresse verwendet einfaches HTTP, dein Passwort würde also unverschlüsselt übertragen. Verwende https://, außer du vertraust jedem Netzwerk dazwischen.";

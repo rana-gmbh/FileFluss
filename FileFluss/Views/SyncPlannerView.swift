@@ -10,6 +10,9 @@ struct SyncPlannerView: View {
     @State private var confirmDestructive: Bool = false
     @State private var confirmLargeDeletion: Bool = false
     @State private var plan: SyncPlan?
+    /// The two sides `plan` was worked out for. A sync runs against these,
+    /// never against whatever the controls happen to say by then.
+    @State private var plannedEndpoints: (source: SyncEndpoint, destination: SyncEndpoint)?
     @State private var isCalculating: Bool = false
     @State private var errorMessage: String?
     /// Free space at the destination at Calculate time (cloud quota or local
@@ -37,8 +40,8 @@ struct SyncPlannerView: View {
         }
         .padding(20)
         .frame(width: 520)
-        .onChange(of: direction) { _, _ in plan = nil; confirmLargeDeletion = false; destAvailable = nil }
-        .onChange(of: mode) { _, _ in plan = nil; confirmDestructive = false; confirmLargeDeletion = false; destAvailable = nil }
+        .onChange(of: direction) { _, _ in resetPlan() }
+        .onChange(of: mode) { _, _ in resetPlan() }
     }
 
     // MARK: - Sections
@@ -100,6 +103,7 @@ struct SyncPlannerView: View {
             .pickerStyle(.segmented)
             .frame(width: 240)
             .labelsHidden()
+            .disabled(isCalculating)
         }
     }
 
@@ -123,6 +127,7 @@ struct SyncPlannerView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(isCalculating)
             }
             if mode.isDestructive {
                 Toggle(isOn: $confirmDestructive) {
@@ -151,7 +156,7 @@ struct SyncPlannerView: View {
                         LText("Calculate")
                     }
                 }
-                .disabled(isCalculating || leftEndpoint == nil || rightEndpoint == nil)
+                .disabled(isCalculating || leftEndpoint == nil || rightEndpoint == nil || readOnlyDestination != nil)
             }
 
             if let plan {
@@ -222,6 +227,13 @@ struct SyncPlannerView: View {
                 }
                 .font(.callout)
 
+                if plan.typeClashes > 0 {
+                    Label(L10n.format("Leaving %d file(s) alone: a folder with the same name is at the destination.", plan.typeClashes),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
                 if plan.wouldEmptyDestination {
                     Label(L10n.text("The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open."),
                           systemImage: "exclamationmark.triangle.fill")
@@ -254,6 +266,11 @@ struct SyncPlannerView: View {
                     .foregroundStyle(.red)
                     .padding(.top, 2)
                 }
+            } else if let readOnlyDestination {
+                Label(SyncPlannerError.destinationReadOnly(readOnlyDestination).localizedDescription,
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
             } else {
                 LText("Press Calculate to compute how many files will be added, replaced, or deleted.")
                     .font(.caption)
@@ -292,15 +309,35 @@ struct SyncPlannerView: View {
         return fileManager.isBrowsingArchive ? nil : .local(fileManager.currentDirectory)
     }
 
+    /// The account type's name, when the destination is one that can't be
+    /// written to: a GoPro or a GitHub repository.
+    private var readOnlyDestination: String? {
+        guard case .cloud(let accountId, _) = destEndpoint,
+              let type = appState.syncManager.accounts.first(where: { $0.id == accountId })?.providerType,
+              type.isReadOnly else { return nil }
+        return type.displayName
+    }
+
     private var canStart: Bool {
-        guard let plan, !isCalculating else { return false }
-        if mode.isDestructive && !confirmDestructive { return false }
+        guard let plan, !isCalculating, plannedEndpoints != nil, readOnlyDestination == nil,
+              plan.matches(mode: mode, direction: direction) else { return false }
+        if plan.mode.isDestructive && !confirmDestructive { return false }
         if plan.wouldEmptyDestination { return false }
         if plan.deletesMostOfDestination && !confirmLargeDeletion { return false }
         return !plan.operations.isEmpty
     }
 
     // MARK: - Actions
+
+    /// Everything a calculation produced or a confirmation agreed to belongs
+    /// to one direction and mode, so a change throws it all away.
+    private func resetPlan() {
+        plan = nil
+        plannedEndpoints = nil
+        destAvailable = nil
+        confirmDestructive = false
+        confirmLargeDeletion = false
+    }
 
     private func calculate() async {
         guard let src = sourceEndpoint, let dst = destEndpoint else { return }
@@ -319,14 +356,28 @@ struct SyncPlannerView: View {
                 mode: mode,
                 direction: direction,
                 sourceIsCloud: src.isCloud,
-                destIsCloud: dst.isCloud
+                destIsCloud: dst.isCloud,
+                dateTolerance: dateTolerance(between: src, and: dst)
             )
+            plannedEndpoints = (src, dst)
             destAvailable = await availableSpace(for: dst)
         } catch {
             errorMessage = "Could not compute plan: \(error.localizedDescription)"
             plan = nil
+            plannedEndpoints = nil
             destAvailable = nil
         }
+    }
+
+    /// How far apart two dates can be and still mean the same moment.
+    private func dateTolerance(between source: SyncEndpoint, and destination: SyncEndpoint) -> TimeInterval {
+        let usesMinuteDates = [source, destination].contains { endpoint in
+            guard case .cloud(let accountId, _) = endpoint,
+                  let type = appState.syncManager.accounts.first(where: { $0.id == accountId })?.providerType
+            else { return false }
+            return type == .sftp || type == .ftp
+        }
+        return usesMinuteDates ? SyncPlanner.minuteDateTolerance : SyncPlanner.defaultDateTolerance
     }
 
     /// What this sync needs on the Mac while it runs, or nil when nothing
@@ -359,10 +410,10 @@ struct SyncPlannerView: View {
     }
 
     private func startSync() async {
-        guard let plan, let src = sourceEndpoint, let dst = destEndpoint else { return }
-        let destSide: PanelSide = direction == .leftToRight ? .right : .left
+        guard let plan, let (src, dst) = plannedEndpoints, plan.matches(mode: mode, direction: direction) else { return }
+        let destSide: PanelSide = plan.direction == .leftToRight ? .right : .left
         let label: String
-        switch mode {
+        switch plan.mode {
         case .mirror:   label = "Mirroring"
         case .newer:    label = "Syncing newer"
         case .additive: label = "Adding"

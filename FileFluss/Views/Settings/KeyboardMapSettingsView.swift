@@ -14,6 +14,14 @@ struct KeyboardMapSettingsView: View {
     @State private var manager = KeyboardShortcutManager.shared
     @State private var recordingCommand: KeyboardCommand?
     @State private var resetConfirm = false
+    /// A recorded shortcut that's already taken, waiting for a decision.
+    @State private var pendingClash: ShortcutClash?
+
+    private struct ShortcutClash {
+        let binding: ShortcutBinding
+        let command: KeyboardCommand
+        let others: [KeyboardCommand]
+    }
 
     private let labelWidth: CGFloat = 230
     private let fieldWidth: CGFloat = 180
@@ -25,6 +33,23 @@ struct KeyboardMapSettingsView: View {
             commandList
             Divider()
             footer
+        }
+        .alert(
+            L10n.text("Shortcut already in use"),
+            isPresented: Binding(get: { pendingClash != nil }, set: { if !$0 { pendingClash = nil } }),
+            presenting: pendingClash
+        ) { clash in
+            Button(L10n.text("Replace")) {
+                for other in clash.others {
+                    manager.setBinding(.init(key: "", modifiers: []), for: other)
+                }
+                manager.setBinding(clash.binding, for: clash.command)
+                pendingClash = nil
+            }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingClash = nil }
+        } message: { clash in
+            Text(L10n.format("This shortcut is assigned to “%@”. Replacing it leaves that command without one.",
+                             clash.others.map { L10n.text($0.displayName) }.joined(separator: ", ")))
         }
     }
 
@@ -101,7 +126,12 @@ struct KeyboardMapSettingsView: View {
                 .background(
                     ShortcutRecorder { result in
                         if let result {
-                            manager.setBinding(result, for: command)
+                            let others = manager.conflicts(with: result, ignoring: command)
+                            if others.isEmpty {
+                                manager.setBinding(result, for: command)
+                            } else {
+                                pendingClash = ShortcutClash(binding: result, command: command, others: others)
+                            }
                         }
                         recordingCommand = nil
                     }

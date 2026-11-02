@@ -60,7 +60,8 @@ private final class WPSessionDelegate: NSObject, URLSessionTaskDelegate, Sendabl
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
         guard let original = task.originalRequest,
-              original.url?.host == request.url?.host else {
+              CredentialScope.allows(request.url, for: original.url) else {
+            redirected.setValue(nil, forHTTPHeaderField: "Authorization")
             completionHandler(redirected)
             return
         }
@@ -201,7 +202,11 @@ public actor WordPressAPIClient {
             throw CloudProviderError.invalidResponse
         }
         var request = URLRequest(url: url)
-        request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
+        // The address comes from the site's media library and often points at
+        // a CDN or an S3 bucket, which must not receive the site's password.
+        if CredentialScope.allows(url, for: URL(string: credentials.siteURL)) {
+            request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
+        }
 
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {

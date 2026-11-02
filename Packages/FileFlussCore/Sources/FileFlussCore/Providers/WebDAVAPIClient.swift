@@ -45,11 +45,12 @@ private final class WebDAVSessionDelegate: NSObject, URLSessionTaskDelegate, @un
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
-        if let originalHost = task.originalRequest?.url?.host,
-           let redirectHost = request.url?.host,
-           originalHost == redirectHost,
-           let auth = task.originalRequest?.value(forHTTPHeaderField: "Authorization") {
-            redirected.setValue(auth, forHTTPHeaderField: "Authorization")
+        if CredentialScope.allows(request.url, for: task.originalRequest?.url) {
+            if let auth = task.originalRequest?.value(forHTTPHeaderField: "Authorization") {
+                redirected.setValue(auth, forHTTPHeaderField: "Authorization")
+            }
+        } else {
+            redirected.setValue(nil, forHTTPHeaderField: "Authorization")
         }
         completionHandler(redirected)
     }

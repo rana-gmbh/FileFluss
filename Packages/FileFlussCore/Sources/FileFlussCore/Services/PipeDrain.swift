@@ -36,3 +36,28 @@ public final class PipeDrain: @unchecked Sendable {
         return data
     }
 }
+
+/// Stops a running process when the task waiting for it is cancelled.
+/// Call `started` straight after `run()`: a cancel that came first then still
+/// takes effect, and `terminate()` on a process not yet running would throw.
+public final class ProcessCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    public init() {}
+
+    public func started(_ process: Process) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.process = process
+        if cancelled, process.isRunning { process.terminate() }
+    }
+
+    public func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelled = true
+        if let process, process.isRunning { process.terminate() }
+    }
+}

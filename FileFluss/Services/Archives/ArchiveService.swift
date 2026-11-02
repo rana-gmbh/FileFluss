@@ -62,13 +62,25 @@ enum ArchiveService {
 
     static func listSync(_ url: URL, format: ArchiveFormat) throws -> ArchiveTree {
         var raw: [ArchiveEntry] = []
+        var firstUnsafeEntry: String?
         try withReader(url, format: format) { handle in
             while let next = try nextEntry(handle, format: format, archiveURL: url) {
-                if let entry = next.entry { raw.append(entry) }
+                if let entry = next.entry {
+                    raw.append(entry)
+                    if entry.isSymlink, firstUnsafeEntry == nil,
+                       let target = archive_entry_symlink(next.pointer),
+                       linkEscapes(String(cString: target)) {
+                        firstUnsafeEntry = entry.path
+                    }
+                } else if firstUnsafeEntry == nil {
+                    firstUnsafeEntry = next.refusedName
+                }
                 archive_read_data_skip(handle)
             }
         }
-        return ArchiveTree(rawEntries: raw)
+        var tree = ArchiveTree(rawEntries: raw)
+        tree.firstUnsafeEntry = firstUnsafeEntry
+        return tree
     }
 
     // MARK: - Extraction
@@ -119,6 +131,10 @@ enum ArchiveService {
         // files. libarchive would leave a stray `__MACOSX` folder behind and
         // lose Finder tags and custom icons on a round trip.
         if format == .zip {
+            // ditto gets the file as it is, so nothing FileFluss filters out
+            // of the listing is filtered out of what ditto writes. An archive
+            // with anything to filter doesn't reach it.
+            if let unsafe = tree.firstUnsafeEntry { throw ArchiveError.unsafeEntry(unsafe) }
             try await runTool("/usr/bin/ditto", ["-x", "-k", url.path, destination.path], currentDirectory: nil)
             return
         }
@@ -265,6 +281,10 @@ enum ArchiveService {
         return url
     }
 
+    private static func linkEscapes(_ target: String) -> Bool {
+        target.isEmpty || target.hasPrefix("/") || target.split(separator: "/").contains("..")
+    }
+
     /// Recreates a symlink entry.
     ///
     /// Absolute targets, and targets containing `..`, are refused. A symlink
@@ -276,9 +296,7 @@ enum ArchiveService {
     ) throws {
         guard let raw = archive_entry_symlink(pointer) else { return }
         let linkTarget = String(cString: raw)
-        guard !linkTarget.isEmpty,
-              !linkTarget.hasPrefix("/"),
-              !linkTarget.split(separator: "/").contains("..") else {
+        guard !linkEscapes(linkTarget) else {
             throw ArchiveError.unsafeEntry(entryPath)
         }
         let fm = FileManager.default
@@ -446,6 +464,8 @@ enum ArchiveService {
     private struct RawEntry {
         let pointer: OpaquePointer
         let entry: ArchiveEntry?
+        /// The name of an entry left out for being unsafe.
+        var refusedName: String? = nil
     }
 
     private static func nextEntry(
@@ -486,7 +506,7 @@ enum ArchiveService {
                 "skipped unsafe archive entry \"\(rawName)\" in \(archiveURL.lastPathComponent)",
                 category: "archive", level: .error
             )
-            return RawEntry(pointer: pointer, entry: nil)
+            return RawEntry(pointer: pointer, entry: nil, refusedName: rawName)
         }
         // `__MACOSX/…` and `._name` hold the resource forks and Finder
         // metadata a Mac-made zip carries beside each file. They are not

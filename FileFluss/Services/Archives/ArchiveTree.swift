@@ -71,6 +71,10 @@ struct ArchiveTree: Sendable {
     /// extraction will fail before the user watches it fail.
     let containsEncryptedEntries: Bool
 
+    /// The first entry refused as unsafe, either for its path or for a link
+    /// pointing out of the archive. Refused entries aren't in `entries`.
+    var firstUnsafeEntry: String?
+
     /// Whether the archive's own entry list was readable but empty.
     var isEmpty: Bool { entries.isEmpty }
 
