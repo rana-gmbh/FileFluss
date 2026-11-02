@@ -110,6 +110,43 @@ public protocol CloudProvider: Sendable {
 }
 
 extension CloudProvider {
+    /// Replaces the item at `path` with one `write` creates, without ever
+    /// leaving neither.
+    ///
+    /// `write` gets a temporary path beside the old item. Only when it has
+    /// finished does the old item go and the new one take its place, so a
+    /// failed upload, a full account or a cancel leaves things as they were.
+    /// `finalName` is for a replacement with a different name, as when a
+    /// Google Doc arrives as a `.docx`.
+    public func replacingItem(
+        at path: String,
+        finalName: String? = nil,
+        isolation: isolated (any Actor)? = #isolation,
+        using write: (_ temporaryPath: String) async throws -> Void
+    ) async throws {
+        let ns = path as NSString
+        let name = finalName ?? ns.lastPathComponent
+        let temporaryName = FileSystemService.temporaryReplacementName(for: name)
+        let temporaryPath = ns.deletingLastPathComponent == "/"
+            ? "/\(temporaryName)"
+            : "\(ns.deletingLastPathComponent)/\(temporaryName)"
+        do {
+            try await write(temporaryPath)
+            try await deleteItem(at: path)
+        } catch {
+            // Whichever step failed, the old item is still there.
+            try? await deleteItem(at: temporaryPath)
+            throw error
+        }
+        do {
+            try await renameItem(at: temporaryPath, to: name)
+        } catch {
+            throw CloudProviderError.commandFailed(
+                L10n.format("The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”.", name, temporaryName)
+            )
+        }
+    }
+
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         nil
     }

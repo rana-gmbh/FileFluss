@@ -50,8 +50,8 @@ public actor WebDAVSidecarStore {
     }
 
     private func fileURL(for path: String) -> URL {
-        var trimmed = path
-        while trimmed.hasPrefix("/") { trimmed.removeFirst() }
-        return root.appendingPathComponent(trimmed)
+        // `.` and `..` are dropped so a path can only ever land in the store.
+        let components = path.split(separator: "/").filter { $0 != "." && $0 != ".." }
+        return root.appendingPathComponent(components.joined(separator: "/"))
     }
 }

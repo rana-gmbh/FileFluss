@@ -554,75 +554,12 @@ final class FileManagerViewModel {
                 continue
             }
 
-            if FileManager.default.fileExists(atPath: dest.path) {
-                let choice: ConflictChoice
-                if let saved = applyToAllChoice {
-                    choice = saved
-                } else {
-                    let remaining = items[(index + 1)...].filter {
-                        FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
-                    }.count
-                    let destInfo = Self.localFileInfo(at: dest)
-                    let resolution = await withCheckedContinuation { continuation in
-                        self.conflictContinuation = continuation
-                        self.pendingConflict = PendingConflict(
-                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
-                            destination: destInfo,
-                            remainingConflicts: remaining,
-                            direction: self.conflictDirection
-                        )
-                    }
-                    choice = resolution.choice
-                    if resolution.applyToAll { applyToAllChoice = choice }
-                }
-                switch choice {
-                case .skip:
-                    progress?.recordSkip(item.name)
-                    progress?.completedItems = index + 1
-                    continue
-                case .stop:
-                    progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
-                case .keepBoth:
-                    dest = Self.uniqueDestination(for: dest)
-                case .replace: break
-                }
-            }
-
-            do {
-                if FileManager.default.fileExists(atPath: dest.path) {
-                    try FileManager.default.removeItem(at: dest)
-                }
-                progress?.totalBytes += item.size
-                try await FileSystemService.shared.moveItem(from: item.url, to: dest)
-                progress?.completedItems = index + 1
-                progress?.recordSuccess(item.name)
-            } catch {
-                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
-                progress?.recordFailure(item.name, error: error.localizedDescription)
-            }
-        }
-        progress?.endTime = Date()
-        progress?.isComplete = true
-        await loadDirectory()
-    }
-
-    func performCopy(items: [FileItem], to folder: URL, progress: TransferProgress? = nil) async {
-        progress?.transferredFileNames = items.map(\.name)
-        progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
-
-        var applyToAllChoice: ConflictChoice?
-        for (index, item) in items.enumerated() {
-            var dest = folder.appendingPathComponent(item.name)
-            progress?.beginFile(item.name, size: item.size)
-
-            // Pasting into the folder the file already lives in: source and
-            // destination are the same file. "Replace" would delete it and
-            // then copy from a path that no longer exists, destroying it for
-            // good (deletion here is permanent, not Trash).
-            if dest.standardizedFileURL == item.url.standardizedFileURL {
-                let msg = "\"\(item.name)\" is already in this folder."
+            // Moving /A/foo/foo to /A: the item it would replace is a folder
+            // holding the item itself, so "Replace" would delete both.
+            if Self.isInside(item.url, folder: dest) {
+                let msg = L10n.format("“%@” can't replace a folder it's inside.", item.name)
                 self.error = msg
-                progress?.recordSkip(item.name)
+                progress?.recordFailure(item.name, error: msg)
                 progress?.completedItems = index + 1
                 continue
             }
@@ -662,11 +599,96 @@ final class FileManagerViewModel {
             }
 
             do {
-                if FileManager.default.fileExists(atPath: dest.path) {
-                    try FileManager.default.removeItem(at: dest)
-                }
                 progress?.totalBytes += item.size
-                try await FileSystemService.shared.copyItem(from: item.url, to: dest)
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try await FileSystemService.shared.replaceItem(at: dest, withMoved: item.url)
+                } else {
+                    try await FileSystemService.shared.moveItem(from: item.url, to: dest)
+                }
+                progress?.completedItems = index + 1
+                progress?.recordSuccess(item.name)
+            } catch {
+                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+            }
+        }
+        progress?.endTime = Date()
+        progress?.isComplete = true
+        await loadDirectory()
+    }
+
+    func performCopy(items: [FileItem], to folder: URL, progress: TransferProgress? = nil) async {
+        progress?.transferredFileNames = items.map(\.name)
+        progress?.transferredFolderNames = Set(items.filter(\.isDirectory).map(\.name))
+
+        var applyToAllChoice: ConflictChoice?
+        for (index, item) in items.enumerated() {
+            var dest = folder.appendingPathComponent(item.name)
+            progress?.beginFile(item.name, size: item.size)
+
+            // Pasting into the folder the file already lives in: source and
+            // destination are the same file. "Replace" would delete it and
+            // then copy from a path that no longer exists, destroying it for
+            // good (deletion here is permanent, not Trash).
+            if dest.standardizedFileURL == item.url.standardizedFileURL {
+                let msg = "\"\(item.name)\" is already in this folder."
+                self.error = msg
+                progress?.recordSkip(item.name)
+                progress?.completedItems = index + 1
+                continue
+            }
+
+            // Moving /A/foo/foo to /A: the item it would replace is a folder
+            // holding the item itself, so "Replace" would delete both.
+            if Self.isInside(item.url, folder: dest) {
+                let msg = L10n.format("“%@” can't replace a folder it's inside.", item.name)
+                self.error = msg
+                progress?.recordFailure(item.name, error: msg)
+                progress?.completedItems = index + 1
+                continue
+            }
+
+            if FileManager.default.fileExists(atPath: dest.path) {
+                let choice: ConflictChoice
+                if let saved = applyToAllChoice {
+                    choice = saved
+                } else {
+                    let remaining = items[(index + 1)...].filter {
+                        FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path)
+                    }.count
+                    let destInfo = Self.localFileInfo(at: dest)
+                    let resolution = await withCheckedContinuation { continuation in
+                        self.conflictContinuation = continuation
+                        self.pendingConflict = PendingConflict(
+                            source: ConflictFileInfo(name: item.name, date: item.modificationDate, size: item.size, fileExtension: item.url.pathExtension, localURL: item.url),
+                            destination: destInfo,
+                            remainingConflicts: remaining,
+                            direction: self.conflictDirection
+                        )
+                    }
+                    choice = resolution.choice
+                    if resolution.applyToAll { applyToAllChoice = choice }
+                }
+                switch choice {
+                case .skip:
+                    progress?.recordSkip(item.name)
+                    progress?.completedItems = index + 1
+                    continue
+                case .stop:
+                    progress?.endTime = Date(); progress?.isComplete = true; await loadDirectory(); return
+                case .keepBoth:
+                    dest = Self.uniqueDestination(for: dest)
+                case .replace: break
+                }
+            }
+
+            do {
+                progress?.totalBytes += item.size
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try await FileSystemService.shared.replaceItem(at: dest, withCopyOf: item.url)
+                } else {
+                    try await FileSystemService.shared.copyItem(from: item.url, to: dest)
+                }
                 progress?.completedItems = index + 1
                 progress?.recordSuccess(item.name)
             } catch {
@@ -677,6 +699,12 @@ final class FileManagerViewModel {
         progress?.endTime = Date()
         progress?.isComplete = true
         await loadDirectory()
+    }
+
+    /// Whether `url` sits somewhere below `folder`.
+    static func isInside(_ url: URL, folder: URL) -> Bool {
+        let parent = folder.standardizedFileURL.path
+        return url.standardizedFileURL.path.hasPrefix(parent.hasSuffix("/") ? parent : parent + "/")
     }
 
     // MARK: - Archives

@@ -7,11 +7,13 @@ import Foundation
 // FileFlussCore module.
 
 public enum WebDAVResponseParser {
-    public static func parse(data: Data, basePath: String, requestPath: String) -> [CloudFileItem] {
+    /// Throws when the XML doesn't parse to the end. Whatever was read before
+    /// the error is only part of the folder, and must not pass for all of it.
+    public static func parse(data: Data, basePath: String, requestPath: String) throws -> [CloudFileItem] {
         let parser = WebDAVXMLParser(basePath: basePath, requestPath: requestPath)
         let xmlParser = XMLParser(data: data)
         xmlParser.delegate = parser
-        xmlParser.parse()
+        guard xmlParser.parse() else { throw CloudProviderError.unreadableListing }
         return parser.items
     }
 
@@ -26,8 +28,8 @@ public enum WebDAVResponseParser {
     /// a real folder instead, and a Hetzner Storage Box with two folders
     /// showed one (issue #64). Nothing in the spec fixes the ordering
     /// either, so position was never a safe way to find it.
-    public static func children(data: Data, basePath: String, requestPath: String) -> [CloudFileItem] {
-        let all = parse(data: data, basePath: basePath, requestPath: requestPath)
+    public static func children(data: Data, basePath: String, requestPath: String) throws -> [CloudFileItem] {
+        let all = try parse(data: data, basePath: basePath, requestPath: requestPath)
         let target = normalisedPath(requestPath)
         let children = all.filter { normalisedPath($0.path) != target }
         // A server that didn't list the folder itself leaves nothing to

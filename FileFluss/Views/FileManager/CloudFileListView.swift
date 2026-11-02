@@ -175,7 +175,9 @@ struct CloudFileListView: View {
                     appState.addTransfer(transfer, panel: otherSide)
                     transfer.task = Task {
                         await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                        await vm.deleteItems(items)
+                        // Only what arrived: deleting here is permanent.
+                        let landed = transfer.succeededNames
+                        await vm.deleteItems(items.filter { landed.contains($0.name) })
                         await otherFM.refresh()
                     }
                 }
@@ -645,7 +647,11 @@ struct CloudFileListView: View {
                 transfer.task = Task {
                     await vm.uploadFiles(from: urls, toPath: targetPath, progress: transfer)
                     if isMove {
-                        for url in urls { try? FileManager.default.removeItem(at: url) }
+                        // Only what arrived: deleting here is permanent.
+                        let landed = transfer.succeededNames
+                        for url in urls where landed.contains(url.lastPathComponent) {
+                            try? await FileSystemService.shared.deleteItem(at: url)
+                        }
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
                         await appState.fileManager(for: otherSide).refresh()
                     }
@@ -1163,7 +1169,9 @@ struct CloudFileListView: View {
                                 appState.addTransfer(transfer, panel: otherSide)
                                 transfer.task = Task {
                                     await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                                    await vm.deleteItems(items)
+                                    // Only what arrived: deleting here is permanent.
+                                    let landed = transfer.succeededNames
+                                    await vm.deleteItems(items.filter { landed.contains($0.name) })
                                     await otherFM.refresh()
                                 }
                             }
@@ -1368,7 +1376,14 @@ struct CloudFileListView: View {
         let targetExistingItems: [CloudFileItem]?
         if let targetSubfolderPath {
             let provider = await SyncEngine.shared.provider(for: targetVM.accountId)
-            targetExistingItems = (try? await provider?.listDirectory(at: targetSubfolderPath)) ?? []
+            do {
+                targetExistingItems = try await provider?.listDirectory(at: targetSubfolderPath) ?? []
+            } catch {
+                // Not knowing what's there isn't the same as nothing being
+                // there: going on would overwrite without asking.
+                progress?.failAll(items.map(\.name), error: L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription))
+                return
+            }
         } else {
             targetExistingItems = nil
         }
@@ -1447,7 +1462,10 @@ struct CloudFileListView: View {
             progress.expectedBytesUpload = expectedBytes
         }
 
-        await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        // Only what downloaded in full goes on. A folder that failed part way
+        // still has a partial copy in staging, and uploading that as if it
+        // were the folder is how a move came to delete the original.
+        let downloaded = await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.downloadEndTime = Date()
@@ -1460,22 +1478,16 @@ struct CloudFileListView: View {
             }
         }
 
-        // Phase 2: Delete items that need replacing, then upload
-        let provider = await SyncEngine.shared.provider(for: targetVM.accountId)
+        // Phase 2: Upload. Items that replace something are passed along so
+        // the old copy stays until the new one has landed.
         let conflictPool = targetExistingItems ?? targetVM.items
-        for item in itemsToTransfer {
-            if resolutionByName[item.name] == .replace {
-                // Find and delete existing item on target
-                if let existing = conflictPool.first(where: { $0.name == item.name }) {
-                    try? await provider?.deleteItem(at: existing.path)
-                }
-            }
-        }
+        var replacing: [String: CloudFileItem] = [:]
 
         // Build local URLs for upload, renaming "keepBoth" items
         let existingNames = Set(conflictPool.map(\.name))
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            guard let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
+            guard downloaded.contains(item.name),
+                  let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
             var localURL: URL?
             if FileManager.default.fileExists(atPath: expected.path) {
                 localURL = expected
@@ -1489,6 +1501,11 @@ struct CloudFileListView: View {
                 }
             }
             guard let url = localURL else { return nil }
+
+            if resolutionByName[item.name] == .replace,
+               let existing = conflictPool.first(where: { $0.name == item.name }) {
+                replacing[url.lastPathComponent] = existing
+            }
 
             // For keepBoth, rename the local temp file to a unique name
             if resolutionByName[item.name] == .keepBoth {
@@ -1512,7 +1529,7 @@ struct CloudFileListView: View {
         }
 
         // Upload with conflict check skipped — we already handled conflicts
-        await targetVM.uploadFiles(from: localURLs, toPath: targetSubfolderPath, progress: progress, skipConflictCheck: true)
+        await targetVM.uploadFiles(from: localURLs, toPath: targetSubfolderPath, progress: progress, skipConflictCheck: true, replacing: replacing)
 
         if let progress {
             progress.uploadEndTime = Date()
@@ -1528,9 +1545,8 @@ struct CloudFileListView: View {
             // Only what actually arrived at the destination: the loop above
             // records per-item outcomes, and a failure, a skip or a cancel
             // all leave sources that were never transferred.
-            let landed = progress?.succeededNames
-            let transferred = landed.map { names in itemsToTransfer.filter { names.contains($0.name) } }
-                ?? itemsToTransfer
+            let landed = progress?.succeededNames ?? []
+            let transferred = itemsToTransfer.filter { landed.contains($0.name) }
             if !transferred.isEmpty {
                 await sourceVM.deleteItems(transferred)
                 await sourceVM.loadDirectory()

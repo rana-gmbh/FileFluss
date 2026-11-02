@@ -177,7 +177,9 @@ enum ArchiveService {
                 } else {
                     try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try writeFile(
-                        from: handle, to: target, entry: entry, buffer: &buffer, onBytes: onBytes
+                        from: handle, to: target, entry: entry,
+                        isExecutable: archive_entry_perm(next.pointer) & 0o100 != 0,
+                        buffer: &buffer, onBytes: onBytes
                     )
                 }
 
@@ -196,6 +198,7 @@ enum ArchiveService {
         from handle: OpaquePointer,
         to target: URL,
         entry: ArchiveEntry,
+        isExecutable: Bool,
         buffer: inout [UInt8],
         onBytes: (@Sendable (Int64) -> Void)?
     ) throws {
@@ -223,7 +226,13 @@ enum ArchiveService {
             onBytes?(Int64(count))
         }
         try? fileHandle.close()
-        try? fm.setAttributes([.modificationDate: entry.modificationDate], ofItemAtPath: target.path)
+        // The executable bit is the one permission worth keeping: without it
+        // an unpacked tool or script won't run, which is what stopped the rar
+        // install. Set as a fixed mode so setuid bits and odd owner
+        // permissions from an archive never reach the disk.
+        var attributes: [FileAttributeKey: Any] = [.modificationDate: entry.modificationDate]
+        if isExecutable { attributes[.posixPermissions] = 0o755 }
+        try? fm.setAttributes(attributes, ofItemAtPath: target.path)
     }
 
     /// Where `entryPath` lands under `root`.
@@ -282,6 +291,12 @@ enum ArchiveService {
     /// Packs `names` (plain file names, relative to `directory`) into a new
     /// archive in the same folder, and returns it.
     ///
+    /// A name inside the working directory, written so that a command-line
+    /// tool can only read it as a path.
+    static func commandLinePath(_ name: String) -> String {
+        "./" + name
+    }
+
     /// ZIP uses `/usr/bin/zip` rather than `ditto`: ditto takes a single
     /// source, so a multi-row selection would need a second code path.
     /// Info-ZIP takes the whole selection, recurses with `-r`, stores
@@ -306,12 +321,18 @@ enum ArchiveService {
             throw ArchiveError.alreadyExists(archiveName)
         }
 
+        // A file can be named anything, including `-TTsh evil.sh #`, which
+        // `zip` would obey as an option. With `./` in front, no name can be
+        // read as an option, nor as one of rar's `@listfile` arguments.
+        let safeName = commandLinePath(archiveName)
+        let safeNames = names.map(commandLinePath)
+
         let executable: String
         let arguments: [String]
         switch format {
         case .zip:
             executable = "/usr/bin/zip"
-            arguments = ["-r", "-y", archiveName] + names
+            arguments = ["-r", "-y", safeName] + safeNames
         case .sevenZip:
             executable = "/usr/bin/bsdtar"
             arguments = ["-c", "-v", "--format", "7zip", "-f", archiveName, "--"] + names
@@ -327,7 +348,7 @@ enum ArchiveService {
             // -r recurses, -ol stores symlinks as links, -y answers any
             // prompt with yes so the tool never waits on a terminal that
             // isn't there.
-            arguments = ["a", "-r", "-ol", "-y", archiveName, "--"] + names
+            arguments = ["a", "-r", "-ol", "-y", safeName, "--"] + safeNames
         }
 
         try await runTool(

@@ -220,10 +220,11 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
     /// Builds an absolute file URL beneath the CloudDocs root from a
     /// provider-style remote path (`/foo/bar.txt`).
     public func url(forRemotePath remotePath: String) -> URL {
-        var trimmed = remotePath
-        while trimmed.hasPrefix("/") { trimmed.removeFirst() }
-        if trimmed.isEmpty { return Self.rootURL }
-        return Self.rootURL.appendingPathComponent(trimmed)
+        // `.` and `..` are dropped, because this is the one provider whose
+        // paths are real paths: climbing out of CloudDocs reaches the disk.
+        let components = remotePath.split(separator: "/").filter { $0 != "." && $0 != ".." }
+        if components.isEmpty { return Self.rootURL }
+        return Self.rootURL.appendingPathComponent(components.joined(separator: "/"))
     }
 
     private func joinedRemotePath(parent: String, name: String) -> String {

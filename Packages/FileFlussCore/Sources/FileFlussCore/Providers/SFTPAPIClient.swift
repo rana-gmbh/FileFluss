@@ -154,7 +154,7 @@ public actor SFTPAPIClient {
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
         let output = try await runListing(path: path)
-        return parseListing(output: output, basePath: path)
+        return try parseListing(output: output, basePath: path)
     }
 
     /// Runs `ls -la <path>` and returns the raw output.
@@ -315,7 +315,7 @@ public actor SFTPAPIClient {
         let parentPath = (path as NSString).deletingLastPathComponent
         let fileName = (path as NSString).lastPathComponent
         let output = try await runListing(path: parentPath)
-        let items = parseListing(output: output, basePath: parentPath)
+        let items = try parseListing(output: output, basePath: parentPath)
         guard let item = items.first(where: { $0.name == fileName }) else {
             throw CloudProviderError.notFound(path)
         }
@@ -374,6 +374,10 @@ public actor SFTPAPIClient {
                 "-oControlPath=\(controlPath)",
                 "-oControlPersist=600",
                 "-oConnectTimeout=10",
+                // ConnectTimeout only covers the handshake. These end a
+                // connection that goes silent later, about a minute on.
+                "-oServerAliveInterval=15",
+                "-oServerAliveCountMax=4",
                 "-P", "\(credentials.port)"
             ]
 
@@ -417,9 +421,12 @@ public actor SFTPAPIClient {
             process.standardError = stderrPipe
             process.standardInput = FileHandle.nullDevice
 
+            let stdoutDrain = PipeDrain(stdoutPipe)
+            let stderrDrain = PipeDrain(stderrPipe)
+
             process.terminationHandler = { proc in
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                let stdoutData = stdoutDrain.collected()
+                let stderrData = stderrDrain.collected()
                 let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
                 let stderr = String(data: stderrData, encoding: .utf8) ?? ""
 
@@ -456,6 +463,10 @@ public actor SFTPAPIClient {
             do {
                 try process.run()
             } catch {
+                // Never started, so nothing will close these; the drains
+                // would otherwise wait on them forever.
+                try? stdoutPipe.fileHandleForWriting.close()
+                try? stderrPipe.fileHandleForWriting.close()
                 continuation.resume(throwing: CloudProviderError.networkError(error))
             }
         }
@@ -533,7 +544,7 @@ public actor SFTPAPIClient {
 
     // MARK: - Parsing
 
-    private func parseListing(output: String, basePath: String) -> [CloudFileItem] {
+    private func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
         var items: [CloudFileItem] = []
         for line in output.components(separatedBy: "\n") {
             guard let parsed = Self.parseListingLine(line) else { continue }
@@ -577,6 +588,7 @@ public actor SFTPAPIClient {
             )
         }
 
+        try Self.validateListing(output: output, itemCount: items.count, everyLineIsARow: false)
         return items
     }
 
@@ -584,19 +596,45 @@ public actor SFTPAPIClient {
     /// like a long-form `ls -la` row" — used to distinguish a genuinely
     /// empty directory (no listing lines) from a parser miss.
     public static func outputLooksLikeListing(_ output: String) -> Bool {
+        output.components(separatedBy: "\n").contains {
+            isListingRow($0.trimmingCharacters(in: .whitespaces))
+        }
+    }
+
+    /// Cheap structural check: leading filetype char + at least a few perms
+    /// chars. Avoids false positives on prompt lines.
+    private static func isListingRow(_ line: String) -> Bool {
+        guard let first = line.first, "-dlcbps".contains(first), line.count >= 10 else { return false }
+        return line.prefix(10).dropFirst().allSatisfy { "rwxsStT@+.\\*-".contains($0) }
+    }
+
+    /// Throws when a listing holds rows that weren't understood, so that a
+    /// folder is never reported as emptier than it is.
+    ///
+    /// Only files, folders and links count. Device rows put `major, minor`
+    /// where the size goes and don't parse, but nothing here can copy them.
+    ///
+    /// `everyLineIsARow` is for FTP, where the output is the listing and
+    /// nothing else: a Windows-style server's rows don't look like `ls -l` at
+    /// all, so with no parsed rows, any line left over means an unknown format.
+    /// `sftp` also prints its own prompt lines, so it can't make that claim.
+    public static func validateListing(output: String, itemCount: Int, everyLineIsARow: Bool) throws {
+        var unexplainedLine = false
         for raw in output.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            guard let first = line.first, "-dlcbps".contains(first) else { continue }
-            // Cheap structural check: leading filetype char + at least
-            // a few perms chars. Avoids false positives on prompt lines.
-            if line.count >= 10 {
-                let prefix = line.prefix(10)
-                if prefix.dropFirst().allSatisfy({ "rwxsStT@+.\\*-".contains($0) }) {
-                    return true
-                }
+            guard !line.isEmpty, parseListingLine(line) == nil else { continue }
+            let isSelfOrParent = line.hasSuffix(" .") || line.hasSuffix(" ..")
+                || line.hasSuffix("/.") || line.hasSuffix("/..")
+            if isListingRow(line), "-dl".contains(line.first ?? " "), !isSelfOrParent {
+                throw CloudProviderError.unreadableListing
+            }
+            if !isListingRow(line), !line.lowercased().hasPrefix("total ") {
+                unexplainedLine = true
             }
         }
-        return false
+        if everyLineIsARow, itemCount == 0, unexplainedLine {
+            throw CloudProviderError.unreadableListing
+        }
     }
 
     /// Parsed shape returned by `parseListingLine` — kept narrow so the

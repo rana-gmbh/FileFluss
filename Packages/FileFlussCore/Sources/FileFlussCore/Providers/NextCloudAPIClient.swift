@@ -629,7 +629,7 @@ public actor NextCloudAPIClient {
         // path, not by position (#64). Nextcloud happens to send it first
         // and with a displayname, so this was safe here — but it is the
         // same latent bug, one server-side change away.
-        return WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
+        return try WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -836,7 +836,7 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
+        let items = try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
         guard let item = items.first else {
             throw CloudProviderError.notFound(path)
         }
@@ -919,7 +919,7 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
-        return WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
+        return try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
     }
 
     // MARK: - Private

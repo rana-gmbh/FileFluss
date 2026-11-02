@@ -508,10 +508,14 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Download
 
-    func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
+    /// Returns the names of the items that downloaded in full. A folder whose
+    /// walk failed part way leaves a partial copy on disk and is not among
+    /// them, so nothing may treat "it exists" as "it arrived".
+    @discardableResult
+    func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async -> Set<String> {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             SupportLogger.shared.log("downloadItems aborted: provider unavailable", category: cloudCategory, level: .error)
-            return
+            return []
         }
         SupportLogger.shared.log("downloadItems start: \(items.count) item(s) → \(localDirectory.path)", category: cloudCategory)
 
@@ -536,18 +540,19 @@ final class CloudFileManagerViewModel {
         let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
         var applyToAllChoice: ConflictChoice?
         var downloadedCount = 0
+        var downloaded: Set<String> = []
 
         for (index, item) in items.enumerated() {
             if progress?.isCancelled == true || Task.isCancelled {
                 if !(progress?.isCloudToCloud ?? false) {
                     progress?.endTime = Date(); progress?.isComplete = true
                 }
-                return
+                return downloaded
             }
             // Server-supplied name: sanitise and confine before writing. A
             // name that escapes the target directory is refused rather than
             // downloaded; the rest of the batch continues.
-            guard var base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
+            guard let base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
                 let msg = "Unsafe file name from the server — download refused."
                 self.error = msg
                 progress?.recordFailure(item.name, error: msg)
@@ -555,6 +560,7 @@ final class CloudFileManagerViewModel {
             }
             let existingURL = Self.findExistingFile(base: base, convertedExtensions: convertedExtensions)
             let exists = existingURL != nil
+            var keepBoth = false
 
             if exists && !skipConflictCheck {
                 let choice: ConflictChoice
@@ -585,24 +591,34 @@ final class CloudFileManagerViewModel {
                     continue
                 case .stop:
                     if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
-                    return
+                    return downloaded
                 case .keepBoth:
-                    base = FileManagerViewModel.uniqueDestination(for: base)
+                    keepBoth = true
                 case .replace: break
                 }
             }
 
             do {
-                if exists {
-                    if !skipConflictCheck, let existing = existingURL {
-                        try FileManager.default.removeItem(at: existing)
+                if exists, let existingURL, !skipConflictCheck {
+                    try await downloadOverExisting(
+                        item: item,
+                        existing: existingURL,
+                        keepBoth: keepBoth,
+                        in: localDirectory,
+                        provider: provider,
+                        progress: progress,
+                        downloadedCount: &downloadedCount
+                    )
+                } else {
+                    if exists {
+                        for ext in convertedExtensions {
+                            let converted = base.appendingPathExtension(ext)
+                            if FileManager.default.fileExists(atPath: converted.path) { try FileManager.default.removeItem(at: converted) }
+                        }
                     }
-                    for ext in convertedExtensions {
-                        let converted = base.appendingPathExtension(ext)
-                        if FileManager.default.fileExists(atPath: converted.path) { try FileManager.default.removeItem(at: converted) }
-                    }
+                    try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
                 }
-                try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+                downloaded.insert(item.name)
                 progress?.completedItems = index + 1
                 // In a cloud-to-cloud transfer the upload phase is the
                 // canonical place to record per-item success — recording
@@ -626,6 +642,41 @@ final class CloudFileManagerViewModel {
         if !(progress?.isCloudToCloud ?? false) {
             progress?.endTime = Date()
             progress?.isComplete = true
+        }
+        return downloaded
+    }
+
+    /// Downloads an item whose name is already taken here. It goes to a
+    /// staging folder on the same volume first, so the existing item is only
+    /// touched once the new one is complete.
+    private func downloadOverExisting(
+        item: CloudFileItem,
+        existing: URL,
+        keepBoth: Bool,
+        in localDirectory: URL,
+        provider: any CloudProvider,
+        progress: TransferProgress?,
+        downloadedCount: inout Int
+    ) async throws {
+        let fm = FileManager.default
+        let staging = localDirectory.appendingPathComponent(".filefluss-download-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: staging) }
+
+        try await downloadRecursively(item: item, to: staging, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+
+        // The name can differ from `item.name`: Google Docs gain an extension.
+        guard let arrived = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil).first else {
+            throw CloudProviderError.notFound(item.path)
+        }
+        let target = localDirectory.appendingPathComponent(arrived.lastPathComponent)
+        if keepBoth {
+            try await FileSystemService.shared.moveItem(from: arrived, to: FileManagerViewModel.uniqueDestination(for: target))
+            return
+        }
+        try await FileSystemService.shared.replaceItem(at: target, withMoved: arrived)
+        if existing.standardizedFileURL != target.standardizedFileURL {
+            try await FileSystemService.shared.deleteItem(at: existing)
         }
     }
 
@@ -1075,7 +1126,10 @@ final class CloudFileManagerViewModel {
 
     // MARK: - Upload
 
-    func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async {
+    /// `replacing` names, by upload name, items a caller has already decided
+    /// to overwrite. It's how a transfer that resolved its conflicts up front
+    /// gets the same safe replacement as the dialog here.
+    func uploadFiles(from urls: [URL], toPath: String? = nil, progress: TransferProgress? = nil, skipConflictCheck: Bool = false, replacing: [String: CloudFileItem] = [:]) async {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             SupportLogger.shared.log("uploadFiles aborted: provider unavailable", category: cloudCategory, level: .error)
             self.error = "Cloud account not connected"
@@ -1086,8 +1140,19 @@ final class CloudFileManagerViewModel {
 
         let remoteBase = toPath ?? currentPath
         let existingItems: [CloudFileItem]
-        if let toPath, toPath != currentPath {
-            existingItems = (try? await provider.listDirectory(at: toPath)) ?? []
+        if skipConflictCheck {
+            existingItems = []
+        } else if let toPath, toPath != currentPath {
+            do {
+                existingItems = try await provider.listDirectory(at: toPath)
+            } catch {
+                // Not knowing what's there isn't the same as nothing being
+                // there: going on would overwrite without asking.
+                let message = L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription)
+                self.error = message
+                progress?.failAll(urls.map(\.lastPathComponent), error: message)
+                return
+            }
         } else {
             existingItems = items
         }
@@ -1119,6 +1184,7 @@ final class CloudFileManagerViewModel {
             }
             var uploadURL = url
             let name = url.lastPathComponent
+            var itemToReplace = replacing[name]
             if let existing = existingByName[name], !skipConflictCheck {
                 let choice: ConflictChoice
                 if let saved = applyToAllChoice {
@@ -1163,17 +1229,19 @@ final class CloudFileManagerViewModel {
                     }
                     uploadURL = tempCopy
                 case .replace:
-                    do { try await provider.deleteItem(at: existing.path) } catch {
-                        let msg = "Failed to overwrite: \(error.localizedDescription)"
-                        self.error = "Failed to overwrite \(name): \(error.localizedDescription)"
-                        progress?.recordFailure(name, error: msg)
-                        continue
-                    }
+                    itemToReplace = existing
                 }
             }
 
             do {
-                try await uploadRecursively(urls: [uploadURL], toRemotePath: remoteBase, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                if let itemToReplace {
+                    let source = uploadURL
+                    try await provider.replacingItem(at: itemToReplace.path, finalName: source.lastPathComponent) { temporaryPath in
+                        try await uploadRecursively(urls: [source], toRemotePath: remoteBase, remoteItemPath: temporaryPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                    }
+                } else {
+                    try await uploadRecursively(urls: [uploadURL], toRemotePath: remoteBase, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                }
                 if uploadURL != url { try? FileManager.default.removeItem(at: uploadURL) }
                 progress?.recordSuccess(name)
             } catch {
@@ -1192,7 +1260,9 @@ final class CloudFileManagerViewModel {
         await loadDirectory()
     }
 
-    private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
+    /// `remoteItemPath` puts a single item somewhere other than under its own
+    /// name, for a replacement that's first written beside the original.
+    private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, remoteItemPath: String? = nil, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
         let fm = FileManager.default
         for url in urls {
             var isDir: ObjCBool = false
@@ -1201,7 +1271,8 @@ final class CloudFileManagerViewModel {
                 continue
             }
 
-            let itemRemotePath = remotePath == "/" ? "/\(url.lastPathComponent)" : "\(remotePath)/\(url.lastPathComponent)"
+            let itemRemotePath = remoteItemPath
+                ?? (remotePath == "/" ? "/\(url.lastPathComponent)" : "\(remotePath)/\(url.lastPathComponent)")
 
             if isDir.boolValue {
                 cloudFileVMLog.debug("Upload: creating directory \(itemRemotePath, privacy: .public)")
@@ -1270,7 +1341,17 @@ final class CloudFileManagerViewModel {
         }
         SupportLogger.shared.log("transferItemsToSubfolder \(sourceItems.count) item(s) → \(targetPath) (deleteSource=\(deleteFromSource))", category: cloudCategory)
 
-        let targetSiblings = (try? await provider.listDirectory(at: targetPath)) ?? []
+        let targetSiblings: [CloudFileItem]
+        do {
+            targetSiblings = try await provider.listDirectory(at: targetPath)
+        } catch {
+            // Not knowing what's there isn't the same as nothing being there:
+            // going on would overwrite without asking.
+            let message = L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription)
+            self.error = message
+            progress?.failAll(sourceItems.map(\.name), error: message)
+            return
+        }
         let resolutions = await preFlightConflictCheck(sourceItems: sourceItems, against: targetSiblings)
         let itemsToTransfer = resolutions.filter { $0.1 != .skip }.map(\.0)
         for (item, result) in resolutions where result == .skip {
@@ -1320,24 +1401,15 @@ final class CloudFileManagerViewModel {
             progress.expectedBytesUpload = expectedBytes
         }
 
-        await downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        // Only what downloaded in full goes on. A failed folder still has a
+        // partial copy in staging, which must not upload and pass for it.
+        let downloadedNames = await downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
         progress?.downloadEndTime = Date()
 
-        // Delete items flagged as replace on the target
-        for item in itemsToTransfer {
-            if resolutionByName[item.name] == .replace,
-               let existing = targetSiblings.first(where: { $0.name == item.name }) {
-                try? await provider.deleteItem(at: existing.path)
-            }
-        }
-
         let existingNames = Set(targetSiblings.map(\.name))
-        // Names of the items that actually reached the staging directory.
-        // Anything missing here failed to download, and must not be deleted
-        // from the source afterwards.
-        var downloadedNames: Set<String> = []
-        let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            guard let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
+        let stagedItems: [(item: CloudFileItem, url: URL)] = itemsToTransfer.compactMap { item -> (item: CloudFileItem, url: URL)? in
+            guard downloadedNames.contains(item.name),
+                  let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
             var localURL: URL?
             if FileManager.default.fileExists(atPath: expected.path) {
                 localURL = expected
@@ -1351,19 +1423,18 @@ final class CloudFileManagerViewModel {
                 }
             }
             guard let url = localURL else { return nil }
-            downloadedNames.insert(item.name)
 
             if resolutionByName[item.name] == .keepBoth {
                 let uniqueName = Self.uniqueCloudName(for: url.lastPathComponent, existing: existingNames)
                 let renamed = tempDir.appendingPathComponent(uniqueName)
                 do {
                     try FileManager.default.moveItem(at: url, to: renamed)
-                    return renamed
+                    return (item, renamed)
                 } catch {
-                    return url
+                    return (item, url)
                 }
             }
-            return url
+            return (item, url)
         }
 
         if let progress {
@@ -1374,34 +1445,34 @@ final class CloudFileManagerViewModel {
         }
 
         var uploadedCount = 0
-        var uploadFailed = false
-        do {
-            try await uploadRecursively(urls: localURLs, toRemotePath: targetPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
-        } catch {
-            uploadFailed = true
-            self.error = error.localizedDescription
-            progress?.errorMessage = error.localizedDescription
+        var landed: Set<String> = []
+        for (item, url) in stagedItems {
+            if progress?.isCancelled == true || Task.isCancelled { break }
+            do {
+                if resolutionByName[item.name] == .replace,
+                   let existing = targetSiblings.first(where: { $0.name == item.name }) {
+                    try await provider.replacingItem(at: existing.path, finalName: url.lastPathComponent) { temporaryPath in
+                        try await uploadRecursively(urls: [url], toRemotePath: targetPath, remoteItemPath: temporaryPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                    }
+                } else {
+                    try await uploadRecursively(urls: [url], toRemotePath: targetPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
+                }
+                landed.insert(item.name)
+                progress?.recordSuccess(item.name)
+            } catch {
+                self.error = error.localizedDescription
+                progress?.recordFailure(item.name, error: error.localizedDescription)
+            }
         }
 
         progress?.uploadEndTime = Date()
         progress?.totalBytes = (progress?.downloadBytes ?? 0) + (progress?.uploadBytes ?? 0)
 
         if deleteFromSource {
-            // A move may only delete what arrived. `uploadRecursively`
-            // throws on the first failure, so a failed upload means the
-            // remainder never landed — delete nothing in that case — and
-            // items that failed to download aren't in `downloadedNames`.
-            if uploadFailed {
-                SupportLogger.shared.log(
-                    "Move kept the source files: the upload to \(targetPath) failed",
-                    category: "transfer",
-                    level: .error
-                )
-            } else {
-                let transferred = itemsToTransfer.filter { downloadedNames.contains($0.name) }
-                if !transferred.isEmpty {
-                    await deleteItems(transferred)
-                }
+            // A move may only delete what arrived.
+            let transferred = itemsToTransfer.filter { landed.contains($0.name) }
+            if !transferred.isEmpty {
+                await deleteItems(transferred)
             }
         }
 
@@ -1444,6 +1515,10 @@ final class CloudFileManagerViewModel {
             quickLookController.updateAndReload(urls: [])
             return
         }
+        // Previewing means downloading, so only do it while the preview is
+        // open: otherwise clicking a 4 GB video would fetch 4 GB.
+        // `toggleQuickLook` fetches for itself when the panel opens.
+        guard quickLookController.isPanelVisible else { return }
 
         quickLookTask?.cancel()
         quickLookTask = Task {
@@ -1505,25 +1580,38 @@ final class CloudFileManagerViewModel {
             if progress?.isCancelled == true || Task.isCancelled { return providerSupports }
             progress?.beginFile(item.name, size: item.size)
 
-            // Determine the destination path. KeepBoth → unique name, Replace → delete first.
+            // Determine the destination path. KeepBoth → unique name.
             let resolution = resolutionByName[item.name] ?? .transfer
             var destName = item.name
             if resolution == .keepBoth {
                 destName = Self.uniqueCloudName(for: item.name, existing: existingNames)
-            } else if resolution == .replace,
-                      let existing = targetSiblings.first(where: { $0.name == item.name }) {
-                try? await provider.deleteItem(at: existing.path)
             }
             let destPath = targetPath == "/" ? "/\(destName)" : "\(targetPath)/\(destName)"
+            let existing = resolution == .replace ? targetSiblings.first(where: { $0.name == item.name }) : nil
 
             do {
-                if deleteFromSource {
-                    SupportLogger.shared.log("server-side move \(item.path) → \(destPath)", category: cloudCategory)
-                    try await provider.moveItem(at: item.path, toPath: destPath)
-                } else {
-                    SupportLogger.shared.log("server-side copy \(item.path) → \(destPath)", category: cloudCategory)
-                    try await provider.copyItem(at: item.path, toPath: destPath)
+                // Replace sets the old item aside rather than deleting it, so
+                // a move that fails, or a provider that turns out not to
+                // support moves at all, can put it back.
+                var setAside: String?
+                if let existing {
+                    let name = FileSystemService.temporaryReplacementName(for: item.name)
+                    try await provider.renameItem(at: existing.path, to: name)
+                    setAside = targetPath == "/" ? "/\(name)" : "\(targetPath)/\(name)"
                 }
+                do {
+                    if deleteFromSource {
+                        SupportLogger.shared.log("server-side move \(item.path) → \(destPath)", category: cloudCategory)
+                        try await provider.moveItem(at: item.path, toPath: destPath)
+                    } else {
+                        SupportLogger.shared.log("server-side copy \(item.path) → \(destPath)", category: cloudCategory)
+                        try await provider.copyItem(at: item.path, toPath: destPath)
+                    }
+                } catch {
+                    if let setAside { try? await provider.renameItem(at: setAside, to: item.name) }
+                    throw error
+                }
+                if let setAside { try? await provider.deleteItem(at: setAside) }
                 progress?.recordSuccess(item.name)
                 progress?.completedItems = index + 1
                 progress?.totalBytes += item.size

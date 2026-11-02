@@ -970,3 +970,14 @@
 "Server URL (e.g. https://my-nas.local)" = "Server-URL (z. B. https://my-nas.local)";
 "Server URL (e.g. https://my-nas.local:5006)" = "Server-URL (z. B. https://my-nas.local:5006)";
 "Server URL (e.g. https://my-nas.local:9802)" = "Server-URL (z. B. https://my-nas.local:9802)";
+
+/* Data safety */
+"The server sent a folder listing FileFluss couldn't read." = "Der Server hat eine Ordnerliste gesendet, die FileFluss nicht lesen konnte.";
+"FileFluss couldn't read “%@”, so it can't tell what needs syncing." = "FileFluss konnte „%@“ nicht lesen und kann daher nicht bestimmen, was synchronisiert werden muss.";
+"An offline source can't be changed." = "Eine Offline-Quelle kann nicht geändert werden.";
+"The server listed an unsafe path (“%@”), so the sync was stopped." = "Der Server hat einen unsicheren Pfad aufgeführt („%@“), daher wurde die Synchronisierung gestoppt.";
+"The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "Die Quelle ist leer, daher würde „Spiegeln“ alles am Ziel löschen. Prüfe, ob der richtige Ordner geöffnet ist.";
+"Yes, delete %d of the %d items at the destination." = "Ja, %d von %d Objekten am Ziel löschen.";
+"“%@” can't replace a folder it's inside." = "„%@“ kann keinen Ordner ersetzen, in dem es selbst liegt.";
+"The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "Die neue Kopie von „%@“ wurde hochgeladen, konnte aber nicht umbenannt werden und heißt noch „%@“.";
+"Couldn't check the destination for items with the same name: %@" = "Das Ziel konnte nicht auf gleichnamige Objekte geprüft werden: %@";

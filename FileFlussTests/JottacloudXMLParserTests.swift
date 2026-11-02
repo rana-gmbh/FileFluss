@@ -44,8 +44,8 @@ struct JottacloudXMLParserTests {
     """
 
     @Test("Lists child folders and completed files")
-    func parsesListing() {
-        let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
+    func parsesListing() throws {
+        let items = try JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
         let names = Set(items.map(\.name))
         #expect(names.contains("Documents"))
         #expect(names.contains("Photos"))
@@ -56,8 +56,8 @@ struct JottacloudXMLParserTests {
     }
 
     @Test("File metadata: size, md5, directory flag, path")
-    func parsesFileMetadata() {
-        let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
+    func parsesFileMetadata() throws {
+        let items = try JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
         let file = items.first { $0.name == "report.pdf" }
         #expect(file?.isDirectory == false)
         #expect(file?.size == 20480)
@@ -70,8 +70,8 @@ struct JottacloudXMLParserTests {
     }
 
     @Test("File modified date parses (regression: broken JFS date format)")
-    func parsesModifiedDate() {
-        let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
+    func parsesModifiedDate() throws {
+        let items = try JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/")
         let file = items.first { $0.name == "report.pdf" }
         // JFS sends "2024-01-15-T10:30:00Z" — must parse, not fall back to epoch.
         let comps = Calendar(identifier: .gregorian).dateComponents(
@@ -83,8 +83,8 @@ struct JottacloudXMLParserTests {
     }
 
     @Test("Nested base path is joined onto child names")
-    func parsesNestedPaths() {
-        let items = JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/Pictures")
+    func parsesNestedPaths() throws {
+        let items = try JottacloudXMLParser.parseListing(data: Data(listingXML.utf8), basePath: "/Pictures")
         #expect(items.first { $0.name == "report.pdf" }?.path == "/Pictures/report.pdf")
         #expect(items.first { $0.name == "Documents" }?.path == "/Pictures/Documents")
     }

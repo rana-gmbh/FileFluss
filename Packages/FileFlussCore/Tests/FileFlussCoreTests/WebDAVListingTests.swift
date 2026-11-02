@@ -51,27 +51,27 @@ struct WebDAVListingTests {
     /// The reported case, exactly: a root whose own entry carries no
     /// displayname, and two folders under it.
     @Test("Every folder in the root is listed")
-    func rootWithoutDisplayNameKeepsEveryChild() {
+    func rootWithoutDisplayNameKeepsEveryChild() throws {
         let data = body(
             folder(href: "/", displayName: nil)
             + folder(href: "/Backups/", displayName: "Backups")
             + folder(href: "/Photos/", displayName: "Photos")
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
 
         #expect(items.map(\.name) == ["Backups", "Photos"])
     }
 
     @Test("A root that does send a displayname is listed the same way")
-    func rootWithDisplayName() {
+    func rootWithDisplayName() throws {
         let data = body(
             folder(href: "/", displayName: "/")
             + folder(href: "/Backups/", displayName: "Backups")
             + folder(href: "/Photos/", displayName: "Photos")
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
 
         #expect(items.map(\.name) == ["Backups", "Photos"])
     }
@@ -79,14 +79,14 @@ struct WebDAVListingTests {
     /// Nothing in the spec says the folder comes first, and some servers
     /// put it last. Position was never a safe way to find it.
     @Test("The folder's own entry is found wherever it appears")
-    func selfEntryLast() {
+    func selfEntryLast() throws {
         let data = body(
             folder(href: "/Backups/", displayName: "Backups")
             + folder(href: "/Photos/", displayName: "Photos")
             + folder(href: "/", displayName: "/")
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
 
         #expect(items.map(\.name) == ["Backups", "Photos"])
     }
@@ -94,26 +94,26 @@ struct WebDAVListingTests {
     /// Removing something anyway, when there is nothing to remove, is how
     /// the bug worked.
     @Test("A server that omits the folder's entry loses nothing")
-    func selfEntryAbsent() {
+    func selfEntryAbsent() throws {
         let data = body(
             folder(href: "/Backups/", displayName: "Backups")
             + folder(href: "/Photos/", displayName: "Photos")
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/")
 
         #expect(items.map(\.name) == ["Backups", "Photos"])
     }
 
     @Test("A subfolder lists its contents and not itself")
-    func subfolderListing() {
+    func subfolderListing() throws {
         let data = body(
             folder(href: "/Backups/", displayName: "Backups")
             + file(href: "/Backups/january.tar", displayName: "january.tar", length: 42)
             + folder(href: "/Backups/2026/", displayName: "2026")
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/Backups")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/Backups")
 
         #expect(items.map(\.name) == ["january.tar", "2026"])
         #expect(items.first?.size == 42)
@@ -122,26 +122,26 @@ struct WebDAVListingTests {
     /// Hrefs come percent-encoded, and the folder's own entry has to be
     /// recognised through that.
     @Test("An encoded folder name still matches its own entry")
-    func percentEncodedSelfEntry() {
+    func percentEncodedSelfEntry() throws {
         let data = body(
             folder(href: "/My%20Files/", displayName: "My Files")
             + file(href: "/My%20Files/note.txt", displayName: "note.txt", length: 7)
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/My Files")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/My Files")
 
         #expect(items.map(\.name) == ["note.txt"])
     }
 
     /// Some servers answer with absolute URLs rather than paths.
     @Test("An absolute URL in the href is matched too")
-    func absoluteHrefs() {
+    func absoluteHrefs() throws {
         let data = body(
             folder(href: "\(base)/Backups/", displayName: "Backups")
             + file(href: "\(base)/Backups/january.tar", displayName: "january.tar", length: 1)
         )
 
-        let items = WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/Backups")
+        let items = try WebDAVResponseParser.children(data: data, basePath: base, requestPath: "/Backups")
 
         #expect(items.map(\.name) == ["january.tar"])
     }
@@ -160,10 +160,10 @@ struct WebDAVListingTests {
     /// a Depth-0 PROPFIND, and the entry it wants is the one `children`
     /// exists to remove.
     @Test("Metadata lookups still see the item itself")
-    func parseKeepsTheRequestedItem() {
+    func parseKeepsTheRequestedItem() throws {
         let data = body(file(href: "/Backups/january.tar", displayName: "january.tar", length: 99))
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: base, requestPath: "/Backups/january.tar")
+        let items = try WebDAVResponseParser.parse(data: data, basePath: base, requestPath: "/Backups/january.tar")
 
         #expect(items.first?.name == "january.tar")
         #expect(items.first?.size == 99)

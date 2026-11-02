@@ -1349,7 +1349,14 @@ final class AppState {
         if destPath == destVM.currentPath {
             targetExistingItems = destVM.items
         } else {
-            targetExistingItems = (try? await destProvider.listDirectory(at: destPath)) ?? []
+            do {
+                targetExistingItems = try await destProvider.listDirectory(at: destPath)
+            } catch {
+                // Not knowing what's there isn't the same as nothing being
+                // there: going on would overwrite without asking.
+                transfer.failAll(cloudItems.map(\.name), error: L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription))
+                return
+            }
         }
 
         // Show the "already exists" dialog for any colliding names. This
@@ -1405,14 +1412,6 @@ final class AppState {
                     continue
                 }
                 try? FileManager.default.removeItem(at: tempURL)
-
-                // --- Apply .replace: delete the existing item at the
-                // destination before uploading. Done up-front so an
-                // upload error doesn't leave a half-replaced state.
-                if resolutionByName[item.name] == .replace,
-                   let existing = targetExistingItems.first(where: { $0.name == item.name }) {
-                    try? await destProvider.deleteItem(at: existing.path)
-                }
 
                 // --- Download phase
                 let bytesBeforeDownload = await MainActor.run { transfer.downloadBytes }
@@ -1471,23 +1470,35 @@ final class AppState {
                     return root + "/" + destName
                 }()
                 let bytesBeforeUpload = await MainActor.run { transfer.uploadBytes }
+                // .replace goes through `replacingItem`, so the existing item
+                // stays until this upload has finished.
+                let existingToReplace = resolutionByName[item.name] == .replace
+                    ? targetExistingItems.first(where: { $0.name == item.name })
+                    : nil
                 do {
-                    try await destProvider.uploadFile(
-                        from: tempURL,
-                        to: dstPath,
-                        onBytes: { bytes in
-                            Task { @MainActor in transfer.addUploadBytes(bytes) }
-                        }
-                    )
-                    // Preserve the source's modification date on the
-                    // destination so Finder-style mtime semantics hold:
-                    // a copy/move shouldn't change "Date Modified" — only
-                    // a content edit should. Best-effort; unsupported
-                    // providers no-op via the protocol default.
-                    try? await destProvider.setModificationDate(
-                        at: dstPath,
-                        to: item.modificationDate
-                    )
+                    let upload: (String) async throws -> Void = { path in
+                        try await destProvider.uploadFile(
+                            from: tempURL,
+                            to: path,
+                            onBytes: { bytes in
+                                Task { @MainActor in transfer.addUploadBytes(bytes) }
+                            }
+                        )
+                        // Preserve the source's modification date on the
+                        // destination so Finder-style mtime semantics hold:
+                        // a copy/move shouldn't change "Date Modified" — only
+                        // a content edit should. Best-effort; unsupported
+                        // providers no-op via the protocol default.
+                        try? await destProvider.setModificationDate(
+                            at: path,
+                            to: item.modificationDate
+                        )
+                    }
+                    if let existingToReplace {
+                        try await destProvider.replacingItem(at: existingToReplace.path, using: upload)
+                    } else {
+                        try await upload(dstPath)
+                    }
                     await MainActor.run {
                         let streamed = transfer.uploadBytes - bytesBeforeUpload
                         if streamed < item.size {
@@ -1996,7 +2007,25 @@ final class TransferProgress: Identifiable {
     /// failures, skips *or* a cancellation, and in each case some sources
     /// were never transferred.
     var succeededNames: Set<String> {
-        Set(itemResults.lazy.filter { $0.status == .succeeded }.map(\.name))
+        var succeeded: Set<String> = []
+        var incomplete: Set<String> = []
+        for result in itemResults {
+            if result.status == .succeeded {
+                succeeded.insert(result.name)
+            } else {
+                incomplete.insert(result.name)
+            }
+        }
+        // An item can be recorded twice, once per phase of a transfer between
+        // two accounts. One that failed anywhere didn't make it.
+        return succeeded.subtracting(incomplete)
+    }
+
+    /// Ends a batch that couldn't start at all.
+    func failAll(_ names: [String], error: String) {
+        for name in names { recordFailure(name, error: error) }
+        endTime = Date()
+        isComplete = true
     }
 
     /// True only when every attempted item succeeded and nothing was

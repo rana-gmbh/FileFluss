@@ -309,7 +309,9 @@ struct FileListView: View {
                 cloudVM.conflictDirection = outgoingDirection
                 transfer.task = Task {
                     await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                    await fm.deleteItems(items)
+                    // Only what arrived: deleting here is permanent.
+                    let landed = transfer.succeededNames
+                    await fm.deleteItems(items.filter { landed.contains($0.url.lastPathComponent) })
                     await fm.refresh()
                 }
             } else {
@@ -674,7 +676,9 @@ struct FileListView: View {
                                     cloudVM.conflictDirection = outgoingDirection
                                     transfer.task = Task {
                                         await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                                        await fm.deleteItems(items)
+                                        // Only what arrived: deleting here is permanent.
+                                        let landed = transfer.succeededNames
+                                        await fm.deleteItems(items.filter { landed.contains($0.url.lastPathComponent) })
                                         await fm.refresh()
                                     }
                                 } else {

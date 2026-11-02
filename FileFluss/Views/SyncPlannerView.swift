@@ -8,6 +8,7 @@ struct SyncPlannerView: View {
     @State private var direction: PlanDirection = .leftToRight
     @State private var mode: SyncMode = .newer
     @State private var confirmDestructive: Bool = false
+    @State private var confirmLargeDeletion: Bool = false
     @State private var plan: SyncPlan?
     @State private var isCalculating: Bool = false
     @State private var errorMessage: String?
@@ -36,8 +37,8 @@ struct SyncPlannerView: View {
         }
         .padding(20)
         .frame(width: 520)
-        .onChange(of: direction) { _, _ in plan = nil; destAvailable = nil }
-        .onChange(of: mode) { _, _ in plan = nil; confirmDestructive = false; destAvailable = nil }
+        .onChange(of: direction) { _, _ in plan = nil; confirmLargeDeletion = false; destAvailable = nil }
+        .onChange(of: mode) { _, _ in plan = nil; confirmDestructive = false; confirmLargeDeletion = false; destAvailable = nil }
     }
 
     // MARK: - Sections
@@ -221,6 +222,22 @@ struct SyncPlannerView: View {
                 }
                 .font(.callout)
 
+                if plan.wouldEmptyDestination {
+                    Label(L10n.text("The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open."),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.top, 2)
+                } else if plan.deletesMostOfDestination {
+                    Toggle(isOn: $confirmLargeDeletion) {
+                        Text(L10n.format("Yes, delete %d of the %d items at the destination.",
+                                         plan.filesToDelete + plan.foldersToDelete, plan.destinationEntryCount))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    .toggleStyle(.checkbox)
+                    .padding(.top, 2)
+                }
                 if let available = destAvailable, available - plan.netDestinationDelta < 0 {
                     Label(L10n.text("This sync would exceed the available space at the destination."),
                           systemImage: "exclamationmark.triangle.fill")
@@ -269,12 +286,17 @@ struct SyncPlannerView: View {
             let vm = appState.cloudFileManager(for: accountId, side: side)
             return .cloud(accountId: accountId, rootPath: vm.currentPath)
         }
-        return .local(appState.fileManager(for: side).currentDirectory)
+        // Inside an archive `currentDirectory` is still the folder around
+        // it, which isn't what the panel shows and not what the user means.
+        let fileManager = appState.fileManager(for: side)
+        return fileManager.isBrowsingArchive ? nil : .local(fileManager.currentDirectory)
     }
 
     private var canStart: Bool {
         guard let plan, !isCalculating else { return false }
         if mode.isDestructive && !confirmDestructive { return false }
+        if plan.wouldEmptyDestination { return false }
+        if plan.deletesMostOfDestination && !confirmLargeDeletion { return false }
         return !plan.operations.isEmpty
     }
 
@@ -284,6 +306,7 @@ struct SyncPlannerView: View {
         guard let src = sourceEndpoint, let dst = destEndpoint else { return }
         isCalculating = true
         errorMessage = nil
+        confirmLargeDeletion = false
         defer { isCalculating = false }
         let planner = SyncPlanner()
         do {

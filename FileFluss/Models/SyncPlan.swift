@@ -47,6 +47,11 @@ struct SyncEntry: Hashable, Sendable {
         self.modificationDate = modificationDate
         self.creationDate = creationDate
     }
+
+    /// Whether this entry or a folder above it is a dotfile.
+    var isHidden: Bool {
+        relativePath.split(separator: "/").contains { $0.hasPrefix(".") }
+    }
 }
 
 /// A single operation the planner will perform to sync one side into the other.
@@ -82,4 +87,21 @@ struct SyncPlan: Sendable {
     /// project remaining quota / free space in the planner. Can be negative
     /// when a mirror sync removes more than it adds.
     let netDestinationDelta: Int64
+    /// What each side held when the plan was made, hidden files aside.
+    let sourceEntryCount: Int
+    let destinationEntryCount: Int
+
+    /// Mirroring nothing over something. This is what a scan gone wrong looks
+    /// like far more often than a real wish to wipe the destination, so it
+    /// isn't offered.
+    var wouldEmptyDestination: Bool {
+        mode == .mirror && sourceEntryCount == 0 && destinationEntryCount > 0
+    }
+
+    /// Deletes at least half of a destination of any real size, which needs
+    /// a confirmation of its own.
+    var deletesMostOfDestination: Bool {
+        let deletions = filesToDelete + foldersToDelete
+        return deletions >= 10 && deletions * 2 >= destinationEntryCount
+    }
 }

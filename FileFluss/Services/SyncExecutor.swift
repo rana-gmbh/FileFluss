@@ -91,29 +91,71 @@ enum SyncExecutor {
                                    onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
             }
         case .replace(let rel, _):
-            try await deleteFile(at: rel, on: destination)
-            try await copyFile(sourceRelative: rel, destRelative: rel,
-                               source: source, destination: destination,
-                               onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+            try await replaceFile(at: rel, source: source, destination: destination,
+                                  onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
         case .addRenamed(let srcRel, let destRel, _):
             try await copyFile(sourceRelative: srcRel, destRelative: destRel,
                                source: source, destination: destination,
                                onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
         case .delete(let rel, let isDir, _):
             if isDir {
-                try? await deleteDirectory(at: rel, on: destination)
+                try await deleteDirectory(at: rel, on: destination)
             } else {
-                try? await deleteFile(at: rel, on: destination)
+                try await deleteFile(at: rel, on: destination)
             }
         }
     }
 
     // MARK: - Endpoint primitives
 
+    /// Copies the source's version beside the destination's and swaps it in
+    /// once it's complete. Deleting first meant a failed copy, for any reason
+    /// from a lost connection to a file over the provider's size limit, lost
+    /// the destination's version for nothing.
+    private static func replaceFile(at rel: String,
+                                    source: SyncEndpoint,
+                                    destination: SyncEndpoint,
+                                    onDownloadBytes: @escaping @Sendable (Int64) -> Void,
+                                    onUploadBytes: @escaping @Sendable (Int64) -> Void) async throws {
+        /// `rel`, in the same folder but under another name.
+        func sibling(named name: String) -> String {
+            let parent = (rel as NSString).deletingLastPathComponent
+            return parent.isEmpty ? name : "\(parent)/\(name)"
+        }
+
+        switch destination {
+        case .local(let root):
+            let target = try SafeLocalPath.destination(forRelativePath: rel, in: root)
+            let temporaryRel = sibling(named: FileSystemService.temporaryReplacementName(for: target.lastPathComponent))
+            do {
+                try await copyFile(sourceRelative: rel, destRelative: temporaryRel,
+                                   source: source, destination: destination,
+                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+                let temporary = try SafeLocalPath.destination(forRelativePath: temporaryRel, in: root)
+                try await FileSystemService.shared.installReplacement(temporary, at: target)
+            } catch {
+                try? await deleteFile(at: temporaryRel, on: destination)
+                throw error
+            }
+        case .cloud(let accountId, let rootPath):
+            guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+                throw SyncPlannerError.providerUnavailable
+            }
+            try await provider.replacingItem(at: cloudJoin(rootPath, rel)) { temporaryPath in
+                try await copyFile(sourceRelative: rel,
+                                   destRelative: sibling(named: (temporaryPath as NSString).lastPathComponent),
+                                   source: source, destination: destination,
+                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+            }
+        case .offlineIndexed:
+            throw SyncPlannerError.offlineEndpointNotWritable
+        }
+    }
+
     private static func createDirectory(at rel: String, on endpoint: SyncEndpoint) async throws {
         switch endpoint {
         case .local(let root):
-            let url = root.appendingPathComponent(rel)
+            let url = try SafeLocalPath.destination(forRelativePath: rel, in: root)
             try await FileSystemService.shared.createDirectory(at: url)
         case .cloud(let accountId, let rootPath):
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
@@ -128,7 +170,7 @@ enum SyncExecutor {
     private static func deleteFile(at rel: String, on endpoint: SyncEndpoint) async throws {
         switch endpoint {
         case .local(let root):
-            let url = root.appendingPathComponent(rel)
+            let url = try SafeLocalPath.destination(forRelativePath: rel, in: root)
             if await FileSystemService.shared.itemExists(at: url) {
                 try await FileSystemService.shared.deleteItem(at: url)
             }
@@ -155,8 +197,8 @@ enum SyncExecutor {
                                  onUploadBytes: @escaping @Sendable (Int64) -> Void) async throws {
         switch (source, destination) {
         case let (.local(srcRoot), .local(dstRoot)):
-            let src = srcRoot.appendingPathComponent(sourceRelative)
-            let dst = dstRoot.appendingPathComponent(destRelative)
+            let src = try SafeLocalPath.destination(forRelativePath: sourceRelative, in: srcRoot)
+            let dst = try SafeLocalPath.destination(forRelativePath: destRelative, in: dstRoot)
             try await ensureParentDirectory(for: dst)
             try await FileSystemService.shared.copyItem(from: src, to: dst)
             // Local-to-local has no byte stream; emit full size once as progress.
@@ -167,7 +209,7 @@ enum SyncExecutor {
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            let src = srcRoot.appendingPathComponent(sourceRelative)
+            let src = try SafeLocalPath.destination(forRelativePath: sourceRelative, in: srcRoot)
             let destPath = cloudJoin(rootPath, destRelative)
             try await ensureCloudParentDirectory(for: destPath, on: provider)
             try await CloudProviderError.enforceUploadSizeLimit(src, provider: provider)
@@ -177,7 +219,7 @@ enum SyncExecutor {
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            let dst = dstRoot.appendingPathComponent(destRelative)
+            let dst = try SafeLocalPath.destination(forRelativePath: destRelative, in: dstRoot)
             try await ensureParentDirectory(for: dst)
             try await provider.downloadFile(remotePath: cloudJoin(rootPath, sourceRelative), to: dst, onBytes: onDownloadBytes)
 

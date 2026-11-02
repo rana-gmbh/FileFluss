@@ -970,3 +970,14 @@
 "Server URL (e.g. https://my-nas.local)" = "服务器 URL（例如 https://my-nas.local）";
 "Server URL (e.g. https://my-nas.local:5006)" = "服务器 URL（例如 https://my-nas.local:5006）";
 "Server URL (e.g. https://my-nas.local:9802)" = "服务器 URL（例如 https://my-nas.local:9802）";
+
+/* Data safety */
+"The server sent a folder listing FileFluss couldn't read." = "服务器发送的文件夹列表 FileFluss 无法读取。";
+"FileFluss couldn't read “%@”, so it can't tell what needs syncing." = "FileFluss 无法读取“%@”，因此无法判断需要同步的内容。";
+"An offline source can't be changed." = "无法更改离线来源。";
+"The server listed an unsafe path (“%@”), so the sync was stopped." = "服务器列出了不安全的路径（“%@”），同步已停止。";
+"The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "来源为空，因此镜像会删除目标中的所有内容。请检查打开的文件夹是否正确。";
+"Yes, delete %d of the %d items at the destination." = "是，删除目标中 %2$d 个项目中的 %1$d 个。";
+"“%@” can't replace a folder it's inside." = "“%@”无法替换包含它自身的文件夹。";
+"The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "“%1$@”的新副本已上传，但无法重命名，仍名为“%2$@”。";
+"Couldn't check the destination for items with the same name: %@" = "无法检查目标中是否有同名项目：%@";

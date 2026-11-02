@@ -248,7 +248,7 @@ public actor WebDAVAPIClient {
 
         // The folder's own entry is removed by path, not by position: it
         // is not always first, and is sometimes not there at all (#64).
-        return WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
+        return try WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -451,7 +451,7 @@ public actor WebDAVAPIClient {
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
+        let items = try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
         guard let item = items.first else {
             throw CloudProviderError.notFound(path)
         }

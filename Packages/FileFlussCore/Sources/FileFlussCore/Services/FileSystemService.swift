@@ -111,6 +111,72 @@ public actor FileSystemService {
         }
     }
 
+    // MARK: - Replacing
+
+    /// A name for the new copy while it's being written next to the item it
+    /// will replace. Visible on purpose: if the app dies part way, whatever
+    /// is left can be seen and deleted. The extension stays last because some
+    /// servers judge an upload by it.
+    public static func temporaryReplacementName(for name: String) -> String {
+        let ns = name as NSString
+        let tag = UUID().uuidString.prefix(8).lowercased()
+        // Leaves room in the 255 bytes most file systems allow for a name.
+        let base = String(ns.deletingPathExtension.prefix(150))
+        let stem = "\(base).filefluss-part-\(tag)"
+        return ns.pathExtension.isEmpty ? stem : "\(stem).\(ns.pathExtension)"
+    }
+
+    /// Replaces `destination` with `source`, removing `source`. The old item
+    /// stays until the new one is ready, so a failure loses neither.
+    public func replaceItem(at destination: URL, withMoved source: URL) throws {
+        let temporary = Self.temporarySibling(of: destination)
+        let fm = Foundation.FileManager.default
+        // A move across volumes is a copy, which is the slow part that can
+        // fail. Doing it first leaves the swap as a single rename.
+        try fm.moveItem(at: source, to: temporary)
+        do {
+            try installReplacement(temporary, at: destination)
+        } catch {
+            try? fm.moveItem(at: temporary, to: source)
+            throw error
+        }
+    }
+
+    /// Replaces `destination` with a copy of `source`. As above: the old item
+    /// stays until the copy is complete.
+    public func replaceItem(at destination: URL, withCopyOf source: URL) throws {
+        let temporary = Self.temporarySibling(of: destination)
+        let fm = Foundation.FileManager.default
+        do {
+            try fm.copyItem(at: source, to: temporary)
+            try installReplacement(temporary, at: destination)
+        } catch {
+            try? fm.removeItem(at: temporary)
+            throw error
+        }
+    }
+
+    /// Swaps a finished copy into place. `temporary` has to be on the same
+    /// volume as `destination`, which is what makes this a rename.
+    public func installReplacement(_ temporary: URL, at destination: URL) throws {
+        let fm = Foundation.FileManager.default
+        do {
+            if fm.fileExists(atPath: destination.path) {
+                _ = try fm.replaceItemAt(destination, withItemAt: temporary)
+            } else {
+                try fm.moveItem(at: temporary, to: destination)
+            }
+            SupportLogger.shared.log("replaced: \(destination.path)", category: "fs")
+        } catch {
+            SupportLogger.shared.log("replace FAILED: \(destination.path) — \(error.localizedDescription)", category: "fs", level: .error)
+            throw error
+        }
+    }
+
+    private static func temporarySibling(of url: URL) -> URL {
+        url.deletingLastPathComponent().appendingPathComponent(temporaryReplacementName(for: url.lastPathComponent))
+    }
+
     public func itemExists(at url: URL) -> Bool {
         Foundation.FileManager.default.fileExists(atPath: url.path())
     }

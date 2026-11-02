@@ -90,7 +90,7 @@ public actor FTPAPIClient {
         // A trailing slash tells curl to LIST the directory (full `ls -l`
         // style output) rather than retrieve a file of that name.
         let output = try await runCurl([directoryURL(for: path)])
-        return parseListing(output: output, basePath: normalized(path))
+        return try parseListing(output: output, basePath: normalized(path))
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
@@ -243,7 +243,10 @@ public actor FTPAPIClient {
             "--config", cfgPath,
             "--silent", "--show-error",
             "--connect-timeout", "15",
-            "--max-time", "600",
+            // Give up on a stalled connection, not a slow one: a time limit
+            // on the whole command would kill any transfer over ten minutes.
+            "--speed-limit", "1",
+            "--speed-time", "120",
         ]
         if credentials.useTLS {
             args.append("--ssl-reqd")
@@ -262,9 +265,12 @@ public actor FTPAPIClient {
             process.standardError = stderrPipe
             process.standardInput = FileHandle.nullDevice
 
+            let stdoutDrain = PipeDrain(stdoutPipe)
+            let stderrDrain = PipeDrain(stderrPipe)
+
             process.terminationHandler = { proc in
-                let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let stdout = String(data: stdoutDrain.collected(), encoding: .utf8) ?? ""
+                let stderr = String(data: stderrDrain.collected(), encoding: .utf8) ?? ""
                 if proc.terminationStatus != 0 {
                     continuation.resume(throwing: Self.mapCurlError(exit: Int(proc.terminationStatus), stderr: stderr))
                     return
@@ -275,6 +281,10 @@ public actor FTPAPIClient {
             do {
                 try process.run()
             } catch {
+                // Never started, so nothing will close these; the drains
+                // would otherwise wait on them forever.
+                try? stdoutPipe.fileHandleForWriting.close()
+                try? stderrPipe.fileHandleForWriting.close()
                 continuation.resume(throwing: CloudProviderError.networkError(error))
             }
         }
@@ -307,7 +317,7 @@ public actor FTPAPIClient {
 
     /// FTP `LIST` output is the server's directory listing — almost always
     /// Unix `ls -l` style, which the SFTP client already parses robustly.
-    private func parseListing(output: String, basePath: String) -> [CloudFileItem] {
+    private func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
         var items: [CloudFileItem] = []
         for line in output.components(separatedBy: "\n") {
             guard let parsed = SFTPAPIClient.parseListingLine(line) else { continue }
@@ -325,6 +335,7 @@ public actor FTPAPIClient {
         if items.isEmpty, SFTPAPIClient.outputLooksLikeListing(output) {
             ftpLog.error("[FTP] Folder \(basePath, privacy: .public) parsed 0 items from listing-shaped output; unrecognised format. Sample: \(output.prefix(500), privacy: .public)")
         }
+        try SFTPAPIClient.validateListing(output: output, itemCount: items.count, everyLineIsARow: true)
         return items
     }
 }

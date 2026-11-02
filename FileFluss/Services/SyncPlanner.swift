@@ -46,6 +46,43 @@ enum SyncPlannerError: Error {
     /// Compare can read from an offline indexed snapshot, but execution
     /// against one would have no live destination to write to.
     case offlineEndpointNotWritable
+    /// A listing named a path that climbs out of the folder being synced.
+    /// Stops the plan: skipping the entry would let Mirror delete it instead.
+    case unsafeRemotePath(String)
+}
+
+extension SyncPlannerError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .providerUnavailable:
+            return L10n.text("Cloud account not connected")
+        case .sourceNotEnumerable(let path):
+            return L10n.format("FileFluss couldn't read “%@”, so it can't tell what needs syncing.", path)
+        case .offlineEndpointNotWritable:
+            return L10n.text("An offline source can't be changed.")
+        case .unsafeRemotePath(let path):
+            return L10n.format("The server listed an unsafe path (“%@”), so the sync was stopped.", path)
+        }
+    }
+}
+
+/// The first folder a scan couldn't read. Written from the enumerator's error
+/// callback and read once the enumeration has finished.
+private final class ScanFailure: @unchecked Sendable {
+    private let lock = NSLock()
+    private var url: URL?
+
+    func record(_ failed: URL) {
+        lock.lock()
+        defer { lock.unlock() }
+        if url == nil { url = failed }
+    }
+
+    var firstFailure: URL? {
+        lock.lock()
+        defer { lock.unlock() }
+        return url
+    }
 }
 
 /// Builds sync plans by enumerating both endpoints and diffing them according to the chosen mode.
@@ -125,17 +162,36 @@ actor SyncPlanner {
             .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
             .contentModificationDateKey, .creationDateKey
         ]
-        guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else {
+        // A folder that can't be read must stop the scan. Left out of the
+        // results it reads as "not there", and Mirror then deletes the
+        // destination's copy, or everything on an ejected drive.
+        var rootIsDirectory: ObjCBool = false
+        guard fm.fileExists(atPath: root.path, isDirectory: &rootIsDirectory), rootIsDirectory.boolValue else {
             throw SyncPlannerError.sourceNotEnumerable(root.path(percentEncoded: false))
         }
-        let rootPath = root.path(percentEncoded: false)
+        let failure = ScanFailure()
+        // The enumerator won't step into a root that is itself a symlink.
+        guard let enumerator = fm.enumerator(
+            at: root.resolvingSymlinksInPath(),
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles],
+            errorHandler: { url, _ in
+                failure.record(url)
+                return false
+            }
+        ) else {
+            throw SyncPlannerError.sourceNotEnumerable(root.path(percentEncoded: false))
+        }
         var results: [SyncEntry] = []
         while let itemURL = enumerator.nextObject() as? URL {
-            guard let values = try? itemURL.resourceValues(forKeys: Set(keys)) else { continue }
-            let itemPath = itemURL.path(percentEncoded: false)
-            guard itemPath.hasPrefix(rootPath) else { continue }
-            var relative = String(itemPath.dropFirst(rootPath.count))
-            while relative.hasPrefix("/") { relative.removeFirst() }
+            guard let values = try? itemURL.resourceValues(forKeys: Set(keys)) else {
+                throw SyncPlannerError.sourceNotEnumerable(itemURL.path(percentEncoded: false))
+            }
+            // By depth, not by comparing against the root's path: the
+            // enumerator may spell a root reached through a symlink
+            // differently (/tmp is really /private/tmp), and an entry that
+            // failed that comparison used to vanish from the scan.
+            let relative = itemURL.pathComponents.suffix(enumerator.level).joined(separator: "/")
             if relative.isEmpty { continue }
             let isDir = values.isDirectory ?? false
             let size = Int64(values.totalFileSize ?? values.fileSize ?? 0)
@@ -149,6 +205,9 @@ actor SyncPlanner {
                 creationDate: created
             ))
         }
+        if let failed = failure.firstFailure {
+            throw SyncPlannerError.sourceNotEnumerable(failed.path(percentEncoded: false))
+        }
         return results
     }
 
@@ -161,6 +220,11 @@ actor SyncPlanner {
             for item in items {
                 let relative = relativeCloudPath(item.path, underRoot: root)
                 guard !relative.isEmpty else { continue }
+                // The name comes from the server. A hostile one could list
+                // `../../Library/LaunchAgents/x.plist`.
+                guard !SafeLocalPath.hasTraversal(relative) else {
+                    throw SyncPlannerError.unsafeRemotePath(item.path)
+                }
                 results.append(SyncEntry(
                     relativePath: relative,
                     isDirectory: item.isDirectory,
@@ -190,6 +254,14 @@ actor SyncPlanner {
               direction: PlanDirection,
               sourceIsCloud: Bool,
               destIsCloud: Bool) -> SyncPlan {
+        // A local scan skips hidden files, so without this the cloud's `.git`
+        // and `.env` look like extras and Mirror deletes them. Scanning them
+        // locally instead would upload secrets nobody chose to upload, so
+        // hidden files stay out of any sync that touches this Mac.
+        let touchesThisMac = !sourceIsCloud || !destIsCloud
+        let sourceEntries = touchesThisMac ? sourceEntries.filter { !$0.isHidden } : sourceEntries
+        let destEntries = touchesThisMac ? destEntries.filter { !$0.isHidden } : destEntries
+
         var destMap: [String: SyncEntry] = [:]
         destMap.reserveCapacity(destEntries.count)
         for entry in destEntries { destMap[entry.relativePath] = entry }
@@ -272,7 +344,9 @@ actor SyncPlanner {
             downloadBytes: download,
             uploadBytes: upload,
             totalBytes: bytesMoved,
-            netDestinationDelta: netDelta
+            netDestinationDelta: netDelta,
+            sourceEntryCount: sourceEntries.count,
+            destinationEntryCount: destEntries.count
         )
     }
 

@@ -970,3 +970,14 @@
 "Server URL (e.g. https://my-nas.local)" = "Server URL (e.g. https://my-nas.local)";
 "Server URL (e.g. https://my-nas.local:5006)" = "Server URL (e.g. https://my-nas.local:5006)";
 "Server URL (e.g. https://my-nas.local:9802)" = "Server URL (e.g. https://my-nas.local:9802)";
+
+/* Data safety */
+"The server sent a folder listing FileFluss couldn't read." = "The server sent a folder listing FileFluss couldn't read.";
+"FileFluss couldn't read “%@”, so it can't tell what needs syncing." = "FileFluss couldn't read “%@”, so it can't tell what needs syncing.";
+"An offline source can't be changed." = "An offline source can't be changed.";
+"The server listed an unsafe path (“%@”), so the sync was stopped." = "The server listed an unsafe path (“%@”), so the sync was stopped.";
+"The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open.";
+"Yes, delete %d of the %d items at the destination." = "Yes, delete %d of the %d items at the destination.";
+"“%@” can't replace a folder it's inside." = "“%@” can't replace a folder it's inside.";
+"The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”.";
+"Couldn't check the destination for items with the same name: %@" = "Couldn't check the destination for items with the same name: %@";
