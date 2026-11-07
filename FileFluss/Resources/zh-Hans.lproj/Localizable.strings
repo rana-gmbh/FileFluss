@@ -736,7 +736,13 @@
 /* Trash refused for want of permission */
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss 无权将其移到废纸篓";
 "Open Privacy Settings…" = "打开隐私设置……";
-"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS 拒绝了 FileFluss 将 %@ 移到废纸篓。在“系统设置 → 隐私与安全性”中为 FileFluss 授予“完全磁盘访问权限”即可解决，之后需要重新启动 FileFluss。永久删除可能因同样的原因被拒绝。";
+"Copy Repair Command" = "拷贝修复命令";
+"Your Trash folder can't be written to" = "无法写入你的废纸篓文件夹";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "macOS 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）属于用户“%@”而不是你。";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "macOS 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）的权限不允许更改。";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "访达也会遇到同样的问题。要修复，请拷贝该命令，粘贴到“终端”中并输入你的密码。";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "你没有权限更改 %@ 所在的文件夹（%@），因此无法将其移到废纸篓或删除。该文件夹的所有者可以在访达的“文件 → 显示简介”中更改。";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "macOS 拒绝了 FileFluss 将 %@ 移到废纸篓。如果 FileFluss 尚未获得“完全磁盘访问权限”，在“系统设置 → 隐私与安全性”中授予可能会有帮助，之后需要重新启动 FileFluss。如果访达也无法将其移到废纸篓，则原因不在 FileFluss。";
 
 /* Local staging space for transfers */
 "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "文件会途经这台 Mac：这需要 %@ 位于 %@，而该处仅剩 %@。中转文件夹可在“设置 → 存储”中设置。";

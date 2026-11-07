@@ -65,7 +65,7 @@ public final class FileSystemService: Sendable {
                 try Foundation.FileManager.default.removeItem(at: url)
                 SupportLogger.shared.log("deleteItem: \(url.path)", category: "fs")
             } catch {
-                SupportLogger.shared.log("deleteItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                SupportLogger.shared.log("deleteItem FAILED: \(url.path) — \(error.localizedDescription) [\(Self.errorChain(error))]", category: "fs", level: .error)
                 throw error
             }
         }
@@ -77,7 +77,7 @@ public final class FileSystemService: Sendable {
                 try Foundation.FileManager.default.trashItem(at: url, resultingItemURL: nil)
                 SupportLogger.shared.log("trashItem: \(url.path)", category: "fs")
             } catch {
-                SupportLogger.shared.log("trashItem FAILED: \(url.path) — \(error.localizedDescription)", category: "fs", level: .error)
+                SupportLogger.shared.log("trashItem FAILED: \(url.path) — \(error.localizedDescription) [\(Self.errorChain(error))]", category: "fs", level: .error)
                 throw error
             }
         }
@@ -117,6 +117,97 @@ public final class FileSystemService: Sendable {
             return isPermissionError(underlying)
         }
         return false
+    }
+
+    /// The domains and codes of an error and everything wrapped inside it,
+    /// e.g. "NSCocoaErrorDomain 513 ← NSPOSIXErrorDomain 13". A localized
+    /// message alone can't tell a support log reader which call failed or why.
+    public static func errorChain(_ error: Error) -> String {
+        var parts: [String] = []
+        var current: NSError? = error as NSError
+        while let ns = current, parts.count < 6 {
+            parts.append("\(ns.domain) \(ns.code)")
+            current = ns.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return parts.joined(separator: " ← ")
+    }
+
+    /// What a folder involved in a refused Trash looks like to this user.
+    public struct FolderFacts: Equatable, Sendable {
+        public var path: String
+        public var ownerUID: uid_t
+        public var isWritable: Bool
+
+        public init(path: String, ownerUID: uid_t, isWritable: Bool) {
+            self.path = path
+            self.ownerUID = ownerUID
+            self.isWritable = isWritable
+        }
+
+        /// stat and access only: both work on the Trash folder without Full
+        /// Disk Access, unlike listing it. access() takes ACLs into account.
+        public static func read(_ url: URL) -> FolderFacts? {
+            var info = stat()
+            guard stat(url.path, &info) == 0 else { return nil }
+            return FolderFacts(path: url.path, ownerUID: info.st_uid,
+                               isWritable: access(url.path, W_OK) == 0)
+        }
+    }
+
+    /// Why macOS refused to move an item to the Trash, as far as it can be
+    /// told from outside. Full Disk Access was the only answer offered
+    /// before, but a process without it trashes files normally; a customer
+    /// who had granted it, and could delete the same file outright, was
+    /// still sent to that setting.
+    public enum TrashRefusal: Equatable, Sendable {
+        /// The Trash folder itself can't take the item: it belongs to
+        /// someone else, or its permissions shut this user out. Finder
+        /// fails the same way.
+        case trashFolderUnwritable(trashPath: String, ownerUID: uid_t)
+        /// The folder the item is in can't be changed by this user, so it
+        /// can neither be trashed nor deleted.
+        case folderNotWritable(folderPath: String)
+        /// Nothing visible explains it.
+        case unknown
+    }
+
+    public static func classifyTrashRefusal(trash: FolderFacts?, parent: FolderFacts?,
+                                            userID: uid_t) -> TrashRefusal {
+        if let trash, trash.ownerUID != userID || !trash.isWritable {
+            return .trashFolderUnwritable(trashPath: trash.path, ownerUID: trash.ownerUID)
+        }
+        if let parent, !parent.isWritable {
+            return .folderNotWritable(folderPath: parent.path)
+        }
+        return .unknown
+    }
+
+    /// Looks at the Trash this item would go to and at the folder it's in.
+    public func diagnoseTrashRefusal(for url: URL) async -> TrashRefusal {
+        (try? await Self.perform {
+            let trashURL = try? Foundation.FileManager.default.url(
+                for: .trashDirectory, in: .userDomainMask, appropriateFor: url, create: false)
+            let trash = trashURL.flatMap(FolderFacts.read)
+            let parent = FolderFacts.read(url.deletingLastPathComponent())
+            let verdict = Self.classifyTrashRefusal(trash: trash, parent: parent, userID: getuid())
+            SupportLogger.shared.log(
+                "trash refusal: trash=\(Self.describe(trash)) parent=\(Self.describe(parent)) uid=\(getuid()) → \(verdict)",
+                category: "fs", level: .error)
+            return verdict
+        }) ?? .unknown
+    }
+
+    private static func describe(_ facts: FolderFacts?) -> String {
+        guard let facts else { return "unreadable" }
+        return "\(facts.path) owner \(facts.ownerUID) \(facts.isWritable ? "writable" : "not writable")"
+    }
+
+    /// A Terminal command that gives the Trash folder back to this user.
+    /// Asks for an administrator password, which is why FileFluss hands it
+    /// over rather than running it.
+    public static func trashRepairCommand(trashPath: String) -> String {
+        let quoted = "'" + trashPath.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return "sudo chown \"$(id -u)\" \(quoted) && sudo chmod u+rwx \(quoted)"
     }
 
     public func moveItem(from source: URL, to destination: URL) async throws {

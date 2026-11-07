@@ -747,7 +747,13 @@
 /* Trash refused for want of permission */
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss isn't allowed to move this to the Trash";
 "Open Privacy Settings…" = "Open Privacy Settings…";
-"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason.";
+"Copy Repair Command" = "Copy Repair Command";
+"Your Trash folder can't be written to" = "Your Trash folder can't be written to";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you.";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.";
 
 /* Local staging space for transfers */
 "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.";

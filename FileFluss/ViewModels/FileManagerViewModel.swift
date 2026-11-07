@@ -495,6 +495,9 @@ final class FileManagerViewModel {
     /// prompt that explains the refusal and offers the setting that fixes
     /// it, rather than a bare "failed".
     var itemsBlockedByPermission: [FileItem] = []
+    /// What stood in the way, so the prompt can name the real cause rather
+    /// than always pointing at Full Disk Access.
+    var trashRefusal: FileSystemService.TrashRefusal = .unknown
 
     func trashSelectedItems() async {
         var needPermanent: [FileItem] = []
@@ -524,6 +527,7 @@ final class FileManagerViewModel {
         }
         if !needPermission.isEmpty {
             SupportLogger.shared.log("trash refused for \(needPermission.count) item(s) — macOS withheld permission", category: "fs", level: .error)
+            trashRefusal = await FileSystemService.shared.diagnoseTrashRefusal(for: needPermission[0].url)
             itemsBlockedByPermission = needPermission
         }
     }

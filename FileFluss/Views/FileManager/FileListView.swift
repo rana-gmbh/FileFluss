@@ -141,32 +141,38 @@ struct FileListView: View {
             }
         }
         .confirmationDialog(
-            L10n.text("FileFluss isn't allowed to move this to the Trash"),
+            trashRefusalTitle(fm.trashRefusal),
             isPresented: $showPermissionBlockedAlert
         ) {
-            Button(L10n.text("Open Privacy Settings…")) {
-                // Full Disk Access: the setting that covers the protected
-                // folders this fails in, and the one macOS offers no prompt
-                // for once it has been refused.
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-                    NSWorkspace.shared.open(url)
+            switch fm.trashRefusal {
+            case .trashFolderUnwritable(let trashPath, _):
+                Button(L10n.text("Copy Repair Command")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        FileSystemService.trashRepairCommand(trashPath: trashPath), forType: .string)
+                    fm.itemsBlockedByPermission = []
                 }
-                fm.itemsBlockedByPermission = []
-            }
-            .keyboardShortcut(.defaultAction)
-            Button(L10n.text("Delete Permanently"), role: .destructive) {
-                let items = fm.itemsBlockedByPermission
-                fm.itemsBlockedByPermission = []
-                Task {
-                    await fm.permanentlyDelete(items)
-                    await appState.refreshAllPanels()
+                .keyboardShortcut(.defaultAction)
+                deletePermanentlyBlockedButton(fm)
+            case .folderNotWritable:
+                // Deleting needs the same permission, so there's nothing to
+                // offer but the explanation.
+                Button(L10n.text("OK"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            case .unknown:
+                Button(L10n.text("Open Privacy Settings…")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    fm.itemsBlockedByPermission = []
                 }
+                .keyboardShortcut(.defaultAction)
+                deletePermanentlyBlockedButton(fm)
             }
-            Button(L10n.text("Cancel"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            if !isFolderNotWritable(fm.trashRefusal) {
+                Button(L10n.text("Cancel"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            }
         } message: {
-            let items = fm.itemsBlockedByPermission
-            let name = items.count == 1 ? "\"\(items[0].name)\"" : L10n.format("%d items", items.count)
-            Text(L10n.format("macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason.", name))
+            Text(trashRefusalMessage(fm.trashRefusal, items: fm.itemsBlockedByPermission))
         }
         .onChange(of: fm.itemsNeedingPermanentDelete.isEmpty) { _, isEmpty in
             guard !isEmpty else { return }
@@ -889,3 +895,50 @@ struct FileListView: View {
     }
 }
 
+
+// MARK: - Trash refused
+
+extension FileListView {
+    private func isFolderNotWritable(_ refusal: FileSystemService.TrashRefusal) -> Bool {
+        if case .folderNotWritable = refusal { return true }
+        return false
+    }
+
+    private func trashRefusalTitle(_ refusal: FileSystemService.TrashRefusal) -> String {
+        switch refusal {
+        case .trashFolderUnwritable: L10n.text("Your Trash folder can't be written to")
+        case .folderNotWritable, .unknown: L10n.text("FileFluss isn't allowed to move this to the Trash")
+        }
+    }
+
+    private func trashRefusalMessage(_ refusal: FileSystemService.TrashRefusal, items: [FileItem]) -> String {
+        let name = items.count == 1 ? "\"\(items[0].name)\"" : L10n.format("%d items", items.count)
+        switch refusal {
+        case .trashFolderUnwritable(let trashPath, let ownerUID):
+            let cause: String
+            if ownerUID != getuid() {
+                let owner = getpwuid(ownerUID).flatMap { String(validatingCString: $0.pointee.pw_name) } ?? String(ownerUID)
+                cause = L10n.format("macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you.", name, trashPath, owner)
+            } else {
+                cause = L10n.format("macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.", name, trashPath)
+            }
+            return cause + " " + L10n.text("Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.")
+        case .folderNotWritable(let folderPath):
+            return L10n.format("You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.", name, folderPath)
+        case .unknown:
+            return L10n.format("macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.", name)
+        }
+    }
+
+    @ViewBuilder
+    private func deletePermanentlyBlockedButton(_ fm: FileManagerViewModel) -> some View {
+        Button(L10n.text("Delete Permanently"), role: .destructive) {
+            let items = fm.itemsBlockedByPermission
+            fm.itemsBlockedByPermission = []
+            Task {
+                await fm.permanentlyDelete(items)
+                await appState.refreshAllPanels()
+            }
+        }
+    }
+}

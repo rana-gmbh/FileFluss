@@ -736,7 +736,13 @@
 /* Trash refused for want of permission */
 "FileFluss isn't allowed to move this to the Trash" = "FileFluss 無權將其移到垃圾桶";
 "Open Privacy Settings…" = "打開隱私權設定……";
-"macOS refused to let FileFluss move %@ to the Trash. Granting FileFluss Full Disk Access in System Settings → Privacy & Security fixes this; FileFluss has to be restarted afterwards. Deleting permanently may be refused for the same reason." = "macOS 拒絕 FileFluss 將 %@ 移到垃圾桶。在「系統設定 → 隱私權與安全性」中為 FileFluss 授予「完全取用磁碟」即可解決，之後需要重新啟動 FileFluss。永久刪除可能因相同原因被拒絕。";
+"Copy Repair Command" = "拷貝修復指令";
+"Your Trash folder can't be written to" = "無法寫入你的垃圾桶檔案夾";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "macOS 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）屬於使用者「%@」而不是你。";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "macOS 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）的權限不允許更改。";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "Finder 也會遇到相同的問題。若要修復，請拷貝該指令，貼到「終端機」中並輸入你的密碼。";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "你沒有權限更改 %@ 所在的檔案夾（%@），因此無法將其移到垃圾桶或刪除。該檔案夾的擁有者可以在 Finder 的「檔案 → 取得資訊」中更改。";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "macOS 拒絕 FileFluss 將 %@ 移到垃圾桶。如果 FileFluss 尚未獲得「完全取用磁碟」，在「系統設定 → 隱私權與安全性」中授予可能會有幫助，之後需要重新啟動 FileFluss。如果 Finder 也無法將其移到垃圾桶，則原因不在 FileFluss。";
 
 /* Local staging space for transfers */
 "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "檔案會途經這台 Mac：這需要 %@ 位於 %@，而該處僅剩 %@。中轉檔案夾可在「設定 → 儲存空間」中設定。";
