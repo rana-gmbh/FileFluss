@@ -1224,8 +1224,8 @@ public actor SearchIndex {
 
         public var errorDescription: String? {
             switch self {
-            case .openFailed(let msg): return "Failed to open search index: \(msg)"
-            case .executionFailed(let msg): return "Search index error: \(msg)"
+            case .openFailed(let msg): return L10n.format("Failed to open search index: %@", msg)
+            case .executionFailed(let msg): return L10n.format("Search index error: %@", msg)
             }
         }
     }

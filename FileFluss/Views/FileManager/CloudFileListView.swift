@@ -70,7 +70,7 @@ struct CloudFileListView: View {
     /// Cloud Accounts are reflected immediately in confirmation dialogs.
     private var accountDisplayName: String {
         appState.syncManager.accounts.first(where: { $0.id == accountId })?.displayName
-            ?? "this account"
+            ?? L10n.text("this account")
     }
 
     /// True for import-only devices (e.g. a GoPro camera): browse, download and
@@ -389,7 +389,7 @@ struct CloudFileListView: View {
             }
             Button(L10n.text("Cancel"), role: .cancel) { pendingUpload = nil }
         } message: { upload in
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
             let name = upload.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             if upload.urls.count == 1 {
@@ -410,7 +410,7 @@ struct CloudFileListView: View {
             Button(L10n.text("Cancel"), role: .cancel) { pendingCloudToCloudDrop = nil }
         } message: { drop in
             let count = drop.sourceItems.count
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
             let name = drop.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             Text(count == 1
@@ -1616,7 +1616,7 @@ struct CloudFileListView: View {
     }
 
     private var pathComponents: [(name: String, path: String)] {
-        let rootName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+        let rootName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
         var components: [(String, String)] = [(rootName, "/")]
         let parts = vm.currentPath.split(separator: "/", omittingEmptySubsequences: true)
         var accumulated = ""

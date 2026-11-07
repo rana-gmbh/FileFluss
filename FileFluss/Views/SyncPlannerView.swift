@@ -362,7 +362,7 @@ struct SyncPlannerView: View {
             plannedEndpoints = (src, dst)
             destAvailable = await availableSpace(for: dst)
         } catch {
-            errorMessage = "Could not compute plan: \(error.localizedDescription)"
+            errorMessage = L10n.format("Could not compute plan: %@", error.localizedDescription)
             plan = nil
             plannedEndpoints = nil
             destAvailable = nil

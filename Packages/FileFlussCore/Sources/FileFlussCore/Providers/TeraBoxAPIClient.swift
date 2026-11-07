@@ -94,7 +94,7 @@ public actor TeraBoxAPIClient {
             }
             try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
         }
-        throw CloudProviderError.commandFailed("Authorization timed out — the QR code expired before it was scanned.")
+        throw CloudProviderError.commandFailed(L10n.text("Authorization timed out — the QR code expired before it was scanned."))
     }
 
     /// Authorization-code variant (kept for completeness if a redirect flow is added later).
@@ -441,9 +441,9 @@ public actor TeraBoxAPIClient {
         guard env.errno == 0 else {
             teraboxLog.error("[TeraBox] API errno \(env.errno)")
             switch env.errno {
-            case -8: throw CloudProviderError.commandFailed("A file with that name already exists.")
-            case -9: throw CloudProviderError.notFound("Item not found.")
-            case -7: throw CloudProviderError.commandFailed("Invalid file name.")
+            case -8: throw CloudProviderError.commandFailed(L10n.text("A file with that name already exists."))
+            case -9: throw CloudProviderError.notFound(L10n.text("Item not found."))
+            case -7: throw CloudProviderError.commandFailed(L10n.text("Invalid file name."))
             default: throw CloudProviderError.serverError(env.errno)
             }
         }
@@ -451,9 +451,9 @@ public actor TeraBoxAPIClient {
 
     private static func mapAuthError(_ errno: Int) -> CloudProviderError {
         switch errno {
-        case 400001: return .commandFailed("Waiting for authorization in the TeraBox app.")
+        case 400001: return .commandFailed(L10n.text("Waiting for authorization in the TeraBox app."))
         case 100001: return .invalidCredentials
-        case 100002: return .commandFailed("Authorization code invalid or expired.")
+        case 100002: return .commandFailed(L10n.text("Authorization code invalid or expired."))
         case 200002, 200003: return .notAuthenticated
         case 200004, 200005: return .notAuthenticated
         default: return .serverError(errno)

@@ -636,7 +636,7 @@ public actor QNAPAPIClient {
         return nil
     }
 
-    private static let lanAddressNote = "The NAS built this link from the address you connect to it with. If that's a local address, recipients outside your network can't open it — set up myQNAPcloud or port forwarding for that."
+    private static var lanAddressNote: String { L10n.text("The NAS built this link from the address you connect to it with. If that's a local address, recipients outside your network can't open it — set up myQNAPcloud or port forwarding for that.") }
 
     // MARK: - Plumbing
 
@@ -683,7 +683,7 @@ public actor QNAPAPIClient {
         return int(object["status"])
     }
 
-    private static let alreadyExistsMessage = "An item with this name already exists on the NAS."
+    private static var alreadyExistsMessage: String { L10n.text("An item with this name already exists on the NAS.") }
 
     /// File Station's status codes, from QNAP's API reference.
     public static func mapStatus(_ status: Int, path: String? = nil) -> CloudProviderError {
@@ -692,11 +692,11 @@ public actor QNAPAPIClient {
         case 3: return .notAuthenticated
         case 4, 10, 11: return .unauthorized
         case 5: return .notFound(path ?? "")
-        case 7: return .commandFailed("The NAS couldn't write the file.")
-        case 8: return .commandFailed("File Station is turned off on the NAS.")
+        case 7: return .commandFailed(L10n.text("The NAS couldn't write the file."))
+        case 8: return .commandFailed(L10n.text("File Station is turned off on the NAS."))
         case 9: return .quotaExceeded
-        case 12: return .commandFailed("The NAS doesn't allow this name.")
-        case 19, 21: return .commandFailed("The NAS is busy. Try again in a moment.")
+        case 12: return .commandFailed(L10n.text("The NAS doesn't allow this name."))
+        case 19, 21: return .commandFailed(L10n.text("The NAS is busy. Try again in a moment."))
         default: return .serverError(status)
         }
     }

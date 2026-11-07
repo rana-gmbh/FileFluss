@@ -73,7 +73,7 @@ public actor NextCloudAPIClient {
             let body = String(data: initData, encoding: .utf8) ?? ""
             nextCloudLog.error("[NextCloud] Login flow init failed: HTTP \(initHTTP.statusCode) body=\(body.prefix(300))")
             if initHTTP.statusCode == 404 {
-                throw CloudProviderError.commandFailed("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.")
+                throw CloudProviderError.commandFailed(L10n.text("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead."))
             }
             throw Self.mapHTTPError(statusCode: initHTTP.statusCode)
         }
@@ -130,7 +130,7 @@ public actor NextCloudAPIClient {
                 throw Self.mapHTTPError(statusCode: pollHTTP.statusCode)
             }
 
-            throw CloudProviderError.commandFailed("Timed out waiting for browser sign-in.")
+            throw CloudProviderError.commandFailed(L10n.text("Timed out waiting for browser sign-in."))
         }
 
         return NextCloudLoginFlowV2(loginURL: loginURL, poll: pollClosure)
@@ -956,7 +956,7 @@ public actor NextCloudAPIClient {
         switch statusCode {
         case 401: return .invalidCredentials
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 409: return .serverError(409)
         case 429: return .rateLimited
         case 507: return .quotaExceeded

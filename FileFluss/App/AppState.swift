@@ -383,7 +383,7 @@ final class AppState {
             $0.kind == .cloudFolder && $0.accountId == accountId && $0.cloudPath == path
         }) else { return }
         let account = syncManager.accountFor(id: accountId)
-        let providerSuffix = account?.providerType.displayName ?? "Cloud"
+        let providerSuffix = account?.providerType.displayName ?? L10n.text("Cloud")
         let displayName = "\(name) (\(providerSuffix))"
         let entry = SidebarFavorite.cloud(
             name: displayName,
@@ -1461,7 +1461,7 @@ final class AppState {
 
                 guard let tempURL = try? SafeLocalPath.destination(for: item.name, in: tempDir) else {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Unsafe file name from the server — transfer refused.")
+                        transfer.recordFailure(item.name, error: L10n.text("Unsafe file name from the server — transfer refused."))
                         transfer.completedItems += 1
                     }
                     continue
@@ -1489,7 +1489,7 @@ final class AppState {
                     )
                 } catch {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Download failed: \(error.localizedDescription)")
+                        transfer.recordFailure(item.name, error: L10n.format("Download failed: %@", error.localizedDescription))
                         transfer.completedItems += 1
                     }
                     continue
@@ -1566,7 +1566,7 @@ final class AppState {
                     successfulSources.append((item.path, item.name))
                 } catch {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Upload failed: \(error.localizedDescription)")
+                        transfer.recordFailure(item.name, error: L10n.format("Upload failed: %@", error.localizedDescription))
                         transfer.completedItems += 1
                     }
                 }
@@ -1912,13 +1912,19 @@ struct SidebarFavorite: Identifiable, Hashable, Codable {
     static func defaultLocalFavorites() -> [SidebarFavorite] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return [
-            .local(name: "Home", icon: "house", url: home),
-            .local(name: "Desktop", icon: "menubar.dock.rectangle", url: home.appendingPathComponent("Desktop")),
-            .local(name: "Documents", icon: "doc", url: home.appendingPathComponent("Documents")),
-            .local(name: "Downloads", icon: "arrow.down.circle", url: home.appendingPathComponent("Downloads")),
-            .local(name: "Pictures", icon: "photo", url: home.appendingPathComponent("Pictures")),
-            .local(name: "Music", icon: "music.note", url: home.appendingPathComponent("Music")),
+            .local(name: L10n.text("Home"), icon: "house", url: home),
+            // macOS names these folders in the user's language itself
+            // ("Schreibtisch", "文稿"), so ask it rather than translating.
+            .local(name: systemName(home.appendingPathComponent("Desktop")), icon: "menubar.dock.rectangle", url: home.appendingPathComponent("Desktop")),
+            .local(name: systemName(home.appendingPathComponent("Documents")), icon: "doc", url: home.appendingPathComponent("Documents")),
+            .local(name: systemName(home.appendingPathComponent("Downloads")), icon: "arrow.down.circle", url: home.appendingPathComponent("Downloads")),
+            .local(name: systemName(home.appendingPathComponent("Pictures")), icon: "photo", url: home.appendingPathComponent("Pictures")),
+            .local(name: systemName(home.appendingPathComponent("Music")), icon: "music.note", url: home.appendingPathComponent("Music")),
         ]
+    }
+
+    private static func systemName(_ url: URL) -> String {
+        FileManager.default.displayName(atPath: url.path)
     }
 }
 
@@ -1945,7 +1951,7 @@ struct FolderSizeEntry: Identifiable {
 
     private var _name: String?
 
-    var name: String { _name ?? url?.lastPathComponent ?? "Unknown" }
+    var name: String { _name ?? url?.lastPathComponent ?? L10n.text("Unknown") }
 
     var formattedSize: String {
         guard let size else { return "Calculating…" }
@@ -2373,22 +2379,22 @@ final class TransferProgress: Identifiable {
         guard expected > 0, hasByteReporting else { return nil }
         let moved = ByteCountFormatter.string(fromByteCount: min(movedBytes, expected), countStyle: .file)
         let total = ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)
-        return "\(moved) of \(total)"
+        return L10n.format("%@ of %@", moved, total)
     }
 
     var etaText: String? {
         guard let seconds = secondsRemaining else { return nil }
-        return "~\(Self.durationText(seconds)) left"
+        return L10n.format("~%@ left", Self.durationText(seconds))
     }
 
     /// Rounded the way someone reads a countdown: seconds below a minute,
     /// whole minutes below an hour, hours and minutes above.
     static func durationText(_ seconds: TimeInterval) -> String {
-        if seconds < 60 { return "\(max(1, Int(seconds.rounded()))) s" }
-        if seconds < 3600 { return "\(Int((seconds / 60).rounded())) min" }
+        if seconds < 60 { return L10n.format("%d s", max(1, Int(seconds.rounded()))) }
+        if seconds < 3600 { return L10n.format("%d min", Int((seconds / 60).rounded())) }
         let hours = Int(seconds / 3600)
         let minutes = Int((seconds - Double(hours) * 3600) / 60)
-        return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
+        return minutes == 0 ? L10n.format("%d h", hours) : L10n.format("%d h %d min", hours, minutes)
     }
 
     /// The one-line summary under the progress bar: speed, how much of how
@@ -2405,18 +2411,19 @@ final class TransferProgress: Identifiable {
 
     var statusText: String {
         if isComplete { return completionSummary }
-        if isCancelled { return "Cancelling…" }
+        if isCancelled { return L10n.text("Cancelling…") }
         if isCloudToCloud {
             let names = transferredFileNames
-            let label = names.count == 1 ? names[0] : "\(names.count) items"
+            let label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
             switch currentPhase {
             case .downloading:
-                return "Downloading \(label)"
+                return L10n.format("Downloading %@", label)
             case .uploading:
-                return "Uploading \(label)"
+                return L10n.format("Uploading %@", label)
             }
         }
-        return "\(operation) \(itemSummary) — \(completedItems) of \(totalFiles > 0 ? totalFiles : totalItems) files"
+        return L10n.format("%@ %@ — %d of %d files", L10n.text(operation), itemSummary,
+                           completedItems, totalFiles > 0 ? totalFiles : totalItems)
     }
 
     private var itemSummary: String {
@@ -2428,10 +2435,10 @@ final class TransferProgress: Identifiable {
         let files = names.filter { !transferredFolderNames.contains($0) }
         var parts: [String] = []
         if !folders.isEmpty {
-            parts.append("\(folders.count) \(folders.count == 1 ? "folder" : "folders")")
+            parts.append(folders.count == 1 ? L10n.text("1 folder") : L10n.format("%d folders", folders.count))
         }
         if !files.isEmpty {
-            parts.append("\(files.count) \(files.count == 1 ? "file" : "files")")
+            parts.append(files.count == 1 ? L10n.text("1 file") : L10n.format("%d files", files.count))
         }
         return parts.joined(separator: ", ")
     }
@@ -2439,14 +2446,18 @@ final class TransferProgress: Identifiable {
     /// Names of top-level items that are directories (set by the caller)
     var transferredFolderNames: Set<String> = []
 
+    /// `operation` is also the key the details view translates, so it
+    /// stays English; this is only ever shown.
     private var pastTenseOperation: String {
         switch operation {
-        case "Copying": return "Copied"
-        case "Moving": return "Moved"
-        case "Downloading": return "Downloaded"
-        case "Uploading": return "Uploaded"
-        case "Opening": return "Opened"
-        default: return operation
+        case "Copying": return L10n.text("Copied")
+        case "Moving": return L10n.text("Moved")
+        case "Downloading": return L10n.text("Downloaded")
+        case "Uploading": return L10n.text("Uploaded")
+        case "Opening": return L10n.text("Opened")
+        case "Compressing": return L10n.text("Compressed")
+        case "Extracting": return L10n.text("Extracted")
+        default: return L10n.text(operation)
         }
     }
 
@@ -2455,15 +2466,15 @@ final class TransferProgress: Identifiable {
         let pastTense = pastTenseOperation
 
         if isCancelled {
-            let label = names.count == 1 ? names[0] : "\(names.count) items"
-            return "Cancelled: \(operation) \(label)"
+            let label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
+            return L10n.format("Cancelled: %@ %@", L10n.text(operation), label)
         }
 
         // Partial success: some items succeeded, some failed. Surface a
         // mixed summary so the user knows to check the details popover.
         if failureCount > 0 && successCount > 0 {
             let total = successCount + failureCount + skippedCount
-            return "\(pastTense) \(successCount) of \(total) — \(failureCount) failed"
+            return L10n.format("%@ %d of %d — %d failed", pastTense, successCount, total, failureCount)
         }
 
         // Whole-transfer failure (either a fatal errorMessage with no
@@ -2471,32 +2482,33 @@ final class TransferProgress: Identifiable {
         if errorMessage != nil || (failureCount > 0 && successCount == 0) {
             let label: String
             if failureCount > 0 {
-                label = failureCount == 1 ? itemResults.first(where: { $0.status == .failed })?.name ?? "1 item" : "\(failureCount) items"
+                label = failureCount == 1
+                    ? itemResults.first(where: { $0.status == .failed })?.name ?? L10n.text("1 item")
+                    : L10n.format("%d items", failureCount)
             } else {
-                label = names.count == 1 ? names[0] : "\(names.count) items"
+                label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
             }
-            let detail = errorMessage ?? itemResults.first(where: { $0.status == .failed })?.errorMessage ?? "Unknown error"
-            return "Failed: \(operation) \(label) — \(detail)"
+            let detail = errorMessage ?? itemResults.first(where: { $0.status == .failed })?.errorMessage ?? L10n.text("Unknown error")
+            return L10n.format("Failed: %@ %@ — %@", L10n.text(operation), label, detail)
         }
 
-        if names.isEmpty { return "Done" }
+        if names.isEmpty { return L10n.text("Done") }
 
         let maxInline = 3
-        let header = "Done: \(pastTense) "
+        let done: String
         if names.count == 1 {
             let fileCount = totalFiles > 0 ? totalFiles : totalItems
             if !transferredFolderNames.isEmpty && fileCount > 1 {
-                return "\(header)\(names[0]) (\(fileCount) files)"
+                done = L10n.format("%@ (%d files)", names[0], fileCount)
+            } else {
+                done = names[0]
             }
-            return "\(header)\(names[0])"
+        } else {
+            let shown = names.prefix(maxInline).joined(separator: ", ")
+            let remaining = names.count - maxInline
+            done = remaining > 0 ? L10n.format("%@ +%d more", shown, remaining) : shown
         }
-
-        let shown = names.prefix(maxInline).joined(separator: ", ")
-        let remaining = names.count - maxInline
-        if remaining > 0 {
-            return "\(header)\(shown) +\(remaining) more"
-        }
-        return "\(header)\(shown)"
+        return L10n.format("Done: %@ %@", pastTense, done)
     }
 
     /// Full item list for tooltip display when the summary is truncated.

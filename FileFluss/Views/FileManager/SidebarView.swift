@@ -154,7 +154,7 @@ struct SidebarView: View {
               let cap = SpaceCheck.localVolumeCapacity(at: mount) else {
             return drive.displayName
         }
-        return "\(drive.displayName): \(LocalVolumeFormatter.summary(free: cap.free, total: cap.total))"
+        return L10n.format("%@: %@", drive.displayName, LocalVolumeFormatter.summary(free: cap.free, total: cap.total))
     }
 
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
@@ -185,7 +185,7 @@ struct SidebarView: View {
                 Button {
                     appState.setFavoriteIcon(id: fav.id, to: item.symbol, in: panelSide)
                 } label: {
-                    Label(item.name, systemImage: item.symbol)
+                    Label(L10n.text(item.name), systemImage: item.symbol)
                 }
             }
         } label: {
@@ -803,18 +803,18 @@ struct SidebarView: View {
     private var transfersTooltip: String {
         let count = appState.transfers(for: panelSide).count
         switch count {
-        case 0: return "No transfers"
-        case 1: return "1 transfer — click for details"
-        default: return "\(count) transfers — click for details"
+        case 0: return L10n.text("No transfers")
+        case 1: return L10n.text("1 transfer — click for details")
+        default: return L10n.format("%d transfers — click for details", count)
         }
     }
 
     private var folderSizesTooltip: String {
         let count = appState.folderSizes(for: panelSide).count
         switch count {
-        case 0: return "No folder sizes"
-        case 1: return "1 folder size — click for details"
-        default: return "\(count) folder sizes — click for details"
+        case 0: return L10n.text("No folder sizes")
+        case 1: return L10n.text("1 folder size — click for details")
+        default: return L10n.format("%d folder sizes — click for details", count)
         }
     }
 
@@ -848,7 +848,7 @@ struct SidebarView: View {
         }
         if isOnline, let mount = appState.driveMonitor.mountURL(for: drive.id) {
             if activeJob == nil {
-                Button(drive.lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                Button(L10n.text(drive.lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…")) {
                     appState.indexingService.indexDrive(drive, mountURL: mount)
                 }
             } else {
@@ -893,13 +893,13 @@ struct SidebarView: View {
             Button(L10n.text("Reveal in Finder")) {
                 NSWorkspace.shared.activateFileViewerSelecting([mount.mountPoint])
             }
-            Button(isBusy ? "Unmounting…" : "Unmount from Finder") {
+            Button(L10n.text(isBusy ? "Unmounting…" : "Unmount from Finder")) {
                 let target = mount
                 Task { await performUnmount(target, accountId: account.id) }
             }
             .disabled(isBusy)
         } else {
-            Button(isBusy ? "Mounting…" : "Mount in Finder") {
+            Button(L10n.text(isBusy ? "Mounting…" : "Mount in Finder")) {
                 Task { await performMount(account: account) }
             }
             .disabled(isBusy)
@@ -911,7 +911,7 @@ struct SidebarView: View {
         mountingAccountIds.insert(account.id)
         defer { mountingAccountIds.remove(account.id) }
         guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
-            mountErrorMessage = "“\(account.displayName)” isn't connected — sign in first."
+            mountErrorMessage = L10n.format("“%@” isn't connected — sign in first.", account.displayName)
             showMountError = true
             return
         }
@@ -922,7 +922,7 @@ struct SidebarView: View {
                 displayName: account.displayName
             )
         } catch {
-            mountErrorMessage = "Could not mount “\(account.displayName)”: \(error.localizedDescription)"
+            mountErrorMessage = L10n.format("Could not mount “%@”: %@", account.displayName, error.localizedDescription)
             showMountError = true
         }
     }
@@ -975,7 +975,7 @@ struct SidebarView: View {
         }
         if account.isConnected {
             if activeJob == nil {
-                Button(lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                Button(L10n.text(lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…")) {
                     appState.indexingService.indexCloudAccount(account)
                 }
             } else {

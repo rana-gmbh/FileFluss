@@ -1296,7 +1296,7 @@ public actor GoogleDriveAPIClient {
                 return .serverError(403)
             }
             return .unauthorized
-        case 404: return .notFound(googleMessage ?? "Resource not found")
+        case 404: return .notFound(googleMessage ?? L10n.text("Resource not found"))
         case 429: return .rateLimited
         case 507: return .quotaExceeded
         default: return .serverError(statusCode)

@@ -469,7 +469,7 @@ final class FileManagerViewModel {
             do {
                 try await FileSystemService.shared.deleteItem(at: item.url)
             } catch {
-                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.error = L10n.format("Failed to delete %@: %@", item.name, error.localizedDescription)
                 return
             }
         }
@@ -482,7 +482,7 @@ final class FileManagerViewModel {
             do {
                 try await FileSystemService.shared.deleteItem(at: item.url)
             } catch {
-                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.error = L10n.format("Failed to delete %@: %@", item.name, error.localizedDescription)
                 return
             }
         }
@@ -515,7 +515,7 @@ final class FileManagerViewModel {
                 } else if FileSystemService.isPermissionError(error) {
                     needPermission.append(item)
                 } else {
-                    self.error = "Failed to trash \(item.name): \(error.localizedDescription)"
+                    self.error = L10n.format("Failed to move %@ to the Trash: %@", item.name, error.localizedDescription)
                 }
             }
         }
@@ -547,7 +547,7 @@ final class FileManagerViewModel {
             do {
                 try await FileSystemService.shared.deleteItem(at: item.url)
             } catch {
-                self.error = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.error = L10n.format("Failed to delete %@: %@", item.name, error.localizedDescription)
             }
         }
         await loadDirectory()
@@ -559,7 +559,7 @@ final class FileManagerViewModel {
             try await FileSystemService.shared.createDirectory(at: folderURL)
             await loadDirectory()
         } catch {
-            self.error = "Failed to create folder: \(error.localizedDescription)"
+            self.error = L10n.format("Failed to create folder: %@", error.localizedDescription)
         }
     }
 
@@ -569,7 +569,7 @@ final class FileManagerViewModel {
             try await FileSystemService.shared.moveItem(from: item.url, to: newURL)
             await loadDirectory()
         } catch {
-            self.error = "Failed to rename: \(error.localizedDescription)"
+            self.error = L10n.format("Failed to rename: %@", error.localizedDescription)
         }
     }
 
@@ -594,7 +594,7 @@ final class FileManagerViewModel {
             // then copy from a path that no longer exists, destroying it for
             // good (deletion here is permanent, not Trash).
             if dest.standardizedFileURL == item.url.standardizedFileURL {
-                let msg = "\"\(item.name)\" is already in this folder."
+                let msg = L10n.format("\"%@\" is already in this folder.", item.name)
                 self.error = msg
                 progress?.recordSkip(item.name)
                 progress?.completedItems = index + 1
@@ -652,7 +652,7 @@ final class FileManagerViewModel {
                 progress?.completedItems = index + 1
                 progress?.recordSuccess(item.name)
             } catch {
-                self.error = "Failed to move \(item.name): \(error.localizedDescription)"
+                self.error = L10n.format("Failed to move %@: %@", item.name, error.localizedDescription)
                 progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }
@@ -676,7 +676,7 @@ final class FileManagerViewModel {
             // then copy from a path that no longer exists, destroying it for
             // good (deletion here is permanent, not Trash).
             if dest.standardizedFileURL == item.url.standardizedFileURL {
-                let msg = "\"\(item.name)\" is already in this folder."
+                let msg = L10n.format("\"%@\" is already in this folder.", item.name)
                 self.error = msg
                 progress?.recordSkip(item.name)
                 progress?.completedItems = index + 1
@@ -734,7 +734,7 @@ final class FileManagerViewModel {
                 progress?.completedItems = index + 1
                 progress?.recordSuccess(item.name)
             } catch {
-                self.error = "Failed to copy \(item.name): \(error.localizedDescription)"
+                self.error = L10n.format("Failed to copy %@: %@", item.name, error.localizedDescription)
                 progress?.recordFailure(item.name, error: error.localizedDescription)
             }
         }

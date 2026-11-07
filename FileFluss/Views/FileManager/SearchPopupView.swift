@@ -147,7 +147,7 @@ struct SearchPopupView: View {
                 )
             } else if vm.filteredResults.isEmpty && vm.status != .idle {
                 if case .searching = vm.status {
-                    ProgressView("Searching...")
+                    ProgressView(L10n.text("Searching…"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ContentUnavailableView.search(text: vm.searchText)

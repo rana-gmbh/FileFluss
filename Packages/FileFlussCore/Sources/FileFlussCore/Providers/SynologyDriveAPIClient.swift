@@ -690,7 +690,7 @@ public actor SynologyDriveAPIClient {
 
     /// DSM builds the link from whatever address it believes it has, which is
     /// frequently a LAN address or an unreachable DDNS name.
-    private static let lanAddressNote = "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it."
+    private static var lanAddressNote: String { L10n.text("The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.") }
 
     /// `date_expired` as File Station wants it: a UTC calendar day.
     private static func expiryDateString(_ date: Date) -> String {
@@ -716,9 +716,9 @@ public actor SynologyDriveAPIClient {
 
     private static func mapSharingError(code: Int) -> CloudProviderError {
         switch code {
-        case 2000: return .commandFailed("The sharing link does not exist.")
-        case 2001: return .commandFailed("The NAS has reached its maximum number of sharing links — delete some in File Station and try again.")
-        case 2002: return .commandFailed("Failed to access the NAS's sharing links.")
+        case 2000: return .commandFailed(L10n.text("The sharing link does not exist."))
+        case 2001: return .commandFailed(L10n.text("The NAS has reached its maximum number of sharing links — delete some in File Station and try again."))
+        case 2002: return .commandFailed(L10n.text("Failed to access the NAS's sharing links."))
         default: return .serverError(code)
         }
     }
@@ -823,32 +823,32 @@ public actor SynologyDriveAPIClient {
 
     private static func mapAuthError(code: Int) -> CloudProviderError {
         switch code {
-        case 400: return .commandFailed("No such account or incorrect password.")
-        case 401: return .commandFailed("Account is disabled.")
-        case 402: return .commandFailed("Permission denied.")
-        case 403: return .commandFailed("This account requires a 2-factor authentication (OTP) code.")
-        case 404: return .commandFailed("OTP code is incorrect.")
-        case 405: return .commandFailed("OTP code authentication has failed too many times.")
-        case 406: return .commandFailed("Synology administrator must enforce 2-factor authentication.")
-        case 407: return .commandFailed("Maximum number of OTP retries reached. Try again later.")
-        case 408: return .commandFailed("Password expired — please reset it from DSM.")
-        case 409: return .commandFailed("Password must be changed at first login.")
-        default: return .commandFailed("Synology login failed (code \(code)).")
+        case 400: return .commandFailed(L10n.text("No such account or incorrect password."))
+        case 401: return .commandFailed(L10n.text("Account is disabled."))
+        case 402: return .commandFailed(L10n.text("Permission denied."))
+        case 403: return .commandFailed(L10n.text("This account requires a 2-factor authentication (OTP) code."))
+        case 404: return .commandFailed(L10n.text("OTP code is incorrect."))
+        case 405: return .commandFailed(L10n.text("OTP code authentication has failed too many times."))
+        case 406: return .commandFailed(L10n.text("Synology administrator must enforce 2-factor authentication."))
+        case 407: return .commandFailed(L10n.text("Maximum number of OTP retries reached. Try again later."))
+        case 408: return .commandFailed(L10n.text("Password expired — please reset it from DSM."))
+        case 409: return .commandFailed(L10n.text("Password must be changed at first login."))
+        default: return .commandFailed(L10n.format("Synology login failed (code %d).", code))
         }
     }
 
     private func mapAPIError(code: Int) -> CloudProviderError {
         switch code {
-        case 400: return .commandFailed("Invalid parameter for the request.")
-        case 401: return .commandFailed("Unknown API method.")
-        case 402: return .commandFailed("Invalid API method version.")
-        case 403: return .commandFailed("Invalid API method.")
-        case 405: return .commandFailed("Insufficient user privilege.")
-        case 406: return .commandFailed("Connection time out.")
-        case 407: return .commandFailed("Multiple login detected.")
-        case 408: return .commandFailed("Request denied — too many connections.")
+        case 400: return .commandFailed(L10n.text("Invalid parameter for the request."))
+        case 401: return .commandFailed(L10n.text("Unknown API method."))
+        case 402: return .commandFailed(L10n.text("Invalid API method version."))
+        case 403: return .commandFailed(L10n.text("Invalid API method."))
+        case 405: return .commandFailed(L10n.text("Insufficient user privilege."))
+        case 406: return .commandFailed(L10n.text("Connection time out."))
+        case 407: return .commandFailed(L10n.text("Multiple login detected."))
+        case 408: return .commandFailed(L10n.text("Request denied — too many connections."))
         case 119: return .notAuthenticated
-        case 401_400, 1_400, 1_401, 1_402: return .commandFailed("Synology rejected the file path.")
+        case 401_400, 1_400, 1_401, 1_402: return .commandFailed(L10n.text("Synology rejected the file path."))
         default: return .serverError(code)
         }
     }

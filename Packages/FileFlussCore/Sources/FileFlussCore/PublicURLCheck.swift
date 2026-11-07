@@ -92,20 +92,20 @@ public enum PublicURLCheck {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return Attempt(result: Result(outcome: .notPublic, detail: "no HTTP response"), isSignInRedirect: false)
+                return Attempt(result: Result(outcome: .notPublic, detail: L10n.text("no HTTP response")), isSignInRedirect: false)
             }
             guard (200...299).contains(http.statusCode) else {
                 let landed = http.url?.absoluteString ?? url.absoluteString
                 return Attempt(
                     result: Result(
                         outcome: .notPublic,
-                        detail: "HTTP \(http.statusCode) (final URL: \(landed)) — \(summarize(data))"
+                        detail: L10n.format("HTTP %d (final URL: %@) — %@", http.statusCode, landed, summarize(data))
                     ),
                     isSignInRedirect: false
                 )
             }
             if data.isEmpty {
-                return Attempt(result: Result(outcome: .notPublic, detail: "empty response body"), isSignInRedirect: false)
+                return Attempt(result: Result(outcome: .notPublic, detail: L10n.text("empty response body")), isSignInRedirect: false)
             }
             // A sign-in page is served as a perfectly good HTTP 200, so the
             // status code alone can't tell a public link from one that
@@ -115,7 +115,7 @@ public enum PublicURLCheck {
                 return Attempt(
                     result: Result(
                         outcome: .notPublic,
-                        detail: "the link redirects to a sign-in page at \(host) — it is not public"
+                        detail: L10n.format("the link redirects to a sign-in page at %@ — it is not public", host)
                     ),
                     isSignInRedirect: true
                 )

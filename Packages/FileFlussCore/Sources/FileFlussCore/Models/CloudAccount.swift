@@ -54,15 +54,15 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .s3: return "AWS S3"
         case .synologyDrive: return "Synology Drive"
         case .synologyC2: return "Synology C2 Storage"
-        case .s3Compatible: return "S3-Compatible Storage"
+        case .s3Compatible: return L10n.text("S3-Compatible Storage")
         case .box: return "Box"
         case .seafile: return "Seafile"
         case .filen: return "Filen"
         case .internxt: return "Internxt"
         case .terabox: return "TeraBox"
         case .jottacloud: return "Jottacloud"
-        case .googleDrivePicker: return "Google Drive (Selected Folders)"
-        case .gopro: return "GoPro Camera"
+        case .googleDrivePicker: return L10n.text("Google Drive (Selected Folders)")
+        case .gopro: return L10n.text("GoPro Camera")
         case .github: return "GitHub"
         case .drime: return "Drime"
         case .qnap: return "QNAP"

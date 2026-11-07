@@ -35,7 +35,7 @@ enum SyncEndpoint: Sendable {
         case .cloud(_, let root): return root.isEmpty ? "/" : root
         case .offlineIndexed(_, _, let root, let name):
             let path = root.isEmpty || root == "/" ? "" : root
-            return "\(name) (offline)\(path)"
+            return L10n.format("%@ (offline)", name) + path
         }
     }
 }

@@ -145,4 +145,62 @@ struct LocalizationCoverageTests {
             }
         }
     }
+
+    /// The checks above only see text that goes through `L10n`. A second
+    /// sweep found about 115 texts written straight into the code — dialog
+    /// titles, "Failed to delete …" messages, provider errors — which no
+    /// table could translate. These are the places they turned up.
+    @Test("Dialogs and error messages don't hard-code English")
+    func noHardcodedEnglish() throws {
+        let english = try Self.stringsTable("en")
+        let literal = #""((?=[^"\\]*[A-Za-z]{2})(?:[^"\\]|\\.)*)""#
+        let rules: [(name: String, pattern: NSRegularExpression)] = try [
+            ("dialog title", NSRegularExpression(pattern: #"\.(?:confirmationDialog|alert)\(\s*"# + literal)),
+            ("error message", NSRegularExpression(pattern: #"\b(?:error|actionError|errorMessage|mountErrorMessage|authError|statusMessage)\s*=\s*"# + literal)),
+            ("Text or Button", NSRegularExpression(pattern: #"(?<![\w.])(?:Text|Button)\(\s*"# + literal)),
+            ("Text or Button choice", NSRegularExpression(pattern: #"(?<![\w.])(?:Text|Button)\([^()]*\?\s*"# + literal)),
+            ("error description", NSRegularExpression(pattern: #"\breturn\s+"# + literal)),
+        ]
+        // Credits, links and brand names in the About window stay as they are.
+        let exempt: Set<String> = ["AboutView.swift", "VersionTestRunner.swift", "TestAccountSnapshot.swift", "Localization.swift"]
+
+        var found: [String] = []
+        for directory in ["FileFluss", "Packages/FileFlussCore/Sources"] {
+            let root = Self.repositoryRoot.appendingPathComponent(directory)
+            guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
+            while let url = walker.nextObject() as? URL {
+                guard url.pathExtension == "swift", !exempt.contains(url.lastPathComponent),
+                      let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                var debugDepth = 0
+                var errorDescriptionDepth: Int?
+                var braceDepth = 0
+                for (index, line) in source.components(separatedBy: "\n").enumerated() {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    if trimmed.hasPrefix("#if DEBUG") { debugDepth += 1 }
+                    if trimmed.hasPrefix("#endif"), debugDepth > 0 { debugDepth -= 1 }
+                    if trimmed.contains("var errorDescription") { errorDescriptionDepth = braceDepth }
+                    braceDepth += line.filter { $0 == "{" }.count - line.filter { $0 == "}" }.count
+                    if let depth = errorDescriptionDepth, braceDepth <= depth, !trimmed.contains("var errorDescription") {
+                        errorDescriptionDepth = nil
+                    }
+                    guard debugDepth == 0, !trimmed.hasPrefix("//"), !line.contains("L10n."), !line.contains("LText(") else { continue }
+                    let range = NSRange(line.startIndex..<line.endIndex, in: line)
+                    for rule in rules {
+                        if rule.name == "error description", errorDescriptionDepth == nil { continue }
+                        // SwiftUI looks a plain literal up in the table itself.
+                        if let match = rule.pattern.firstMatch(in: line, range: range) {
+                            if let r = Range(match.range(at: 1), in: line),
+                               english[String(line[r]).replacingOccurrences(of: "\\\"", with: "\"")] != nil { continue }
+                            found.append("\(url.lastPathComponent):\(index + 1) (\(rule.name)): \(trimmed.prefix(100))")
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        #expect(found.isEmpty, """
+        \(found.count) English text(s) written straight into the code, which no translation can reach:
+        \(found.prefix(30).map { "  • \($0)" }.joined(separator: "\n"))
+        """)
+    }
 }

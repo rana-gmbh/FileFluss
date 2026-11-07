@@ -398,7 +398,7 @@ final class CloudFileManagerViewModel {
             await loadDirectory()
         } catch {
             SupportLogger.shared.log("createDirectory FAILED \(folderPath) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-            self.actionError = "Failed to create folder: \(error.localizedDescription)"
+            self.actionError = L10n.format("Failed to create folder: %@", error.localizedDescription)
         }
     }
 
@@ -410,7 +410,7 @@ final class CloudFileManagerViewModel {
             await loadDirectory()
         } catch {
             SupportLogger.shared.log("renameItem FAILED \(item.path) → \(newName) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-            self.actionError = "Failed to rename: \(error.localizedDescription)"
+            self.actionError = L10n.format("Failed to rename: %@", error.localizedDescription)
         }
     }
 
@@ -433,7 +433,7 @@ final class CloudFileManagerViewModel {
                 SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
                 SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-                self.actionError = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.actionError = L10n.format("Failed to delete %@: %@", item.name, error.localizedDescription)
                 return
             }
         }
@@ -450,7 +450,7 @@ final class CloudFileManagerViewModel {
                 SupportLogger.shared.log("deleteItem \(item.path)", category: cloudCategory)
             } catch {
                 SupportLogger.shared.log("deleteItem FAILED \(item.path) — \(error.localizedDescription)", category: cloudCategory, level: .error)
-                self.actionError = "Failed to delete \(item.name): \(error.localizedDescription)"
+                self.actionError = L10n.format("Failed to delete %@: %@", item.name, error.localizedDescription)
                 return
             }
         }
@@ -556,7 +556,7 @@ final class CloudFileManagerViewModel {
             // name that escapes the target directory is refused rather than
             // downloaded; the rest of the batch continues.
             guard let base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
-                let msg = "Unsafe file name from the server — download refused."
+                let msg = L10n.text("Unsafe file name from the server — download refused.")
                 self.actionError = msg
                 progress?.recordFailure(item.name, error: msg)
                 continue
@@ -635,7 +635,7 @@ final class CloudFileManagerViewModel {
                     progress?.recordSkip(item.name)
                     continue
                 }
-                self.actionError = "Failed to download \(item.name): \(error.localizedDescription)"
+                self.actionError = L10n.format("Failed to download %@: %@", item.name, error.localizedDescription)
                 // Failures must always be recorded so cloud-to-cloud
                 // download errors aren't silently dropped — the upload
                 // phase won't see those items.
@@ -1234,7 +1234,7 @@ final class CloudFileManagerViewModel {
                         // upload under the ORIGINAL name — overwriting the
                         // very file the user asked to keep. Skip the item
                         // and say so instead.
-                        let msg = "Couldn't stage a copy for \"Keep Both\": \(error.localizedDescription)"
+                        let msg = L10n.format("Couldn't stage a copy for \"Keep Both\": %@", error.localizedDescription)
                         self.actionError = msg
                         progress?.recordFailure(name, error: msg)
                         continue
@@ -1645,8 +1645,8 @@ final class CloudFileManagerViewModel {
                 progress?.recordFailure(
                     item.name,
                     error: deleteFromSource
-                        ? "The server wouldn't move this item — try copying it and deleting the original."
-                        : "The server wouldn't copy this item."
+                        ? L10n.text("The server wouldn't move this item — try copying it and deleting the original.")
+                        : L10n.text("The server wouldn't copy this item.")
                 )
             } catch {
                 SupportLogger.shared.log(

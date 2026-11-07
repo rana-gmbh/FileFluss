@@ -316,15 +316,15 @@ public actor FTPAPIClient {
         let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         switch exit {
         case 67: return .invalidCredentials // login denied
-        case 6: return .commandFailed("Could not resolve host. Check the server address.")
-        case 7: return .commandFailed("Could not connect — check the host, port, and that FTP is reachable.")
-        case 28: return .commandFailed("Connection timed out.")
-        case 9: return .commandFailed(trimmed.isEmpty ? "Access denied to that path on the server." : trimmed)
-        case 19, 78: return .notFound(trimmed.isEmpty ? "File or directory not found." : trimmed)
+        case 6: return .commandFailed(L10n.text("Could not resolve host. Check the server address."))
+        case 7: return .commandFailed(L10n.text("Could not connect — check the host, port, and that FTP is reachable."))
+        case 28: return .commandFailed(L10n.text("Connection timed out."))
+        case 9: return .commandFailed(trimmed.isEmpty ? L10n.text("Access denied to that path on the server.") : trimmed)
+        case 19, 78: return .notFound(trimmed.isEmpty ? L10n.text("File or directory not found.") : trimmed)
         case 60, 35, 58, 59, 64, 77: // TLS/cert errors
-            return .commandFailed("TLS/SSL error: \(trimmed.isEmpty ? "the server's certificate could not be verified." : trimmed)")
+            return .commandFailed(L10n.format("TLS/SSL error: %@", trimmed.isEmpty ? L10n.text("the server's certificate could not be verified.") : trimmed))
         default:
-            return .commandFailed(trimmed.isEmpty ? "FTP command failed (curl exit \(exit))." : trimmed)
+            return .commandFailed(trimmed.isEmpty ? L10n.format("FTP command failed (curl exit %d).", exit) : trimmed)
         }
     }
 

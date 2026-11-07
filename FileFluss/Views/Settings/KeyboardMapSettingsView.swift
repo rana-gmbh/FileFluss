@@ -80,7 +80,7 @@ struct KeyboardMapSettingsView: View {
                 ForEach(KeyboardCommand.Section.allCases, id: \.self) { section in
                     let commands = KeyboardCommand.allCases.filter { $0.section == section }
                     if !commands.isEmpty {
-                        sectionBlock(title: section.rawValue, commands: commands)
+                        sectionBlock(title: L10n.text(section.rawValue), commands: commands)
                     }
                 }
             }
@@ -236,7 +236,7 @@ struct KeyboardMapSettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .confirmationDialog(
-            "Reset every customised shortcut?",
+            L10n.text("Reset every customised shortcut?"),
             isPresented: $resetConfirm,
             titleVisibility: .visible
         ) {

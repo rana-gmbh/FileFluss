@@ -448,7 +448,7 @@ private struct MountToggleButton: View {
                     Image(systemName: "arrow.up.right.square")
                 }
                 .buttonStyle(.borderless)
-                .help("Reveal “\(mount.displayName)” in Finder")
+                .help(L10n.format("Reveal “%@” in Finder", mount.displayName))
             }
             Button {
                 Task { await toggle(currentlyMounted: mountedNow) }
@@ -603,7 +603,7 @@ struct StorageSettingsView: View {
         }
         .formStyle(.grouped)
         .confirmationDialog(
-            "Clear the cache?",
+            L10n.text("Clear the cache?"),
             isPresented: $showClearConfirm,
             titleVisibility: .visible
         ) {
@@ -784,7 +784,7 @@ struct IndexStatusSettingsView: View {
         }
         .padding(14)
         .confirmationDialog(
-            "Erase all offline indexes?",
+            L10n.text("Erase all offline indexes?"),
             isPresented: $showWipeConfirm,
             titleVisibility: .visible
         ) {

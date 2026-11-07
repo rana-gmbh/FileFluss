@@ -1173,7 +1173,7 @@ public actor DropboxAPIClient {
             if let data = responseBody,
                let bodyStr = String(data: data, encoding: .utf8),
                bodyStr.contains("not_found") {
-                return .notFound("Path not found")
+                return .notFound(L10n.text("Path not found"))
             }
             return .serverError(409)
         case 429: return .rateLimited

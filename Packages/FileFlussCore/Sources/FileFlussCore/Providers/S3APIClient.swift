@@ -238,7 +238,7 @@ public actor S3APIClient {
     public func listBuckets() async throws -> [CloudFileItem] {
         let host = topLevelHost(region: credentials.region)
         guard !host.isEmpty, let url = URL(string: "https://\(host)/") else {
-            throw CloudProviderError.commandFailed("S3 endpoint URL is invalid (host: \"\(host)\"). Double-check the Endpoint URL field.")
+            throw CloudProviderError.commandFailed(L10n.format("S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field.", host))
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -836,11 +836,11 @@ public actor S3APIClient {
                 throw CloudProviderError.commandFailed(message)
             }
             throw CloudProviderError.unauthorized
-        case 404: throw CloudProviderError.notFound(message ?? "Not Found")
+        case 404: throw CloudProviderError.notFound(message ?? L10n.text("Not Found"))
         case 429, 503: throw CloudProviderError.rateLimited
         default:
             if let message {
-                throw CloudProviderError.commandFailed("S3 error (HTTP \(http.statusCode)): \(message)")
+                throw CloudProviderError.commandFailed(L10n.format("S3 error (HTTP %d): %@", http.statusCode, message))
             }
             throw CloudProviderError.serverError(http.statusCode)
         }

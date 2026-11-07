@@ -125,7 +125,7 @@ public actor PCloudAPIClient {
                 deletedOnce = true
             } catch CloudProviderError.notFound {
                 if !deletedOnce && attempt == 0 {
-                    throw CloudProviderError.notFound("File not found: \(path)")
+                    throw CloudProviderError.notFound(L10n.format("File not found: %@", path))
                 }
                 return
             } catch CloudProviderError.serverError(let code) where code == 2055 {
@@ -603,8 +603,8 @@ public actor PCloudAPIClient {
         case 1000: return .notAuthenticated
         case 2000: return .unauthorized
         case 2003: return .unauthorized
-        case 2005: return .notFound("Directory not found")
-        case 2009: return .notFound("File not found")
+        case 2005: return .notFound(L10n.text("Directory not found"))
+        case 2009: return .notFound(L10n.text("File not found"))
         case 2008: return .quotaExceeded
         case 4000: return .rateLimited
         default: return .serverError(code)

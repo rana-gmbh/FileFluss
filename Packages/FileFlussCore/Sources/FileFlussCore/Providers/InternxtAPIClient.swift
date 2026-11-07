@@ -566,7 +566,7 @@ public actor InternxtAPIClient {
             internxtLog.error("[Internxt] HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(300) ?? "")")
             switch http.statusCode {
             case 401, 403: throw CloudProviderError.notAuthenticated
-            case 404: throw CloudProviderError.notFound("Resource not found")
+            case 404: throw CloudProviderError.notFound(L10n.text("Resource not found"))
             case 429: throw CloudProviderError.rateLimited
             default: throw CloudProviderError.serverError(http.statusCode)
             }

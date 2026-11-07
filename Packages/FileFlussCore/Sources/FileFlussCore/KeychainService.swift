@@ -162,9 +162,9 @@ public enum KeychainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .saveFailed(let status):
-            return "Keychain save failed (OSStatus \(status))"
+            return L10n.format("Keychain save failed (OSStatus %d)", Int(status))
         case .deleteFailed(let status):
-            return "Keychain delete failed (OSStatus \(status))"
+            return L10n.format("Keychain delete failed (OSStatus %d)", Int(status))
         }
     }
 }

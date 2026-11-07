@@ -808,14 +808,14 @@ public actor MegaAPIClient {
     private func resolveHandle(for path: String) throws -> String {
         if path == "/" || path.isEmpty {
             guard let root = rootHandle else {
-                throw CloudProviderError.notFound("Root folder not found")
+                throw CloudProviderError.notFound(L10n.text("Root folder not found"))
             }
             return root
         }
 
         let components = path.split(separator: "/").map(String.init)
         guard let root = rootHandle else {
-            throw CloudProviderError.notFound("Root folder not found")
+            throw CloudProviderError.notFound(L10n.text("Root folder not found"))
         }
 
         var currentHandle = root
@@ -1054,9 +1054,9 @@ public actor MegaAPIClient {
         case -2: return .invalidCredentials
         case -4: return .quotaExceeded
         case -6: return .rateLimited
-        case -9: return .notFound("Object not found")
+        case -9: return .notFound(L10n.text("Object not found"))
         case -11: return .unauthorized
-        case -14: return .notFound("Temporary not available")
+        case -14: return .notFound(L10n.text("Temporary not available"))
         case -15: return .serverError(code) // Session expired
         case -16: return .rateLimited
         case -17: return .quotaExceeded // Over quota

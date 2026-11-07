@@ -152,7 +152,7 @@ final class SyncViewModel {
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
         } catch CloudProviderError.serverError(1022) {
-            authError = "pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field."
+            authError = L10n.text("pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.")
         } catch {
             authError = error.localizedDescription
         }
@@ -688,7 +688,7 @@ final class SyncViewModel {
         // Disallow more than one iCloud account — they all back the same
         // CloudDocs folder, so duplicates would only confuse the sidebar.
         if accounts.contains(where: { $0.providerType == .iCloud }) {
-            authError = "iCloud Drive is already added."
+            authError = L10n.text("iCloud Drive is already added.")
             return
         }
         let provider = ICloudProvider()
@@ -993,7 +993,7 @@ final class SyncViewModel {
         do {
             try await provider.connectCOHN(ipAddress: ipAddress, username: username, password: password, cameraName: nil)
             var connectedAccount = account
-            connectedAccount.displayName = (try? await provider.userDisplayName()) ?? "GoPro Camera"
+            connectedAccount.displayName = (try? await provider.userDisplayName()) ?? L10n.text("GoPro Camera")
             connectedAccount.isConnected = true
             accounts.append(connectedAccount)
             await syncEngine.registerProvider(for: account.id, provider: provider)

@@ -525,7 +525,7 @@ public actor WebDAVAPIClient {
         switch statusCode {
         case 401: return .invalidCredentials
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 409: return .serverError(409)
         case 429: return .rateLimited
         case 507: return .quotaExceeded

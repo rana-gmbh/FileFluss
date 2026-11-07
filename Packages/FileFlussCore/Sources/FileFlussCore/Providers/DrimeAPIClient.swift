@@ -1022,7 +1022,7 @@ public actor DrimeAPIClient {
                 return .commandFailed(message)
             }
             return .unauthorized
-        case 404: return .notFound(message ?? "Resource not found")
+        case 404: return .notFound(message ?? L10n.text("Resource not found"))
         case 413: return .fileTooLarge(fileBytes: 0, providerLimitBytes: nil)
         case 422: return message.map { .commandFailed($0) } ?? .serverError(422)
         case 429: return .rateLimited

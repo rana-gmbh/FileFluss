@@ -124,7 +124,7 @@ public actor WordPressAPIClient {
             throw CloudProviderError.invalidCredentials
         }
         if http.statusCode == 404 {
-            throw CloudProviderError.notFound("WordPress REST API not found. Make sure the site has the REST API enabled at /wp-json/wp/v2/media")
+            throw CloudProviderError.notFound(L10n.text("WordPress REST API not found. Make sure the site has the REST API enabled at /wp-json/wp/v2/media"))
         }
         guard (200...299).contains(http.statusCode) else {
             throw CloudProviderError.serverError(http.statusCode)

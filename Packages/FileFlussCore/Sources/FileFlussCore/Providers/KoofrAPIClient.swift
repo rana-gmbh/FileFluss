@@ -76,7 +76,7 @@ public actor KoofrAPIClient {
 
         let mountsResult = try JSONDecoder().decode(KoofrMountsResponse.self, from: mountsData)
         guard let primary = mountsResult.mounts.first(where: { $0.isPrimary }) ?? mountsResult.mounts.first else {
-            throw CloudProviderError.notFound("No mount found")
+            throw CloudProviderError.notFound(L10n.text("No mount found"))
         }
 
         koofrLog.info("[Koofr] Authenticated as \(displayName), mount: \(primary.id)")
@@ -521,7 +521,7 @@ public actor KoofrAPIClient {
         switch statusCode {
         case 401: return .invalidCredentials
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 409: return .serverError(409)
         case 429: return .rateLimited
         case 507: return .quotaExceeded

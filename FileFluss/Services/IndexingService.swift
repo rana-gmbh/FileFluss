@@ -259,7 +259,7 @@ final class IndexingService {
             job.filesProcessed = finalCount
             job.isComplete = true
             if cancelled {
-                job.errorMessage = "Cancelled"
+                job.errorMessage = L10n.text("Cancelled")
                 return
             }
             if let failure {
@@ -267,7 +267,7 @@ final class IndexingService {
                 // whatever it said before. Reporting "indexed N files" after
                 // a failed write is what sent a user looking for a database
                 // that had never been written.
-                job.errorMessage = "Could not save the index: \(failure)"
+                job.errorMessage = L10n.format("Could not save the index: %@", failure)
                 return
             }
             // Update the drive's persisted metadata, with the number the
@@ -292,7 +292,7 @@ final class IndexingService {
             await MainActor.run {
                 if let job = service?.jobs.first(where: { $0.id == jobId }) {
                     job.isComplete = true
-                    job.errorMessage = "Account not connected"
+                    job.errorMessage = L10n.text("Account not connected")
                 }
             }
             return
@@ -323,7 +323,7 @@ final class IndexingService {
                 await MainActor.run {
                     if let job = service?.jobs.first(where: { $0.id == jobId }) {
                         job.isComplete = true
-                        job.errorMessage = "Could not save the index: \(error.localizedDescription)"
+                        job.errorMessage = L10n.format("Could not save the index: %@", error.localizedDescription)
                     }
                 }
                 return
@@ -368,7 +368,7 @@ final class IndexingService {
                 job.filesProcessed = finalCount
                 job.isComplete = true
                 if cancelled {
-                    job.errorMessage = "Cancelled"
+                    job.errorMessage = L10n.text("Cancelled")
                 }
             }
         }

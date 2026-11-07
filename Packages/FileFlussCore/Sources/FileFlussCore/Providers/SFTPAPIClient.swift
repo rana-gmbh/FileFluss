@@ -498,45 +498,45 @@ public actor SFTPAPIClient {
         // Auth failures — distinguish password vs key vs passphrase so
         // the user knows which thing to fix.
         if lower.contains("permission denied (publickey)") {
-            return .commandFailed("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).")
+            return .commandFailed(L10n.text("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)."))
         }
         if lower.contains("permission denied") || lower.contains("authentication failed") {
             switch authMethod {
             case .password:
-                return .commandFailed("SSH authentication failed. Check the username and password.")
+                return .commandFailed(L10n.text("SSH authentication failed. Check the username and password."))
             case .privateKey:
-                return .commandFailed("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.")
+                return .commandFailed(L10n.text("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong."))
             }
         }
 
         // Key-loading problems on the client side.
         if lower.contains("invalid format") || lower.contains("error in libcrypto") {
-            return .commandFailed("Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).")
+            return .commandFailed(L10n.text("Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)."))
         }
         if lower.contains("are too open") || lower.contains("bad permissions") {
-            return .commandFailed("Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again.")
+            return .commandFailed(L10n.text("Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again."))
         }
         if lower.contains("incorrect passphrase") || lower.contains("bad passphrase") || lower.contains("could not decrypt") {
-            return .commandFailed("Wrong passphrase for the private key.")
+            return .commandFailed(L10n.text("Wrong passphrase for the private key."))
         }
 
         // Host-key problems.
         if lower.contains("host key verification failed") {
-            return .commandFailed("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry.")
+            return .commandFailed(L10n.text("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry."))
         }
 
         // Connection-level issues.
         if lower.contains("connection refused") {
-            return .commandFailed("Connection refused — is the SSH daemon running on this host and port?")
+            return .commandFailed(L10n.text("Connection refused — is the SSH daemon running on this host and port?"))
         }
         if lower.contains("connection timed out") || lower.contains("operation timed out") {
-            return .commandFailed("Connection timed out. Check the hostname, port, and your network.")
+            return .commandFailed(L10n.text("Connection timed out. Check the hostname, port, and your network."))
         }
         if lower.contains("no route to host") || lower.contains("network is unreachable") {
-            return .commandFailed("Network is unreachable from this Mac.")
+            return .commandFailed(L10n.text("Network is unreachable from this Mac."))
         }
         if lower.contains("could not resolve hostname") || lower.contains("name or service not known") {
-            return .commandFailed("Could not resolve hostname. Check spelling or DNS.")
+            return .commandFailed(L10n.text("Could not resolve hostname. Check spelling or DNS."))
         }
 
         // SFTP-level errors during a command (mkdir/put/get) — surface the
@@ -546,16 +546,16 @@ public actor SFTPAPIClient {
         }
         if lower.contains("couldn't") || lower.contains("failure") {
             // e.g. "Couldn't create directory: Permission denied"
-            return .commandFailed(combined.isEmpty ? "SFTP command failed (exit \(exit))." : combined)
+            return .commandFailed(combined.isEmpty ? L10n.format("SFTP command failed (exit %d).", exit) : combined)
         }
 
         // Fall-through: surface the raw stderr if we have it, otherwise
         // the exit code. Truncate aggressively — SFTP can spew banners.
         if !stderr.isEmpty {
             let snippet = stderr.split(separator: "\n").prefix(3).joined(separator: " — ")
-            return .commandFailed("SFTP failed (exit \(exit)): \(snippet)")
+            return .commandFailed(L10n.format("SFTP failed (exit %d): %@", exit, snippet))
         }
-        return .commandFailed("SFTP failed with exit code \(exit). Check the server is reachable and the credentials are correct.")
+        return .commandFailed(L10n.format("SFTP failed with exit code %d. Check the server is reachable and the credentials are correct.", exit))
     }
 
     // MARK: - Parsing

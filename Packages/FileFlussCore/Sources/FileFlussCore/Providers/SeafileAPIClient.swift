@@ -130,7 +130,7 @@ public actor SeafileAPIClient {
     ) async throws -> SeafileCredentials {
         let normalizedServer = normalizeServerURL(serverURL)
         guard let url = URL(string: "\(normalizedServer)/api2/auth-token/") else {
-            throw CloudProviderError.commandFailed("Server URL is not a valid URL.")
+            throw CloudProviderError.commandFailed(L10n.text("Server URL is not a valid URL."))
         }
 
         var request = URLRequest(url: url)
@@ -332,7 +332,7 @@ public actor SeafileAPIClient {
         if let id = libraryIdByName[libraryKey] {
             return (id, "/" + inner)
         }
-        throw CloudProviderError.notFound("Library \(libraryKey)")
+        throw CloudProviderError.notFound(L10n.format("Library %@", libraryKey))
     }
 
     // MARK: - Directory listing
@@ -419,7 +419,7 @@ public actor SeafileAPIClient {
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         guard let resolved = try await resolveLibrary(forPath: remotePath) else {
-            throw CloudProviderError.commandFailed("Cannot upload directly to the Seafile library root — pick a library first.")
+            throw CloudProviderError.commandFailed(L10n.text("Cannot upload directly to the Seafile library root — pick a library first."))
         }
         let parentInner = (resolved.innerPath as NSString).deletingLastPathComponent
         let fileName = (resolved.innerPath as NSString).lastPathComponent
@@ -484,7 +484,7 @@ public actor SeafileAPIClient {
             // Deleting a whole library is destructive enough that we leave
             // it to the Seafile web UI rather than expose it accidentally
             // through the panel's Delete key.
-            throw CloudProviderError.commandFailed("Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.")
+            throw CloudProviderError.commandFailed(L10n.text("Cannot delete a Seafile library from FileFluss. Use the Seafile web UI."))
         }
         let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
         let isDir = await isDirectory(repoId: resolved.repoId, innerPath: resolved.innerPath)
@@ -502,7 +502,7 @@ public actor SeafileAPIClient {
 
     public func createFolder(at path: String) async throws {
         guard let resolved = try await resolveLibrary(forPath: path) else {
-            throw CloudProviderError.commandFailed("Create a library in the Seafile web UI before adding folders.")
+            throw CloudProviderError.commandFailed(L10n.text("Create a library in the Seafile web UI before adding folders."))
         }
         let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
         var request = try authenticatedRequest(path: "/api2/repos/\(resolved.repoId)/dir/?p=\(encodedInner)")
@@ -518,7 +518,7 @@ public actor SeafileAPIClient {
 
     public func renameItem(at path: String, to newName: String) async throws {
         guard let resolved = try await resolveLibrary(forPath: path), !resolved.innerPath.isEmpty, resolved.innerPath != "/" else {
-            throw CloudProviderError.commandFailed("Rename a Seafile library from its web UI.")
+            throw CloudProviderError.commandFailed(L10n.text("Rename a Seafile library from its web UI."))
         }
         let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
         let isDir = await isDirectory(repoId: resolved.repoId, innerPath: resolved.innerPath)
@@ -542,7 +542,7 @@ public actor SeafileAPIClient {
 
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let resolved = try await resolveLibrary(forPath: path) else {
-            throw CloudProviderError.commandFailed("Library root has no file metadata.")
+            throw CloudProviderError.commandFailed(L10n.text("Library root has no file metadata."))
         }
         let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
 
@@ -671,7 +671,7 @@ public actor SeafileAPIClient {
     /// verbatim rather than a generic failure.
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         guard let resolved = try await resolveLibrary(forPath: path) else {
-            throw CloudProviderError.commandFailed("Cannot share the Seafile library list — pick a file or folder inside a library.")
+            throw CloudProviderError.commandFailed(L10n.text("Cannot share the Seafile library list — pick a file or folder inside a library."))
         }
 
         // Seafile takes a whole number of days, not a date. Round up so a
@@ -935,7 +935,7 @@ public actor SeafileAPIClient {
         switch statusCode {
         case 401: return .notAuthenticated
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 429: return .rateLimited
         case 507: return .quotaExceeded
         default: return .serverError(statusCode)

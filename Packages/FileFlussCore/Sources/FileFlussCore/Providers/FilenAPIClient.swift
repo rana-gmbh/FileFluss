@@ -116,7 +116,7 @@ public actor FilenAPIClient {
         let info = try await fetchAuthInfo(email: email)
         guard info.authVersion == 2 else {
             throw CloudProviderError.commandFailed(
-                "Filen account uses auth version \(info.authVersion). FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented."
+                L10n.format("Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.", String(info.authVersion))
             )
         }
 
@@ -137,7 +137,7 @@ public actor FilenAPIClient {
             expectedKey: "data"
         )
         guard let apiKey = loginResponse["apiKey"] as? String else {
-            throw CloudProviderError.commandFailed("Filen login succeeded but the server didn't return an apiKey.")
+            throw CloudProviderError.commandFailed(L10n.text("Filen login succeeded but the server didn't return an apiKey."))
         }
         let masterKeysBlob = loginResponse["masterKeys"] as? String
 
@@ -305,7 +305,7 @@ public actor FilenAPIClient {
         // CloudFileItem.id for a file is "f:<uuid>" — strip the prefix.
         let uuid = String(item.id.dropFirst(2))
         guard let info = fileChunkInfo[uuid] else {
-            throw CloudProviderError.commandFailed("Filen file metadata not cached — listing didn't populate chunk info.")
+            throw CloudProviderError.commandFailed(L10n.text("Filen file metadata not cached — listing didn't populate chunk info."))
         }
         // Chunks are appended as they arrive, so they go under a name of their
         // own: a drop part way must not leave a short file under the real one.
@@ -324,7 +324,7 @@ public actor FilenAPIClient {
         // Filen's per-file AES-256 key is the 32-char ASCII string used as
         // 32 raw bytes — see FileKey::try_from in filen-sdk-rs/src/crypto/v2.rs.
         guard info.key.count == 32, let keyData = info.key.data(using: .utf8) else {
-            throw CloudProviderError.commandFailed("Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.")
+            throw CloudProviderError.commandFailed(L10n.text("Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet."))
         }
         let aesKey = SymmetricKey(data: keyData)
 
@@ -335,7 +335,7 @@ public actor FilenAPIClient {
         guard info.chunks > 0 else { return }
 
         guard let handle = try? FileHandle(forWritingTo: localURL) else {
-            throw CloudProviderError.commandFailed("Couldn't open destination file for writing.")
+            throw CloudProviderError.commandFailed(L10n.text("Couldn't open destination file for writing."))
         }
         defer { try? handle.close() }
 
@@ -395,7 +395,7 @@ public actor FilenAPIClient {
         // used to encrypt every chunk (FileKey::try_from in v2.rs).
         let fileKeyAscii = Self.randomFilenString(length: 32)
         guard fileKeyAscii.count == 32, let fileKeyData = fileKeyAscii.data(using: .utf8) else {
-            throw CloudProviderError.commandFailed("Couldn't mint a 32-byte file key.")
+            throw CloudProviderError.commandFailed(L10n.text("Couldn't mint a 32-byte file key."))
         }
         let fileKeyAes = SymmetricKey(data: fileKeyData)
 
@@ -624,7 +624,7 @@ public actor FilenAPIClient {
             // file-key-encrypted name (server-side index). Reuse the cached
             // file-chunk info to pull the original per-file key.
             guard let info = fileChunkInfo[uuid] else {
-                throw CloudProviderError.commandFailed("Filen file metadata not cached — re-open the folder and try again.")
+                throw CloudProviderError.commandFailed(L10n.text("Filen file metadata not cached — re-open the folder and try again."))
             }
             let fileKeyAes = try FilenCrypto.aesKeyFromV2MasterKey(info.key)
             let fileMeta: [String: Any] = [
@@ -700,7 +700,7 @@ public actor FilenAPIClient {
         let response = try await postUnauthenticated(path: "/v3/auth/info", body: body, expectedKey: "data")
         guard let salt = response["salt"] as? String,
               let authVersion = (response["authVersion"] as? NSNumber)?.intValue else {
-            throw CloudProviderError.commandFailed("Filen /v3/auth/info returned an unexpected payload.")
+            throw CloudProviderError.commandFailed(L10n.text("Filen /v3/auth/info returned an unexpected payload."))
         }
         let userId = (response["id"] as? NSNumber)?.int64Value ?? 0
         let respEmail = (response["email"] as? String) ?? email
@@ -718,12 +718,12 @@ public actor FilenAPIClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw CloudProviderError.commandFailed("Filen /v3/user/baseFolder failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0))")
+            throw CloudProviderError.commandFailed(L10n.format("Filen /v3/user/baseFolder failed (HTTP %d)", (response as? HTTPURLResponse)?.statusCode ?? 0))
         }
         let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let nested = envelope?["data"] as? [String: Any],
               let uuid = nested["uuid"] as? String else {
-            throw CloudProviderError.commandFailed("Filen /v3/user/baseFolder didn't return a root UUID.")
+            throw CloudProviderError.commandFailed(L10n.text("Filen /v3/user/baseFolder didn't return a root UUID."))
         }
         return uuid
     }
@@ -770,7 +770,7 @@ public actor FilenAPIClient {
             throw CloudProviderError.invalidResponse
         }
         if let status = envelope["status"] as? Bool, status == false {
-            let msg = (envelope["message"] as? String) ?? "Filen API error"
+            let msg = (envelope["message"] as? String) ?? L10n.text("Filen API error")
             throw CloudProviderError.commandFailed(msg)
         }
         // The wrapped payload may be a dict OR an array (e.g. masterKeys list).
@@ -906,7 +906,7 @@ enum FilenCrypto {
         let sealed = try AES.GCM.seal(Data(plaintext.utf8), using: aesKey, nonce: nonce)
         let body = sealed.ciphertext + sealed.tag
         guard let asciiNonce = String(data: Data(nonceBytes), encoding: .utf8) else {
-            throw CloudProviderError.commandFailed("Couldn't render Filen metadata nonce as ASCII.")
+            throw CloudProviderError.commandFailed(L10n.text("Couldn't render Filen metadata nonce as ASCII."))
         }
         return "002" + asciiNonce + body.base64EncodedString()
     }
@@ -975,7 +975,7 @@ enum FilenCrypto {
             }
         }
         guard status == kCCSuccess else {
-            throw CloudProviderError.commandFailed("PBKDF2 derivation failed (status=\(status))")
+            throw CloudProviderError.commandFailed(L10n.format("PBKDF2 derivation failed (status=%@)", String(status)))
         }
         return Data(derived)
     }

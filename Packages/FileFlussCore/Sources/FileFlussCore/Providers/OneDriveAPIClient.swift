@@ -1082,7 +1082,7 @@ public actor OneDriveAPIClient {
         switch statusCode {
         case 401: return .notAuthenticated
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 429: return .rateLimited
         case 507: return .quotaExceeded
         default: return .serverError(statusCode)
