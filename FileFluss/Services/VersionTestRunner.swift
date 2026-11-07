@@ -84,6 +84,11 @@ enum VersionTestRunner {
             accountResults.append(result)
         }
 
+        #if DEBUG
+        // Tokens refreshed during the run replace the saved ones.
+        TestAccountSnapshot.refreshAfterVersionTest(appState: appState)
+        #endif
+
         let report = Report(
             startDate: startDate,
             endDate: Date(),

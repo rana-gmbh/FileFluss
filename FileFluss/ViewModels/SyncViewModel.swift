@@ -31,7 +31,17 @@ final class SyncViewModel {
     var isAuthenticatingNextCloud: Bool = false
 
     private let syncEngine = SyncEngine.shared
-    private static let accountsKey = "cloudAccounts"
+    #if DEBUG
+    /// Debug builds keep their own list. They share the bundle ID, and so
+    /// the preferences, of the installed release app, which showed every
+    /// test account without its credentials (Debug keeps those in its own
+    /// folder, not the Keychain). Removing them there removed them here too,
+    /// and the whole set had to be added again for the next version test.
+    static let accountsKey = "debugCloudAccounts"
+    static let sharedAccountsKey = "cloudAccounts"
+    #else
+    static let accountsKey = "cloudAccounts"
+    #endif
 
     /// True when a stored account list existed but couldn't be decoded. In
     /// that state `accounts` is empty through no fault of the user, and
@@ -1765,11 +1775,34 @@ final class SyncViewModel {
         }
     }
 
+    #if DEBUG
+    /// Adds the accounts from a test-account snapshot that aren't in the
+    /// list, then connects everything whose credentials are in place.
+    /// Accounts already here are left as they are. Returns how many were added.
+    @discardableResult
+    func restoreTestAccounts(_ restored: [CloudAccount]) async -> Int {
+        let known = Set(accounts.map(\.id))
+        let added = restored.filter { !known.contains($0.id) }
+        accounts += added
+        saveAccounts()
+        await reconnectSavedAccounts()
+        return added.count
+    }
+    #endif
+
     /// Accounts in the store that this version can't read: one added in a
     /// newer version, usually. Kept so that saving doesn't delete them.
     private var unreadableAccounts: [Data] = []
 
     private func loadAccounts() {
+        #if DEBUG
+        // First launch with a separate list: start from the shared one, so
+        // the accounts already set up for testing carry over.
+        if Self.defaults.data(forKey: Self.accountsKey) == nil,
+           let shared = Self.defaults.data(forKey: Self.sharedAccountsKey) {
+            Self.defaults.set(shared, forKey: Self.accountsKey)
+        }
+        #endif
         guard let data = Self.defaults.data(forKey: Self.accountsKey) else { return }
         guard let saved = StoredList.decode(data, as: CloudAccount.self) else {
             // Stored data exists but doesn't decode — a truncated write, say.

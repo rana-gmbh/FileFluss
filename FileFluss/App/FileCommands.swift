@@ -322,6 +322,13 @@ struct FileCommands: Commands {
                 Button(L10n.text("Run Version Test…")) {
                     Task { await VersionTestRunner.run(appState: appState) }
                 }
+                // Dev-only and English-only, like the version test itself.
+                Button(String("Save Test Accounts…")) {
+                    TestAccountSnapshot.saveFromMenu(appState: appState)
+                }
+                Button(String("Restore Test Accounts…")) {
+                    TestAccountSnapshot.restoreFromMenu(appState: appState)
+                }
                 #endif
             }
         }
