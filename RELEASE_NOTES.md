@@ -1,67 +1,76 @@
-# FileFluss 1.5.2
+# FileFluss 1.6
 
-A maintenance release, and most of it came from reports. Thank you for every one of them — several of these were bugs I had put there myself and would not have found alone.
+Archives, three new kinds of storage, Open With, and a long list of work on what matters most in a file manager: that a copy, a move or a sync never costs you a file.
 
-If you transfer large files, or edit files on a cloud account with another app, this release matters to you.
+## Archives, right in the panel
 
-## Large transfers run to the end
+![Browsing an archive in FileFluss](https://github.com/rana-gmbh/FileFluss/raw/v1.6/Screenshots/FileFluss%20archives.webp)
 
-A customer's 1.5 GB upload to Nextcloud stopped at about half, every time, while the same file through Finder was fine.
+Double-click a ZIP, RAR, 7z or TAR archive and it opens in the panel like a folder — on your Mac and on any cloud account. Inside, folders navigate as usual, and the breadcrumb and history work unchanged.
 
-Every provider in the app was setting a **wall-clock cap on the whole request** — five to thirty minutes, depending on the service — in the belief that it was an inactivity timeout. It isn't. A transfer too big for your connection to carry inside that window died in the middle no matter how well it was going, and seventeen providers had one. Uploads and downloads alike, on almost every service.
+- **Preview** any file inside with Quick Look, or open it, without unpacking the rest.
+- **Drag single files or folders out** to the other panel or to Finder, or choose *Extract to … Panel*.
+- **Extract Here** and **Extract to the other panel** for the whole archive, following Finder's rule: one item lands as itself, several go into a folder named after the archive.
+- **Compress** to ZIP, 7-Zip, TAR.GZ, TAR.BZ2 or TAR.XZ from the right-click menu.
 
-That cap is gone. What remains is the guard that is actually worth having: a transfer goes on as long as bytes are moving, and fails only when it has genuinely gone silent.
+On a cloud account it all works the same way: the archive is downloaded, unpacked or packed, and the result uploaded beside it. Nothing is unpacked until you actually ask for an entry, and archive entries that try to escape their folder are refused.
 
-Two more things on the same path:
+RAR archives open out of the box. *Creating* RAR needs RARLAB's own tool, since no free encoder exists — FileFluss offers to fetch it from rarlab.com, checked against a pinned checksum.
 
-- **A 3.7 GB upload that reached 100% and then failed** was waiting for the server. Once the last byte is sent, the far end still has to finish with several gigabytes, and thirty seconds was not enough. It now waits five minutes for that answer.
-- **A large WebDAV upload no longer loads the file into memory first.** Nextcloud and generic WebDAV hand the file to the system and let it read as it sends, so the upload costs the same memory whatever the file's size.
+## Back up your GitHub repositories, and three new NAS brands
 
-Worth saying plainly: a single request of several gigabytes is still a lot to ask of a PHP server. This buys real headroom, not immunity. Chunked uploads would be the robust answer and are not in this release.
+![GitHub repositories in FileFluss](https://github.com/rana-gmbh/FileFluss/raw/v1.6/Screenshots/FileFluss%20GitHub%20integration.webp)
 
-**The support log no longer stops after sixty seconds.** The same customer could not record his failing upload at all, because the recording ended minutes before the failure did. It now runs until you stop it, with an hour's backstop in case it's forgotten.
+**GitHub** can now be connected with a personal access token. The panel lists your owners and repositories, shows at a glance which ones are private, and offers each repository both as browsable files and as a snapshot ZIP of its default branch. Drag those snapshots onto Dropbox, a NAS or any other account, and your repositories are backed up — as an ordinary panel-to-panel copy. GitHub accounts are read-only, so nothing can be deleted there by accident.
 
-## Editing a cloud file in another app
+**New NAS support**, in a new NAS section of Add Account alongside Synology:
 
-A user reported Pages losing its changes to a file on a WebDAV account, while TextEdit kept them. Two separate faults, both ours.
+- **QNAP** — signs in to File Station with your QTS account, including 2-step verification, and creates share links.
+- **UGREEN** and **ASUSTOR** — connect through the NAS's built-in WebDAV service, with each maker's default port.
 
-**A mounted account now opens the file where it really is.** His account was mounted in Finder the whole time, but a double-click in a FileFluss panel never looked at the mount — it downloaded a copy, opened that, and his saves went into a file on this Mac that nothing uploads. A mounted account now opens through the volume, so the save goes back to the server, from Pages or anything else.
+All three accept a self-signed certificate. That also fixed downloads from Synology units that use one.
 
-**And FileFluss no longer deletes a copy that holds your edits.** This is the worse half. The next open compared the local copy against the server's and, on any mismatch, deleted it and downloaded again — which for someone who had edited the file was FileFluss deleting the only copy of their work. An edited copy is now set aside with the time it was written, and you're told where it went and offered *Show in Finder*.
+**Drime**, the French cloud storage service, joins as a new provider: browse, upload (in parallel parts for large files), download, move and copy on the server, rename, delete to the Drime trash, storage quota, and share links with password, expiry and a download switch.
 
-Being straightforward about the limit: for an account that is **not** mounted, FileFluss still does not upload changes you make in another app. Mounting the account is the way to edit in place today. Preserving the file instead of destroying it is the fix here; uploading it back is the next stage.
+## Open With
 
-## How much room a transfer needs on this Mac
+![The Open With submenu](https://github.com/rana-gmbh/FileFluss/raw/v1.6/Screenshots/FileFluss%20Open%20with%20dialogue.webp)
 
-Asked for by a reader, who pointed out that a big cloud-to-cloud transfer is an easy place to forget about a nearly full Mac SSD. He was right that nothing said so — every byte of a cloud-to-cloud copy crosses a local disk on its way, and the pre-flight only ever looked at the destination account.
+The right-click menu now has an **Open With** submenu, like Finder's: the default app first, then every other app that can open the selection, and *Other…* to pick any app. It works on your cloud drives too — open a Dropbox or NAS file straight in the app of your choice. A mounted account opens the file in place; otherwise it's downloaded first. With several files selected, only apps that open all of them are offered.
 
-The transfer preview and the sync planner now show both figures, and they're calculated per transfer shape: cloud to cloud needs the whole transfer at once, cloud to local needs only the largest single item — nothing at all when it lands on the same volume it staged on — and local to cloud needs nothing. When space is short, the warning says *which* disk, because freeing space on your Mac and freeing space in an account are not the same errand.
+## Sync and large copies you can rely on
 
-A cloud-to-cloud transfer that cannot fit now stops before it starts, naming the disk and the setting, instead of failing half way with a disk-full error. Two things turned up while tracing this: such transfers were staging into the system temp folder rather than the folder you chose in Settings → Storage — which is exactly what moving the cache to an external drive is for — and the pre-flight is off by default, so the reported case would have warned nobody. Both fixed.
+The biggest part of this release is invisible when it works. I went through every path that copies, moves, replaces or syncs a file and closed the ones that could lose data:
+
+- **A move deletes the source only once everything has arrived** — including folders that only partly downloaded.
+- **Replace never leaves you with nothing.** The new copy is written under a temporary name and swapped in once complete, in sync, in manual Replace and in the conflict dialog. *Keep Both* on a cloud download no longer deletes the existing file.
+- **Mirror stops instead of guessing.** A folder it can't read, a listing it can't parse or an unsafe path stops the sync, and it refuses to empty a destination. Syncs involving this Mac leave hidden files alone on both sides.
+- **A repeated sync has nothing to do.** Copies now keep the source's modification date, a sync runs exactly what was calculated, and *Update Newer* leaves folders alone.
+- **Large files upload in pieces** on Google Drive, OneDrive and Dropbox instead of being read into memory first, and downloads are swapped in only once complete.
+- **Cancel means cancel**, at once, including SFTP and FTP transfers. The Mac stays awake during a transfer, and quitting mid-transfer asks first.
+- **SFTP and FTP no longer hang** on very large folders.
+
+## Security
+
+- The Finder mount rejects paths containing `..`, and sync writes stay inside the folder you chose.
+- Login details are sent only to their own host, including after redirects and for WordPress media downloads.
+- Archives with unsafe entries are refused, and file names can no longer be read as options by the archiving tools.
+- Downloaded files carry the quarantine flag, so Gatekeeper checks them like anything else you download.
+- Add Account warns before you connect to a server over plain HTTP.
+
+## Translations
+
+Around 245 texts were written straight into the code and never reached the translation files — dialog titles, error messages, transfer status lines and the error messages of most cloud providers. German, Simplified Chinese and Traditional Chinese users read them in English. All of them are translated now, and a new test keeps new English-only text from creeping in.
 
 ## Fixes
 
-- **SFTP moves and copies now happen on the server.** Dragging a file to another folder on the same server downloaded it and uploaded it again — the cost of a full round trip to achieve a rename. FileFluss now asks the server to do it. Copying needs OpenSSH 9.0 or later; a server without it is asked once and remembered, so a folder of a thousand files doesn't pay a failed round trip a thousand times. Thanks to @paull27 for the report and the analysis. (#62)
-- **WebDAV no longer hides one of your folders.** A Storage Box with two folders showed one. A listing returns the folder itself alongside its children, and FileFluss removed it by position rather than by name — so on a server that doesn't name its own entry, it removed a real folder instead. It is now matched by path, and if nothing matches, nothing is removed. Nextcloud had the same line, one server-side change away from the same bug. Thanks to @mrflory. (#64)
-- **Synology Drive accounts with 2FA survive a restart and an edit.** The one-time code was sent only with the first login, so every later one was refused. Found, diagnosed, patched and tested against a real DS920+ by @knoxville68 — see the credit below. Editing such an account dropped the device token and asked for a code again; it's now carried through when the server and username are unchanged. Codes typed or pasted with a space ("123 456") are accepted in both sheets.
-- **A failed search index says so instead of reporting success.** An SMB share indexed, 179,000 files appeared in the sidebar, and the database was empty — no error anywhere, and the index gone after a relaunch. Index writes were discarding every database result, including the commit, so a write that never happened looked identical to one that did. Writes now fail loudly and roll back, and the count shown is read back from the index rather than tallied while walking: the sidebar says what is actually searchable.
-- **Indexing a large share no longer holds it all in memory.** A 179,000-file walk kept every entry for the eight minutes it took, then wrote them in one transaction. Rows are now written as they're found, into a staging area that search and browsing can't see, and swapped in at the end. Until that succeeds your previous index is intact — and if it fails, it still is.
-- **A Trash refusal now explains itself.** macOS refused to let FileFluss move three files to the Trash for want of permission, and the app said only "Failed to trash". It now recognises that refusal, names the setting that fixes it, offers to open System Settings, and says a restart is needed afterwards.
-- **A sidebar drop that moves files refreshes both panels.** The destination refreshed; the panel the files came from went on listing files that were no longer there.
-
-## Privacy policy
-
-Raised publicly, and fairly: the policy on the website says nothing about user files or application data, which is what an app needs one for. There is now one written from what the code does — every claim in it is checkable in the repository — and **Help → Privacy Policy** opens it.
-
-The short version: no analytics or telemetry of any kind, the only request the app makes on its own is checking for updates, credentials live in the Keychain, the search index holds names and sizes but no file contents, the support log is off by default and never transmitted, and the Finder mount listens on 127.0.0.1 only.
-
-## German and Chinese are complete again
-
-123 strings were missing from the translation files, so German, Simplified and Traditional Chinese users saw English in the transfer preview, the space warnings, the storage analysis and the GoPro import. All four languages now carry the same 810 strings, and a test keeps them that way.
-
-## Thank you
-
-**@knoxville68** found the Synology 2FA bug, worked out that the session established by the one-time-code login was being thrown away, wrote the patch and tested it against real hardware — the part nobody here could have done. Contributors are now credited in `CONTRIBUTORS.md`, which also says what makes a pull request easy to accept.
+- **No more crash when a drag ends over a file list.** It had been possible since 1.5 and was easiest to hit by dragging out of an archive. Thanks to the user who reported it.
+- **A refused Trash names the real cause.** FileFluss always pointed at Full Disk Access, even for users who had already granted it. It now checks whether the Trash folder itself is the problem — for example one owned by another user — and offers a command that repairs it.
+- **An expired sign-in keeps the panel usable**, with a way to sign in again, and accounts stuck offline recover at launch.
+- **Your account list and favourites are safe from a damaged entry**: one that can't be read is kept aside rather than risking the whole list, and a damaged search index rebuilds itself.
+- **Local panels follow changes made outside FileFluss**, keep their selection during a refresh, and show local errors.
+- **The conflict question always appears**, queues when several arrive at once, and ends cleanly on Cancel.
+- Tab moves keyboard focus, and the hidden-files, Quick Look and Settings shortcuts work again.
 
 ## Install
 

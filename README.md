@@ -35,6 +35,7 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - Filen (filen.io)
 - Internxt (internxt.com — end-to-end encrypted)
 - Jottacloud (jottacloud.com)
+- Drime (drime.cloud — French cloud storage)
 - NextCloud
 - Seafile
 - Synology Drive
@@ -42,6 +43,7 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - QNAP (File Station, with 2-step verification)
 - UGREEN NAS (via its WebDAV service)
 - ASUSTOR NAS (via its WebDAV service)
+- GitHub (read-only — browse repositories and back them up as ZIP snapshots)
 - WordPress (Media Library)
 - GMX Cloud (MediaCenter)
 - AWS S3
@@ -55,6 +57,32 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
 
+### Archives, right in the panel
+
+![Browsing an archive](Screenshots/FileFluss%20archives.webp)
+
+- Double-click a **ZIP, RAR, 7z or TAR** archive and it opens in the panel like a folder — locally and on any cloud account.
+- **Preview** files inside with Quick Look, open them, or **drag single files and folders out** to the other panel or to Finder. Nothing is unpacked until you ask for it.
+- **Extract Here** or **Extract to the other panel** from the right-click menu, following Finder's rule for one item versus several.
+- **Compress** to ZIP, 7-Zip, TAR.GZ, TAR.BZ2 or TAR.XZ. On a cloud account the archive is downloaded, packed or unpacked, and the result uploaded beside it.
+
+### Back up your GitHub repositories
+
+![GitHub repositories](Screenshots/FileFluss%20GitHub%20integration.webp)
+
+- Connect GitHub with a personal access token: the panel lists owners, then repositories, with private ones marked.
+- Each repository is available as browsable files and as a **snapshot ZIP** of its default branch.
+- Drag the snapshots onto Dropbox, a NAS or any other account, and your repositories are backed up — an ordinary panel-to-panel copy.
+- Read-only by design: nothing can be deleted on GitHub from FileFluss.
+
+### Open With
+
+![Open With submenu](Screenshots/FileFluss%20Open%20with%20dialogue.webp)
+
+- Right-click → **Open With**, like Finder: the default app first, every other app that can open the selection, and *Other…* to pick any app.
+- Works on cloud drives too — open a cloud file directly in the app of your choice. Mounted accounts open the file in place; otherwise it's downloaded first.
+- Works inside archives as well: the entry is unpacked first.
+
 ### Share files with a link
 
 ![Share files](Screenshots/FileFluss%20Share%20Files.webp)
@@ -64,7 +92,7 @@ Right-click a file on a supported cloud account → **Share Link**. FileFluss as
 - Optional **password** and **expiry date**, offered only where that account can actually honour them.
 - Every link is fetched anonymously before you hand it out, so you find out here — not from the recipient — if it only works while signed in.
 - Copy an existing link again, change its password or expiry, or stop sharing entirely.
-- Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, QNAP, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
+- Dropbox, Google Drive, OneDrive, Box, Drime, pCloud, kDrive, Koofr, Jottacloud, NextCloud, QNAP, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
 
 ### Storage Analysis
 
