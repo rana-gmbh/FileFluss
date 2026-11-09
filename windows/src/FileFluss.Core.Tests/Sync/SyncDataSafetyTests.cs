@@ -278,6 +278,30 @@ public sealed class SyncDataSafetyTests : IDisposable
         Assert.True(second.Plan!.IsEmpty);
     }
 
+    [Fact]
+    public async Task AReplaceThatFailsInASyncKeepsTheDestinationsVersion()
+    {
+        // macOS 1.6: deleting first lost the destination's version to any failed upload.
+        var source = LocalDir("replace-src", "a.txt");
+        File.SetLastWriteTimeUtc(Path.Combine(source, "a.txt"), new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var cloud = new MemoryCloudProvider();
+        cloud.AddFile("/Dst/a.txt", "the only copy of this version", T(1_000));
+        cloud.OnUpload = _ => throw CloudProviderException.QuotaExceeded();
+        var session = new SyncSession(new SyncEndpoint(LocalFileProvider.Shared, source), new SyncEndpoint(cloud, "/Dst"))
+        {
+            Mode = SyncMode.Newer,
+        };
+
+        await session.CalculateAsync();
+        Assert.Equal(1, session.Plan!.FilesToReplace);
+        var progress = session.StartSync()!;
+        await session.ExecutionTask!;
+
+        Assert.Equal(1, progress.FailureCount);
+        Assert.Equal("the only copy of this version", cloud.Read("/Dst/a.txt"));
+        Assert.Equal(["/Dst", "/Dst/a.txt"], cloud.AllPaths.Where(p => p != "/"));
+    }
+
     // MARK: - Running what was calculated
 
     [Fact]
