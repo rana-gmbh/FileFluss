@@ -188,6 +188,113 @@ public sealed class SynologyDriveProviderTests : IDisposable
         Assert.False(provider.IsAuthenticated);
     }
 
+    // MARK: - Device token (macOS #66, #67)
+
+    /// <summary>A DSM that wants an OTP unless the request carries the device token it issued.</summary>
+    private static FakeHttpHandler TwoFactorDsm(string tokenField = "did") => new FakeHttpHandler().On(HttpMethod.Get, "/webapi/auth.cgi", (request, _) =>
+    {
+        if (Param(request, "otp_code") is { } otp)
+        {
+            return otp == "123456" && Param(request, "enable_device_token") == "yes" && Param(request, "device_name") == "FileFluss"
+                ? Ok($"{{\"sid\":\"otp-sid\",\"{tokenField}\":\"device-token-1\"}}")
+                : Fail(404);
+        }
+
+        return Param(request, "device_id") == "device-token-1" && Param(request, "device_name") == "FileFluss"
+            ? Ok("{\"sid\":\"token-sid\"}")
+            : Fail(403);
+    });
+
+    [Theory]
+    [InlineData("did")]
+    [InlineData("device_id")]
+    public async Task OtpLoginKeepsTheDeviceTokenForLaterLogins(string tokenField)
+    {
+        var dsm = TwoFactorDsm(tokenField);
+        using (var provider = new SynologyDriveProvider(AccountId, _store, dsm))
+        {
+            await provider.ConnectAsync(Values(otp: "123 456"), new ScriptedConnectPrompt());
+        }
+
+        var stored = _store.Load<SynologyDriveCredentials>($"synologyDrive.{AccountId}");
+        Assert.Equal("device-token-1", stored?.DeviceId);
+
+        // A restart: the stored account logs in again without a code, presenting the token.
+        dsm.On(HttpMethod.Get, "/webapi/entry.cgi", (_, _) => Ok("{\"shares\":[]}"));
+        using var relaunched = new SynologyDriveProvider(AccountId, _store, dsm);
+        await relaunched.ListDirectoryAsync("/");
+
+        var relogin = dsm.Requests.Where(r => r.Uri.AbsolutePath == "/webapi/auth.cgi").Last();
+        Assert.Null(Param(relogin.Uri, "otp_code"));
+        Assert.Equal("device-token-1", Param(relogin.Uri, "device_id"));
+        Assert.Equal("token-sid", Param(dsm.Requests.Last().Uri, "_sid"));
+    }
+
+    [Fact]
+    public async Task OtpCodesTypedOrPastedWithSpacesAreSentWithout()
+    {
+        var dsm = TwoFactorDsm();
+        var prompt = new ScriptedConnectPrompt();
+        prompt.Codes.Enqueue(" 123 456 ");
+        using var provider = new SynologyDriveProvider(AccountId, _store, dsm);
+
+        await provider.ConnectAsync(Values(), prompt);
+
+        Assert.Equal([null, "123456"], dsm.Requests.Select(r => Param(r.Uri, "otp_code")));
+        Assert.Equal("123456", SynologyDriveApiClient.NormalizeOtp("12 34\t56"));
+        Assert.Equal(string.Empty, SynologyDriveApiClient.NormalizeOtp(null));
+    }
+
+    [Fact]
+    public async Task EditingTheSameAccountCarriesTheDeviceTokenAlong()
+    {
+        _store.Save($"synologyDrive.{AccountId}", new SynologyDriveCredentials("https://nas.local:5001", "robert", "old", true, "robert@nas.local", "device-token-1"));
+        var dsm = TwoFactorDsm();
+        using var provider = new SynologyDriveProvider(AccountId, _store, dsm);
+
+        // A new password and the certificate setting toggled, no OTP to hand: the token does it.
+        var values = Values(server: "https://nas.local:5001/", password: "new password").AsDictionary().ToDictionary();
+        values["allowSelfSigned"] = "false";
+        await provider.ConnectAsync(new ConnectValues("default", values), new ScriptedConnectPrompt());
+
+        Assert.Equal("device-token-1", Param(dsm.Requests.Single().Uri, "device_id"));
+        var stored = _store.Load<SynologyDriveCredentials>($"synologyDrive.{AccountId}");
+        Assert.Equal("device-token-1", stored?.DeviceId);
+        Assert.Equal("new password", stored?.Password);
+        Assert.False(stored?.AllowSelfSignedCertificate);
+    }
+
+    [Theory]
+    [InlineData("other-nas.local", " robert ")]
+    [InlineData("nas.local", "someone-else")]
+    public async Task ADeviceTokenNeverGoesToAnotherServerOrUser(string server, string username)
+    {
+        _store.Save($"synologyDrive.{AccountId}", new SynologyDriveCredentials("https://nas.local:5001", "robert", "pw", true, "robert@nas.local", "device-token-1"));
+        var dsm = TwoFactorDsm();
+        using var provider = new SynologyDriveProvider(AccountId, _store, dsm);
+        var values = Values(server: server).AsDictionary().ToDictionary();
+        values["username"] = username;
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(new ConnectValues("default", values), new ScriptedConnectPrompt()));
+
+        Assert.All(dsm.Requests, r => Assert.Null(Param(r.Uri, "device_id")));
+        Assert.Equal("device-token-1", _store.Load<SynologyDriveCredentials>($"synologyDrive.{AccountId}")?.DeviceId);
+    }
+
+    [Fact]
+    public void CredentialsSavedBeforeDeviceTokensStillLoad()
+    {
+        _store.Save($"synologyDrive.{AccountId}", Encoding.UTF8.GetBytes(
+            """{"serverURL":"https://nas.local:5001","username":"robert","password":"secret","allowSelfSignedCertificate":false,"displayName":"robert@nas.local"}"""));
+
+        var decoded = _store.Load<SynologyDriveCredentials>($"synologyDrive.{AccountId}");
+
+        Assert.Equal("robert", decoded?.Username);
+        Assert.Null(decoded?.DeviceId);
+        using var provider = new SynologyDriveProvider(AccountId, _store, _http);
+        Assert.True(provider.IsAuthenticated);
+    }
+
     // MARK: - Sessions
 
     [Fact]
