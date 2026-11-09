@@ -556,6 +556,8 @@ public sealed class WebDavFamilyRegistryTests
     [InlineData(CloudProviderType.NextCloud, typeof(FileFluss.Core.Providers.NextCloud.NextCloudProvider))]
     [InlineData(CloudProviderType.Koofr, typeof(FileFluss.Core.Providers.Koofr.KoofrProvider))]
     [InlineData(CloudProviderType.KDrive, typeof(FileFluss.Core.Providers.KDrive.KDriveProvider))]
+    [InlineData(CloudProviderType.Ugreen, typeof(UgreenNasProvider))]
+    [InlineData(CloudProviderType.Asustor, typeof(AsustorNasProvider))]
     public void RegistryCreatesTheProviderWithoutNetwork(CloudProviderType type, Type expected)
     {
         Assert.True(CloudProviderRegistry.IsAvailable(type));

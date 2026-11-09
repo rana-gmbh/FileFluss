@@ -278,6 +278,7 @@ public sealed class MountService
     /// </summary>
     internal static bool ReplacesInPlace(CloudProviderType type) => type is
         CloudProviderType.WebDav or CloudProviderType.NextCloud or CloudProviderType.GmxCloud
+        or CloudProviderType.Ugreen or CloudProviderType.Asustor
         or CloudProviderType.S3 or CloudProviderType.S3Compatible or CloudProviderType.SynologyC2
         or CloudProviderType.Sftp or CloudProviderType.Ftp or CloudProviderType.GoogleDrive;
 

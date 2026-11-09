@@ -19,7 +19,7 @@ namespace FileFluss.App.Views.Accounts;
 
 /// <summary>
 /// Add Cloud Account and Edit Account. The provider grid mirrors the macOS sheet (Cloud
-/// Storage Providers / Other Protocols / Cameras &amp; Devices); the sign-in form is generated
+/// Storage Providers / NAS / Other Protocols / Cameras &amp; Devices); the sign-in form is generated
 /// from the provider's <see cref="ConnectSpec"/>, so every provider gets the same behaviour:
 /// Connect stays disabled until required fields are filled, errors appear inline, browser
 /// sign-ins can be cancelled, and nothing is saved unless sign-in succeeded.
@@ -104,6 +104,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
         foreach (var (category, title) in new[]
                  {
                      (ProviderCategory.CloudStorage, "Cloud Storage Providers"),
+                     (ProviderCategory.Nas, "NAS"),
                      (ProviderCategory.OtherProtocols, "Other Protocols"),
                      (ProviderCategory.Devices, "Cameras & Devices"),
                  })

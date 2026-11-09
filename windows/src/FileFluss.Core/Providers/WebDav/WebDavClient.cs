@@ -11,12 +11,18 @@ using FileFluss.Core.Net;
 
 namespace FileFluss.Core.Providers.WebDav;
 
-/// <summary>Stored for WebDAV and GMX accounts (the macOS <c>WebDAVCredentials</c>, same JSON keys).</summary>
+/// <summary>Stored for WebDAV, GMX, UGREEN and ASUSTOR accounts (the macOS <c>WebDAVCredentials</c>, same JSON keys).</summary>
+/// <param name="AllowSelfSignedCertificate">
+/// Trust the server's certificate even when it doesn't chain to a trusted root — NAS boxes
+/// ship with self-signed ones. Only for the host of <paramref name="ServerUrl"/>. Optional so
+/// credentials saved before the option existed still read back.
+/// </param>
 internal sealed record WebDavCredentials(
     [property: JsonPropertyName("serverURL")] string ServerUrl,
     [property: JsonPropertyName("username")] string Username,
     [property: JsonPropertyName("password")] string Password,
-    [property: JsonPropertyName("displayName")] string DisplayName);
+    [property: JsonPropertyName("displayName")] string DisplayName,
+    [property: JsonPropertyName("allowSelfSignedCertificate")] bool? AllowSelfSignedCertificate = null);
 
 /// <summary>What differs between the servers that share <see cref="WebDavClient"/>.</summary>
 /// <param name="PropfindBody">Properties asked for in listings; NextCloud adds <c>oc:checksums</c> and <c>oc:size</c>.</param>
