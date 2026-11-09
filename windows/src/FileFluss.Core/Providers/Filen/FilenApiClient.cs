@@ -240,6 +240,14 @@ internal sealed class FilenApiClient
         {
             Content = new StreamContent(new FilenChunkStream(this, uuid, info, key), HttpTransfer.BufferSize),
         };
+
+        // The decrypted size the metadata promises: a missing or short chunk count would
+        // otherwise end the stream early and save a truncated file as complete.
+        if (info.Size > 0)
+        {
+            plain.Content.Headers.ContentLength = info.Size;
+        }
+
         await HttpTransfer.SaveToFileAsync(plain, localPath, onBytes, cancellationToken).ConfigureAwait(false);
     }
 

@@ -87,7 +87,9 @@ public static class SyncExecutor
             progress.BeginFile(op.DisplayName, 0);
             try
             {
-                await destination.Provider.CreateDirectoryAsync(destination.Resolve(op.RelativePath), ct).ConfigureAwait(false);
+                // The planner's destination spelling: legal on the local disk, and inside folders
+                // that already exist under their own names.
+                await destination.Provider.CreateDirectoryAsync(destination.Resolve(op.DestinationRelativePath), ct).ConfigureAwait(false);
                 progress.RecordSuccess(op.DisplayName);
             }
             catch (OperationCanceledException)

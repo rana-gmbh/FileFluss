@@ -429,6 +429,7 @@ public sealed class SynologyDriveProviderTests : IDisposable
         var polls = 0;
         Api("SYNO.FileStation.CopyMove", "status", _ => Ok(Interlocked.Increment(ref polls) < 3 ? "{\"finished\":false}" : "{\"finished\":true}"));
         Api("SYNO.FileStation.Rename", "rename", _ => OkEmpty());
+        Api("SYNO.FileStation.List", "getinfo", _ => Ok("{\"files\":[{\"code\":408,\"path\":\"/photo/archive/a.txt\"}]}"));
         using var provider = Connected();
 
         await provider.MoveItemAsync("/home/a.txt", "/photo/archive/b.txt");
@@ -447,6 +448,33 @@ public sealed class SynologyDriveProviderTests : IDisposable
         await provider.CopyItemAsync("/home/c.txt", "/photo/c.txt");
         Assert.Equal("false", Param(Calls("SYNO.FileStation.CopyMove", "start").Last().Uri, "remove_src"));
         Assert.Single(Calls("SYNO.FileStation.Rename", "rename"));
+    }
+
+    [Fact]
+    public async Task ARenamedCopyOntoAnOccupiedNameIsLeftToTheByteCopy()
+    {
+        // CopyMove overwrites under the source name: "Keep both" into a folder that already has
+        // a.txt would destroy the a.txt the user chose to keep.
+        Api("SYNO.FileStation.List", "getinfo", _ => Ok("{\"files\":[{\"path\":\"/photo/a.txt\",\"name\":\"a.txt\",\"isdir\":false}]}"));
+        Api("SYNO.FileStation.CopyMove", "start", _ => Ok("{\"taskid\":\"x\"}"));
+        using var provider = Connected();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync("/home/a.txt", "/photo/a (2).txt"));
+        var sameFolder = await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync("/home/a.txt", "/home/a (2).txt"));
+
+        Assert.Equal(CloudErrorKind.NotImplemented, error.Kind);
+        Assert.Equal(CloudErrorKind.NotImplemented, sameFolder.Kind);
+        Assert.Empty(Calls("SYNO.FileStation.CopyMove", "start"));
+    }
+
+    [Fact]
+    public async Task AFailedCopyMoveTaskIsAnError()
+    {
+        Api("SYNO.FileStation.CopyMove", "start", _ => Ok("{\"taskid\":\"t\"}"));
+        Api("SYNO.FileStation.CopyMove", "status", _ => Ok("{\"finished\":true,\"error\":{\"code\":1000}}"));
+        using var provider = Connected();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.MoveItemAsync("/home/a.txt", "/photo/a.txt"));
     }
 
     [Fact]

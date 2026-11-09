@@ -167,11 +167,22 @@ internal sealed class KDriveApiClient
     public async Task<List<KDriveFile>> ListFolderAsync(long fileId, CancellationToken cancellationToken)
     {
         var all = new List<KDriveFile>();
+        var guard = new PageGuard("kDrive listing");
+        long? previousFirst = null;
         for (var page = 1; ; page++)
         {
+            guard.Count();
             var query = $"order_by=name&order=asc&per_page={PageSize}&page={page}";
             using var document = await GetDataAsync($"/2/drive/{DriveId}/files/{fileId}/files", query, null, cancellationToken).ConfigureAwait(false);
             var items = document.RootElement.GetProperty("data").Deserialize<List<KDriveFile>>(CloudHttp.Json) ?? [];
+
+            // A server that ignores the page number sends the first page again and again.
+            if (items.Count > 0 && items[0].Id == previousFirst)
+            {
+                throw CloudProviderException.InvalidResponse();
+            }
+
+            previousFirst = items.Count > 0 ? items[0].Id : null;
             all.AddRange(items);
             if (items.Count < PageSize)
             {

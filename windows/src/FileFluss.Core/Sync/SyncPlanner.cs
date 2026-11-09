@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
+using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 
 namespace FileFluss.Core.Sync;
@@ -99,7 +100,15 @@ public static class SyncPlanner
         bool destinationIsCloud,
         bool ignoreCase = false)
     {
-        var comparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        // Names match regardless of Unicode form (a Mac's NFD "Café" is the PC's NFC one), and —
+        // when the files land on the local disk — under the name they actually get there:
+        // "a:b" from a server arrives as "a_b", and matching the raw name would make every
+        // mirror download the file again and then delete the copy as "extra".
+        var comparer = FileNames.MatchComparer(ignoreCase);
+        var sanitizeSource = !destinationIsCloud;
+        string KeyOf(string sourceRelativePath) => sanitizeSource ? LocalKey(sourceRelativePath) : sourceRelativePath;
+        string SourceKey(SyncEntry entry) => KeyOf(entry.RelativePath);
+
         var destinationMap = new Dictionary<string, SyncEntry>(destinationEntries.Count, comparer);
         foreach (var entry in destinationEntries)
         {
@@ -109,7 +118,29 @@ public static class SyncPlanner
         var sourceMap = new Dictionary<string, SyncEntry>(sourceEntries.Count, comparer);
         foreach (var entry in sourceEntries)
         {
-            sourceMap[entry.RelativePath] = entry;
+            sourceMap[SourceKey(entry)] = entry;
+        }
+
+        // Where a source path lands: folders that already exist keep the destination's own
+        // spelling (its case and Unicode form — otherwise a file would go to a folder that isn't
+        // there), new components are named as the destination will name them.
+        string DestinationPathFor(string sourceRelativePath)
+        {
+            var parts = sourceRelativePath.Split('/');
+            var landed = string.Empty;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (destinationMap.TryGetValue(KeyOf(string.Join('/', parts, 0, i + 1)), out var match))
+                {
+                    landed = match.RelativePath;
+                    continue;
+                }
+
+                var name = sanitizeSource ? SafeLocalPath.FileName(parts[i]) : parts[i];
+                landed = landed.Length == 0 ? name : landed + "/" + name;
+            }
+
+            return landed;
         }
 
         // Names a renamed copy must not take: anything on either side, and earlier renames.
@@ -124,7 +155,7 @@ public static class SyncPlanner
         // before their children.
         foreach (var entry in sourceEntries.OrderBy(e => e.RelativePath, StringComparer.Ordinal))
         {
-            if (destinationMap.TryGetValue(entry.RelativePath, out var existing))
+            if (destinationMap.TryGetValue(SourceKey(entry), out var existing))
             {
                 // On both sides. A folder already exists; its contents are planned one by one.
                 if (entry.IsDirectory)
@@ -140,7 +171,7 @@ public static class SyncPlanner
                             continue;
                         }
 
-                        operations.Add(Replace(entry));
+                        operations.Add(Replace(entry, existing.RelativePath));
                         replaces++;
                         bytesMoved += entry.Size;
                         netDelta += entry.Size - existing.Size;
@@ -149,7 +180,7 @@ public static class SyncPlanner
                     case SyncMode.Newer:
                         if (entry.ModificationDate - existing.ModificationDate > ModificationDateTolerance)
                         {
-                            operations.Add(Replace(entry));
+                            operations.Add(Replace(entry, existing.RelativePath));
                             replaces++;
                             bytesMoved += entry.Size;
                             netDelta += entry.Size - existing.Size;
@@ -164,7 +195,7 @@ public static class SyncPlanner
                             taken.UnionWith(sourceMap.Keys);
                         }
 
-                        var unique = UniqueName(entry.RelativePath, taken);
+                        var unique = UniqueName(DestinationPathFor(entry.RelativePath), taken);
                         taken.Add(unique);
                         operations.Add(new SyncOperation(SyncOperationKind.AddRenamed, entry.RelativePath, false, entry.Size)
                         {
@@ -181,6 +212,7 @@ public static class SyncPlanner
             {
                 operations.Add(new SyncOperation(SyncOperationKind.Add, entry.RelativePath, entry.IsDirectory, entry.Size)
                 {
+                    DestinationRelativePath = DestinationPathFor(entry.RelativePath),
                     SourceModificationDate = entry.ModificationDate,
                 });
                 if (entry.IsDirectory)
@@ -235,8 +267,16 @@ public static class SyncPlanner
             NetDestinationDelta: netDelta);
     }
 
-    private static SyncOperation Replace(SyncEntry entry)
-        => new(SyncOperationKind.Replace, entry.RelativePath, false, entry.Size) { SourceModificationDate = entry.ModificationDate };
+    /// <summary>A relative path as the local disk will spell it: each component made legal (<see cref="SafeLocalPath.FileName"/>).</summary>
+    internal static string LocalKey(string relativePath)
+        => string.Join('/', relativePath.Split('/').Select(SafeLocalPath.FileName));
+
+    private static SyncOperation Replace(SyncEntry entry, string destinationRelativePath)
+        => new(SyncOperationKind.Replace, entry.RelativePath, false, entry.Size)
+        {
+            DestinationRelativePath = destinationRelativePath,
+            SourceModificationDate = entry.ModificationDate,
+        };
 
     /// <summary>Same size and a modification date within the tolerance: treated as the same file.</summary>
     public static bool FilesLookIdentical(SyncEntry a, SyncEntry b)

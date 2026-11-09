@@ -35,6 +35,12 @@ internal sealed class FakeSshServer
     /// <summary>Thrown once by the next ListAsync.</summary>
     public Exception? FailNextList { get; set; }
 
+    /// <summary>For an upload to the path: the error to fail with after writing half the bytes.</summary>
+    public Func<string, Exception?> FailUpload { get; set; } = _ => null;
+
+    /// <summary>Refuse every rename, as an upload-only drop box does.</summary>
+    public bool RefuseRenames { get; set; }
+
     public FakeSshServer()
     {
         Exec = DefaultShell;
@@ -182,6 +188,14 @@ internal sealed class FakeSftpTransport(FakeSshServer server) : ISftpTransport
         Tree.Log.Enqueue("PUT " + path);
         using var buffer = new MemoryStream();
         await source.CopyToAsync(buffer, cancellationToken);
+        if (server.FailUpload(path) is { } failure)
+        {
+            var half = buffer.ToArray()[..(int)(buffer.Length / 2)];
+            onTotal(half.Length);
+            Tree.Put(path, new PosixTestTree.Node(PosixTestTree.NodeKind.File, half, DateTime.UtcNow));
+            throw failure;
+        }
+
         onTotal(buffer.Length);
         Tree.Put(path, new PosixTestTree.Node(PosixTestTree.NodeKind.File, buffer.ToArray(), DateTime.UtcNow));
     }
@@ -230,7 +244,7 @@ internal sealed class FakeSftpTransport(FakeSshServer server) : ISftpTransport
     public Task RenameAsync(string path, string newPath, CancellationToken cancellationToken)
     {
         Tree.Log.Enqueue($"RENAME {path} {newPath}");
-        if (Tree.Get(newPath) is not null)
+        if (server.RefuseRenames || Tree.Get(newPath) is not null)
         {
             throw new SshException("Failure");
         }
@@ -646,6 +660,78 @@ public class SftpProviderTests
             Assert.Equal(7, reported);
             Assert.Equal("payload", _server.Tree.Text("/home/u/p.txt"));
             Assert.Equal(stamp, _server.Tree.Get("/home/u/p.txt")!.Modified);
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task AFailedUploadLeavesTheFileItWasReplacingIntact()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-sftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "the new version");
+        try
+        {
+            _server.Tree.Dir("/home/u");
+            _server.Tree.Put("/home/u/doc.txt", new PosixTestTree.Node(PosixTestTree.NodeKind.File, "the old version"u8.ToArray(), DateTime.UtcNow));
+            _server.FailUpload = path => path.EndsWith(".fileflusspart", StringComparison.Ordinal) ? new SshException("Failure") : null;
+            using var provider = Signed();
+
+            await Assert.ThrowsAnyAsync<Exception>(() => provider.UploadFileAsync(local, "/home/u/doc.txt"));
+
+            Assert.Equal("the old version", _server.Tree.Text("/home/u/doc.txt"));
+            Assert.Null(_server.Tree.Get("/home/u/doc.txt.fileflusspart"));
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task UploadsReplaceThroughAStagingFile()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-sftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "new");
+        try
+        {
+            _server.Tree.Dir("/home/u");
+            _server.Tree.Put("/home/u/doc.txt", new PosixTestTree.Node(PosixTestTree.NodeKind.File, "old"u8.ToArray(), DateTime.UtcNow));
+            using var provider = Signed();
+            long reported = 0;
+
+            await provider.UploadFileAsync(local, "/home/u/doc.txt", d => reported += d);
+
+            Assert.Equal("new", _server.Tree.Text("/home/u/doc.txt"));
+            Assert.Null(_server.Tree.Get("/home/u/doc.txt.fileflusspart"));
+            Assert.Contains("PUT /home/u/doc.txt.fileflusspart", _server.Tree.Log);
+            Assert.Equal(3, reported);
+        }
+        finally
+        {
+            File.Delete(local);
+        }
+    }
+
+    [Fact]
+    public async Task ADropBoxThatRefusesRenamesStillGetsTheFile()
+    {
+        var local = Path.Combine(Path.GetTempPath(), $"ff-sftp-{Guid.NewGuid():N}.txt");
+        await File.WriteAllTextAsync(local, "drop");
+        try
+        {
+            _server.Tree.Dir("/home/u");
+            _server.RefuseRenames = true;
+            using var provider = Signed();
+            long reported = 0;
+
+            await provider.UploadFileAsync(local, "/home/u/in.txt", d => reported += d);
+
+            Assert.Equal("drop", _server.Tree.Text("/home/u/in.txt"));
+            Assert.Null(_server.Tree.Get("/home/u/in.txt.fileflusspart"));
+            Assert.Equal(4, reported);
         }
         finally
         {

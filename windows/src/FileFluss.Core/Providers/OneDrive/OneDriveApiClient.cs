@@ -215,7 +215,7 @@ internal sealed class OneDriveApiClient
         if (!response.IsSuccessStatusCode)
         {
             SupportLogger.Shared.Log($"[OneDrive] Token refresh failed: HTTP {(int)response.StatusCode}", Category, LogLevel.Error);
-            throw CloudProviderException.NotAuthenticated();
+            throw CloudProviderException.TokenRefreshFailed((int)response.StatusCode);
         }
 
         var token = await response.ReadJsonAsync<OneDriveTokenResponse>(CancellationToken.None).ConfigureAwait(false);
@@ -247,8 +247,10 @@ internal sealed class OneDriveApiClient
         var endpoint = CloudPath.IsRoot(path) ? "/me/drive/root/children" : $"/me/drive/root:{EncodePath(path)}:/children";
         var page = await GraphJsonAsync<GraphListResponse>(HttpMethod.Get, endpoint + "?$top=1000&$orderby=name%20asc", null, path, cancellationToken).ConfigureAwait(false);
         var all = new List<GraphDriveItem>(page.Value ?? []);
+        var guard = new PageGuard("OneDrive children");
         while (!string.IsNullOrEmpty(page.NextLink))
         {
+            guard.Follow(page.NextLink);
             page = await GraphJsonAsync<GraphListResponse>(HttpMethod.Get, page.NextLink, null, path, cancellationToken).ConfigureAwait(false);
             all.AddRange(page.Value ?? []);
         }
@@ -344,7 +346,9 @@ internal sealed class OneDriveApiClient
         // Graph answers with a redirect to a pre-authenticated URL; HttpClient follows it and
         // drops the Authorization header on the way, which that URL doesn't want anyway.
         using var response = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, uri), true, cancellationToken).ConfigureAwait(false);
-        if ((int)response.StatusCode is < 200 or > 399)
+        // Only a 2xx carries the file. A redirect that wasn't followed (https → http) has an
+        // empty body, which would otherwise be saved as the file's contents.
+        if (!response.IsSuccessStatusCode)
         {
             throw await GraphErrorAsync(response, $"GET {uri.AbsolutePath}", remotePath, cancellationToken).ConfigureAwait(false);
         }

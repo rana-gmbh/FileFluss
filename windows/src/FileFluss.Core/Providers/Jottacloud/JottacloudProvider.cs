@@ -281,10 +281,13 @@ public sealed class JottacloudProvider : CloudProvider
                 credentials = _credentials ?? throw CloudProviderException.NotAuthenticated();
             }
 
+            // Not the caller's token: once the server has rotated the refresh token, abandoning
+            // the response (a cancelled listing) would lose the only valid one and sign the
+            // account out at the next refresh. The API timeout still bounds it.
             var (status, tokens) = await RequestTokenAsync(
                 credentials.TokenEndpoint,
                 [("grant_type", "refresh_token"), ("client_id", ClientId), ("refresh_token", credentials.RefreshToken)],
-                cancellationToken).ConfigureAwait(false);
+                CancellationToken.None).ConfigureAwait(false);
 
             if (tokens is null)
             {

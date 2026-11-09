@@ -247,7 +247,7 @@ internal sealed class BoxApiClient
         if (!response.IsSuccessStatusCode)
         {
             SupportLogger.Shared.Log($"[Box] Token refresh failed: HTTP {(int)response.StatusCode}", LogCategory, LogLevel.Error);
-            throw CloudProviderException.NotAuthenticated();
+            throw CloudProviderException.TokenRefreshFailed((int)response.StatusCode);
         }
 
         var token = await response.ReadJsonAsync<BoxTokenResponse>(CancellationToken.None).ConfigureAwait(false);

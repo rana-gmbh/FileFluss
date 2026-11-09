@@ -92,7 +92,7 @@ public static class ShellFileOperations
             };
 
             var cancelFlag = 0;
-            var copied = CopyFileEx(source, partial, callback, 0, ref cancelFlag, 0);
+            var copied = CopyFileEx(ExtendedPath(source), ExtendedPath(partial), callback, 0, ref cancelFlag, 0);
             var error = Marshal.GetLastPInvokeError();
             GC.KeepAlive(callback);
             if (!copied)
@@ -109,6 +109,25 @@ public static class ShellFileOperations
 
             File.Move(partial, destination, overwrite: true);
         }, cancellationToken);
+
+    /// <summary>
+    /// The "\\?\" form of a long path. .NET's own file APIs add it themselves, but a path handed
+    /// to Win32 directly is cut off at MAX_PATH (260) unless the process is long-path aware and
+    /// the machine has LongPathsEnabled — so a copy deep in a synced tree failed with "path not
+    /// found" while every other step worked.
+    /// </summary>
+    internal static string ExtendedPath(string path)
+    {
+        if (path.Length < 248 || path.StartsWith(@"\\?\", StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        var full = Path.GetFullPath(path);
+        return full.StartsWith(@"\\", StringComparison.Ordinal)
+            ? @"\\?\UNC\" + full[2..]
+            : @"\\?\" + full;
+    }
 
     private static void TryDelete(string path)
     {

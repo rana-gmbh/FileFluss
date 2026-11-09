@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Core.Search;
+using Microsoft.Data.Sqlite;
 
 namespace FileFluss.Core.Tests.Search;
 
@@ -81,6 +82,35 @@ public sealed class SearchIndexWriteTests : IDisposable
         finally
         {
             File.Delete(blocker);
+        }
+    }
+
+    /// <summary>A damaged index file is set aside and replaced by a fresh one — not a broken search for ever.</summary>
+    [Theory]
+    [InlineData("this is not a database, just text that happens to be long enough to have a header....")]
+    [InlineData("SQLite format 3\0 followed by a truncated, garbled header and no pages at all")]
+    public void ACorruptIndexIsMovedAsideAndRebuilt(string garbage)
+    {
+        var dbPath = Path.Combine(Path.GetDirectoryName(_temp.Path)!, $"corrupt-{Guid.NewGuid():N}.sqlite");
+        File.WriteAllText(dbPath, garbage + new string('x', 4096));
+        try
+        {
+            using (var index = new SearchIndex(dbPath))
+            {
+                index.Open();
+                index.ReplaceFiles("vol:TEST", "drive-external", "Disk", Files(2, "vol:TEST"));
+                Assert.Equal(2, index.SourceCounts("vol:TEST")?.Files);
+            }
+
+            Assert.True(File.Exists(dbPath + ".corrupt"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var file in Directory.GetFiles(Path.GetDirectoryName(dbPath)!, Path.GetFileName(dbPath) + "*"))
+            {
+                File.Delete(file);
+            }
         }
     }
 

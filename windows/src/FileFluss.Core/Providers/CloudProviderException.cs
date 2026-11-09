@@ -81,6 +81,18 @@ public sealed class CloudProviderException : Exception
     public static CloudProviderException RateLimited()
         => new(CloudErrorKind.RateLimited, Localization.L("Rate limited. Please try again later."));
 
+    /// <summary>
+    /// A failed OAuth token refresh. Only the server rejecting the grant (400 invalid_grant,
+    /// 401, 403) means "sign in again"; a 429 or a 5xx during an outage is passing, and turning
+    /// it into the re-auth banner would send the user through a sign-in that fixes nothing.
+    /// </summary>
+    public static CloudProviderException TokenRefreshFailed(int statusCode) => statusCode switch
+    {
+        400 or 401 or 403 => NotAuthenticated(),
+        429 => RateLimited(),
+        _ => ServerError(statusCode),
+    };
+
     public static CloudProviderException ServerError(int statusCode)
         => new(CloudErrorKind.ServerError, Localization.L("Server error (HTTP {0}).", statusCode)) { StatusCode = statusCode };
 

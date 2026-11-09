@@ -103,13 +103,15 @@ public static class TransferEngine
         {
             await RunCoreAsync(request, progress, ct).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Recorded by Cancel(); the completion summary says so.
         }
         catch (Exception e)
         {
-            progress.Fail(e.Message);
+            // Includes a cancellation nobody asked for — an HTTP timeout surfaces as one, and
+            // swallowing it would end the transfer as "Done" with nothing done.
+            progress.Fail(Describe(e));
             SupportLogger.Shared.Log($"Transfer failed: {e.Message}", "Transfer", LogLevel.Error);
         }
         finally
@@ -125,15 +127,22 @@ public static class TransferEngine
         var destination = request.Destination;
         var sameProvider = ReferenceEquals(source, destination);
 
-        // What is already at the destination, for conflict detection and unique naming.
+        // What is already at the destination, for conflict detection and unique naming. Names
+        // match as the destination folds them, and regardless of Unicode form (FileNames).
+        var matcher = MatcherFor(destination);
         var existing = await ListOrEmptyAsync(destination, request.DestinationPath, ct).ConfigureAwait(false);
-        var existingByName = new Dictionary<string, CloudFileItem>(destination.NameComparer);
+        var existingByName = new Dictionary<string, CloudFileItem>(matcher);
         foreach (var item in existing)
         {
             existingByName.TryAdd(item.Name, item);
         }
 
-        var takenNames = new HashSet<string>(existingByName.Keys, destination.NameComparer);
+        var takenNames = new HashSet<string>(existingByName.Keys, matcher);
+
+        // Names this batch has already claimed. Two sources can land on one name — "a.txt" and
+        // "A.txt" from a case-sensitive store onto NTFS, or "a:b" and "a_b" once made legal —
+        // and the second would silently overwrite the first (and a move would then delete both).
+        var plannedNames = new HashSet<string>(matcher);
         var resolutions = await ResolveConflictsAsync(request, existingByName, ct).ConfigureAwait(false);
 
         // Plan the whole tree first: real totals for the progress bar, and one listing pass.
@@ -162,17 +171,15 @@ public static class TransferEngine
                 continue;
             }
 
-            var targetName = request.DestinationNames?.GetValueOrDefault(item.Name) ?? item.Name;
-            if (destination.IsLocal)
-            {
-                targetName = SafeLocalPath.FileName(targetName);
-            }
-            else if (CloudPath.IsTraversalName(targetName))
+            var targetName = TargetNameFor(request, item);
+            if (!destination.IsLocal && CloudPath.IsTraversalName(targetName))
             {
                 // A hostile source listing "..": it must not climb out of the destination folder.
                 progress.RecordFailure(item.Name, SafeLocalPath.UnsafeName(targetName).Message);
                 continue;
             }
+
+            var clash = existingByName.GetValueOrDefault(targetName);
 
             // Copying onto itself (same folder, same account) is Explorer's "- Copy".
             var sameFolder = sameProvider && PathsEqual(source, source.GetParentPath(item.Path), request.DestinationPath);
@@ -185,14 +192,25 @@ public static class TransferEngine
                 }
 
                 targetName = UniqueName(targetName, takenNames);
+                clash = null;
             }
-            else if (choice == ConflictChoice.KeepBoth)
+            else if (choice == ConflictChoice.KeepBoth || plannedNames.Contains(targetName))
             {
                 targetName = UniqueName(targetName, takenNames);
+                clash = null;
+            }
+            else if (choice == ConflictChoice.Replace && clash is not null && clash.IsDirectory == item.IsDirectory &&
+                     (item.IsDirectory || destination.IsLocal))
+            {
+                // Land on the existing item's own spelling. NTFS keeps "Café" in NFC and NFD as
+                // two files, so writing the other form would put a twin beside the original
+                // instead of replacing it; a merged folder must be the folder that is there.
+                targetName = clash.Name;
             }
 
             takenNames.Add(targetName);
-            var plan = new ItemPlan(item, targetName, choice == ConflictChoice.Replace, existingByName.GetValueOrDefault(item.Name));
+            plannedNames.Add(targetName);
+            var plan = new ItemPlan(item, targetName, choice == ConflictChoice.Replace && clash is not null, clash);
             plans.Add(plan);
 
             if (UsesServerSide(request, plan))
@@ -205,12 +223,12 @@ public static class TransferEngine
             {
                 plan.Tree = await WalkAsync(source, item, ct).ConfigureAwait(false);
                 totalFiles += plan.Tree.Count(e => !e.Item.IsDirectory);
-                expectedBytes += plan.Tree.Where(e => !e.Item.IsDirectory).Sum(e => e.Item.Size);
+                expectedBytes += plan.Tree.Where(e => !e.Item.IsDirectory).Sum(e => Math.Max(0, e.Item.Size));
             }
             else
             {
                 totalFiles++;
-                expectedBytes += item.Size;
+                expectedBytes += Math.Max(0, item.Size);
             }
         }
 
@@ -243,7 +261,8 @@ public static class TransferEngine
                         staging ??= StagingLocation.StagingDirectory("transfer");
                     }
 
-                    var failures = await CopyItemAsync(request, plan, targetPath, staging, progress, ct).ConfigureAwait(false);
+                    var outcome = await CopyItemAsync(request, plan, targetPath, staging, progress, ct).ConfigureAwait(false);
+                    var failures = outcome.Failures;
                     if (failures.Count > 0)
                     {
                         var message = failures.Count == 1 && plan.Tree is null
@@ -255,18 +274,28 @@ public static class TransferEngine
 
                     if (request.IsMove)
                     {
-                        await DeleteSourceAsync(source, plan.Item, ct).ConfigureAwait(false);
+                        // The source goes only once the copy is confirmed whole at the
+                        // destination: a provider that reported success for a truncated upload
+                        // must not cost the user the only complete copy.
+                        if (await VerifyArrivalsAsync(request, outcome.Arrivals, ct).ConfigureAwait(false) is { } incomplete)
+                        {
+                            progress.RecordFailure(plan.Item.Name, L("\"{0}\" didn't arrive complete, so the original was kept.", incomplete));
+                            SupportLogger.Shared.Log($"Move of {plan.Item.Name}: {incomplete} failed verification, source kept", "Transfer", LogLevel.Error);
+                            continue;
+                        }
+
+                        await DeleteSourceAsync(source, plan, outcome.Arrivals, ct).ConfigureAwait(false);
                     }
 
                     progress.RecordSuccess(plan.Item.Name);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     throw;
                 }
                 catch (Exception e)
                 {
-                    progress.RecordFailure(plan.Item.Name, e.Message);
+                    progress.RecordFailure(plan.Item.Name, Describe(e));
                     SupportLogger.Shared.Log($"Transfer of {plan.Item.Name} failed: {e.Message}", "Transfer", LogLevel.Error);
                 }
             }
@@ -294,7 +323,7 @@ public static class TransferEngine
         for (var index = 0; index < items.Count; index++)
         {
             var item = items[index];
-            var targetName = request.DestinationNames?.GetValueOrDefault(item.Name) ?? item.Name;
+            var targetName = TargetNameFor(request, item);
             var inSameFolder = sameProvider && PathsEqual(request.Source, request.Source.GetParentPath(item.Path), request.DestinationPath);
             if (inSameFolder || !existingByName.TryGetValue(targetName, out var clash))
             {
@@ -313,7 +342,7 @@ public static class TransferEngine
             }
             else
             {
-                var remaining = items.Skip(index + 1).Count(i => existingByName.ContainsKey(i.Name));
+                var remaining = items.Skip(index + 1).Count(i => existingByName.ContainsKey(TargetNameFor(request, i)));
                 var resolution = await request.ResolveConflict(
                     new ConflictInfo(item, clash, remaining, request.Source, request.Destination), ct).ConfigureAwait(false);
                 choice = resolution.Choice;
@@ -338,6 +367,26 @@ public static class TransferEngine
 
         return results;
     }
+
+    /// <summary>The name an item gets at the destination: sync's rename if any, made legal on the local disk.</summary>
+    private static string TargetNameFor(TransferRequest request, CloudFileItem item)
+    {
+        var name = request.DestinationNames?.GetValueOrDefault(item.Name) ?? item.Name;
+        return request.Destination.IsLocal ? SafeLocalPath.FileName(name) : name;
+    }
+
+    private static StringComparer MatcherFor(FileProvider destination) => FileNames.MatchComparer(!destination.IsCaseSensitive);
+
+    /// <summary>
+    /// What the user reads for a failure. A cancellation nobody requested is a timeout, and a
+    /// full disk says so in the user's language rather than as a raw Win32 message.
+    /// </summary>
+    internal static string Describe(Exception e) => e switch
+    {
+        OperationCanceledException => L("The request timed out."),
+        IOException { HResult: unchecked((int)0x80070070) or unchecked((int)0x80070027) } => L("Not enough space"),
+        _ => e.Message,
+    };
 
     /// <summary>"name (2).ext" — Explorer's rule — unique against <paramref name="taken"/>.</summary>
     public static string UniqueName(string name, ISet<string> taken)
@@ -394,7 +443,7 @@ public static class TransferEngine
         {
             if (plan.Replace && plan.Existing is { } existing)
             {
-                await provider.DeleteItemAsync(existing.Path, ct).ConfigureAwait(false);
+                await DeleteExistingAsync(provider, existing.Path, ct).ConfigureAwait(false);
             }
 
             if (request.IsMove)
@@ -416,7 +465,17 @@ public static class TransferEngine
 
     // MARK: - Byte copies
 
-    private static async Task<List<string>> CopyItemAsync(
+    /// <summary>A file this transfer wrote, for verifying a move before its source goes.</summary>
+    private sealed record Arrival(string SourcePath, string DestinationPath, long ExpectedSize);
+
+    private sealed class CopyOutcome
+    {
+        public List<string> Failures { get; } = [];
+
+        public List<Arrival> Arrivals { get; } = [];
+    }
+
+    private static async Task<CopyOutcome> CopyItemAsync(
         TransferRequest request,
         ItemPlan plan,
         string targetPath,
@@ -424,9 +483,8 @@ public static class TransferEngine
         TransferProgress progress,
         CancellationToken ct)
     {
-        var source = request.Source;
         var destination = request.Destination;
-        var failures = new List<string>();
+        var outcome = new CopyOutcome();
 
         if (!plan.Item.IsDirectory)
         {
@@ -434,93 +492,132 @@ public static class TransferEngine
             {
                 // A local file is overwritten in place by the staged copy (the old one survives
                 // a failure); a cloud upload may create a duplicate instead, so clear it first.
-                await destination.DeleteItemAsync(existing.Path, ct).ConfigureAwait(false);
+                await DeleteExistingAsync(destination, existing.Path, ct).ConfigureAwait(false);
             }
 
             try
             {
-                await CopyFileAsync(request, plan.Item, targetPath, staging, progress, ct).ConfigureAwait(false);
+                outcome.Arrivals.Add(await CopyFileAsync(request, plan.Item, targetPath, staging, progress, ct).ConfigureAwait(false));
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }
             catch (Exception e)
             {
-                failures.Add(e.Message);
+                outcome.Failures.Add(Describe(e));
             }
 
-            return failures;
+            return outcome;
         }
 
         if (plan.Replace && plan.Existing is { IsDirectory: false } fileInTheWay)
         {
-            await destination.DeleteItemAsync(fileInTheWay.Path, ct).ConfigureAwait(false);
+            await DeleteExistingAsync(destination, fileInTheWay.Path, ct).ConfigureAwait(false);
         }
 
         // Folders merge into an existing folder of the same name, as Explorer does.
         await destination.CreateDirectoryAsync(targetPath, ct).ConfigureAwait(false);
         var createdFolders = new Dictionary<string, string>(StringComparer.Ordinal) { [string.Empty] = targetPath };
-        var existingChildren = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        // Per destination folder: what was there before (listed lazily, and only for folders
+        // that existed — a merge), and what this transfer has put there so far.
+        var matcher = MatcherFor(destination);
+        var fresh = new HashSet<string>(StringComparer.Ordinal);
+        if (!NeedsMerge(plan))
+        {
+            fresh.Add(targetPath);
+        }
+
+        var existingIn = new Dictionary<string, Dictionary<string, CloudFileItem>>(StringComparer.Ordinal);
+        var placedIn = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var entry in plan.Tree ?? [])
         {
             ct.ThrowIfCancellationRequested();
             if (!createdFolders.TryGetValue(entry.ParentKey, out var parentPath))
             {
-                failures.Add(L("Item not found: {0}", entry.ParentKey));
+                outcome.Failures.Add(L("Item not found: {0}", entry.ParentKey));
                 continue;
             }
 
-            var name = destination.IsLocal ? SafeLocalPath.FileName(entry.Item.Name) : entry.Item.Name;
-            if (!destination.IsLocal && CloudPath.IsTraversalName(name))
-            {
-                // Its children are skipped too: their parent key never gets a created folder.
-                failures.Add($"{entry.Item.Name}: {SafeLocalPath.UnsafeName(name).Message}");
-                continue;
-            }
-
-            var path = destination.CombinePath(parentPath, name);
             try
             {
+                if (!existingIn.TryGetValue(parentPath, out var before))
+                {
+                    before = new Dictionary<string, CloudFileItem>(matcher);
+                    if (!fresh.Contains(parentPath))
+                    {
+                        foreach (var child in await ListOrEmptyAsync(destination, parentPath, ct).ConfigureAwait(false))
+                        {
+                            before.TryAdd(child.Name, child);
+                        }
+                    }
+
+                    existingIn[parentPath] = before;
+                }
+
+                if (!placedIn.TryGetValue(parentPath, out var placed))
+                {
+                    placed = new HashSet<string>(matcher);
+                    placedIn[parentPath] = placed;
+                }
+
+                var name = destination.IsLocal ? SafeLocalPath.FileName(entry.Item.Name) : entry.Item.Name;
+                if (!destination.IsLocal && CloudPath.IsTraversalName(name))
+                {
+                    // Its children are skipped too: their parent key never gets a created folder.
+                    outcome.Failures.Add($"{entry.Item.Name}: {SafeLocalPath.UnsafeName(name).Message}");
+                    continue;
+                }
+
+                CloudFileItem? clash = null;
+                if (placed.Contains(name))
+                {
+                    // Another entry of this folder already landed on this name (case folding,
+                    // Unicode form, or characters Windows can't hold): number this one.
+                    var taken = new HashSet<string>(placed, matcher);
+                    taken.UnionWith(before.Keys);
+                    name = UniqueName(name, taken);
+                }
+                else if (before.TryGetValue(name, out clash) && clash.IsDirectory == entry.Item.IsDirectory)
+                {
+                    // Merging: land on the existing item's own spelling (see the top level).
+                    name = clash.Name;
+                }
+
+                placed.Add(name);
+                var path = destination.CombinePath(parentPath, name);
                 if (entry.Item.IsDirectory)
                 {
                     await destination.CreateDirectoryAsync(path, ct).ConfigureAwait(false);
                     createdFolders[entry.Key] = path;
+                    if (clash is null)
+                    {
+                        fresh.Add(path);
+                    }
+
                     continue;
                 }
 
-                if (plan.Replace && !destination.IsLocal)
+                if (clash is { IsDirectory: false } && !destination.IsLocal)
                 {
                     // Merging into an existing cloud folder: clear a same-named file first so
                     // providers that keep duplicates don't end up with two.
-                    if (!existingChildren.TryGetValue(parentPath, out var names))
-                    {
-                        names = (await ListOrEmptyAsync(destination, parentPath, ct).ConfigureAwait(false))
-                            .Where(i => !i.IsDirectory).Select(i => i.Name).ToHashSet(destination.NameComparer);
-                        existingChildren[parentPath] = names;
-                    }
-
-                    if (names.Contains(name))
-                    {
-                        await destination.DeleteItemAsync(path, ct).ConfigureAwait(false);
-                    }
+                    await DeleteExistingAsync(destination, clash.Path, ct).ConfigureAwait(false);
                 }
 
-                await CopyFileAsync(request, entry.Item, path, staging, progress, ct).ConfigureAwait(false);
+                outcome.Arrivals.Add(await CopyFileAsync(request, entry.Item, path, staging, progress, ct).ConfigureAwait(false));
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }
             catch (Exception e)
             {
-                failures.Add($"{entry.Item.Name}: {e.Message}");
-                if (entry.Item.IsDirectory)
-                {
-                    // Children of a folder that couldn't be created can't land anywhere.
-                    continue;
-                }
+                // A folder that couldn't be created never enters createdFolders, so its
+                // children fail with "not found" rather than landing somewhere else.
+                outcome.Failures.Add($"{entry.Item.Name}: {Describe(e)}");
             }
         }
 
@@ -529,10 +626,23 @@ public static class TransferEngine
             await TryStampAsync(destination, targetPath, plan.Item.ModificationDate, ct).ConfigureAwait(false);
         }
 
-        return failures;
+        return outcome;
     }
 
-    private static async Task CopyFileAsync(
+    /// <summary>Clears the item a "Replace" overwrites. Already gone (a retried fallback, another client) is fine.</summary>
+    private static async Task DeleteExistingAsync(FileProvider provider, string path, CancellationToken ct)
+    {
+        try
+        {
+            await provider.DeleteItemAsync(path, ct).ConfigureAwait(false);
+        }
+        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+        {
+        }
+    }
+
+    /// <returns>Where the file landed and how big it should be there (-1 when unknowable, as for an exported document).</returns>
+    private static async Task<Arrival> CopyFileAsync(
         TransferRequest request,
         CloudFileItem item,
         string targetPath,
@@ -542,6 +652,7 @@ public static class TransferEngine
     {
         var source = request.Source;
         var destination = request.Destination;
+        var expectedSize = item.Size;
         progress.BeginFile(item.Name, item.Size);
 
         if (destination is CloudProvider cloud && source.IsLocal)
@@ -566,7 +677,13 @@ public static class TransferEngine
             progress.TopUp(upload: false, reported, item.Size);
 
             // An exported Google document lands as "<name>.docx"; stamp that file.
-            targetPath = DownloadedFile.Locate(targetPath);
+            var landed = DownloadedFile.Locate(targetPath);
+            if (DownloadedFile.AddedExtension(targetPath, landed).Length > 0)
+            {
+                expectedSize = -1;
+            }
+
+            targetPath = landed;
         }
         else if (ReferenceEquals(source, destination) && await TryServerSideFileCopyAsync(source, item, targetPath, ct).ConfigureAwait(false))
         {
@@ -586,9 +703,13 @@ public static class TransferEngine
                 // A Google document arrives exported ("<name>.docx"); it travels on under that name.
                 staged = DownloadedFile.Locate(requested);
                 var added = DownloadedFile.AddedExtension(requested, staged);
-                if (added.Length > 0 && !targetPath.EndsWith(added, StringComparison.OrdinalIgnoreCase))
+                if (added.Length > 0)
                 {
-                    targetPath += added;
+                    expectedSize = -1;
+                    if (!targetPath.EndsWith(added, StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetPath += added;
+                    }
                 }
 
                 if (item.HasKnownModificationDate)
@@ -621,6 +742,7 @@ public static class TransferEngine
         }
 
         progress.FileFinished();
+        return new Arrival(item.Path, targetPath, expectedSize);
     }
 
     private static async Task<bool> TryServerSideFileCopyAsync(FileProvider provider, CloudFileItem item, string targetPath, CancellationToken ct)
@@ -678,17 +800,157 @@ public static class TransferEngine
 
     // MARK: - Move clean-up
 
-    private static async Task DeleteSourceAsync(FileProvider source, CloudFileItem item, CancellationToken ct)
+    /// <summary>
+    /// Checks every file a move wrote: present at the destination, and — where both sides know
+    /// it — the size the source has. Returns the name of the first file that fails, or null.
+    /// A local source is measured now, so a file that changed while it travelled fails too.
+    /// </summary>
+    private static async Task<string?> VerifyArrivalsAsync(TransferRequest request, IReadOnlyList<Arrival> arrivals, CancellationToken ct)
     {
-        if (source.IsLocal)
+        var source = request.Source;
+        var destination = request.Destination;
+        if (arrivals.Count == 0 || !destination.CanVerifyArrivals)
         {
-            // Explorer deletes a moved source outright once the copy is complete; sending it to
-            // the Recycle Bin would make a move to another drive leave a second copy behind.
-            await Task.Run(() => LocalFileProvider.DeletePermanently(item.Path), ct).ConfigureAwait(false);
+            return null;
         }
-        else
+
+        long Expected(Arrival arrival)
+        {
+            if (arrival.ExpectedSize < 0 || !source.IsLocal)
+            {
+                return arrival.ExpectedSize;
+            }
+
+            try
+            {
+                var info = new FileInfo(arrival.SourcePath);
+                return info.Exists ? info.Length : -1;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return -1;
+            }
+        }
+
+        if (destination.IsLocal)
+        {
+            return await Task.Run(() =>
+            {
+                foreach (var arrival in arrivals)
+                {
+                    var info = new FileInfo(arrival.DestinationPath);
+                    var expected = Expected(arrival);
+                    if (!info.Exists || (expected >= 0 && info.Length != expected))
+                    {
+                        return Path.GetFileName(arrival.DestinationPath);
+                    }
+                }
+
+                return null;
+            }, ct).ConfigureAwait(false);
+        }
+
+        // One listing per destination folder rather than one metadata call per file.
+        var matcher = MatcherFor(destination);
+        foreach (var folder in arrivals.GroupBy(a => destination.GetParentPath(a.DestinationPath), StringComparer.Ordinal))
+        {
+            var listed = new Dictionary<string, CloudFileItem>(matcher);
+            try
+            {
+                foreach (var child in await destination.ListDirectoryAsync(folder.Key, ct).ConfigureAwait(false))
+                {
+                    listed.TryAdd(child.Name, child);
+                }
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+            {
+            }
+
+            foreach (var arrival in folder)
+            {
+                var name = destination.GetName(arrival.DestinationPath);
+                if (!listed.TryGetValue(name, out var landed))
+                {
+                    // Listings can lag an upload by a moment; ask for the file itself.
+                    try
+                    {
+                        landed = await destination.GetFileMetadataAsync(arrival.DestinationPath, ct).ConfigureAwait(false);
+                    }
+                    catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+                    {
+                        return name;
+                    }
+                }
+
+                var expected = Expected(arrival);
+                if (landed.IsDirectory || (expected >= 0 && landed.Size >= 0 && landed.Size != expected))
+                {
+                    return name;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task DeleteSourceAsync(FileProvider source, ItemPlan plan, IReadOnlyList<Arrival> arrivals, CancellationToken ct)
+    {
+        var item = plan.Item;
+        if (!source.IsLocal)
         {
             await source.DeleteItemAsync(item.Path, ct).ConfigureAwait(false);
+            return;
+        }
+
+        // Explorer deletes a moved source outright once the copy is complete; sending it to
+        // the Recycle Bin would make a move to another drive leave a second copy behind.
+        if (!item.IsDirectory || plan.Tree is null)
+        {
+            await Task.Run(() => LocalFileProvider.DeletePermanently(item.Path), ct).ConfigureAwait(false);
+            return;
+        }
+
+        // A folder goes file by file — only what was copied — and then each folder that is left
+        // empty. Something saved into the folder while it travelled stays where it is instead
+        // of being deleted uncopied.
+        await Task.Run(() =>
+        {
+            foreach (var arrival in arrivals)
+            {
+                try
+                {
+                    LocalFileProvider.DeletePermanently(arrival.SourcePath);
+                }
+                catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+                {
+                }
+            }
+
+            var folders = plan.Tree
+                .Where(e => e.Item.IsDirectory)
+                .OrderByDescending(e => e.Key.Count(c => c == '/'))
+                .Select(e => e.Item)
+                .Append(item);
+            foreach (var folder in folders)
+            {
+                TryRemoveEmptyDirectory(folder);
+            }
+        }, ct).ConfigureAwait(false);
+    }
+
+    private static void TryRemoveEmptyDirectory(CloudFileItem folder)
+    {
+        try
+        {
+            // A junction is removed as a link (its target is not this move's to delete); a real
+            // folder only when nothing is left in it.
+            if (folder.IsSymlink || !Directory.EnumerateFileSystemEntries(folder.Path).Any())
+            {
+                Directory.Delete(folder.Path, recursive: false);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
         }
     }
 

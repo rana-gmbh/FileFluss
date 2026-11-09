@@ -43,6 +43,13 @@ public abstract class FileProvider
     /// </summary>
     public virtual bool IsCaseSensitive => true;
 
+    /// <summary>
+    /// Whether an uploaded file can be found again at the path it was uploaded to, with the
+    /// size it was uploaded with. A move checks exactly that before deleting its source; a
+    /// store that files uploads elsewhere or rewrites them (WordPress's media library) opts out.
+    /// </summary>
+    public virtual bool CanVerifyArrivals => true;
+
     /// <summary>The comparer for names in one folder of this provider.</summary>
     public StringComparer NameComparer => IsCaseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 

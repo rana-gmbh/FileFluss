@@ -238,9 +238,6 @@ public sealed class LocalFileProvider : FileProvider
             }
 
             File.Move(partial, destination, overwrite: true);
-            var info = new FileInfo(source);
-            File.SetLastWriteTimeUtc(destination, info.LastWriteTimeUtc);
-            File.SetCreationTimeUtc(destination, info.CreationTimeUtc);
         }
         catch
         {
@@ -248,11 +245,22 @@ public sealed class LocalFileProvider : FileProvider
             {
                 File.Delete(partial);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
 
             throw;
+        }
+
+        // The copy is complete; dates are best-effort (a read-only target, a FAT stick).
+        try
+        {
+            var info = new FileInfo(source);
+            File.SetLastWriteTimeUtc(destination, info.LastWriteTimeUtc);
+            File.SetCreationTimeUtc(destination, info.CreationTimeUtc);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentOutOfRangeException)
+        {
         }
     }
 

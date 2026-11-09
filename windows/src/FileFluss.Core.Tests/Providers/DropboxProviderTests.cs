@@ -134,6 +134,19 @@ public sealed class DropboxProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task AListingWhoseCursorNeverAdvancesStopsInsteadOfLoopingForever()
+    {
+        _http.OnJson(HttpMethod.Post, "/files/list_folder/continue", """{"entries":[],"cursor":"same","has_more":true}""");
+        _http.OnJson(HttpMethod.Post, "/files/list_folder", """{"entries":[],"cursor":"same","has_more":true}""");
+        using var provider = Provider();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/"));
+
+        Assert.Equal(CloudErrorKind.InvalidResponse, error.Kind);
+        Assert.Single(_http.Requests, r => r.Uri.ToString().Contains("/list_folder/continue", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task OperationsMapPathsToTheirEndpoints()
     {
         _http.OnJson(HttpMethod.Post, "/files/list_folder", """{"entries":[],"cursor":"c","has_more":false}""");

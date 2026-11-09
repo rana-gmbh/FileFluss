@@ -266,18 +266,36 @@ internal sealed class SynologyDriveApiClient
             return;
         }
 
-        for (var poll = 0; poll < 120; poll++)
+        // A big folder takes the NAS minutes. Returning while the task still runs would report a
+        // move as done (and the caller would go on to rename or delete) before it happened, so
+        // keep asking — slower after the first minute — and fail outright when it never ends.
+        var deadline = DateTimeOffset.UtcNow + CopyMoveTimeout;
+        for (var poll = 0; ; poll++)
         {
             var status = await CallAsync<SynologyTaskStatusData>(
                 "SYNO.FileStation.CopyMove", "3", "status", [("taskid", taskId)], cancellationToken).ConfigureAwait(false);
+            if (status.ErrorCode is { } code)
+            {
+                throw MapApiError(code);
+            }
+
             if (status.Finished == true)
             {
                 return;
             }
 
-            await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw CloudProviderException.Network(new TimeoutException(Localization.L("The request timed out.")));
+            }
+
+            var interval = poll < 120 ? PollInterval : TimeSpan.FromTicks(Math.Max(PollInterval.Ticks, TimeSpan.FromSeconds(5).Ticks));
+            await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>How long a server-side copy or move may run before it is given up on.</summary>
+    internal TimeSpan CopyMoveTimeout { get; set; } = TimeSpan.FromMinutes(30);
 
     // MARK: - Metadata
 

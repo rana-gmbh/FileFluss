@@ -12,12 +12,23 @@ public static class HttpTransfer
     public const int BufferSize = 128 * 1024;
 
     /// <summary>
+    /// How long a download may go without receiving a single byte before it is abandoned.
+    /// The HttpClient has no overall timeout (a 7 GB file takes hours), so without this a
+    /// half-open connection — Wi-Fi switched, a NAT entry dropped — waits for ever.
+    /// </summary>
+    public static readonly TimeSpan StallTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>
     /// Streams a response body to <paramref name="localPath"/>, reporting each chunk. Writes to
     /// a sibling "*.fileflusspart" file and renames on success, so a failed or cancelled
-    /// download never leaves a truncated file that looks complete. The response must have been
-    /// requested with <see cref="HttpCompletionOption.ResponseHeadersRead"/>.
+    /// download never leaves a truncated file that looks complete. A body shorter than its
+    /// Content-Length, or one that stalls for <see cref="StallTimeout"/>, is a network error.
+    /// The response must have been requested with <see cref="HttpCompletionOption.ResponseHeadersRead"/>.
     /// </summary>
-    public static async Task SaveToFileAsync(HttpResponseMessage response, string localPath, ByteProgress? onBytes, CancellationToken cancellationToken)
+    public static Task SaveToFileAsync(HttpResponseMessage response, string localPath, ByteProgress? onBytes, CancellationToken cancellationToken)
+        => SaveToFileAsync(response, localPath, onBytes, StallTimeout, cancellationToken);
+
+    internal static async Task SaveToFileAsync(HttpResponseMessage response, string localPath, ByteProgress? onBytes, TimeSpan stallTimeout, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(localPath);
         if (!string.IsNullOrEmpty(directory))
@@ -28,16 +39,37 @@ public static class HttpTransfer
         var partial = localPath + ".fileflusspart";
         try
         {
+            long written;
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
             await using (var target = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, useAsync: true))
             {
-                await CopyAsync(source, target, onBytes, cancellationToken).ConfigureAwait(false);
+                written = await CopyWatchingForStallsAsync(source, target, onBytes, stallTimeout, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Content-Length survives only when the body wasn't decompressed on the way in, so
+            // where it is present it is exactly the byte count the file must have.
+            if (response.Content.Headers.ContentLength is { } expected && expected != written)
+            {
+                throw CloudProviderException.Network(new IOException(
+                    Localization.L("The download ended after {0} of {1} bytes.", written, expected)));
             }
 
             File.Move(partial, localPath, overwrite: true);
         }
         catch (HttpRequestException e)
         {
+            TryDelete(partial);
+            throw CloudProviderException.Network(e);
+        }
+        catch (HttpIOException e)
+        {
+            // "The response ended prematurely": the connection closed mid-body.
+            TryDelete(partial);
+            throw CloudProviderException.Network(e);
+        }
+        catch (ObjectDisposedException e)
+        {
+            // The provider was disposed (account re-authenticated or edited) mid-download.
             TryDelete(partial);
             throw CloudProviderException.Network(e);
         }
@@ -51,6 +83,39 @@ public static class HttpTransfer
         {
             TryDelete(partial);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="CopyAsync"/> for a network source: each read must produce something within
+    /// <paramref name="stallTimeout"/>, or the copy fails as a timeout. Returns the bytes copied.
+    /// </summary>
+    public static async Task<long> CopyWatchingForStallsAsync(Stream source, Stream target, ByteProgress? onBytes, TimeSpan stallTimeout, CancellationToken cancellationToken)
+    {
+        using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var buffer = new byte[BufferSize];
+        long total = 0;
+        while (true)
+        {
+            idle.CancelAfter(stallTimeout);
+            int read;
+            try
+            {
+                read = await source.ReadAsync(buffer, idle.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw CloudProviderException.Network(new TimeoutException(Localization.L("The request timed out.")));
+            }
+
+            if (read == 0)
+            {
+                return total;
+            }
+
+            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            total += read;
+            onBytes?.Invoke(read);
         }
     }
 

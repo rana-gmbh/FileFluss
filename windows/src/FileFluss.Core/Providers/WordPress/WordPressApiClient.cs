@@ -307,7 +307,7 @@ internal sealed partial class WordPressApiClient
                 null,
                 cancellationToken).ConfigureAwait(false);
             ThrowIfUnauthorized(response);
-            if (!response.IsSuccessStatusCode)
+            if (IsPastLastPage(response, page))
             {
                 break;
             }
@@ -361,6 +361,11 @@ internal sealed partial class WordPressApiClient
             if (!response.IsSuccessStatusCode)
             {
                 SupportLogger.Shared.Log($"[WordPress] Listing {basePath} page {page} failed: HTTP {(int)response.StatusCode}", "WordPress", LogLevel.Error);
+            }
+
+            if (IsPastLastPage(response, page))
+            {
+                complete = true;
                 break;
             }
 
@@ -406,7 +411,7 @@ internal sealed partial class WordPressApiClient
                 null,
                 cancellationToken).ConfigureAwait(false);
             ThrowIfUnauthorized(response);
-            if (!response.IsSuccessStatusCode)
+            if (IsPastLastPage(response, page))
             {
                 break;
             }
@@ -807,6 +812,26 @@ internal sealed partial class WordPressApiClient
            int.TryParse(values.FirstOrDefault(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var pages)
             ? pages
             : 1;
+
+    /// <summary>
+    /// True when the page answered "no such page" (WordPress's 400 for a page past the end).
+    /// Any other failure throws: a listing that stopped at a 429 or 500 and returned what it had
+    /// would make a sync or compare read everything after it as deleted.
+    /// </summary>
+    private static bool IsPastLastPage(HttpResponseMessage response, int page)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        if (page > 1 && response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            return true;
+        }
+
+        throw CloudHttp.StatusError(response.StatusCode);
+    }
 
     private static void ThrowIfUnauthorized(HttpResponseMessage response)
     {

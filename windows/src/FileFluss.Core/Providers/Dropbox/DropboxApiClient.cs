@@ -282,7 +282,7 @@ internal sealed class DropboxApiClient
         if (!response.IsSuccessStatusCode)
         {
             SupportLogger.Shared.Log($"[Dropbox] Token refresh failed: HTTP {(int)response.StatusCode}", LogCategory, LogLevel.Error);
-            throw CloudProviderException.NotAuthenticated();
+            throw CloudProviderException.TokenRefreshFailed((int)response.StatusCode);
         }
 
         var token = await response.ReadJsonAsync<DropboxTokenResponse>(CancellationToken.None).ConfigureAwait(false);
@@ -356,8 +356,10 @@ internal sealed class DropboxApiClient
             cancellationToken).ConfigureAwait(false);
         entries.AddRange(page.Entries);
 
+        var guard = new PageGuard("Dropbox list_folder");
         while (page.HasMore)
         {
+            guard.Follow(page.Cursor);
             page = await RpcAsync<DropboxListFolderResponse>(
                 "/files/list_folder/continue",
                 new JsonObject { ["cursor"] = page.Cursor },
