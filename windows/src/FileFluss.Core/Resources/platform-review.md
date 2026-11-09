@@ -49,6 +49,250 @@ were left alone and want a human decision.
 | `en` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud uses the sign-in of iCloud for Windows — there's nothing to edit here. Manage iCloud Drive in the iCloud for Windows app. |
 | `en` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Map this account as a network drive first — a cloud folder has no path a terminal can open. |
 | `en` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | A terminal can only open a folder that exists on this PC. Mapping this account as a network drive adds it to File Explorer, and the terminal opens inside it. |
+| `en` | `FileFluss isn't allowed to move this to the Trash` | needs review | FileFluss isn't allowed to move this to the Trash |
+| `en` | `Your Trash folder can't be written to` | needs review | Your Trash folder can't be written to |
+| `en` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you. |
+| `en` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes. |
+| `en` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Explorer runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password. |
+| `en` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Explorer under File → Get Info. |
+| `en` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Explorer can't move it to the Trash either, the cause lies outside FileFluss. |
+| `en` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | needs review | The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage. |
+| `en` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | needs review | The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage. |
+| `en` | `Show in Finder` | auto-rewritten | Show in Explorer |
+| `en` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | “%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Explorer. |
+| `en` | ` and ` | windows override |  and  |
+| `en` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | "Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page. |
+| `en` | `%@ usually need a paid plan.` | windows override | %@ usually need a paid plan. |
+| `en` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead. |
+| `en` | `Allow downloading` | windows override | Allow downloading |
+| `en` | `Analyse` | windows override | Analyse |
+| `en` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | Anyone with this link can download the file until it expires. The link cannot be revoked early. |
+| `en` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box kept the public link in place — check whether your administrator manages sharing for this item. |
+| `en` | `Change Sharing…` | windows override | Change Sharing… |
+| `en` | `Check for updates automatically` | windows override | Check for updates automatically |
+| `en` | `Checked just now: %@` | windows override | Checked just now: %@ |
+| `en` | `Choose Folder…` | windows override | Choose Folder… |
+| `en` | `Cloud account not connected` | windows override | Cloud account not connected |
+| `en` | `Copy Share Link` | windows override | Copy Share Link |
+| `en` | `Copy direct download links when available` | windows override | Copy direct download links when available |
+| `en` | `Couldn't change sharing: %@` | windows override | Couldn't change sharing: %@ |
+| `en` | `Couldn't create the share link: %@` | windows override | Couldn't create the share link: %@ |
+| `en` | `Couldn't read this file's share link: %@` | windows override | Couldn't read this file's share link: %@ |
+| `en` | `Couldn't stop sharing: %@` | windows override | Couldn't stop sharing: %@ |
+| `en` | `Create Link` | windows override | Create Link |
+| `en` | `Expires` | windows override | Expires |
+| `en` | `Expires %@` | windows override | Expires %@ |
+| `en` | `Folders` | windows override | Folders |
+| `en` | `Home folder` | windows override | Home folder |
+| `en` | `Jottacloud accepted the request but returned no public link for this file.` | windows override | Jottacloud accepted the request but returned no public link for this file. |
+| `en` | `Largest files` | windows override | Largest files |
+| `en` | `Last checked: %@` | windows override | Last checked: %@ |
+| `en` | `No files above this size.` | windows override | No files above this size. |
+| `en` | `OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.` | windows override | OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works. |
+| `en` | `OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation.` | windows override | OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation. |
+| `en` | `Pick a cloud account or a folder, then choose Analyse.` | windows override | Pick a cloud account or a folder, then choose Analyse. |
+| `en` | `Protect with password` | windows override | Protect with password |
+| `en` | `Reveal` | windows override | Reveal |
+| `en` | `Save Changes` | windows override | Save Changes |
+| `en` | `Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.` | windows override | Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works. |
+| `en` | `Set an expiry date` | windows override | Set an expiry date |
+| `en` | `Share Link…` | windows override | Share Link… |
+| `en` | `Shared` | windows override | Shared |
+| `en` | `Sharing failed` | windows override | Sharing failed |
+| `en` | `Show` | windows override | Show |
+| `en` | `Stop Sharing` | windows override | Stop Sharing |
+| `en` | `Stop sharing this file?` | windows override | Stop sharing this file? |
+| `en` | `Stopped early, so these totals are a lower bound — the real figures are larger.` | windows override | Stopped early, so these totals are a lower bound — the real figures are larger. |
+| `en` | `Storage Analysis` | windows override | Storage Analysis |
+| `en` | `Storage Analysis…` | windows override | Storage Analysis… |
+| `en` | `The link couldn't be checked from here: %@` | windows override | The link couldn't be checked from here: %@ |
+| `en` | `The link to "%@" stops working for everyone who has it. This can't be undone.` | windows override | The link to "%@" stops working for everyone who has it. This can't be undone. |
+| `en` | `The server returned an unsafe file name ("%@"), so the download was stopped.` | windows override | The server returned an unsafe file name ("%@"), so the download was stopped. |
+| `en` | `This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it.` | windows override | This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it. |
+| `en` | `This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there.` | windows override | This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there. |
+| `en` | `This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there.` | windows override | This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there. |
+| `en` | `This account can't serve direct download links, so the share page link was copied instead.` | windows override | This account can't serve direct download links, so the share page link was copied instead. |
+| `en` | `This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.` | windows override | This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account. |
+| `en` | `This file already had a public link, so the requested settings were not applied.` | windows override | This file already had a public link, so the requested settings were not applied. |
+| `en` | `This file already had a share link, so that one was returned.` | windows override | This file already had a share link, so that one was returned. |
+| `en` | `This file already has a public link. Open it in Dropbox to copy that link.` | windows override | This file already has a public link. Open it in Dropbox to copy that link. |
+| `en` | `This file doesn't have a public link.` | windows override | This file doesn't have a public link. |
+| `en` | `This file has no public link to update. Create one first.` | windows override | This file has no public link to update. Create one first. |
+| `en` | `This file is no longer shared.` | windows override | This file is no longer shared. |
+| `en` | `This file isn't shared with anyone who has the link.` | windows override | This file isn't shared with anyone who has the link. |
+| `en` | `This file was already public — WordPress media has no private state.` | windows override | This file was already public — WordPress media has no private state. |
+| `en` | `This item doesn't have a public link.` | windows override | This item doesn't have a public link. |
+| `en` | `This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions.` | windows override | This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions. |
+| `en` | `This link is not public: OneDrive granted it as "%@", so opening it asks for a Microsoft sign-in.` | windows override | This link is not public: OneDrive granted it as "%@", so opening it asks for a Microsoft sign-in. |
+| `en` | `When FileFluss opens` | windows override | When FileFluss opens |
+| `en` | `Your Box administrator disabled downloads for shared links — recipients can only preview the file.` | windows override | Your Box administrator disabled downloads for shared links — recipients can only preview the file. |
+| `en` | `Your Box administrator restricted this link to people in your company — it is not publicly accessible.` | windows override | Your Box administrator restricted this link to people in your company — it is not publicly accessible. |
+| `en` | `Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible.` | windows override | Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible. |
+| `en` | `a password` | windows override | a password |
+| `en` | `a password and an expiry date` | windows override | a password and an expiry date |
+| `en` | `an expiry date` | windows override | an expiry date |
+| `en` | `expiry dates` | windows override | expiry dates |
+| `en` | `kDrive created the link without download permission — recipients can view the file only.` | windows override | kDrive created the link without download permission — recipients can view the file only. |
+| `en` | `password protection` | windows override | password protection |
+| `en` | `the link is not reachable without signing in.` | windows override | the link is not reachable without signing in. |
+| `en` | `the server didn't answer.` | windows override | the server didn't answer. |
+| `en` | `Cloud Storage Providers` | windows override | Cloud Storage Providers |
+| `en` | `Other Protocols` | windows override | Other Protocols |
+| `en` | `Cameras & Devices` | windows override | Cameras & Devices |
+| `en` | `Show Archive in Finder` | auto-rewritten | Show Archive in Explorer |
+| `en` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
+
+RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss can download RAR %@ for Windows from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
+
+RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com. |
+| `en` | `Open` | windows override | Open |
+| `en` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | needs review | Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain. |
+| `en` | `The file changed while it was being uploaded.` | windows override | The file changed while it was being uploaded. |
+| `en` | `Quit Anyway` | windows override | Quit Anyway |
+| `en` | `Cloud` | windows override | Cloud |
+| `en` | `Home` | windows override | Home |
+| `en` | `%@ of %@` | windows override | %@ of %@ |
+| `en` | `~%@ left` | windows override | ~%@ left |
+| `en` | `Cancelling…` | windows override | Cancelling… |
+| `en` | `Downloading %@` | windows override | Downloading %@ |
+| `en` | `Uploading %@` | windows override | Uploading %@ |
+| `en` | `1 folder` | windows override | 1 folder |
+| `en` | `1 file` | windows override | 1 file |
+| `en` | `Copied` | windows override | Copied |
+| `en` | `Moved` | windows override | Moved |
+| `en` | `Downloaded` | windows override | Downloaded |
+| `en` | `Uploaded` | windows override | Uploaded |
+| `en` | `Opened` | windows override | Opened |
+| `en` | `Cancelled: %@ %@` | windows override | Cancelled: %@ %@ |
+| `en` | `Unknown error` | windows override | Unknown error |
+| `en` | `Failed: %@ %@ — %@` | windows override | Failed: %@ %@ — %@ |
+| `en` | `Done` | windows override | Done |
+| `en` | `Done: %@ %@` | windows override | Done: %@ %@ |
+| `en` | `Share link copied` | windows override | Share link copied |
+| `en` | `Link copied — not public` | windows override | Link copied — not public |
+| `en` | `Failed to move %@ to the Trash: %@` | needs review | Failed to move %@ to the Trash: %@ |
+| `en` | `Left newer` | windows override | Left newer |
+| `en` | `Right newer` | windows override | Right newer |
+| `en` | `Could not read folders: %@` | windows override | Could not read folders: %@ |
+| `en` | `Cancelled` | windows override | Cancelled |
+| `en` | `Could not save the index: %@` | windows override | Could not save the index: %@ |
+| `en` | `Account not connected` | windows override | Account not connected |
+| `en` | `Space` | windows override | Space |
+| `en` | `Could not mount in Finder: %@` | auto-rewritten | Could not mount in Explorer: %@ |
+| `en` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it. |
+| `en` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows found nothing to mount at the internal server (NetFS status %d). |
+| `en` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | The internal WebDAV server didn't respond with 200 OK to OPTIONS. |
+| `en` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | Could not reach the internal WebDAV server on 127.0.0.1:%@: %@ |
+| `en` | `Current Folder` | windows override | Current Folder |
+| `en` | `This Source` | windows override | This Source |
+| `en` | `All Sources` | windows override | All Sources |
+| `en` | `%@ (offline)` | windows override | %@ (offline) |
+| `en` | `Local Files` | windows override | Local Files |
+| `en` | `Local` | windows override | Local |
+| `en` | `Reveal “%@” in Finder` | auto-rewritten | Reveal “%@” in Explorer |
+| `en` | `Clear the cache?` | windows override | Clear the cache? |
+| `en` | `Erase all offline indexes?` | windows override | Erase all offline indexes? |
+| `en` | `1 transfer — click for details` | windows override | 1 transfer — click for details |
+| `en` | `1 folder size — click for details` | windows override | 1 folder size — click for details |
+| `en` | `Index for Offline Search…` | windows override | Index for Offline Search… |
+| `en` | `Re-index for Offline Search…` | windows override | Re-index for Offline Search… |
+| `en` | `Unmount from Finder` | auto-rewritten | Unmount from Explorer |
+| `en` | `Could not compute plan: %@` | windows override | Could not compute plan: %@ |
+| `en` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field. |
+| `en` | `Desktop` | windows override | Desktop |
+| `en` | `Document` | windows override | Document |
+| `en` | `Text Document` | windows override | Text Document |
+| `en` | `Downloads` | windows override | Downloads |
+| `en` | `Pictures` | windows override | Pictures |
+| `en` | `Music` | windows override | Music |
+| `en` | `Folder` | windows override | Folder |
+| `en` | `Star` | windows override | Star |
+| `en` | `Heart` | windows override | Heart |
+| `en` | `Flag` | windows override | Flag |
+| `en` | `Bookmark` | windows override | Bookmark |
+| `en` | `Tag` | windows override | Tag |
+| `en` | `Work` | windows override | Work |
+| `en` | `Archive` | windows override | Archive |
+| `en` | `Inbox` | windows override | Inbox |
+| `en` | `Sent` | windows override | Sent |
+| `en` | `Personal` | windows override | Personal |
+| `en` | `Panel Navigation` | windows override | Panel Navigation |
+| `en` | `File Operations` | windows override | File Operations |
+| `en` | `Clipboard` | windows override | Clipboard |
+| `en` | `Selection` | windows override | Selection |
+| `en` | `View & Sort` | windows override | View & Sort |
+| `en` | `Cross-panel & Tools` | windows override | Cross-panel & Tools |
+| `en` | `Misc` | windows override | Misc |
+| `en` | `The folders from last time` | windows override | The folders from last time |
+| `en` | `Specific folders` | windows override | Specific folders |
+| `en` | `All sizes` | windows override | All sizes |
+| `en` | `1 MB and up` | windows override | 1 MB and up |
+| `en` | `10 MB and up` | windows override | 10 MB and up |
+| `en` | `100 MB and up` | windows override | 100 MB and up |
+| `en` | `1 GB and up` | windows override | 1 GB and up |
+| `en` | `Keychain save failed (OSStatus %d)` | auto-rewritten | credential store save failed (OSStatus %d) |
+| `en` | `Keychain delete failed (OSStatus %d)` | auto-rewritten | credential store delete failed (OSStatus %d) |
+| `en` | `Box authentication failed: %@` | windows override | Box authentication failed: %@ |
+| `en` | `Could not resolve host. Check the server address.` | windows override | Could not resolve host. Check the server address. |
+| `en` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | Could not connect — check the host, port, and that FTP is reachable. |
+| `en` | `Connection timed out.` | windows override | Connection timed out. |
+| `en` | `TLS/SSL error: %@` | windows override | TLS/SSL error: %@ |
+| `en` | `the server's certificate could not be verified.` | windows override | the server's certificate could not be verified. |
+| `en` | `Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.` | windows override | Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented. |
+| `en` | `Filen login succeeded but the server didn't return an apiKey.` | windows override | Filen login succeeded but the server didn't return an apiKey. |
+| `en` | `Filen file metadata not cached — listing didn't populate chunk info.` | windows override | Filen file metadata not cached — listing didn't populate chunk info. |
+| `en` | `Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.` | windows override | Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet. |
+| `en` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen file metadata not cached — re-open the folder and try again. |
+| `en` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info returned an unexpected payload. |
+| `en` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder didn't return a root UUID. |
+| `en` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | auto-rewritten | You're not signed into iCloud on this Mac. Open Settings → Apple Account → iCloud → iCloud Drive and turn it on. |
+| `en` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead. |
+| `en` | `Timed out waiting for browser sign-in.` | windows override | Timed out waiting for browser sign-in. |
+| `en` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box). |
+| `en` | `SSH authentication failed. Check the username and password.` | windows override | SSH authentication failed. Check the username and password. |
+| `en` | `SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.` | windows override | SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong. |
+| `en` | `Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).` | windows override | Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`). |
+| `en` | `Wrong passphrase for the private key.` | windows override | Wrong passphrase for the private key. |
+| `en` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | Connection refused — is the SSH daemon running on this host and port? |
+| `en` | `Connection timed out. Check the hostname, port, and your network.` | windows override | Connection timed out. Check the hostname, port, and your network. |
+| `en` | `Could not resolve hostname. Check spelling or DNS.` | windows override | Could not resolve hostname. Check spelling or DNS. |
+| `en` | `Server URL is not a valid URL.` | windows override | Server URL is not a valid URL. |
+| `en` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | Cannot upload directly to the Seafile library root — pick a library first. |
+| `en` | `Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.` | windows override | Cannot delete a Seafile library from FileFluss. Use the Seafile web UI. |
+| `en` | `Create a library in the Seafile web UI before adding folders.` | windows override | Create a library in the Seafile web UI before adding folders. |
+| `en` | `Rename a Seafile library from its web UI.` | windows override | Rename a Seafile library from its web UI. |
+| `en` | `Cannot share the Seafile library list — pick a file or folder inside a library.` | windows override | Cannot share the Seafile library list — pick a file or folder inside a library. |
+| `en` | `The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.` | windows override | The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it. |
+| `en` | `The sharing link does not exist.` | windows override | The sharing link does not exist. |
+| `en` | `The NAS has reached its maximum number of sharing links — delete some in File Station and try again.` | windows override | The NAS has reached its maximum number of sharing links — delete some in File Station and try again. |
+| `en` | `Failed to access the NAS's sharing links.` | windows override | Failed to access the NAS's sharing links. |
+| `en` | `No such account or incorrect password.` | windows override | No such account or incorrect password. |
+| `en` | `Account is disabled.` | windows override | Account is disabled. |
+| `en` | `Permission denied.` | windows override | Permission denied. |
+| `en` | `This account requires a 2-factor authentication (OTP) code.` | windows override | This account requires a 2-factor authentication (OTP) code. |
+| `en` | `OTP code is incorrect.` | windows override | OTP code is incorrect. |
+| `en` | `OTP code authentication has failed too many times.` | windows override | OTP code authentication has failed too many times. |
+| `en` | `Synology administrator must enforce 2-factor authentication.` | windows override | Synology administrator must enforce 2-factor authentication. |
+| `en` | `Maximum number of OTP retries reached. Try again later.` | windows override | Maximum number of OTP retries reached. Try again later. |
+| `en` | `Password expired — please reset it from DSM.` | windows override | Password expired — please reset it from DSM. |
+| `en` | `Password must be changed at first login.` | windows override | Password must be changed at first login. |
+| `en` | `Invalid parameter for the request.` | windows override | Invalid parameter for the request. |
+| `en` | `Unknown API method.` | windows override | Unknown API method. |
+| `en` | `Invalid API method version.` | windows override | Invalid API method version. |
+| `en` | `Invalid API method.` | windows override | Invalid API method. |
+| `en` | `Insufficient user privilege.` | windows override | Insufficient user privilege. |
+| `en` | `Multiple login detected.` | windows override | Multiple login detected. |
+| `en` | `Request denied — too many connections.` | windows override | Request denied — too many connections. |
+| `en` | `Synology rejected the file path.` | windows override | Synology rejected the file path. |
+| `en` | `Authorization timed out — the QR code expired before it was scanned.` | windows override | Authorization timed out — the QR code expired before it was scanned. |
+| `en` | `A file with that name already exists.` | windows override | A file with that name already exists. |
+| `en` | `Invalid file name.` | windows override | Invalid file name. |
+| `en` | `Waiting for authorization in the TeraBox app.` | windows override | Waiting for authorization in the TeraBox app. |
+| `en` | `Authorization code invalid or expired.` | windows override | Authorization code invalid or expired. |
+| `en` | `Failed to open search index: %@` | windows override | Failed to open search index: %@ |
+| `en` | `Search index error: %@` | windows override | Search index error: %@ |
+| `en` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field. |
+| `en` | `Filen API error` | windows override | Filen API error |
 | `de` | `System Default follows the language selected in macOS.` | windows override | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
 | `de` | `Search all sources (⌘F)` | windows override | Alle Quellen durchsuchen (Strg+F) |
 | `de` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows fragt einmal pro geschütztem Ordner (Schreibtisch, Dokumente, Downloads, …). Das erste Öffnen kann jeweils einige Sekunden dauern – aber nur beim ersten Mal. |
@@ -85,6 +329,244 @@ were left alone and want a human decision.
 | `de` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“. |
 | `de` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann. |
 | `de` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin. |
+| `de` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil der Papierkorb-Ordner (%@) dem Benutzer „%@“ gehört statt dir. |
+| `de` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners (%@) keine Änderungen erlauben. |
+| `de` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl, füge ihn im Terminal ein und gib dein Passwort ein. |
+| `de` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Ablage → Informationen ändern. |
+| `de` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Falls FileFluss noch keinen Festplattenvollzugriff hat, kann es helfen, ihn unter Systemeinstellungen → Datenschutz & Sicherheit zu erteilen; danach muss FileFluss neu gestartet werden. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss. |
+| `de` | `Show in Finder` | auto-rewritten | Im Explorer zeigen |
+| `de` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | „%@“ wurde auf diesem Mac geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten das Konto im Explorer einbinden. |
+| `de` | ` and ` | windows override |  und  |
+| `de` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | „Freigabelink kopieren“ kopiert dann einen Link, der die Datei sofort herunterlädt, statt der Vorschauseite des Anbieters. Anbieter ohne direkten Link liefern immer ihre eigene Seite. |
+| `de` | `%@ usually need a paid plan.` | windows override | %@ erfordern meist ein kostenpflichtiges Abo. |
+| `de` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | Ein Ordner, den es nicht mehr gibt – ein gelöschter Ordner, ein entferntes Laufwerk, ein getrenntes Cloud-Konto –, öffnet stattdessen deinen Benutzerordner. |
+| `de` | `Allow downloading` | windows override | Herunterladen erlauben |
+| `de` | `Analyse` | windows override | Analysieren |
+| `de` | `Analyse any folder on this Mac` | needs review | Beliebigen Ordner auf diesem Mac analysieren |
+| `de` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | Jeder mit diesem Link kann die Datei herunterladen, bis er abläuft. Der Link kann nicht vorzeitig widerrufen werden. |
+| `de` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box hat den öffentlichen Link beibehalten – prüfe, ob dein Administrator die Freigabe für dieses Objekt verwaltet. |
+| `de` | `Change Sharing…` | windows override | Freigabe ändern… |
+| `de` | `Check for updates automatically` | windows override | Automatisch nach Updates suchen |
+| `de` | `Checked just now: %@` | windows override | Gerade geprüft: %@ |
+| `de` | `Choose Folder…` | windows override | Ordner auswählen… |
+| `de` | `Cloud account not connected` | windows override | Cloud-Konto nicht verbunden |
+| `de` | `Copy Share Link` | windows override | Freigabelink kopieren |
+| `de` | `Copy direct download links when available` | windows override | Direkte Download-Links kopieren, sofern verfügbar |
+| `de` | `Couldn't change sharing: %@` | windows override | Die Freigabe konnte nicht geändert werden: %@ |
+| `de` | `Couldn't create the share link: %@` | windows override | Der Freigabelink konnte nicht erstellt werden: %@ |
+| `de` | `Couldn't read this file's share link: %@` | windows override | Der Freigabelink dieser Datei konnte nicht gelesen werden: %@ |
+| `de` | `Couldn't stop sharing: %@` | windows override | Die Freigabe konnte nicht beendet werden: %@ |
+| `de` | `Create Link` | windows override | Link erstellen |
+| `de` | `Expires` | windows override | Läuft ab |
+| `de` | `Expires %@` | windows override | Läuft ab: %@ |
+| `de` | `Folders` | windows override | Ordner |
+| `de` | `Home folder` | windows override | Benutzerordner |
+| `de` | `Jottacloud accepted the request but returned no public link for this file.` | windows override | Jottacloud hat die Anfrage angenommen, aber keinen öffentlichen Link für diese Datei geliefert. |
+| `de` | `Largest files` | windows override | Größte Dateien |
+| `de` | `Last checked: %@` | windows override | Zuletzt geprüft: %@ |
+| `de` | `No files above this size.` | windows override | Keine Dateien über dieser Größe. |
+| `de` | `OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.` | windows override | OneDrive kann die Einstellungen eines Links nicht direkt ändern, daher wurde der bisherige Link widerrufen und ein neuer erstellt – die alte Adresse funktioniert nicht mehr. |
+| `de` | `OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation.` | windows override | OneDrive hat das Erstellen eines öffentlichen Links für diese Datei abgelehnt. Das Teilen per Link kann für ein Konto deaktiviert sein, und Geschäftskonten erlauben Links oft nur für Personen innerhalb der Organisation. |
+| `de` | `Pick a cloud account or a folder, then choose Analyse.` | windows override | Wähle ein Cloud-Konto oder einen Ordner und dann „Analysieren“. |
+| `de` | `Protect with password` | windows override | Mit Passwort schützen |
+| `de` | `Reveal` | windows override | Im Bereich zeigen |
+| `de` | `Save Changes` | windows override | Änderungen speichern |
+| `de` | `Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.` | windows override | Seafile kann die Einstellungen eines Links nicht ändern, daher wurde der Link ersetzt – die bisherige URL funktioniert nicht mehr. |
+| `de` | `Set an expiry date` | windows override | Ablaufdatum festlegen |
+| `de` | `Share Link…` | windows override | Link teilen… |
+| `de` | `Shared` | windows override | Freigegeben |
+| `de` | `Sharing failed` | windows override | Freigabe fehlgeschlagen |
+| `de` | `Show` | windows override | Anzeigen |
+| `de` | `Stop Sharing` | windows override | Freigabe beenden |
+| `de` | `Stop sharing this file?` | windows override | Freigabe dieser Datei beenden? |
+| `de` | `Stopped early, so these totals are a lower bound — the real figures are larger.` | windows override | Vorzeitig beendet – diese Summen sind daher eine Untergrenze, die tatsächlichen Werte sind höher. |
+| `de` | `Storage Analysis` | windows override | Speicheranalyse |
+| `de` | `Storage Analysis…` | windows override | Speicheranalyse… |
+| `de` | `The link couldn't be checked from here: %@` | windows override | Der Link konnte von hier aus nicht geprüft werden: %@ |
+| `de` | `The link to "%@" stops working for everyone who has it. This can't be undone.` | windows override | Der Link zu „%@“ funktioniert dann für niemanden mehr, der ihn hat. Dies kann nicht rückgängig gemacht werden. |
+| `de` | `The server returned an unsafe file name ("%@"), so the download was stopped.` | windows override | Der Server hat einen unsicheren Dateinamen („%@“) geliefert, daher wurde der Download abgebrochen. |
+| `de` | `This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it.` | windows override | Dieses Microsoft-Konto erlaubt Apps nicht, den bestehenden Link einer Datei zu ändern. Öffne die Datei in OneDrive im Web, um ihn zu ändern oder zu entfernen. |
+| `de` | `This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there.` | windows override | Dieses Microsoft-Konto erlaubt Apps nicht, die bestehenden Links einer Datei zu verwalten. Öffne die Datei in OneDrive im Web und entferne den Link dort. |
+| `de` | `This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there.` | windows override | Dieses Microsoft-Konto erlaubt Apps nicht, einen bestehenden Link zu entfernen. Öffne die Datei in OneDrive im Web und entferne den Link dort. |
+| `de` | `This account can't serve direct download links, so the share page link was copied instead.` | windows override | Dieses Konto kann keine direkten Download-Links bereitstellen, daher wurde stattdessen der Link zur Freigabeseite kopiert. |
+| `de` | `This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.` | windows override | Dieses Konto hat %@ für den Link abgelehnt. Die meisten Anbieter bieten das nur in kostenpflichtigen Tarifen an. Teilen funktioniert auch ohne diese Optionen; sie werden für dieses Konto ab jetzt ausgeblendet. |
+| `de` | `This file already had a public link, so the requested settings were not applied.` | windows override | Diese Datei hatte bereits einen öffentlichen Link, daher wurden die gewünschten Einstellungen nicht übernommen. |
+| `de` | `This file already had a share link, so that one was returned.` | windows override | Diese Datei hatte bereits einen Freigabelink, daher wurde dieser verwendet. |
+| `de` | `This file already has a public link. Open it in Dropbox to copy that link.` | windows override | Diese Datei hat bereits einen öffentlichen Link. Öffne sie in Dropbox, um diesen Link zu kopieren. |
+| `de` | `This file doesn't have a public link.` | windows override | Diese Datei hat keinen öffentlichen Link. |
+| `de` | `This file has no public link to update. Create one first.` | windows override | Diese Datei hat keinen öffentlichen Link, der aktualisiert werden könnte. Erstelle zuerst einen. |
+| `de` | `This file is no longer shared.` | windows override | Diese Datei ist nicht mehr freigegeben. |
+| `de` | `This file isn't shared with anyone who has the link.` | windows override | Diese Datei ist nicht für Personen mit dem Link freigegeben. |
+| `de` | `This file was already public — WordPress media has no private state.` | windows override | Diese Datei war bereits öffentlich – WordPress-Medien können nicht privat sein. |
+| `de` | `This item doesn't have a public link.` | windows override | Dieses Objekt hat keinen öffentlichen Link. |
+| `de` | `This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions.` | windows override | Dieser Schlüssel darf die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). Gib den Bucket-Namen im Feld „Pfad“ ein – FileFluss arbeitet dann nur mit diesem Bucket und benötigt keine kontoweiten Berechtigungen. |
+| `de` | `This link is not public: OneDrive granted it as "%@", so opening it asks for a Microsoft sign-in.` | windows override | Dieser Link ist nicht öffentlich: OneDrive hat ihn als „%@“ vergeben, daher verlangt das Öffnen eine Microsoft-Anmeldung. |
+| `de` | `When FileFluss opens` | windows override | Beim Start von FileFluss |
+| `de` | `Your Box administrator disabled downloads for shared links — recipients can only preview the file.` | windows override | Dein Box-Administrator hat Downloads über Freigabelinks deaktiviert – Empfänger können die Datei nur in der Vorschau ansehen. |
+| `de` | `Your Box administrator restricted this link to people in your company — it is not publicly accessible.` | windows override | Dein Box-Administrator hat diesen Link auf Personen in deinem Unternehmen beschränkt – er ist nicht öffentlich zugänglich. |
+| `de` | `Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible.` | windows override | Dein Box-Administrator hat diesen Link auf die Mitwirkenden der Datei beschränkt – er ist nicht öffentlich zugänglich. |
+| `de` | `a password` | windows override | ein Passwort |
+| `de` | `a password and an expiry date` | windows override | ein Passwort und ein Ablaufdatum |
+| `de` | `an expiry date` | windows override | ein Ablaufdatum |
+| `de` | `expiry dates` | windows override | Ablaufdaten |
+| `de` | `kDrive created the link without download permission — recipients can view the file only.` | windows override | kDrive hat den Link ohne Download-Berechtigung erstellt – Empfänger können die Datei nur ansehen. |
+| `de` | `password protection` | windows override | Passwortschutz |
+| `de` | `the link is not reachable without signing in.` | windows override | der Link ist ohne Anmeldung nicht erreichbar. |
+| `de` | `the server didn't answer.` | windows override | der Server hat nicht geantwortet. |
+| `de` | `Cloud Storage Providers` | windows override | Cloud-Speicheranbieter |
+| `de` | `Other Protocols` | windows override | Andere Protokolle |
+| `de` | `Cameras & Devices` | windows override | Kameras & Geräte |
+| `de` | `Show Archive in Finder` | auto-rewritten | Archiv im Explorer zeigen |
+| `de` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
+
+RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss kann RAR %@ für Windows von rarlab.com laden (unter 1 MB), es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Ein Administratorpasswort ist nicht nötig.
+
+RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden. |
+| `de` | `Open` | windows override | Öffnen |
+| `de` | `The file changed while it was being uploaded.` | windows override | Die Datei wurde während des Hochladens geändert. |
+| `de` | `Quit Anyway` | windows override | Trotzdem beenden |
+| `de` | `Cloud` | windows override | Cloud |
+| `de` | `Home` | windows override | Benutzerordner |
+| `de` | `%@ of %@` | windows override | %@ von %@ |
+| `de` | `~%@ left` | windows override | noch ca. %@ |
+| `de` | `Cancelling…` | windows override | Wird abgebrochen… |
+| `de` | `Downloading %@` | windows override | %@ wird heruntergeladen |
+| `de` | `Uploading %@` | windows override | %@ wird hochgeladen |
+| `de` | `1 folder` | windows override | 1 Ordner |
+| `de` | `1 file` | windows override | 1 Datei |
+| `de` | `Copied` | windows override | Kopiert |
+| `de` | `Moved` | windows override | Verschoben |
+| `de` | `Downloaded` | windows override | Heruntergeladen |
+| `de` | `Uploaded` | windows override | Hochgeladen |
+| `de` | `Opened` | windows override | Geöffnet |
+| `de` | `Cancelled: %@ %@` | windows override | Abgebrochen – %@: %@ |
+| `de` | `Unknown error` | windows override | Unbekannter Fehler |
+| `de` | `Failed: %@ %@ — %@` | windows override | Fehlgeschlagen – %@: %@ – %@ |
+| `de` | `Done` | windows override | Fertig |
+| `de` | `Done: %@ %@` | windows override | Fertig – %@: %@ |
+| `de` | `Share link copied` | windows override | Freigabelink kopiert |
+| `de` | `Link copied — not public` | windows override | Link kopiert – nicht öffentlich |
+| `de` | `Left newer` | windows override | Links neuer |
+| `de` | `Right newer` | windows override | Rechts neuer |
+| `de` | `Could not read folders: %@` | windows override | Ordner konnten nicht gelesen werden: %@ |
+| `de` | `Cancelled` | windows override | Abgebrochen |
+| `de` | `Could not save the index: %@` | windows override | Der Index konnte nicht gespeichert werden: %@ |
+| `de` | `Account not connected` | windows override | Konto nicht verbunden |
+| `de` | `Space` | windows override | Leertaste |
+| `de` | `Could not mount in Finder: %@` | auto-rewritten | Einbinden im Explorer fehlgeschlagen: %@ |
+| `de` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (NetFS-Status %d). Bitte melde es. |
+| `de` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows hat auf dem internen Server nichts zum Einbinden gefunden (NetFS-Status %d). |
+| `de` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet. |
+| `de` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | Der interne WebDAV-Server auf 127.0.0.1:%@ ist nicht erreichbar: %@ |
+| `de` | `Current Folder` | windows override | Aktueller Ordner |
+| `de` | `This Source` | windows override | Diese Quelle |
+| `de` | `All Sources` | windows override | Alle Quellen |
+| `de` | `%@ (offline)` | windows override | %@ (offline) |
+| `de` | `Local Files` | windows override | Lokale Dateien |
+| `de` | `Local` | windows override | Lokal |
+| `de` | `Reveal “%@” in Finder` | auto-rewritten | „%@“ im Explorer zeigen |
+| `de` | `Clear the cache?` | windows override | Cache leeren? |
+| `de` | `Erase all offline indexes?` | windows override | Alle Offline-Indizes löschen? |
+| `de` | `1 transfer — click for details` | windows override | 1 Übertragung – für Details klicken |
+| `de` | `1 folder size — click for details` | windows override | 1 Ordnergröße – für Details klicken |
+| `de` | `Index for Offline Search…` | windows override | Für die Offline-Suche indizieren… |
+| `de` | `Re-index for Offline Search…` | windows override | Für die Offline-Suche neu indizieren… |
+| `de` | `Unmount from Finder` | auto-rewritten | Aus dem Explorer auswerfen |
+| `de` | `Could not compute plan: %@` | windows override | Plan konnte nicht berechnet werden: %@ |
+| `de` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein. |
+| `de` | `Desktop` | windows override | Desktop |
+| `de` | `Document` | windows override | Dokument |
+| `de` | `Text Document` | windows override | Textdokument |
+| `de` | `Downloads` | windows override | Downloads |
+| `de` | `Pictures` | windows override | Bilder |
+| `de` | `Music` | windows override | Musik |
+| `de` | `Folder` | windows override | Ordner |
+| `de` | `Star` | windows override | Stern |
+| `de` | `Heart` | windows override | Herz |
+| `de` | `Flag` | windows override | Fahne |
+| `de` | `Bookmark` | windows override | Lesezeichen |
+| `de` | `Tag` | windows override | Etikett |
+| `de` | `Work` | windows override | Arbeit |
+| `de` | `Archive` | windows override | Archiv |
+| `de` | `Inbox` | windows override | Posteingang |
+| `de` | `Sent` | windows override | Gesendet |
+| `de` | `Personal` | windows override | Persönlich |
+| `de` | `Panel Navigation` | windows override | Navigation im Bereich |
+| `de` | `File Operations` | windows override | Dateioperationen |
+| `de` | `Clipboard` | windows override | Zwischenablage |
+| `de` | `Selection` | windows override | Auswahl |
+| `de` | `View & Sort` | windows override | Ansicht & Sortierung |
+| `de` | `Cross-panel & Tools` | windows override | Bereichsübergreifend & Werkzeuge |
+| `de` | `Misc` | windows override | Sonstiges |
+| `de` | `The folders from last time` | windows override | Die Ordner vom letzten Mal |
+| `de` | `Specific folders` | windows override | Bestimmte Ordner |
+| `de` | `All sizes` | windows override | Alle Größen |
+| `de` | `1 MB and up` | windows override | Ab 1 MB |
+| `de` | `10 MB and up` | windows override | Ab 10 MB |
+| `de` | `100 MB and up` | windows override | Ab 100 MB |
+| `de` | `1 GB and up` | windows override | Ab 1 GB |
+| `de` | `Box authentication failed: %@` | windows override | Box-Authentifizierung fehlgeschlagen: %@ |
+| `de` | `Could not resolve host. Check the server address.` | windows override | Host konnte nicht aufgelöst werden. Prüfe die Serveradresse. |
+| `de` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | Verbindung fehlgeschlagen – prüfe Host und Port und ob FTP erreichbar ist. |
+| `de` | `Connection timed out.` | windows override | Zeitüberschreitung der Verbindung. |
+| `de` | `TLS/SSL error: %@` | windows override | TLS/SSL-Fehler: %@ |
+| `de` | `the server's certificate could not be verified.` | windows override | das Zertifikat des Servers konnte nicht überprüft werden. |
+| `de` | `Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.` | windows override | Das Filen-Konto verwendet die Auth-Version %@. FileFluss unterstützt derzeit nur v2-Konten – Filen v1 / v3 (Argon2) sind noch nicht implementiert. |
+| `de` | `Filen login succeeded but the server didn't return an apiKey.` | windows override | Die Filen-Anmeldung war erfolgreich, aber der Server hat keinen apiKey geliefert. |
+| `de` | `Filen file metadata not cached — listing didn't populate chunk info.` | windows override | Filen-Dateimetadaten nicht im Cache – die Auflistung hat keine Chunk-Informationen geliefert. |
+| `de` | `Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.` | windows override | Der Filen-Dateischlüssel ist nicht 32 ASCII-Bytes lang – er wurde mit einer Auth-Version verschlüsselt, die noch nicht unterstützt wird. |
+| `de` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen-Dateimetadaten nicht im Cache – öffne den Ordner erneut und versuche es noch einmal. |
+| `de` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info hat unerwartete Daten geliefert. |
+| `de` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder hat keine Stamm-UUID geliefert. |
+| `de` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | Du bist auf diesem Mac nicht bei iCloud angemeldet. Öffne Systemeinstellungen → Apple Account → iCloud → iCloud Drive und schalte es ein. |
+| `de` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | Dieser Nextcloud-Server bietet keinen Login Flow v2 an. Verwende stattdessen die Anmeldung mit App-Passwort. |
+| `de` | `Timed out waiting for browser sign-in.` | windows override | Zeitüberschreitung beim Warten auf die Anmeldung im Browser. |
+| `de` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | Der SSH-Schlüssel wurde vom Server abgelehnt. Stelle sicher, dass der öffentliche Schlüssel in ~/.ssh/authorized_keys auf dem Server steht (oder bei verwalteten Diensten wie der Hetzner Storage Box in der SSH-Schlüssel-Verwaltung des Anbieters hinterlegt ist). |
+| `de` | `SSH authentication failed. Check the username and password.` | windows override | SSH-Authentifizierung fehlgeschlagen. Prüfe Benutzername und Passwort. |
+| `de` | `SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.` | windows override | SSH-Authentifizierung fehlgeschlagen. Möglicherweise ist dein öffentlicher Schlüssel auf dem Server nicht autorisiert, oder die Passphrase ist falsch. |
+| `de` | `Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).` | windows override | Der private Schlüssel liegt in einem nicht unterstützten Format vor. Konvertiere ihn ins OpenSSH-Format (z. B. mit `puttygen key.ppk -O private-openssh -o id_rsa`). |
+| `de` | `Wrong passphrase for the private key.` | windows override | Falsche Passphrase für den privaten Schlüssel. |
+| `de` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | Verbindung abgelehnt – läuft der SSH-Dienst auf diesem Host und Port? |
+| `de` | `Connection timed out. Check the hostname, port, and your network.` | windows override | Zeitüberschreitung der Verbindung. Prüfe Hostname, Port und dein Netzwerk. |
+| `de` | `Network is unreachable from this Mac.` | needs review | Das Netzwerk ist von diesem Mac aus nicht erreichbar. |
+| `de` | `Could not resolve hostname. Check spelling or DNS.` | windows override | Hostname konnte nicht aufgelöst werden. Prüfe die Schreibweise oder das DNS. |
+| `de` | `Server URL is not a valid URL.` | windows override | Die Server-URL ist keine gültige URL. |
+| `de` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | In die oberste Ebene der Seafile-Bibliotheken kann nicht direkt hochgeladen werden – wähle zuerst eine Bibliothek. |
+| `de` | `Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.` | windows override | Eine Seafile-Bibliothek kann nicht in FileFluss gelöscht werden. Verwende die Seafile-Weboberfläche. |
+| `de` | `Create a library in the Seafile web UI before adding folders.` | windows override | Erstelle in der Seafile-Weboberfläche eine Bibliothek, bevor du Ordner hinzufügst. |
+| `de` | `Rename a Seafile library from its web UI.` | windows override | Benenne eine Seafile-Bibliothek in der Weboberfläche um. |
+| `de` | `Cannot share the Seafile library list — pick a file or folder inside a library.` | windows override | Die Liste der Seafile-Bibliotheken kann nicht geteilt werden – wähle eine Datei oder einen Ordner innerhalb einer Bibliothek. |
+| `de` | `The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.` | windows override | Das NAS hat diesen Link aus der Adresse gebildet, die DSM für die eigene hält, daher funktioniert er möglicherweise nur in deinem lokalen Netzwerk. Prüfe die Einstellungen für den externen Zugriff in DSM, falls Empfänger ihn nicht öffnen können. |
+| `de` | `The sharing link does not exist.` | windows override | Der Freigabelink existiert nicht. |
+| `de` | `The NAS has reached its maximum number of sharing links — delete some in File Station and try again.` | windows override | Das NAS hat die maximale Anzahl an Freigabelinks erreicht – lösche einige in der File Station und versuche es erneut. |
+| `de` | `Failed to access the NAS's sharing links.` | windows override | Auf die Freigabelinks des NAS konnte nicht zugegriffen werden. |
+| `de` | `No such account or incorrect password.` | windows override | Konto nicht vorhanden oder Passwort falsch. |
+| `de` | `Account is disabled.` | windows override | Das Konto ist deaktiviert. |
+| `de` | `Permission denied.` | windows override | Zugriff verweigert. |
+| `de` | `This account requires a 2-factor authentication (OTP) code.` | windows override | Dieses Konto erfordert einen Code für die Zwei-Faktor-Authentifizierung (OTP). |
+| `de` | `OTP code is incorrect.` | windows override | Der OTP-Code ist falsch. |
+| `de` | `OTP code authentication has failed too many times.` | windows override | Die OTP-Authentifizierung ist zu oft fehlgeschlagen. |
+| `de` | `Synology administrator must enforce 2-factor authentication.` | windows override | Der Synology-Administrator verlangt eine Zwei-Faktor-Authentifizierung. |
+| `de` | `Maximum number of OTP retries reached. Try again later.` | windows override | Maximale Anzahl an OTP-Versuchen erreicht. Versuche es später erneut. |
+| `de` | `Password expired — please reset it from DSM.` | windows override | Passwort abgelaufen – bitte setze es in DSM zurück. |
+| `de` | `Password must be changed at first login.` | windows override | Das Passwort muss bei der ersten Anmeldung geändert werden. |
+| `de` | `Invalid parameter for the request.` | windows override | Ungültiger Parameter in der Anfrage. |
+| `de` | `Unknown API method.` | windows override | Unbekannte API-Methode. |
+| `de` | `Invalid API method version.` | windows override | Ungültige Version der API-Methode. |
+| `de` | `Invalid API method.` | windows override | Ungültige API-Methode. |
+| `de` | `Insufficient user privilege.` | windows override | Unzureichende Benutzerrechte. |
+| `de` | `Multiple login detected.` | windows override | Mehrfache Anmeldung erkannt. |
+| `de` | `Request denied — too many connections.` | windows override | Anfrage abgelehnt – zu viele Verbindungen. |
+| `de` | `Synology rejected the file path.` | windows override | Synology hat den Dateipfad abgelehnt. |
+| `de` | `Authorization timed out — the QR code expired before it was scanned.` | windows override | Zeitüberschreitung bei der Autorisierung – der QR-Code ist abgelaufen, bevor er gescannt wurde. |
+| `de` | `A file with that name already exists.` | windows override | Eine Datei mit diesem Namen ist bereits vorhanden. |
+| `de` | `Invalid file name.` | windows override | Ungültiger Dateiname. |
+| `de` | `Waiting for authorization in the TeraBox app.` | windows override | Warte auf die Autorisierung in der TeraBox-App. |
+| `de` | `Authorization code invalid or expired.` | windows override | Autorisierungscode ungültig oder abgelaufen. |
+| `de` | `Failed to open search index: %@` | windows override | Der Suchindex konnte nicht geöffnet werden: %@ |
+| `de` | `Search index error: %@` | windows override | Fehler im Suchindex: %@ |
+| `de` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | Die S3-Endpunkt-URL ist ungültig (Host: „%@“). Prüfe das Feld „Endpunkt-URL“. |
+| `de` | `Filen API error` | windows override | Filen-API-Fehler |
 | `zh-Hans` | `System Default follows the language selected in macOS.` | windows override | “跟随系统”将使用 Windows 中设置的语言。 |
 | `zh-Hans` | `Search all sources (⌘F)` | windows override | 搜索所有来源（Ctrl+F） |
 | `zh-Hans` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 会对每个受保护的文件夹（桌面、文稿、下载……）询问一次。每个文件夹首次打开可能需要几秒钟——但仅限首次。 |
@@ -123,6 +605,248 @@ were left alone and want a human decision.
 | `zh-Hans` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登录——此处无可编辑内容。请在 Windows 版 iCloud 应用中管理 iCloud 云盘。 |
 | `zh-Hans` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。 |
 | `zh-Hans` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 终端只能打开这台电脑上存在的文件夹。将此账户映射为网络驱动器后，它会出现在文件资源管理器中，终端将在其中打开。 |
+| `zh-Hans` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）属于用户“%@”而不是你。 |
+| `zh-Hans` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）的权限不允许更改。 |
+| `zh-Hans` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows 拒绝了 FileFluss 将 %@ 移到废纸篓。如果 FileFluss 尚未获得“完全磁盘访问权限”，在“系统设置 → 隐私与安全性”中授予可能会有帮助，之后需要重新启动 FileFluss。如果访达也无法将其移到废纸篓，则原因不在 FileFluss。 |
+| `zh-Hans` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | needs review | FileFluss 打开“%@”之后，该文件在这台 Mac 上被修改过。FileFluss 尚不会将其他 App 中的修改上传回去，因此已保留修改后的副本，并改为打开账户中的版本。若要就地编辑，请在访达中装载该账户。 |
+| `zh-Hans` | ` and ` | windows override | 和 |
+| `zh-Hans` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | 这样，“复制共享链接”会复制一个可直接下载文件的链接，而不是服务商的预览页面。不提供直接链接的服务商始终给出其自己的页面。 |
+| `zh-Hans` | `%@ usually need a paid plan.` | windows override | %@通常需要付费套餐。 |
+| `zh-Hans` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | 已不存在的文件夹（已删除的文件夹、已拔出的驱动器、已断开的云账户）将改为打开你的主文件夹。 |
+| `zh-Hans` | `Allow downloading` | windows override | 允许下载 |
+| `zh-Hans` | `Analyse` | windows override | 分析 |
+| `zh-Hans` | `Analyse any folder on this Mac` | needs review | 分析这台 Mac 上的任意文件夹 |
+| `zh-Hans` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | 在链接过期之前，任何拥有此链接的人都可以下载该文件。此链接无法提前撤销。 |
+| `zh-Hans` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box 保留了公开链接——请确认你的管理员是否管理此项目的共享。 |
+| `zh-Hans` | `Change Sharing…` | windows override | 更改共享… |
+| `zh-Hans` | `Check for updates automatically` | windows override | 自动检查更新 |
+| `zh-Hans` | `Checked just now: %@` | windows override | 刚刚检查：%@ |
+| `zh-Hans` | `Choose Folder…` | windows override | 选择文件夹… |
+| `zh-Hans` | `Cloud account not connected` | windows override | 云账户未连接 |
+| `zh-Hans` | `Copy Share Link` | windows override | 复制共享链接 |
+| `zh-Hans` | `Copy direct download links when available` | windows override | 尽可能复制直接下载链接 |
+| `zh-Hans` | `Couldn't change sharing: %@` | windows override | 无法更改共享设置：%@ |
+| `zh-Hans` | `Couldn't create the share link: %@` | windows override | 无法创建共享链接：%@ |
+| `zh-Hans` | `Couldn't read this file's share link: %@` | windows override | 无法读取此文件的共享链接：%@ |
+| `zh-Hans` | `Couldn't stop sharing: %@` | windows override | 无法停止共享：%@ |
+| `zh-Hans` | `Create Link` | windows override | 创建链接 |
+| `zh-Hans` | `Expires` | windows override | 过期时间 |
+| `zh-Hans` | `Expires %@` | windows override | %@ 过期 |
+| `zh-Hans` | `Folders` | windows override | 文件夹 |
+| `zh-Hans` | `Home folder` | windows override | 主文件夹 |
+| `zh-Hans` | `Jottacloud accepted the request but returned no public link for this file.` | windows override | Jottacloud 接受了请求，但没有返回此文件的公开链接。 |
+| `zh-Hans` | `Largest files` | windows override | 最大的文件 |
+| `zh-Hans` | `Last checked: %@` | windows override | 上次检查：%@ |
+| `zh-Hans` | `No files above this size.` | windows override | 没有超过此大小的文件。 |
+| `zh-Hans` | `OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.` | windows override | OneDrive 无法直接更改链接的设置，因此已撤销之前的链接并创建了新链接——旧地址已失效。 |
+| `zh-Hans` | `OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation.` | windows override | OneDrive 拒绝为此文件创建公开链接。账户可能关闭了通过链接共享的功能，而且企业账户通常只允许组织内部人员使用链接。 |
+| `zh-Hans` | `Pick a cloud account or a folder, then choose Analyse.` | windows override | 选择一个云账户或文件夹，然后选择“分析”。 |
+| `zh-Hans` | `Protect with password` | windows override | 使用密码保护 |
+| `zh-Hans` | `Reveal` | windows override | 在面板中显示 |
+| `zh-Hans` | `Save Changes` | windows override | 保存更改 |
+| `zh-Hans` | `Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.` | windows override | Seafile 无法更改链接的设置，因此已替换该链接——之前的 URL 已失效。 |
+| `zh-Hans` | `Set an expiry date` | windows override | 设置过期日期 |
+| `zh-Hans` | `Share Link…` | windows override | 共享链接… |
+| `zh-Hans` | `Shared` | windows override | 已共享 |
+| `zh-Hans` | `Sharing failed` | windows override | 共享失败 |
+| `zh-Hans` | `Show` | windows override | 显示 |
+| `zh-Hans` | `Stop Sharing` | windows override | 停止共享 |
+| `zh-Hans` | `Stop sharing this file?` | windows override | 要停止共享此文件吗？ |
+| `zh-Hans` | `Stopped early, so these totals are a lower bound — the real figures are larger.` | windows override | 已提前停止，因此这些总数只是下限——实际数值更大。 |
+| `zh-Hans` | `Storage Analysis` | windows override | 存储分析 |
+| `zh-Hans` | `Storage Analysis…` | windows override | 存储分析… |
+| `zh-Hans` | `The link couldn't be checked from here: %@` | windows override | 无法从此处检查链接：%@ |
+| `zh-Hans` | `The link to "%@" stops working for everyone who has it. This can't be undone.` | windows override | 指向“%@”的链接将对所有拥有它的人失效。此操作无法撤销。 |
+| `zh-Hans` | `The server returned an unsafe file name ("%@"), so the download was stopped.` | windows override | 服务器返回了不安全的文件名（“%@”），因此已停止下载。 |
+| `zh-Hans` | `This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it.` | windows override | 此 Microsoft 账户不允许应用更改文件的现有链接。请在 OneDrive 网页版中打开该文件以更改或移除链接。 |
+| `zh-Hans` | `This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there.` | windows override | 此 Microsoft 账户不允许应用管理文件的现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。 |
+| `zh-Hans` | `This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there.` | windows override | 此 Microsoft 账户不允许应用移除现有链接。请在 OneDrive 网页版中打开该文件，并在那里移除链接。 |
+| `zh-Hans` | `This account can't serve direct download links, so the share page link was copied instead.` | windows override | 此账户无法提供直接下载链接，因此已改为复制共享页面链接。 |
+| `zh-Hans` | `This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.` | windows override | 此账户拒绝为链接设置%@。大多数服务商仅在付费套餐中提供这些功能。不使用它们仍可共享，这些选项现已对此账户隐藏。 |
+| `zh-Hans` | `This file already had a public link, so the requested settings were not applied.` | windows override | 此文件已有公开链接，因此未应用所请求的设置。 |
+| `zh-Hans` | `This file already had a share link, so that one was returned.` | windows override | 此文件已有共享链接，因此返回了该链接。 |
+| `zh-Hans` | `This file already has a public link. Open it in Dropbox to copy that link.` | windows override | 此文件已有公开链接。请在 Dropbox 中打开它以复制该链接。 |
+| `zh-Hans` | `This file doesn't have a public link.` | windows override | 此文件没有公开链接。 |
+| `zh-Hans` | `This file has no public link to update. Create one first.` | windows override | 此文件没有可更新的公开链接。请先创建一个。 |
+| `zh-Hans` | `This file is no longer shared.` | windows override | 此文件已不再共享。 |
+| `zh-Hans` | `This file isn't shared with anyone who has the link.` | windows override | 此文件未与拥有链接的人共享。 |
+| `zh-Hans` | `This file was already public — WordPress media has no private state.` | windows override | 此文件已经是公开的——WordPress 媒体没有私有状态。 |
+| `zh-Hans` | `This item doesn't have a public link.` | windows override | 此项目没有公开链接。 |
+| `zh-Hans` | `This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions.` | windows override | 此密钥无权列出账户的存储桶（s3:ListAllMyBuckets）。请在“路径”字段中输入存储桶名称——FileFluss 将只使用该存储桶，不会请求账户范围的权限。 |
+| `zh-Hans` | `This link is not public: OneDrive granted it as "%@", so opening it asks for a Microsoft sign-in.` | windows override | 此链接不是公开的：OneDrive 以“%@”方式授予了它，因此打开时需要登录 Microsoft 账户。 |
+| `zh-Hans` | `When FileFluss opens` | windows override | FileFluss 启动时 |
+| `zh-Hans` | `Your Box administrator disabled downloads for shared links — recipients can only preview the file.` | windows override | 你的 Box 管理员已禁用共享链接的下载——收件人只能预览该文件。 |
+| `zh-Hans` | `Your Box administrator restricted this link to people in your company — it is not publicly accessible.` | windows override | 你的 Box 管理员已将此链接限制为仅公司内部人员可用——它无法公开访问。 |
+| `zh-Hans` | `Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible.` | windows override | 你的 Box 管理员已将此链接限制为仅文件的协作者可用——它无法公开访问。 |
+| `zh-Hans` | `a password` | windows override | 密码 |
+| `zh-Hans` | `a password and an expiry date` | windows override | 密码和过期日期 |
+| `zh-Hans` | `an expiry date` | windows override | 过期日期 |
+| `zh-Hans` | `expiry dates` | windows override | 过期日期 |
+| `zh-Hans` | `kDrive created the link without download permission — recipients can view the file only.` | windows override | kDrive 创建的链接没有下载权限——收件人只能查看该文件。 |
+| `zh-Hans` | `password protection` | windows override | 密码保护 |
+| `zh-Hans` | `the link is not reachable without signing in.` | windows override | 未登录时无法访问该链接。 |
+| `zh-Hans` | `the server didn't answer.` | windows override | 服务器没有响应。 |
+| `zh-Hans` | `COHN Password` | windows override | COHN 密码 |
+| `zh-Hans` | `COHN Username` | windows override | COHN 用户名 |
+| `zh-Hans` | `Camera IP address` | windows override | 相机 IP 地址 |
+| `zh-Hans` | `GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again.` | windows override | GoPro 相机在开机且可访问时会自动连接。要配对其他相机，请移除此相机后重新添加。 |
+| `zh-Hans` | `Home Wi-Fi (COHN)` | windows override | 家庭 Wi-Fi（COHN） |
+| `zh-Hans` | `No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again.` | windows override | 未找到相机。请确保相机已开机并通过 USB 或 Wi-Fi 连接，然后再次扫描。 |
+| `zh-Hans` | `Scan for Cameras` | windows override | 扫描相机 |
+| `zh-Hans` | `Scanning…` | windows override | 正在扫描… |
+| `zh-Hans` | `Set up "Camera on Home Network" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows.` | windows override | 在 GoPro Quik 应用中设置“家庭网络上的相机”（COHN），然后输入相机的 IP 地址以及应用显示的 COHN 用户名和密码。 |
+| `zh-Hans` | `Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it.` | windows override | 打开相机，然后通过 USB 连接，或加入相机的 Wi-Fi 网络。再扫描以查找相机。 |
+| `zh-Hans` | `USB or Wi-Fi` | windows override | USB 或 Wi-Fi |
+| `zh-Hans` | `Cloud Storage Providers` | windows override | 云存储服务商 |
+| `zh-Hans` | `Other Protocols` | windows override | 其他协议 |
+| `zh-Hans` | `Cameras & Devices` | windows override | 相机和设备 |
+| `zh-Hans` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
+
+RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@（不到 1 MB），用已知指纹校验后放在自己的文件夹中，无需管理员密码。
+
+RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。 |
+| `zh-Hans` | `Open` | windows override | 打开 |
+| `zh-Hans` | `The file changed while it was being uploaded.` | windows override | 文件在上传过程中发生了更改。 |
+| `zh-Hans` | `Quit Anyway` | windows override | 仍要退出 |
+| `zh-Hans` | `Cloud` | windows override | 云端 |
+| `zh-Hans` | `Home` | windows override | 主文件夹 |
+| `zh-Hans` | `%@ of %@` | windows override | %@ / %@ |
+| `zh-Hans` | `~%@ left` | windows override | 剩余约 %@ |
+| `zh-Hans` | `Cancelling…` | windows override | 正在取消… |
+| `zh-Hans` | `Downloading %@` | windows override | 正在下载 %@ |
+| `zh-Hans` | `Uploading %@` | windows override | 正在上传 %@ |
+| `zh-Hans` | `1 folder` | windows override | 1 个文件夹 |
+| `zh-Hans` | `1 file` | windows override | 1 个文件 |
+| `zh-Hans` | `Copied` | windows override | 已复制 |
+| `zh-Hans` | `Moved` | windows override | 已移动 |
+| `zh-Hans` | `Downloaded` | windows override | 已下载 |
+| `zh-Hans` | `Uploaded` | windows override | 已上传 |
+| `zh-Hans` | `Opened` | windows override | 已打开 |
+| `zh-Hans` | `Cancelled: %@ %@` | windows override | 已取消——%@：%@ |
+| `zh-Hans` | `Unknown error` | windows override | 未知错误 |
+| `zh-Hans` | `Failed: %@ %@ — %@` | windows override | 失败——%@：%@——%@ |
+| `zh-Hans` | `Done` | windows override | 完成 |
+| `zh-Hans` | `Done: %@ %@` | windows override | 完成——%@：%@ |
+| `zh-Hans` | `Share link copied` | windows override | 共享链接已复制 |
+| `zh-Hans` | `Link copied — not public` | windows override | 链接已复制——非公开 |
+| `zh-Hans` | `Left newer` | windows override | 左侧较新 |
+| `zh-Hans` | `Right newer` | windows override | 右侧较新 |
+| `zh-Hans` | `Could not read folders: %@` | windows override | 无法读取文件夹：%@ |
+| `zh-Hans` | `Cancelled` | windows override | 已取消 |
+| `zh-Hans` | `Could not save the index: %@` | windows override | 无法保存索引：%@ |
+| `zh-Hans` | `Account not connected` | windows override | 账户未连接 |
+| `zh-Hans` | `Space` | windows override | 空格键 |
+| `zh-Hans` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows 与内部服务器无法就认证方式达成一致（NetFS 状态 %d）。请报告此问题。 |
+| `zh-Hans` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows 在内部服务器上找不到可装载的内容（NetFS 状态 %d）。 |
+| `zh-Hans` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | 内部 WebDAV 服务器未对 OPTIONS 返回 200 OK。 |
+| `zh-Hans` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | 无法访问 127.0.0.1:%@ 上的内部 WebDAV 服务器：%@ |
+| `zh-Hans` | `Current Folder` | windows override | 当前文件夹 |
+| `zh-Hans` | `This Source` | windows override | 此来源 |
+| `zh-Hans` | `All Sources` | windows override | 所有来源 |
+| `zh-Hans` | `%@ (offline)` | windows override | %@（离线） |
+| `zh-Hans` | `Local Files` | windows override | 本地文件 |
+| `zh-Hans` | `Local` | windows override | 本地 |
+| `zh-Hans` | `Clear the cache?` | windows override | 要清除缓存吗？ |
+| `zh-Hans` | `Erase all offline indexes?` | windows override | 要清除所有离线索引吗？ |
+| `zh-Hans` | `1 transfer — click for details` | windows override | 1 个传输——单击查看详情 |
+| `zh-Hans` | `1 folder size — click for details` | windows override | 1 个文件夹大小——单击查看详情 |
+| `zh-Hans` | `Index for Offline Search…` | windows override | 为离线搜索编制索引… |
+| `zh-Hans` | `Re-index for Offline Search…` | windows override | 为离线搜索重新编制索引… |
+| `zh-Hans` | `Could not compute plan: %@` | windows override | 无法计算同步计划：%@ |
+| `zh-Hans` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。 |
+| `zh-Hans` | `Desktop` | windows override | 桌面 |
+| `zh-Hans` | `Document` | windows override | 文档 |
+| `zh-Hans` | `Text Document` | windows override | 文本文档 |
+| `zh-Hans` | `Downloads` | windows override | 下载 |
+| `zh-Hans` | `Pictures` | windows override | 图片 |
+| `zh-Hans` | `Music` | windows override | 音乐 |
+| `zh-Hans` | `Folder` | windows override | 文件夹 |
+| `zh-Hans` | `Star` | windows override | 星标 |
+| `zh-Hans` | `Heart` | windows override | 心形 |
+| `zh-Hans` | `Flag` | windows override | 旗帜 |
+| `zh-Hans` | `Bookmark` | windows override | 书签 |
+| `zh-Hans` | `Tag` | windows override | 标签 |
+| `zh-Hans` | `Work` | windows override | 工作 |
+| `zh-Hans` | `Archive` | windows override | 归档 |
+| `zh-Hans` | `Inbox` | windows override | 收件箱 |
+| `zh-Hans` | `Sent` | windows override | 已发送 |
+| `zh-Hans` | `Personal` | windows override | 个人 |
+| `zh-Hans` | `Panel Navigation` | windows override | 面板导航 |
+| `zh-Hans` | `File Operations` | windows override | 文件操作 |
+| `zh-Hans` | `Clipboard` | windows override | 剪贴板 |
+| `zh-Hans` | `Selection` | windows override | 选择 |
+| `zh-Hans` | `View & Sort` | windows override | 视图和排序 |
+| `zh-Hans` | `Cross-panel & Tools` | windows override | 跨面板和工具 |
+| `zh-Hans` | `Misc` | windows override | 其他 |
+| `zh-Hans` | `The folders from last time` | windows override | 上次的文件夹 |
+| `zh-Hans` | `Specific folders` | windows override | 指定的文件夹 |
+| `zh-Hans` | `All sizes` | windows override | 所有大小 |
+| `zh-Hans` | `1 MB and up` | windows override | 1 MB 及以上 |
+| `zh-Hans` | `10 MB and up` | windows override | 10 MB 及以上 |
+| `zh-Hans` | `100 MB and up` | windows override | 100 MB 及以上 |
+| `zh-Hans` | `1 GB and up` | windows override | 1 GB 及以上 |
+| `zh-Hans` | `Box authentication failed: %@` | windows override | Box 认证失败：%@ |
+| `zh-Hans` | `Could not resolve host. Check the server address.` | windows override | 无法解析主机。请检查服务器地址。 |
+| `zh-Hans` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | 无法连接——请检查主机、端口以及 FTP 是否可访问。 |
+| `zh-Hans` | `Connection timed out.` | windows override | 连接超时。 |
+| `zh-Hans` | `TLS/SSL error: %@` | windows override | TLS/SSL 错误：%@ |
+| `zh-Hans` | `the server's certificate could not be verified.` | windows override | 无法验证服务器的证书。 |
+| `zh-Hans` | `Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.` | windows override | Filen 账户使用认证版本 %@。FileFluss 目前仅支持 v2 账户——尚未实现 Filen v1 / v3（Argon2）。 |
+| `zh-Hans` | `Filen login succeeded but the server didn't return an apiKey.` | windows override | Filen 登录成功，但服务器未返回 apiKey。 |
+| `zh-Hans` | `Filen file metadata not cached — listing didn't populate chunk info.` | windows override | Filen 文件元数据未缓存——列表未提供分块信息。 |
+| `zh-Hans` | `Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.` | windows override | Filen 文件密钥不是 32 个 ASCII 字节——它使用了尚不支持的认证版本加密。 |
+| `zh-Hans` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen 文件元数据未缓存——请重新打开文件夹后重试。 |
+| `zh-Hans` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info 返回了意外的数据。 |
+| `zh-Hans` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder 未返回根 UUID。 |
+| `zh-Hans` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | 你尚未在这台 Mac 上登录 iCloud。打开“系统设置 → Apple 账户 → iCloud → iCloud 云盘”并将其打开。 |
+| `zh-Hans` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | 此 Nextcloud 服务器未提供 Login Flow v2。请改用应用专用密码登录方式。 |
+| `zh-Hans` | `Timed out waiting for browser sign-in.` | windows override | 等待浏览器登录超时。 |
+| `zh-Hans` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | 服务器拒绝了 SSH 密钥。请确保公钥位于服务器的 ~/.ssh/authorized_keys 中（对于 Hetzner Storage Box 等托管服务，请将其添加到服务商的 SSH 密钥面板中）。 |
+| `zh-Hans` | `SSH authentication failed. Check the username and password.` | windows override | SSH 认证失败。请检查用户名和密码。 |
+| `zh-Hans` | `SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.` | windows override | SSH 认证失败。服务器可能未授权你的公钥，或者密码短语错误。 |
+| `zh-Hans` | `Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).` | windows override | 私钥格式不受支持。请将其转换为 OpenSSH 格式（例如使用 `puttygen key.ppk -O private-openssh -o id_rsa`）。 |
+| `zh-Hans` | `Wrong passphrase for the private key.` | windows override | 私钥的密码短语错误。 |
+| `zh-Hans` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | 连接被拒绝——此主机和端口上是否运行着 SSH 服务？ |
+| `zh-Hans` | `Connection timed out. Check the hostname, port, and your network.` | windows override | 连接超时。请检查主机名、端口和你的网络。 |
+| `zh-Hans` | `Network is unreachable from this Mac.` | needs review | 无法从这台 Mac 访问网络。 |
+| `zh-Hans` | `Could not resolve hostname. Check spelling or DNS.` | windows override | 无法解析主机名。请检查拼写或 DNS。 |
+| `zh-Hans` | `Server URL is not a valid URL.` | windows override | 服务器 URL 不是有效的 URL。 |
+| `zh-Hans` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | 无法直接上传到 Seafile 资料库的根目录——请先选择一个资料库。 |
+| `zh-Hans` | `Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.` | windows override | 无法在 FileFluss 中删除 Seafile 资料库。请使用 Seafile 网页界面。 |
+| `zh-Hans` | `Create a library in the Seafile web UI before adding folders.` | windows override | 添加文件夹之前，请先在 Seafile 网页界面中创建资料库。 |
+| `zh-Hans` | `Rename a Seafile library from its web UI.` | windows override | 请在 Seafile 网页界面中重命名资料库。 |
+| `zh-Hans` | `Cannot share the Seafile library list — pick a file or folder inside a library.` | windows override | 无法共享 Seafile 资料库列表——请选择资料库中的文件或文件夹。 |
+| `zh-Hans` | `The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.` | windows override | NAS 根据 DSM 自认为的地址生成了此链接，因此它可能只能在你的本地网络中使用。如果收件人无法打开，请检查 DSM 的外部访问设置。 |
+| `zh-Hans` | `The sharing link does not exist.` | windows override | 共享链接不存在。 |
+| `zh-Hans` | `The NAS has reached its maximum number of sharing links — delete some in File Station and try again.` | windows override | NAS 的共享链接数量已达上限——请在 File Station 中删除一些后重试。 |
+| `zh-Hans` | `Failed to access the NAS's sharing links.` | windows override | 无法访问 NAS 的共享链接。 |
+| `zh-Hans` | `No such account or incorrect password.` | windows override | 账户不存在或密码错误。 |
+| `zh-Hans` | `Account is disabled.` | windows override | 账户已停用。 |
+| `zh-Hans` | `Permission denied.` | windows override | 权限被拒绝。 |
+| `zh-Hans` | `This account requires a 2-factor authentication (OTP) code.` | windows override | 此账户需要双重验证（OTP）代码。 |
+| `zh-Hans` | `OTP code is incorrect.` | windows override | OTP 代码不正确。 |
+| `zh-Hans` | `OTP code authentication has failed too many times.` | windows override | OTP 代码验证失败次数过多。 |
+| `zh-Hans` | `Synology administrator must enforce 2-factor authentication.` | windows override | Synology 管理员要求进行双重验证。 |
+| `zh-Hans` | `Maximum number of OTP retries reached. Try again later.` | windows override | 已达到 OTP 最大重试次数。请稍后再试。 |
+| `zh-Hans` | `Password expired — please reset it from DSM.` | windows override | 密码已过期——请在 DSM 中重置。 |
+| `zh-Hans` | `Password must be changed at first login.` | windows override | 首次登录时必须更改密码。 |
+| `zh-Hans` | `Invalid parameter for the request.` | windows override | 请求参数无效。 |
+| `zh-Hans` | `Unknown API method.` | windows override | 未知的 API 方法。 |
+| `zh-Hans` | `Invalid API method version.` | windows override | 无效的 API 方法版本。 |
+| `zh-Hans` | `Invalid API method.` | windows override | 无效的 API 方法。 |
+| `zh-Hans` | `Insufficient user privilege.` | windows override | 用户权限不足。 |
+| `zh-Hans` | `Multiple login detected.` | windows override | 检测到多处登录。 |
+| `zh-Hans` | `Request denied — too many connections.` | windows override | 请求被拒绝——连接过多。 |
+| `zh-Hans` | `Synology rejected the file path.` | windows override | Synology 拒绝了该文件路径。 |
+| `zh-Hans` | `Authorization timed out — the QR code expired before it was scanned.` | windows override | 授权超时——二维码在扫描前已过期。 |
+| `zh-Hans` | `A file with that name already exists.` | windows override | 已存在同名文件。 |
+| `zh-Hans` | `Invalid file name.` | windows override | 文件名无效。 |
+| `zh-Hans` | `Waiting for authorization in the TeraBox app.` | windows override | 正在等待 TeraBox 应用中的授权。 |
+| `zh-Hans` | `Authorization code invalid or expired.` | windows override | 授权码无效或已过期。 |
+| `zh-Hans` | `Failed to open search index: %@` | windows override | 无法打开搜索索引：%@ |
+| `zh-Hans` | `Search index error: %@` | windows override | 搜索索引错误：%@ |
+| `zh-Hans` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 端点 URL 无效（主机：“%@”）。请检查“端点 URL”字段。 |
+| `zh-Hans` | `Filen API error` | windows override | Filen API 错误 |
 | `zh-Hant` | `System Default follows the language selected in macOS.` | windows override | 「跟隨系統」會使用 Windows 中設定的語言。 |
 | `zh-Hant` | `Search all sources (⌘F)` | windows override | 搜尋所有來源（Ctrl+F） |
 | `zh-Hant` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 會對每個受保護的資料夾（桌面、文件、下載……）詢問一次。每個資料夾首次打開可能需要幾秒鐘——但僅限首次。 |
@@ -162,3 +886,252 @@ were left alone and want a human decision.
 | `zh-Hant` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登入——此處無可編輯內容。請在 Windows 版 iCloud 應用程式中管理 iCloud 雲碟。 |
 | `zh-Hant` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 請先將此帳戶連線為網路磁碟機——雲端資料夾沒有終端機可以開啟的路徑。 |
 | `zh-Hant` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 終端機只能開啟這台電腦上存在的資料夾。將此帳戶連線為網路磁碟機後，它會出現在檔案總管中，終端機將在其中開啟。 |
+| `zh-Hant` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）屬於使用者「%@」而不是你。 |
+| `zh-Hant` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）的權限不允許更改。 |
+| `zh-Hant` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Explorer 也會遇到相同的問題。若要修復，請拷貝該指令，貼到「終端機」中並輸入你的密碼。 |
+| `zh-Hant` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | 你沒有權限更改 %@ 所在的檔案夾（%@），因此無法將其移到垃圾桶或刪除。該檔案夾的擁有者可以在 Explorer 的「檔案 → 取得資訊」中更改。 |
+| `zh-Hant` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows 拒絕 FileFluss 將 %@ 移到垃圾桶。如果 FileFluss 尚未獲得「完全取用磁碟」，在「系統設定 → 隱私權與安全性」中授予可能會有幫助，之後需要重新啟動 FileFluss。如果 Explorer 也無法將其移到垃圾桶，則原因不在 FileFluss。 |
+| `zh-Hant` | `Show in Finder` | auto-rewritten | 在 Explorer 中顯示 |
+| `zh-Hant` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | FileFluss 開啟「%@」之後，該檔案在這台 Mac 上被修改過。FileFluss 尚不會將其他 App 中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請在 Explorer 中掛載該帳戶。 |
+| `zh-Hant` | ` and ` | windows override | 和 |
+| `zh-Hant` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | 這樣，「複製共用連結」會複製可直接下載檔案的連結，而不是服務商的預覽頁面。不提供直接連結的服務商一律提供其自己的頁面。 |
+| `zh-Hant` | `%@ usually need a paid plan.` | windows override | %@通常需要付費方案。 |
+| `zh-Hant` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | 已不存在的資料夾（已刪除的資料夾、已拔除的磁碟機、已中斷連線的雲端帳戶）會改為開啟你的主資料夾。 |
+| `zh-Hant` | `Allow downloading` | windows override | 允許下載 |
+| `zh-Hant` | `Analyse` | windows override | 分析 |
+| `zh-Hant` | `Analyse any folder on this Mac` | needs review | 分析這台 Mac 上的任意檔案夾 |
+| `zh-Hant` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | 在連結到期之前，任何擁有此連結的人都可以下載該檔案。此連結無法提前撤銷。 |
+| `zh-Hant` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box 保留了公開連結——請確認你的系統管理員是否管理此項目的共用。 |
+| `zh-Hant` | `Change Sharing…` | windows override | 變更共用… |
+| `zh-Hant` | `Check for updates automatically` | windows override | 自動檢查更新 |
+| `zh-Hant` | `Checked just now: %@` | windows override | 剛剛檢查：%@ |
+| `zh-Hant` | `Choose Folder…` | windows override | 選擇資料夾… |
+| `zh-Hant` | `Cloud account not connected` | windows override | 雲端帳戶未連線 |
+| `zh-Hant` | `Copy Share Link` | windows override | 複製共用連結 |
+| `zh-Hant` | `Copy direct download links when available` | windows override | 盡可能複製直接下載連結 |
+| `zh-Hant` | `Couldn't change sharing: %@` | windows override | 無法變更共用設定：%@ |
+| `zh-Hant` | `Couldn't create the share link: %@` | windows override | 無法建立共用連結：%@ |
+| `zh-Hant` | `Couldn't read this file's share link: %@` | windows override | 無法讀取此檔案的共用連結：%@ |
+| `zh-Hant` | `Couldn't stop sharing: %@` | windows override | 無法停止共用：%@ |
+| `zh-Hant` | `Create Link` | windows override | 建立連結 |
+| `zh-Hant` | `Expires` | windows override | 到期日 |
+| `zh-Hant` | `Expires %@` | windows override | %@ 到期 |
+| `zh-Hant` | `Folders` | windows override | 資料夾 |
+| `zh-Hant` | `Home folder` | windows override | 主資料夾 |
+| `zh-Hant` | `Jottacloud accepted the request but returned no public link for this file.` | windows override | Jottacloud 接受了要求，但沒有傳回此檔案的公開連結。 |
+| `zh-Hant` | `Largest files` | windows override | 最大的檔案 |
+| `zh-Hant` | `Last checked: %@` | windows override | 上次檢查：%@ |
+| `zh-Hant` | `No files above this size.` | windows override | 沒有超過此大小的檔案。 |
+| `zh-Hant` | `OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works.` | windows override | OneDrive 無法直接變更連結的設定，因此已撤銷先前的連結並建立了新連結——舊位址已失效。 |
+| `zh-Hant` | `OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation.` | windows override | OneDrive 拒絕為此檔案建立公開連結。帳戶可能已關閉透過連結共用的功能，而且公司帳戶通常只允許組織內部人員使用連結。 |
+| `zh-Hant` | `Pick a cloud account or a folder, then choose Analyse.` | windows override | 選擇一個雲端帳戶或資料夾，然後選擇「分析」。 |
+| `zh-Hant` | `Protect with password` | windows override | 以密碼保護 |
+| `zh-Hant` | `Reveal` | windows override | 在面板中顯示 |
+| `zh-Hant` | `Save Changes` | windows override | 儲存變更 |
+| `zh-Hant` | `Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works.` | windows override | Seafile 無法變更連結的設定，因此已取代該連結——先前的 URL 已失效。 |
+| `zh-Hant` | `Set an expiry date` | windows override | 設定到期日 |
+| `zh-Hant` | `Share Link…` | windows override | 共用連結… |
+| `zh-Hant` | `Shared` | windows override | 已共用 |
+| `zh-Hant` | `Sharing failed` | windows override | 共用失敗 |
+| `zh-Hant` | `Show` | windows override | 顯示 |
+| `zh-Hant` | `Stop Sharing` | windows override | 停止共用 |
+| `zh-Hant` | `Stop sharing this file?` | windows override | 要停止共用此檔案嗎？ |
+| `zh-Hant` | `Stopped early, so these totals are a lower bound — the real figures are larger.` | windows override | 已提前停止，因此這些總數只是下限——實際數值更大。 |
+| `zh-Hant` | `Storage Analysis` | windows override | 儲存空間分析 |
+| `zh-Hant` | `Storage Analysis…` | windows override | 儲存空間分析… |
+| `zh-Hant` | `The link couldn't be checked from here: %@` | windows override | 無法從此處檢查連結：%@ |
+| `zh-Hant` | `The link to "%@" stops working for everyone who has it. This can't be undone.` | windows override | 指向「%@」的連結將對所有擁有它的人失效。此操作無法復原。 |
+| `zh-Hant` | `The server returned an unsafe file name ("%@"), so the download was stopped.` | windows override | 伺服器傳回了不安全的檔案名稱（「%@」），因此已停止下載。 |
+| `zh-Hant` | `This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it.` | windows override | 此 Microsoft 帳戶不允許應用程式變更檔案的現有連結。請在 OneDrive 網頁版中開啟該檔案以變更或移除連結。 |
+| `zh-Hant` | `This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there.` | windows override | 此 Microsoft 帳戶不允許應用程式管理檔案的現有連結。請在 OneDrive 網頁版中開啟該檔案，並在該處移除連結。 |
+| `zh-Hant` | `This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there.` | windows override | 此 Microsoft 帳戶不允許應用程式移除現有連結。請在 OneDrive 網頁版中開啟該檔案，並在該處移除連結。 |
+| `zh-Hant` | `This account can't serve direct download links, so the share page link was copied instead.` | windows override | 此帳戶無法提供直接下載連結，因此已改為複製共用頁面的連結。 |
+| `zh-Hant` | `This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account.` | windows override | 此帳戶拒絕為連結設定%@。大多數服務商僅在付費方案中提供這些功能。不使用它們仍可共用，這些選項現已對此帳戶隱藏。 |
+| `zh-Hant` | `This file already had a public link, so the requested settings were not applied.` | windows override | 此檔案已有公開連結，因此未套用所要求的設定。 |
+| `zh-Hant` | `This file already had a share link, so that one was returned.` | windows override | 此檔案已有共用連結，因此傳回了該連結。 |
+| `zh-Hant` | `This file already has a public link. Open it in Dropbox to copy that link.` | windows override | 此檔案已有公開連結。請在 Dropbox 中開啟它以複製該連結。 |
+| `zh-Hant` | `This file doesn't have a public link.` | windows override | 此檔案沒有公開連結。 |
+| `zh-Hant` | `This file has no public link to update. Create one first.` | windows override | 此檔案沒有可更新的公開連結。請先建立一個。 |
+| `zh-Hant` | `This file is no longer shared.` | windows override | 此檔案已不再共用。 |
+| `zh-Hant` | `This file isn't shared with anyone who has the link.` | windows override | 此檔案未與擁有連結的人共用。 |
+| `zh-Hant` | `This file was already public — WordPress media has no private state.` | windows override | 此檔案原本就是公開的——WordPress 媒體沒有私人狀態。 |
+| `zh-Hant` | `This item doesn't have a public link.` | windows override | 此項目沒有公開連結。 |
+| `zh-Hant` | `This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions.` | windows override | 此金鑰無權列出帳戶的值區（s3:ListAllMyBuckets）。請在「路徑」欄位中輸入值區名稱——FileFluss 將只使用該值區，不會要求整個帳戶的權限。 |
+| `zh-Hant` | `This link is not public: OneDrive granted it as "%@", so opening it asks for a Microsoft sign-in.` | windows override | 此連結不是公開的：OneDrive 以「%@」方式授予，因此開啟時需要登入 Microsoft 帳戶。 |
+| `zh-Hant` | `When FileFluss opens` | windows override | FileFluss 啟動時 |
+| `zh-Hant` | `Your Box administrator disabled downloads for shared links — recipients can only preview the file.` | windows override | 你的 Box 系統管理員已停用共用連結的下載——收件者只能預覽該檔案。 |
+| `zh-Hant` | `Your Box administrator restricted this link to people in your company — it is not publicly accessible.` | windows override | 你的 Box 系統管理員已將此連結限制為僅公司內部人員可用——它無法公開存取。 |
+| `zh-Hant` | `Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible.` | windows override | 你的 Box 系統管理員已將此連結限制為僅檔案的共同作業者可用——它無法公開存取。 |
+| `zh-Hant` | `a password` | windows override | 密碼 |
+| `zh-Hant` | `a password and an expiry date` | windows override | 密碼和到期日 |
+| `zh-Hant` | `an expiry date` | windows override | 到期日 |
+| `zh-Hant` | `expiry dates` | windows override | 到期日 |
+| `zh-Hant` | `kDrive created the link without download permission — recipients can view the file only.` | windows override | kDrive 建立的連結沒有下載權限——收件者只能檢視該檔案。 |
+| `zh-Hant` | `password protection` | windows override | 密碼保護 |
+| `zh-Hant` | `the link is not reachable without signing in.` | windows override | 未登入時無法存取該連結。 |
+| `zh-Hant` | `the server didn't answer.` | windows override | 伺服器沒有回應。 |
+| `zh-Hant` | `COHN Password` | windows override | COHN 密碼 |
+| `zh-Hant` | `COHN Username` | windows override | COHN 使用者名稱 |
+| `zh-Hant` | `Camera IP address` | windows override | 相機 IP 位址 |
+| `zh-Hant` | `GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again.` | windows override | GoPro 相機在開機且可連線時會自動連接。若要配對其他相機，請移除此相機後重新加入。 |
+| `zh-Hant` | `Home Wi-Fi (COHN)` | windows override | 家用 Wi-Fi（COHN） |
+| `zh-Hant` | `No camera found. Make sure it's on and connected by USB or Wi-Fi, then scan again.` | windows override | 找不到相機。請確認相機已開機並透過 USB 或 Wi-Fi 連接，然後再次掃描。 |
+| `zh-Hant` | `Scan for Cameras` | windows override | 掃描相機 |
+| `zh-Hant` | `Scanning…` | windows override | 正在掃描… |
+| `zh-Hant` | `Set up "Camera on Home Network" in the GoPro Quik app, then enter the camera's IP address and the COHN username and password it shows.` | windows override | 在 GoPro Quik 應用程式中設定「家用網路上的相機」（COHN），然後輸入相機的 IP 位址，以及應用程式顯示的 COHN 使用者名稱和密碼。 |
+| `zh-Hant` | `Turn the camera on, then either connect it by USB or join its Wi-Fi network. Scan to find it.` | windows override | 開啟相機，然後透過 USB 連接，或加入相機的 Wi-Fi 網路。再掃描以尋找相機。 |
+| `zh-Hant` | `USB or Wi-Fi` | windows override | USB 或 Wi-Fi |
+| `zh-Hant` | `Cloud Storage Providers` | windows override | 雲端儲存服務商 |
+| `zh-Hant` | `Other Protocols` | windows override | 其他通訊協定 |
+| `zh-Hant` | `Cameras & Devices` | windows override | 相機與裝置 |
+| `zh-Hant` | `Show Archive in Finder` | auto-rewritten | 在 Explorer 中顯示壓縮檔 |
+| `zh-Hant` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
+
+RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR %@（不到 1 MB），用已知指紋驗證後放在自己的資料夾中，無需管理者密碼。
+
+RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。 |
+| `zh-Hant` | `Open` | windows override | 開啟 |
+| `zh-Hant` | `The file changed while it was being uploaded.` | windows override | 檔案在上傳期間已變更。 |
+| `zh-Hant` | `Quit Anyway` | windows override | 仍要結束 |
+| `zh-Hant` | `Cloud` | windows override | 雲端 |
+| `zh-Hant` | `Home` | windows override | 主資料夾 |
+| `zh-Hant` | `%@ of %@` | windows override | %@ / %@ |
+| `zh-Hant` | `~%@ left` | windows override | 剩餘約 %@ |
+| `zh-Hant` | `Cancelling…` | windows override | 正在取消… |
+| `zh-Hant` | `Downloading %@` | windows override | 正在下載 %@ |
+| `zh-Hant` | `Uploading %@` | windows override | 正在上傳 %@ |
+| `zh-Hant` | `1 folder` | windows override | 1 個資料夾 |
+| `zh-Hant` | `1 file` | windows override | 1 個檔案 |
+| `zh-Hant` | `Copied` | windows override | 已複製 |
+| `zh-Hant` | `Moved` | windows override | 已移動 |
+| `zh-Hant` | `Downloaded` | windows override | 已下載 |
+| `zh-Hant` | `Uploaded` | windows override | 已上傳 |
+| `zh-Hant` | `Opened` | windows override | 已開啟 |
+| `zh-Hant` | `Cancelled: %@ %@` | windows override | 已取消——%@：%@ |
+| `zh-Hant` | `Unknown error` | windows override | 未知的錯誤 |
+| `zh-Hant` | `Failed: %@ %@ — %@` | windows override | 失敗——%@：%@——%@ |
+| `zh-Hant` | `Done` | windows override | 完成 |
+| `zh-Hant` | `Done: %@ %@` | windows override | 完成——%@：%@ |
+| `zh-Hant` | `Share link copied` | windows override | 共用連結已複製 |
+| `zh-Hant` | `Link copied — not public` | windows override | 連結已複製——非公開 |
+| `zh-Hant` | `Left newer` | windows override | 左側較新 |
+| `zh-Hant` | `Right newer` | windows override | 右側較新 |
+| `zh-Hant` | `Could not read folders: %@` | windows override | 無法讀取資料夾：%@ |
+| `zh-Hant` | `Cancelled` | windows override | 已取消 |
+| `zh-Hant` | `Could not save the index: %@` | windows override | 無法儲存索引：%@ |
+| `zh-Hant` | `Account not connected` | windows override | 帳戶未連線 |
+| `zh-Hant` | `Space` | windows override | 空白鍵 |
+| `zh-Hant` | `Could not mount in Finder: %@` | auto-rewritten | 無法在 Explorer 中裝載：%@ |
+| `zh-Hant` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows 與內部伺服器無法就認證方式達成一致（NetFS 狀態 %d）。請回報此問題。 |
+| `zh-Hant` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows 在內部伺服器上找不到可裝載的內容（NetFS 狀態 %d）。 |
+| `zh-Hant` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | 內部 WebDAV 伺服器未對 OPTIONS 回應 200 OK。 |
+| `zh-Hant` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | 無法連線到 127.0.0.1:%@ 上的內部 WebDAV 伺服器：%@ |
+| `zh-Hant` | `Current Folder` | windows override | 目前資料夾 |
+| `zh-Hant` | `This Source` | windows override | 此來源 |
+| `zh-Hant` | `All Sources` | windows override | 所有來源 |
+| `zh-Hant` | `%@ (offline)` | windows override | %@（離線） |
+| `zh-Hant` | `Local Files` | windows override | 本機檔案 |
+| `zh-Hant` | `Local` | windows override | 本機 |
+| `zh-Hant` | `Reveal “%@” in Finder` | auto-rewritten | 在 Explorer 中顯示「%@」 |
+| `zh-Hant` | `Clear the cache?` | windows override | 要清除快取嗎？ |
+| `zh-Hant` | `Erase all offline indexes?` | windows override | 要清除所有離線索引嗎？ |
+| `zh-Hant` | `1 transfer — click for details` | windows override | 1 個傳輸——按一下查看詳細資料 |
+| `zh-Hant` | `1 folder size — click for details` | windows override | 1 個資料夾大小——按一下查看詳細資料 |
+| `zh-Hant` | `Index for Offline Search…` | windows override | 為離線搜尋建立索引… |
+| `zh-Hant` | `Re-index for Offline Search…` | windows override | 為離線搜尋重新建立索引… |
+| `zh-Hant` | `Unmount from Finder` | auto-rewritten | 從 Explorer 中退出 |
+| `zh-Hant` | `Could not compute plan: %@` | windows override | 無法計算同步計畫：%@ |
+| `zh-Hant` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 現在要求第三方應用程式使用 OAuth，且已停止新應用程式註冊。請在 my.pcloud.com 登入，複製「pcauth」Cookie 的值，並將其貼到「存取權杖」欄位中。 |
+| `zh-Hant` | `Desktop` | windows override | 桌面 |
+| `zh-Hant` | `Document` | windows override | 文件 |
+| `zh-Hant` | `Text Document` | windows override | 文字文件 |
+| `zh-Hant` | `Downloads` | windows override | 下載 |
+| `zh-Hant` | `Pictures` | windows override | 圖片 |
+| `zh-Hant` | `Music` | windows override | 音樂 |
+| `zh-Hant` | `Folder` | windows override | 資料夾 |
+| `zh-Hant` | `Star` | windows override | 星號 |
+| `zh-Hant` | `Heart` | windows override | 愛心 |
+| `zh-Hant` | `Flag` | windows override | 旗標 |
+| `zh-Hant` | `Bookmark` | windows override | 書籤 |
+| `zh-Hant` | `Tag` | windows override | 標籤 |
+| `zh-Hant` | `Work` | windows override | 工作 |
+| `zh-Hant` | `Archive` | windows override | 封存 |
+| `zh-Hant` | `Inbox` | windows override | 收件匣 |
+| `zh-Hant` | `Sent` | windows override | 已傳送 |
+| `zh-Hant` | `Personal` | windows override | 個人 |
+| `zh-Hant` | `Panel Navigation` | windows override | 面板導覽 |
+| `zh-Hant` | `File Operations` | windows override | 檔案操作 |
+| `zh-Hant` | `Clipboard` | windows override | 剪貼簿 |
+| `zh-Hant` | `Selection` | windows override | 選取 |
+| `zh-Hant` | `View & Sort` | windows override | 檢視與排序 |
+| `zh-Hant` | `Cross-panel & Tools` | windows override | 跨面板與工具 |
+| `zh-Hant` | `Misc` | windows override | 其他 |
+| `zh-Hant` | `The folders from last time` | windows override | 上次的資料夾 |
+| `zh-Hant` | `Specific folders` | windows override | 指定的資料夾 |
+| `zh-Hant` | `All sizes` | windows override | 所有大小 |
+| `zh-Hant` | `1 MB and up` | windows override | 1 MB 以上 |
+| `zh-Hant` | `10 MB and up` | windows override | 10 MB 以上 |
+| `zh-Hant` | `100 MB and up` | windows override | 100 MB 以上 |
+| `zh-Hant` | `1 GB and up` | windows override | 1 GB 以上 |
+| `zh-Hant` | `Box authentication failed: %@` | windows override | Box 驗證失敗：%@ |
+| `zh-Hant` | `Could not resolve host. Check the server address.` | windows override | 無法解析主機。請檢查伺服器位址。 |
+| `zh-Hant` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | 無法連線——請檢查主機、連接埠，以及 FTP 是否可以存取。 |
+| `zh-Hant` | `Connection timed out.` | windows override | 連線逾時。 |
+| `zh-Hant` | `TLS/SSL error: %@` | windows override | TLS/SSL 錯誤：%@ |
+| `zh-Hant` | `the server's certificate could not be verified.` | windows override | 無法驗證伺服器的憑證。 |
+| `zh-Hant` | `Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented.` | windows override | Filen 帳戶使用驗證版本 %@。FileFluss 目前僅支援 v2 帳戶——尚未實作 Filen v1 / v3（Argon2）。 |
+| `zh-Hant` | `Filen login succeeded but the server didn't return an apiKey.` | windows override | Filen 登入成功，但伺服器未傳回 apiKey。 |
+| `zh-Hant` | `Filen file metadata not cached — listing didn't populate chunk info.` | windows override | Filen 檔案中繼資料未快取——清單未提供區塊資訊。 |
+| `zh-Hant` | `Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet.` | windows override | Filen 檔案金鑰不是 32 個 ASCII 位元組——它使用了尚不支援的驗證版本加密。 |
+| `zh-Hant` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen 檔案中繼資料未快取——請重新開啟資料夾後再試一次。 |
+| `zh-Hant` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info 傳回了非預期的資料。 |
+| `zh-Hant` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder 未傳回根 UUID。 |
+| `zh-Hant` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | 你尚未在這台 Mac 上登入 iCloud。打開「系統設定 → Apple 帳戶 → iCloud → iCloud 雲碟」並將其開啟。 |
+| `zh-Hant` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | 此 Nextcloud 伺服器未提供 Login Flow v2。請改用應用程式專用密碼登入方式。 |
+| `zh-Hant` | `Timed out waiting for browser sign-in.` | windows override | 等候瀏覽器登入逾時。 |
+| `zh-Hant` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | 伺服器拒絕了 SSH 金鑰。請確認公開金鑰位於伺服器的 ~/.ssh/authorized_keys 中（若是 Hetzner Storage Box 等代管服務，請將其加入服務商的 SSH 金鑰面板）。 |
+| `zh-Hant` | `SSH authentication failed. Check the username and password.` | windows override | SSH 驗證失敗。請檢查使用者名稱和密碼。 |
+| `zh-Hant` | `SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.` | windows override | SSH 驗證失敗。伺服器可能未授權你的公開金鑰，或者複雜密碼錯誤。 |
+| `zh-Hant` | `Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).` | windows override | 私密金鑰的格式不受支援。請將其轉換為 OpenSSH 格式（例如使用 `puttygen key.ppk -O private-openssh -o id_rsa`）。 |
+| `zh-Hant` | `Wrong passphrase for the private key.` | windows override | 私密金鑰的複雜密碼錯誤。 |
+| `zh-Hant` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | 連線遭拒——此主機和連接埠上是否正在執行 SSH 服務？ |
+| `zh-Hant` | `Connection timed out. Check the hostname, port, and your network.` | windows override | 連線逾時。請檢查主機名稱、連接埠和你的網路。 |
+| `zh-Hant` | `Network is unreachable from this Mac.` | needs review | 無法從這台 Mac 存取網路。 |
+| `zh-Hant` | `Could not resolve hostname. Check spelling or DNS.` | windows override | 無法解析主機名稱。請檢查拼字或 DNS。 |
+| `zh-Hant` | `Server URL is not a valid URL.` | windows override | 伺服器 URL 不是有效的 URL。 |
+| `zh-Hant` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | 無法直接上傳到 Seafile 資料庫的根目錄——請先選擇一個資料庫。 |
+| `zh-Hant` | `Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.` | windows override | 無法在 FileFluss 中刪除 Seafile 資料庫。請使用 Seafile 網頁介面。 |
+| `zh-Hant` | `Create a library in the Seafile web UI before adding folders.` | windows override | 加入資料夾之前，請先在 Seafile 網頁介面中建立資料庫。 |
+| `zh-Hant` | `Rename a Seafile library from its web UI.` | windows override | 請在 Seafile 網頁介面中重新命名資料庫。 |
+| `zh-Hant` | `Cannot share the Seafile library list — pick a file or folder inside a library.` | windows override | 無法共用 Seafile 資料庫清單——請選擇資料庫中的檔案或資料夾。 |
+| `zh-Hant` | `The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.` | windows override | NAS 依據 DSM 自認的位址產生了此連結，因此它可能只能在你的區域網路中使用。如果收件者無法開啟，請檢查 DSM 的外部存取設定。 |
+| `zh-Hant` | `The sharing link does not exist.` | windows override | 共用連結不存在。 |
+| `zh-Hant` | `The NAS has reached its maximum number of sharing links — delete some in File Station and try again.` | windows override | NAS 的共用連結數量已達上限——請在 File Station 中刪除一些後再試一次。 |
+| `zh-Hant` | `Failed to access the NAS's sharing links.` | windows override | 無法存取 NAS 的共用連結。 |
+| `zh-Hant` | `No such account or incorrect password.` | windows override | 帳戶不存在或密碼錯誤。 |
+| `zh-Hant` | `Account is disabled.` | windows override | 帳戶已停用。 |
+| `zh-Hant` | `Permission denied.` | windows override | 權限遭拒。 |
+| `zh-Hant` | `This account requires a 2-factor authentication (OTP) code.` | windows override | 此帳戶需要雙重驗證（OTP）代碼。 |
+| `zh-Hant` | `OTP code is incorrect.` | windows override | OTP 代碼不正確。 |
+| `zh-Hant` | `OTP code authentication has failed too many times.` | windows override | OTP 代碼驗證失敗次數過多。 |
+| `zh-Hant` | `Synology administrator must enforce 2-factor authentication.` | windows override | Synology 系統管理員要求使用雙重驗證。 |
+| `zh-Hant` | `Maximum number of OTP retries reached. Try again later.` | windows override | 已達 OTP 重試次數上限。請稍後再試。 |
+| `zh-Hant` | `Password expired — please reset it from DSM.` | windows override | 密碼已過期——請在 DSM 中重設。 |
+| `zh-Hant` | `Password must be changed at first login.` | windows override | 首次登入時必須變更密碼。 |
+| `zh-Hant` | `Invalid parameter for the request.` | windows override | 要求的參數無效。 |
+| `zh-Hant` | `Unknown API method.` | windows override | 未知的 API 方法。 |
+| `zh-Hant` | `Invalid API method version.` | windows override | 無效的 API 方法版本。 |
+| `zh-Hant` | `Invalid API method.` | windows override | 無效的 API 方法。 |
+| `zh-Hant` | `Insufficient user privilege.` | windows override | 使用者權限不足。 |
+| `zh-Hant` | `Multiple login detected.` | windows override | 偵測到多處登入。 |
+| `zh-Hant` | `Request denied — too many connections.` | windows override | 要求遭拒——連線過多。 |
+| `zh-Hant` | `Synology rejected the file path.` | windows override | Synology 拒絕了該檔案路徑。 |
+| `zh-Hant` | `Authorization timed out — the QR code expired before it was scanned.` | windows override | 授權逾時——QR 碼在掃描前已過期。 |
+| `zh-Hant` | `A file with that name already exists.` | windows override | 已有同名的檔案。 |
+| `zh-Hant` | `Invalid file name.` | windows override | 檔案名稱無效。 |
+| `zh-Hant` | `Waiting for authorization in the TeraBox app.` | windows override | 正在等候 TeraBox 應用程式中的授權。 |
+| `zh-Hant` | `Authorization code invalid or expired.` | windows override | 授權碼無效或已過期。 |
+| `zh-Hant` | `Failed to open search index: %@` | windows override | 無法開啟搜尋索引：%@ |
+| `zh-Hant` | `Search index error: %@` | windows override | 搜尋索引錯誤：%@ |
+| `zh-Hant` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 端點 URL 無效（主機：「%@」）。請檢查「端點 URL」欄位。 |
+| `zh-Hant` | `Filen API error` | windows override | Filen API 錯誤 |

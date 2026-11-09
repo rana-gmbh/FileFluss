@@ -272,6 +272,30 @@ internal static class Program
                 }
             }
 
+            // Keys that differ only in their Cocoa specifier ("%d files" and "%@ files") become
+            // the same .NET key ("{0} files"). They mean the same text, so one entry each: a
+            // Windows wording wins, otherwise the first the catalogues list.
+            var windowsNames = windowsEntries.Keys.Select(k => names[ConvertSpecifiers(k)]).ToHashSet(StringComparer.Ordinal);
+            var byName = new Dictionary<string, int>(StringComparer.Ordinal);
+            var unique = new List<KeyValuePair<string, string>>();
+            foreach (var entry in converted)
+            {
+                if (byName.TryGetValue(entry.Key, out var index))
+                {
+                    if (windowsNames.Contains(entry.Key) && unique[index].Value != entry.Value && windowsEntries.Entries.Any(w => names[ConvertSpecifiers(w.Key)] == entry.Key && ConvertSpecifiers(w.Value) == entry.Value))
+                    {
+                        unique[index] = entry;
+                    }
+
+                    continue;
+                }
+
+                byName[entry.Key] = unique.Count;
+                unique.Add(entry);
+            }
+
+            converted = unique;
+
             // Defence in depth: whatever the map said, never hand resgen a file it would
             // have to silently drop entries from.
             var folded = new Dictionary<string, string>(StringComparer.Ordinal);
