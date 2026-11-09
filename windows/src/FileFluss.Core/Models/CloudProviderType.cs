@@ -108,6 +108,13 @@ public static class CloudProviderTypeExtensions
         _ => type.ToString(),
     };
 
+    /// <summary>
+    /// Whether Add Account offers the type. TeraBox stays out of the list until TeraBox issues
+    /// the Open Platform keys: without them sign-in can only fail (macOS 8503dad).
+    /// </summary>
+    public static bool IsOfferedInAddAccount(this CloudProviderType type)
+        => type != CloudProviderType.TeraBox || Providers.TeraBox.TeraBoxProvider.IsAvailable;
+
     public static ProviderCategory Category(this CloudProviderType type) => type switch
     {
         CloudProviderType.Ftp or CloudProviderType.S3 or CloudProviderType.S3Compatible or

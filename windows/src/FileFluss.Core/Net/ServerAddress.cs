@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Globalization;
+using System.Net;
 
 namespace FileFluss.Core.Net;
 
@@ -40,5 +41,47 @@ public static class ServerAddress
         var authorityEnd = url.IndexOfAny(['/', '?', '#'], authorityStart);
         authorityEnd = authorityEnd < 0 ? url.Length : authorityEnd;
         return url[..authorityEnd] + ":" + port.ToString(CultureInfo.InvariantCulture) + url[authorityEnd..];
+    }
+
+    /// <summary>
+    /// Whether a password sent to <paramref name="address"/> would cross a network in the
+    /// clear (the macOS <c>CredentialScope.exposesPassword</c>). Addresses on this PC or the
+    /// local network don't count: home NAS units are often reached over plain HTTP, and
+    /// that's a fair choice.
+    /// </summary>
+    public static bool ExposesPassword(string? address)
+    {
+        var trimmed = (address ?? string.Empty).Trim().ToLowerInvariant();
+        if (!trimmed.StartsWith("http://", StringComparison.Ordinal)
+            || !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || uri.Host.Length == 0)
+        {
+            return false;
+        }
+
+        var host = uri.Host;
+        if (host == "localhost" || host.EndsWith(".local", StringComparison.Ordinal) || host.EndsWith(".localhost", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var octets = host.Split('.');
+        if (octets.Length != 4 || !octets.All(o => int.TryParse(o, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
+        {
+            return true;
+        }
+
+        if (!IPAddress.TryParse(host, out var ip))
+        {
+            return true;
+        }
+
+        var bytes = ip.GetAddressBytes();
+        return (bytes[0], bytes[1]) switch
+        {
+            (10, _) or (127, _) or (192, 168) or (169, 254) => false,
+            (172, >= 16 and <= 31) => false,
+            _ => true,
+        };
     }
 }

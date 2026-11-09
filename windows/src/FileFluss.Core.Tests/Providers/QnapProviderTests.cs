@@ -677,3 +677,34 @@ public sealed class QnapProviderTests : IDisposable
         Assert.Equal("sid-1", Param(logout.Uri, "sid"));
     }
 }
+
+public sealed class AddAccountOfferTests
+{
+    [Fact]
+    public void TeraBoxStaysHiddenUntilItsKeysAreFilledIn()
+    {
+        // This build ships the placeholder Open Platform keys, so sign-in could only fail.
+        Assert.False(FileFluss.Core.Providers.TeraBox.TeraBoxProvider.IsAvailable);
+        Assert.False(CloudProviderType.TeraBox.IsOfferedInAddAccount());
+        Assert.True(CloudProviderType.Qnap.IsOfferedInAddAccount());
+        Assert.True(CloudProviderType.Dropbox.IsOfferedInAddAccount());
+    }
+
+    [Theory]
+    [InlineData("http://files.example.com", true)]
+    [InlineData("  HTTP://dav.example.com:8080/dav ", true)]
+    [InlineData("http://8.8.8.8", true)]
+    [InlineData("http://172.32.0.1", true)]
+    [InlineData("https://files.example.com", false)]
+    [InlineData("files.example.com", false)]
+    [InlineData("http://localhost:5005", false)]
+    [InlineData("http://my-nas.local", false)]
+    [InlineData("http://192.168.1.20:5000", false)]
+    [InlineData("http://10.0.0.5", false)]
+    [InlineData("http://172.16.4.2", false)]
+    [InlineData("http://169.254.10.10", false)]
+    [InlineData("http://127.0.0.1", false)]
+    [InlineData("", false)]
+    public void PlainHttpWarningOnlyForAddressesBeyondTheLocalNetwork(string address, bool exposes)
+        => Assert.Equal(exposes, FileFluss.Core.Net.ServerAddress.ExposesPassword(address));
+}
