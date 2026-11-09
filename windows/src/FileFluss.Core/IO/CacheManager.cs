@@ -64,13 +64,19 @@ public static class CacheManager
             return total;
         }, cancellationToken);
 
-    /// <summary>Deletes everything cached. Files in use (an open document) are left alone.</summary>
+    /// <summary>
+    /// Deletes everything cached. Files in use (an open document) are left alone, and so are
+    /// opened copies the user has edited (<see cref="HoldsUserEdits"/>): they are not cache.
+    /// </summary>
     public static Task ClearAsync()
         => Task.Run(() =>
         {
             foreach (var file in CacheFiles())
             {
-                TryDelete(file);
+                if (!HoldsUserEdits(file))
+                {
+                    TryDelete(file);
+                }
             }
 
             foreach (var root in StagingLocation.CacheScanRoots())
@@ -142,6 +148,13 @@ public static class CacheManager
             {
                 var info = new FileInfo(file);
                 var cached = info.CreationTimeUtc;
+                if (HoldsUserEdits(file, cached, info.LastWriteTimeUtc))
+                {
+                    // Neither aged out nor counted against the limit: it's the user's work,
+                    // and counting it would only evict everything else in its place.
+                    continue;
+                }
+
                 if (cutoff is { } oldest && cached < oldest)
                 {
                     TryDelete(file);
@@ -179,6 +192,29 @@ public static class CacheManager
         return name.EndsWith(".fileflusspart", StringComparison.OrdinalIgnoreCase) ||
                name.StartsWith("dl-", StringComparison.Ordinal) ||
                folder.StartsWith("transfer-", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A copy opened from a cloud panel that an app has saved over since (see
+    /// <see cref="CachedCopy"/>), or one already kept aside as "(edited …)": FileFluss doesn't
+    /// upload such changes yet, so this copy may be the only one of the user's work. Only the
+    /// open cache is judged this way — transfer staging is never handed to an app.
+    /// </summary>
+    internal static bool HoldsUserEdits(string path, DateTime createdUtc, DateTime modifiedUtc)
+        => path.Replace('/', '\\').Contains(@"\FileFluss-Cache\open\", StringComparison.OrdinalIgnoreCase) &&CachedCopy.HoldsEdits(createdUtc, modifiedUtc);
+
+    private static bool HoldsUserEdits(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return HoldsUserEdits(path, info.CreationTimeUtc, info.LastWriteTimeUtc);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable dates: spare it — deleting is the step that can't be undone.
+            return true;
+        }
     }
 
     private static bool TryDelete(string path)

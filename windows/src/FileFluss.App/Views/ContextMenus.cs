@@ -79,11 +79,16 @@ public static class ContextMenus
         if (single is not null)
         {
             items.Add(Bold(Item(single.IsDirectory ? L("Open") : L("Open"), Glyphs.OpenInNew, single.IsDirectory ? Shortcut(KeyboardCommand.OpenDirectory) : null, () => _ = main.OpenAsync(panel, single))));
-            if (!single.IsDirectory && panel.IsLocal)
-            {
-                items.Add(Item(L("Open With…"), null, null, () => ShellFileOperations.OpenWith(single.Path, WindowHandle(view))));
-            }
+        }
 
+        // Open With: for one file or several, local or cloud (filled when the submenu opens).
+        if (OpenWithMenu.Offers(panel, selection))
+        {
+            items.Add(OpenWithMenu.Create(main, panel));
+        }
+
+        if (single is not null)
+        {
             if (!main.SinglePaneMode && single.IsDirectory)
             {
                 items.Add(Item(L("Open in Other Panel"), null, Shortcut(KeyboardCommand.OpenInOtherPanel), () => _ = main.OtherPanel.NavigateAsync(panel.Location with { Path = single.Path })));
