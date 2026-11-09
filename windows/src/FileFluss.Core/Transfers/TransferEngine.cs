@@ -1,9 +1,11 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Core.Diagnostics;
+using FileFluss.Core.Formatting;
 using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
+using FileFluss.Core.Storage;
 using static FileFluss.Core.Localization;
 
 namespace FileFluss.Core.Transfers;
@@ -241,6 +243,22 @@ public static class TransferEngine
             }
         }
 
+        // Between two accounts every file passes through the staging folder, which may be on a
+        // nearly full disk the destination's quota says nothing about. The sizes are summed
+        // already, so checking costs nothing; stopping here with a reason beats failing half
+        // way with a disk-full error (macOS 1.6). Windows stages one file at a time.
+        if (progress.IsCloudToCloud && StagingNeedFor(plans) is { WouldExceed: true } need)
+        {
+            var message = L(
+                "The files pass through this Mac on the way between the two accounts: that needs {0} on {1}, which has {2} free. Free up space, or choose another folder in Settings → Storage.",
+                ByteFormatter.Format(need.Needed),
+                need.VolumeName,
+                ByteFormatter.Format(Math.Max(0, need.Free ?? 0)));
+            SupportLogger.Shared.Log($"Cloud-to-cloud refused: needs {need.Needed} bytes staged on {need.VolumeName}, {need.Free} free", "Transfer", LogLevel.Error);
+            progress.Fail(message);
+            return;
+        }
+
         progress.SetPlan(totalFiles, progress.IsCloudToCloud ? expectedBytes * 2 : expectedBytes);
         progress.SetPhase(progress.IsCloudToCloud ? TransferPhase.Downloading : TransferPhase.Copying);
 
@@ -316,6 +334,31 @@ public static class TransferEngine
                 TryDeleteDirectory(staging);
             }
         }
+    }
+
+    /// <summary>The largest file of the planned byte copies: what the staging folder must hold at once.</summary>
+    private static StagingNeed? StagingNeedFor(IEnumerable<ItemPlan> plans)
+    {
+        long largest = 0;
+        foreach (var plan in plans)
+        {
+            if (plan.Tree is { } tree)
+            {
+                foreach (var entry in tree)
+                {
+                    if (!entry.Item.IsDirectory)
+                    {
+                        largest = Math.Max(largest, entry.Item.Size);
+                    }
+                }
+            }
+            else if (!plan.Item.IsDirectory)
+            {
+                largest = Math.Max(largest, plan.Item.Size);
+            }
+        }
+
+        return StagingSpace.For(largest);
     }
 
     // MARK: - Conflicts

@@ -28,6 +28,7 @@ public sealed class SyncSession : INotifyPropertyChanged
     private SyncPlan? _plan;
     private string? _errorMessage;
     private long? _destinationAvailable;
+    private StagingNeed? _staging;
     private int _generation;
     private CancellationTokenSource? _calculation;
 
@@ -316,6 +317,31 @@ public sealed class SyncSession : INotifyPropertyChanged
     /// <summary>"After sync:" row value, floored at zero (the red colour carries the overflow).</summary>
     public string? AfterSyncText => AvailableAfterSync is { } after ? ByteFormatter.Format(Math.Max(0, after)) : null;
 
+    /// <summary>What the plan needs on this PC on the way through; null when nothing passes through.</summary>
+    public StagingNeed? Staging
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _plan is null ? null : _staging;
+            }
+        }
+    }
+
+    /// <summary>"Needs on this Mac:" row value; null hides the two staging rows.</summary>
+    public string? StagingNeededText => Staging is { } staging ? ByteFormatter.Format(staging.Needed) : null;
+
+    /// <summary>The second staging row: the drive's name and what it has free.</summary>
+    public string? StagingFreeText
+        => Staging is { } staging
+            ? staging.Free is { } free ? L("{0} free", ByteFormatter.Format(Math.Max(0, free))) : L("free space unknown")
+            : null;
+
+    /// <summary>"The files pass through this Mac: … doesn't have room for that." in red; null when it fits.</summary>
+    public string? StagingWarning
+        => Staging is { WouldExceed: true } staging ? L("The files pass through this Mac: {0} doesn't have room for that.", staging.VolumeName) : null;
+
     /// <summary>The hint shown before the first Calculate.</summary>
     public static string PlanHint => L("Press Calculate to compute how many files will be added, replaced, or deleted.");
 
@@ -356,6 +382,7 @@ public sealed class SyncSession : INotifyPropertyChanged
 
         SyncPlan? plan = null;
         long? available = null;
+        StagingNeed? staging = null;
         string? error = null;
         try
         {
@@ -380,6 +407,7 @@ public sealed class SyncSession : INotifyPropertyChanged
                 dateTolerance: SyncPlanner.DateToleranceFor(source, destination),
                 hiddenPaths: [.. sourceHidden, .. destinationHidden]);
             available = await SpaceCheck.AvailableSpaceAsync(destination.Provider, destination.Path, token).ConfigureAwait(false);
+            staging = StagingNeedFor(plan);
         }
         catch (OperationCanceledException)
         {
@@ -404,6 +432,7 @@ public sealed class SyncSession : INotifyPropertyChanged
             {
                 _plan = plan;
                 _destinationAvailable = available;
+                _staging = staging;
                 _confirmLargeDeletion = false;
             }
             else if (error is not null)
@@ -471,8 +500,25 @@ public sealed class SyncSession : INotifyPropertyChanged
         _isCalculating = false;
         _plan = null;
         _destinationAvailable = null;
+        _staging = null;
         _errorMessage = null;
         _confirmLargeDeletion = false;
+    }
+
+    /// <summary>
+    /// What a sync that both downloads and uploads needs on this PC while it runs, or null when
+    /// nothing passes through: one that only uploads reads from files already here, and one
+    /// that only downloads writes straight to where they are going. One file at a time.
+    /// </summary>
+    private static StagingNeed? StagingNeedFor(SyncPlan plan)
+    {
+        if (plan.DownloadBytes <= 0 || plan.UploadBytes <= 0)
+        {
+            return null;
+        }
+
+        var largest = plan.Operations.Where(o => o.CopiesFile).Select(o => o.Bytes).DefaultIfEmpty(0).Max();
+        return StagingSpace.For(largest);
     }
 
     private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
