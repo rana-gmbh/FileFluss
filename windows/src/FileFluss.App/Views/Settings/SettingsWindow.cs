@@ -320,7 +320,7 @@ public sealed class SettingsWindow : Window
             }
 
             var dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
-            dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, account.IsConnected ? "ConnectedBrush" : "DisconnectedBrush");
+            dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, account.IsConnected && !_services.Accounts.NeedsSignIn(account.Id) ? "ConnectedBrush" : "DisconnectedBrush");
             header.Children.Add(dot);
             header.Children.Add(new TextBlock { Text = account.DisplayName, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 340 });
 

@@ -653,6 +653,14 @@ public sealed class PanelViewModel : Observable
             (_sortedRows, _sortedField, _sortedFolderCount) = (sorted, field, folderCount);
             Error = null;
             NeedsReauthentication = false;
+
+            // A listing that works proves the sign-in does (macOS 1.6 markSignInWorks): the
+            // sidebar's dot turns green again without a trip through Sign In.
+            if (location.AccountId is { } signedIn && !provider.IsLocal && provider is not Core.Search.OfflineIndexProvider)
+            {
+                _services.Accounts.MarkSignInWorks(signedIn);
+            }
+
             IsRefreshLoad = _listedLocation == location;
             ApplyView();
             ItemsListed?.Invoke(this, items);
