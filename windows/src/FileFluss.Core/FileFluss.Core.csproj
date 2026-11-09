@@ -22,8 +22,13 @@
       server-side rename and host-key handling without parsing a TTY.
     - FluentFTP: FTP/FTPS. macOS drives curl; same reasoning.
     - Microsoft.Data.Sqlite: the search/offline index (macOS uses the system SQLite).
+    - SharpCompress (MIT, pure C#, no native code, no dependencies on net10.0): reading ZIP,
+      RAR (4 and 5), 7z, BZip2 and XZ, and writing 7z and BZip2. macOS uses the system
+      libarchive; Windows has no archive API, and its bundled tar.exe crashes on file names
+      outside the ANSI code page. Tarballs, GZip and ZIP writing stay on .NET's own classes.
   -->
   <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="FluentFTP" Version="55.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />

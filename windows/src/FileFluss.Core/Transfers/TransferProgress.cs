@@ -17,6 +17,8 @@ public enum TransferOperation
     Mirroring,
     SyncingNewer,
     Adding,
+    Compressing,
+    Extracting,
 }
 
 public enum TransferPhase
@@ -373,6 +375,8 @@ public sealed class TransferProgress : INotifyPropertyChanged
         TransferOperation.Opening => L("Opening"),
         TransferOperation.Mirroring => L("Mirroring"),
         TransferOperation.SyncingNewer => L("Syncing newer"),
+        TransferOperation.Compressing => L("Compressing"),
+        TransferOperation.Extracting => L("Extracting"),
         _ => L("Adding"),
     };
 
@@ -383,6 +387,8 @@ public sealed class TransferProgress : INotifyPropertyChanged
         TransferOperation.Downloading => L("Downloaded"),
         TransferOperation.Uploading => L("Uploaded"),
         TransferOperation.Opening => L("Opened"),
+        TransferOperation.Compressing => L("Compressed"),
+        TransferOperation.Extracting => L("Extracted"),
         _ => L("Synced"),
     };
 
