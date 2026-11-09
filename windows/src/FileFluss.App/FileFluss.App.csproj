@@ -37,6 +37,7 @@
   <ItemGroup>
     <ProjectReference Include="../FileFluss.Core/FileFluss.Core.csproj" />
     <ProjectReference Include="../FileFluss.Native/FileFluss.Native.csproj" />
+    <InternalsVisibleTo Include="FileFluss.App.Tests" />
   </ItemGroup>
 
 </Project>

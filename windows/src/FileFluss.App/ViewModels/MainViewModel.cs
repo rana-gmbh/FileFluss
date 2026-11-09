@@ -499,10 +499,186 @@ public sealed class MainViewModel : Observable
     }
 
     /// <summary>
-    /// Downloads a cloud file to the open cache and hands it to its default app. A cached copy
-    /// with the same size and date is reused, so reopening is instant.
+    /// Hands a cloud file to its default app. A mapped account opens it where it really is, on
+    /// its drive, so a save goes back to the server (macOS 574038b); otherwise it is
+    /// downloaded to the open cache first (<see cref="CachedCopyAsync"/>). With
+    /// <paramref name="launch"/> false (Quick Look) it only fetches the cached copy.
     /// </summary>
     public async Task<string?> OpenCloudFileAsync(PanelViewModel panel, CloudFileItem item, bool launch = true)
+    {
+        if (launch && await MountedPathsAsync(panel, [item]) is [var mounted])
+        {
+            try
+            {
+                ShellFileOperations.Open(mounted);
+            }
+            catch (Exception e)
+            {
+                MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", item.Name), e.Message);
+            }
+
+            return mounted;
+        }
+
+        if (await CachedCopyAsync(panel, item) is not { } copy)
+        {
+            return null;
+        }
+
+        var (target, kept) = copy;
+        if (launch)
+        {
+            try
+            {
+                // Downloaded from someone's server: SmartScreen and Protected View apply, as to
+                // a browser download. (Quick Look's own preview stays unmarked.)
+                MarkOfTheWeb.Apply(target);
+                ShellFileOperations.Open(target);
+            }
+            catch (Exception e)
+            {
+                MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", item.Name), e.Message);
+            }
+        }
+
+        if (kept is not null)
+        {
+            ShowKeptEdits(item.Name, kept);
+        }
+
+        return target;
+    }
+
+    /// <summary>
+    /// Right-click → Open With (macOS <c>openCloudFiles(_:withApplication:)</c>): the selection
+    /// as local paths — itself in a local panel, on the drive of a mapped account, else
+    /// downloaded copies marked as coming from the Internet — handed to <paramref name="open"/>,
+    /// which returns false when the app refused them.
+    /// </summary>
+    public async Task OpenWithAsync(PanelViewModel panel, IReadOnlyList<CloudFileItem> items, Func<IReadOnlyList<string>, bool> open)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var paths = new List<string>();
+        var kept = new List<(string Name, string Path)>();
+        if (panel.IsLocal)
+        {
+            paths.AddRange(items.Select(i => i.Path));
+        }
+        else if (await MountedPathsAsync(panel, items) is { } mounted)
+        {
+            paths.AddRange(mounted);
+        }
+        else
+        {
+            foreach (var item in items)
+            {
+                if (await CachedCopyAsync(panel, item) is not { } copy)
+                {
+                    // Failed (and said so) or cancelled: the rest still open, as on macOS.
+                    continue;
+                }
+
+                var (target, keptAt) = copy;
+                MarkOfTheWeb.Apply(target);
+                paths.Add(target);
+                if (keptAt is not null)
+                {
+                    kept.Add((item.Name, keptAt));
+                }
+            }
+        }
+
+        if (paths.Count > 0)
+        {
+            string? failure = null;
+            try
+            {
+                if (!open(paths))
+                {
+                    // ERROR_NO_ASSOCIATION, in the system's own words and language.
+                    failure = new System.ComponentModel.Win32Exception(1155).Message;
+                }
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException or InvalidOperationException or IOException)
+            {
+                failure = e.Message;
+            }
+
+            if (failure is not null)
+            {
+                SupportLogger.Shared.Log($"Open With failed: {failure}", "Open", LogLevel.Error);
+                MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", Path.GetFileName(paths[0])), failure);
+            }
+        }
+
+        foreach (var (name, path) in kept)
+        {
+            ShowKeptEdits(name, path);
+        }
+    }
+
+    /// <summary>
+    /// Where the items are on the drive of their mapped account, or null when the account isn't
+    /// mapped, a file is past the WebDAV redirector's size limit, or a path doesn't resolve on
+    /// the drive — a copy then beats refusing to open anything (logged, as on macOS).
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> MountedPathsAsync(PanelViewModel panel, IReadOnlyList<CloudFileItem> items)
+    {
+        if (!panel.IsCloud || panel.IsOffline || panel.Location.AccountId is not { } accountId || _services.Mount.MountFor(accountId) is not { } mount)
+        {
+            return null;
+        }
+
+        if (mount.FileSizeLimitBytes is { } limit && items.Any(i => i.Size > limit))
+        {
+            return null;
+        }
+
+        var paths = items.Select(i => DrivePathFor(mount, i.Path)).ToList();
+        try
+        {
+            // Each check is a round trip through the redirector: off the UI thread, and bounded.
+            if (await Task.Run(() => paths.All(File.Exists)).WaitAsync(TimeSpan.FromSeconds(10)))
+            {
+                return paths;
+            }
+        }
+        catch (TimeoutException)
+        {
+        }
+
+        SupportLogger.Shared.Log($"open: {items[0].Path} not found on the drive {mount.DriveLetter}; opening a copy instead", "Open");
+        return null;
+    }
+
+    /// <summary>
+    /// "Your changes were kept, but not uploaded" (macOS 851b79c): saying nothing would leave
+    /// the user believing the work is gone.
+    /// </summary>
+    private void ShowKeptEdits(string name, string keptPath)
+    {
+        var choice = MessageDialog.Show(Shell.Window, L("Your changes were kept, but not uploaded"),
+            L("“{0}” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.", name),
+            DialogIcon.Info,
+            new DialogButton("reveal", L("Show in Finder")),
+            new DialogButton("ok", L("OK"), IsDefault: true, IsCancel: true));
+        if (choice == "reveal")
+        {
+            ShellFileOperations.RevealInExplorer([keptPath]);
+        }
+    }
+
+    /// <summary>
+    /// The open cache's copy of a cloud file, downloaded unless the copy there is still current.
+    /// A copy an app has saved over since it was downloaded is the user's work, not cache: it
+    /// is moved aside first (<see cref="CachedCopy"/>) and returned as <c>Kept</c>. Null when the
+    /// download failed (the user has been told) or was cancelled.
+    /// </summary>
+    private async Task<(string Path, string? Kept)?> CachedCopyAsync(PanelViewModel panel, CloudFileItem item)
     {
         if (panel.Provider is not { } provider || panel.Location.AccountId is not { } accountId)
         {
@@ -526,10 +702,30 @@ public sealed class MainViewModel : Observable
             return null;
         }
 
-        var fresh = cached.Exists && cached.Length == item.Size &&
-                    (!item.HasKnownModificationDate || Math.Abs((cached.LastWriteTimeUtc - item.ModificationDate.UtcDateTime).TotalSeconds) < 2);
-        if (!fresh)
+        DateTime? remoteModified = item.HasKnownModificationDate ? item.ModificationDate.UtcDateTime : null;
+        var decision = cached.Exists
+            ? CachedCopy.Decide(cached.Length, cached.LastWriteTimeUtc, item.Size, CachedCopy.StampOf(remoteModified, cached.CreationTimeUtc))
+            : CachedCopyDecision.Refresh;
+        string? kept = null;
+        if (decision == CachedCopyDecision.PreserveEditsThenRefresh)
         {
+            try
+            {
+                kept = CachedCopy.Preserve(target);
+                SupportLogger.Shared.Log($"open: kept an edited copy of {item.Name} before downloading it again", "Open", LogLevel.Notice);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Still held by the app it was saved in: never write over it. That app has the
+                // user's version open, and this copy is what it shows.
+                SupportLogger.Shared.Log($"open: an edited copy of {item.Name} is in use ({e.Message}); opening it as it is", "Open", LogLevel.Notice);
+                return (target, null);
+            }
+        }
+
+        if (decision != CachedCopyDecision.Reuse)
+        {
+            var failed = false;
             var progress = new TransferProgress(TransferOperation.Opening, 1, panel.Side);
             progress.SetItems([item]);
             progress.SetPlan(1, item.Size);
@@ -542,46 +738,38 @@ public sealed class MainViewModel : Observable
                 await Task.Run(() => provider.DownloadFileAsync(item.Path, requested, d => { Interlocked.Add(ref reported, d); progress.AddDownloadBytes(d); }, progress.CancellationToken));
                 progress.TopUp(false, reported, item.Size);
                 target = DownloadedFile.Locate(requested);
-                if (item.HasKnownModificationDate)
-                {
-                    File.SetLastWriteTimeUtc(target, item.ModificationDate.UtcDateTime);
-                }
-
+                CachedCopy.Stamp(target, remoteModified);
                 progress.FileFinished();
                 progress.RecordSuccess(item.Name);
             }
             catch (OperationCanceledException)
             {
-                return null;
+                failed = true;
             }
             catch (Exception e)
             {
                 progress.RecordFailure(item.Name, e.Message);
                 MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", item.Name), e.Message);
-                return null;
+                failed = true;
             }
             finally
             {
                 progress.Complete();
             }
-        }
 
-        if (launch)
-        {
-            try
+            if (failed)
             {
-                // Downloaded from someone's server: SmartScreen and Protected View apply, as to
-                // a browser download. (Quick Look's own preview stays unmarked.)
-                MarkOfTheWeb.Apply(target);
-                ShellFileOperations.Open(target);
-            }
-            catch (Exception e)
-            {
-                MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", item.Name), e.Message);
+                if (kept is not null)
+                {
+                    // Nothing opens, but the edits were still moved: say where they are.
+                    ShowKeptEdits(item.Name, kept);
+                }
+
+                return null;
             }
         }
 
-        return target;
+        return (target, kept);
     }
 
     // MARK: - Transfers
