@@ -581,3 +581,45 @@
 "%@ files, 1 folder — %@" = "%@ 个文件，1 个文件夹 — %@";
 "Selected: 1 item, calculating…" = "已选择 1 个项目，正在计算…";
 "Selected: 1 item, %@" = "已选择 1 个项目，%@";
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of the macOS 1.6 strings (see en.lproj): 废纸篓 → 回收站, 访达 → 文件资源管理器,
+   钥匙串 → Windows 凭据存储, 这台 Mac → 这台电脑.
+   --------------------------------------------------------------------------------------------- */
+
+"Open System Settings…" = "打开 Windows 设置…";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "在 Windows 安全中心中开启“受控文件夹访问”时，Windows 可能会阻止对受保护文件夹（桌面、文档、下载……）的更改。";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "Windows 安全中心已打开。在**受控文件夹访问**下选择**允许应用通过受控文件夹访问**并添加 FileFluss，然后单击**退出并重新启动**以使新权限生效。";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "在该处单击**添加允许的应用**，然后从 FileFluss 的安装文件夹中选择 FileFluss.exe。";
+"Get Info" = "属性";
+"FileFluss isn't allowed to move this to the Trash" = "FileFluss 无权将其移到回收站";
+"Your Trash folder can't be written to" = "无法写入你的回收站";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "Windows 拒绝将 %@ 移到回收站，因为回收站文件夹（%@）属于用户“%@”而不是你。";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "Windows 拒绝将 %@ 移到回收站，因为回收站文件夹（%@）的权限不允许更改。";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "文件资源管理器也会遇到同样的问题。要修复，请复制该命令，并在以管理员身份打开的终端中运行。";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "你没有权限更改 %@ 所在的文件夹（%@），因此无法将其移到回收站或删除。该文件夹的所有者可以在文件资源管理器的“属性 → 安全”中更改。";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "Windows 拒绝了 FileFluss 将 %@ 移到回收站。如果文件资源管理器也无法将其移到回收站，则原因不在 FileFluss。";
+"Failed to move %@ to the Trash: %@" = "无法将 %@ 移到回收站：%@";
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "文件会途经这台电脑：这需要 %@ 位于 %@，而该处仅剩 %@。中转文件夹可在“设置 → 存储”中设置。";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "文件在两个账户之间会途经这台电脑：这需要 %@ 位于 %@，而该处仅剩 %@。请释放空间，或在“设置 → 存储”中选择其他文件夹。";
+"The files pass through this Mac: %@ doesn't have room for that." = "文件会途经这台电脑：%@ 上没有足够空间。";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "FileFluss 打开“%@”之后，该文件在这台电脑上被修改过。FileFluss 尚不会将其他应用中的修改上传回去，因此已保留修改后的副本，并改为打开账户中的版本。若要就地编辑，请将该账户映射为网络驱动器。";
+"Analyse any folder on this Mac" = "分析这台电脑上的任意文件夹";
+"Network is unreachable from this Mac." = "从这台电脑无法访问网络。";
+"You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." = "你尚未在这台电脑上登录 iCloud。请打开 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。";
+"Show in Finder" = "在文件资源管理器中显示";
+"Show Archive in Finder" = "在文件资源管理器中显示压缩文件";
+"Reveal “%@” in Finder" = "在文件资源管理器中显示“%@”";
+"Could not mount in Finder: %@" = "无法映射为网络驱动器：%@";
+"Unmount from Finder" = "断开网络驱动器";
+"Mount and Open in Terminal" = "映射为网络驱动器并在终端中打开";
+"macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it." = "Windows 与内部服务器无法就认证方式达成一致（状态 %d）。请报告此问题。";
+"macOS found nothing to mount at the internal server (NetFS status %d)." = "Windows 在内部服务器上找不到可映射的内容（状态 %d）。";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌会加密存储在 Windows 凭据存储中。";
+"Keychain save failed (OSStatus %d)" = "无法保存到 Windows 凭据存储（错误 %d）";
+"Keychain delete failed (OSStatus %d)" = "无法从 Windows 凭据存储中删除（错误 %d）";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@，用已知指纹校验后放在自己的文件夹中，无需管理员权限。\n\nRAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。";
+
+/* Transfers: a move whose copy failed verification, and a download cut short. */
+"\"%@\" didn't arrive complete, so the original was kept." = "“%@”未完整到达目标位置，因此已保留原始文件。";
+"The download ended after %@ of %@ bytes." = "下载在 %@ 字节（共 %@ 字节）处中断。";

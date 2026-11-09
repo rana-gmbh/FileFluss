@@ -18,9 +18,9 @@
 // Ported from the NetFluss Windows generator. Three things are translated on the way
 // across:
 //
-//   * Format specifiers. Cocoa writes %@ / %d / %.0f; .NET writes {0} / {1}. Replacement
-//     is positional and in source order; a catalogue string using explicit %1$@ indexes
-//     would need care.
+//   * Format specifiers. Cocoa writes %@ / %d / %.0f; .NET writes {0} / {1}. A plain specifier
+//     takes the next argument in source order, an explicit %2$@ becomes {1}, so a
+//     translation that reorders its arguments keeps each in its place.
 //
 //   * Platform vocabulary. A string such as "System Default follows the language selected
 //     in macOS." is wrong on Windows. Every string matching a platform term is written to
@@ -52,8 +52,9 @@ internal static class Program
         """^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;\s*$""",
         RegexOptions.CultureInvariant);
 
+    /// <summary>A Cocoa specifier; group <c>position</c> holds the 1-based index of an explicit "%2$@".</summary>
     private static readonly Regex SpecifierPattern = new(
-        """%(?:\d+\$)?(?:[-+ #0]*\d*(?:\.\d+)?)?(?:@|ll[du]|l[du]|[dfsu@])""",
+        """%(?:(?<position>\d+)\$)?(?:[-+ #0]*\d*(?:\.\d+)?)?(?:@|ll[du]|l[du]|[dfsu@])""",
         RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -242,7 +243,7 @@ internal static class Program
                 Console.Error.WriteLine($"warning: {language} has {extra.Count} key(s) not in English: {string.Join(", ", extra.Take(3))}...");
             }
 
-            var converted = new List<KeyValuePair<string, string>>();
+            var converted = new List<(KeyValuePair<string, string> Entry, bool FromWindows)>();
 
             foreach (var (key, macValue) in macEntries.Entries)
             {
@@ -250,13 +251,13 @@ internal static class Program
                 {
                     // A deliberate Windows wording beats the blanket substitution: it was
                     // written for this platform, so it neither needs nor gets rewriting.
-                    converted.Add(new(names[ConvertSpecifiers(key)], ConvertSpecifiers(windowsValue)));
+                    converted.Add((new(names[ConvertSpecifiers(key)], ConvertSpecifiers(windowsValue)), true));
                     review.Add(ReviewRow(language, key, "windows override", windowsValue));
                     continue;
                 }
 
                 var (value, wasOverridden) = ApplyPlatformOverrides(macValue);
-                converted.Add(new(names[ConvertSpecifiers(key)], ConvertSpecifiers(value)));
+                converted.Add((new(names[ConvertSpecifiers(key)], ConvertSpecifiers(value)), false));
 
                 if (PlatformTerms.Any(value.Contains) || wasOverridden)
                 {
@@ -268,38 +269,38 @@ internal static class Program
             {
                 if (!macEntries.ContainsKey(key))
                 {
-                    converted.Add(new(names[ConvertSpecifiers(key)], ConvertSpecifiers(value)));
+                    converted.Add((new(names[ConvertSpecifiers(key)], ConvertSpecifiers(value)), true));
                 }
             }
 
             // Keys that differ only in their Cocoa specifier ("%d files" and "%@ files") become
-            // the same .NET key ("{0} files"). They mean the same text, so one entry each: a
-            // Windows wording wins, otherwise the first the catalogues list.
-            var windowsNames = windowsEntries.Keys.Select(k => names[ConvertSpecifiers(k)]).ToHashSet(StringComparer.Ordinal);
+            // the same .NET key ("{0} files"). They mean the same text, so one entry each, in
+            // the position of the first: a Windows wording wins, otherwise the first the
+            // catalogues list.
             var byName = new Dictionary<string, int>(StringComparer.Ordinal);
-            var unique = new List<KeyValuePair<string, string>>();
-            foreach (var entry in converted)
+            var unique = new List<(KeyValuePair<string, string> Entry, bool FromWindows)>();
+            foreach (var (entry, fromWindows) in converted)
             {
                 if (byName.TryGetValue(entry.Key, out var index))
                 {
-                    if (windowsNames.Contains(entry.Key) && unique[index].Value != entry.Value && windowsEntries.Entries.Any(w => names[ConvertSpecifiers(w.Key)] == entry.Key && ConvertSpecifiers(w.Value) == entry.Value))
+                    if (fromWindows && !unique[index].FromWindows)
                     {
-                        unique[index] = entry;
+                        unique[index] = (entry, true);
                     }
 
                     continue;
                 }
 
                 byName[entry.Key] = unique.Count;
-                unique.Add(entry);
+                unique.Add((entry, fromWindows));
             }
 
-            converted = unique;
+            var resources = unique.Select(u => u.Entry).ToList();
 
             // Defence in depth: whatever the map said, never hand resgen a file it would
             // have to silently drop entries from.
             var folded = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var (name, _) in converted)
+            foreach (var (name, _) in resources)
             {
                 var fold = CaseFold(name);
                 if (folded.TryGetValue(fold, out var clash) && clash != name)
@@ -311,7 +312,7 @@ internal static class Program
                 folded[fold] = name;
             }
 
-            generated.Add((Path.Combine(outputDirectory, $"Strings{suffix}.resx"), RenderResx(converted)));
+            generated.Add((Path.Combine(outputDirectory, $"Strings{suffix}.resx"), RenderResx(resources)));
         }
 
         var report = new List<string>
@@ -392,7 +393,10 @@ internal static class Program
     }
 
     private static string ReviewRow(string language, string key, string status, string value)
-        => $"| `{language}` | `{key.Replace("|", "\\|")}` | {status} | {value.Replace("|", "\\|")} |";
+        => $"| `{language}` | `{ReviewCell(key)}` | {status} | {ReviewCell(value)} |";
+
+    /// <summary>A table cell: a pipe would end it, and a line break would end the whole row.</summary>
+    private static string ReviewCell(string text) => text.Replace("|", "\\|").Replace("\n", "\\n");
 
     /// <summary>
     /// The same sequence of replacements as the Python original, in the same order — the
@@ -426,7 +430,7 @@ internal static class Program
     /// the first argument of calls that never take a key (log lines, clipboard formats, …).
     /// </summary>
     private static readonly Regex SecondaryKeyPattern = new(
-        """(?:[?:]\s*|(?<!(?:Log|NotFound|SetData|GetData|FontFamily|Contains|StartsWith|EndsWith|Exception)\s*)\(\s*)"([A-Z][^"\\]*\s[^"\\]*)"(?=\s*[,):?])""",
+        """(?:[?:]\s*|(?<!(?:Log|LogClosing|PageGuard|NotFound|SetData|GetData|FontFamily|Contains|StartsWith|EndsWith|Exception)\s*)\(\s*)"([A-Z][^"\\]*\s[^"\\]*)"(?=\s*[,):?])""",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex XamlKeyPattern = new(
@@ -492,7 +496,11 @@ internal static class Program
 
     private static readonly Regex LiteralPercentOrSpecifier = new("%%|" + SpecifierPattern, RegexOptions.CultureInvariant);
 
-    /// <summary>Cocoa positional specifiers → composite format items, in source order.</summary>
+    /// <summary>
+    /// Cocoa specifiers → composite format items. A plain specifier takes the next argument;
+    /// an explicit one ("%2$@") names its argument, which is how a translation puts the
+    /// arguments in a different order from the English ("确定要从 %2$@ 删除“%1$@”吗？").
+    /// </summary>
     private static string ConvertSpecifiers(string text)
     {
         var index = 0;
@@ -503,7 +511,24 @@ internal static class Program
 
         // "%%" is Cocoa's literal percent sign ("100%% scaling"); without it, "% s" in
         // "100% scaling" reads as a space-flagged %s and becomes a placeholder.
-        return LiteralPercentOrSpecifier.Replace(text, match => match.Value == "%%" ? "%" : "{" + index++ + "}");
+        return LiteralPercentOrSpecifier.Replace(text, match =>
+        {
+            if (match.Value == "%%")
+            {
+                return "%";
+            }
+
+            var position = match.Groups["position"];
+            if (!position.Success)
+            {
+                return "{" + index++ + "}";
+            }
+
+            var argument = int.Parse(position.Value, System.Globalization.CultureInfo.InvariantCulture);
+            return argument >= 1
+                ? "{" + (argument - 1) + "}"
+                : throw new CatalogueException($"error: '{match.Value}' in '{text}' names argument 0; Cocoa counts from 1.");
+        });
     }
 
     /// <summary>

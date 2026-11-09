@@ -48,7 +48,11 @@ public partial class LocalizationWindowsTests
     [MemberData(nameof(AllLanguages))]
     public void NoValueKeepsMacVocabulary(string language)
     {
-        string[] macTerms = ["⌘", "⌥", "Finder", "Keychain", "keychain", "Schlüsselbund", "访达", "钥匙串", "鑰匙圈", "废纸篓", "Credential Manager"];
+        string[] macTerms =
+        [
+            "⌘", "⌥", "Finder", "Keychain", "keychain", "Schlüsselbund", "访达", "钥匙串", "鑰匙圈", "废纸篓", "垃圾桶", "Credential Manager",
+            "this Mac", "diesem Mac", "这台 Mac", "這台 Mac", "OSStatus", "NetFS", "Systemeinstellungen", "系统设置", "系統設定",
+        ];
         var offenders = Entries(language)
             .Where(entry => macTerms.Any(entry.Value.Contains))
             .Select(entry => $"{entry.Key} => {entry.Value}")
@@ -78,11 +82,16 @@ public partial class LocalizationWindowsTests
             Assert.Equal("Alle Quellen durchsuchen (Strg+F)", Localization.L("Search all sources (⌘F)"));
             Assert.Equal("Netzlaufwerk trennen (Z:)", Localization.L("Disconnect Network Drive ({0})", "Z:"));
             Assert.Equal("Als Netzlaufwerk verbinden", Localization.L("Mount in Finder"));
+            Assert.Equal("Benötigt auf diesem PC:", Localization.L("Needs on this Mac:"));
 
             Localization.Use(AppLanguage.SimplifiedChinese);
             Assert.Equal("移到回收站", Localization.L("Move to Recycle Bin"));
             Assert.Equal("在文件资源管理器中显示", Localization.L("Show in Explorer"));
             Assert.Equal("设置", Localization.L("Settings"));
+            Assert.Equal("无法将 a.txt 移到回收站：x", Localization.L("Failed to move {0} to the Trash: {1}", "a.txt", "x"));
+
+            // The translation puts the arguments the other way round ("%2$@ … %1$@").
+            Assert.Equal("确定要从 右侧 删除“a.txt”吗？", Localization.L("Are you sure you want to delete \"{0}\" from {1}?", "a.txt", "右侧"));
 
             Localization.Use(AppLanguage.TraditionalChinese);
             Assert.Equal("移到資源回收筒", Localization.L("Move to Recycle Bin"));

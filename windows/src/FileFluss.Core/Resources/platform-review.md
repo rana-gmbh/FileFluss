@@ -10,10 +10,11 @@ were left alone and want a human decision.
 | --- | --- | --- | --- |
 | `en` | `System Default follows the language selected in macOS.` | windows override | System Default follows the language selected in Windows. |
 | `en` | `Search all sources (⌘F)` | windows override | Search all sources (Ctrl+F) |
-| `en` | `Open System Settings…` | auto-rewritten | Open Settings… |
-| `en` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time. |
-| `en` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | auto-rewritten | Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect. |
-| `en` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | auto-rewritten | Or click the **+** button in Settings and pick FileFluss from your Applications folder. |
+| `en` | `Open System Settings…` | windows override | Open Windows Settings… |
+| `en` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | windows override | Windows may block changes in protected folders (Desktop, Documents, Downloads, …) while Controlled folder access is turned on in Windows Security. |
+| `en` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | windows override | Windows Security is now open. Under **Controlled folder access**, choose **Allow an app through Controlled folder access** and add FileFluss — then click **Quit & Relaunch** so the new permission takes effect. |
+| `en` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | windows override | Click **Add an allowed app** there and pick FileFluss.exe from the folder FileFluss is installed in. |
+| `en` | `Get Info` | windows override | Properties |
 | `en` | `Move to Trash` | windows override | Move to Recycle Bin |
 | `en` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | "%@" can't be moved to the Recycle Bin because its drive doesn't have one. Delete it permanently? This can't be undone. |
 | `en` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d items can't be moved to the Recycle Bin because their drive doesn't have one. Delete them permanently? This can't be undone. |
@@ -48,24 +49,28 @@ were left alone and want a human decision.
 | `en` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store. |
 | `en` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud uses the sign-in of iCloud for Windows — there's nothing to edit here. Manage iCloud Drive in the iCloud for Windows app. |
 | `en` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Map this account as a network drive first — a cloud folder has no path a terminal can open. |
+| `en` | `Mount and Open in Terminal` | windows override | Map as Network Drive and Open in Terminal |
 | `en` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | A terminal can only open a folder that exists on this PC. Mapping this account as a network drive adds it to File Explorer, and the terminal opens inside it. |
-| `en` | `FileFluss isn't allowed to move this to the Trash` | needs review | FileFluss isn't allowed to move this to the Trash |
-| `en` | `Your Trash folder can't be written to` | needs review | Your Trash folder can't be written to |
-| `en` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you. |
-| `en` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes. |
-| `en` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Explorer runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password. |
-| `en` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Explorer under File → Get Info. |
-| `en` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Explorer can't move it to the Trash either, the cause lies outside FileFluss. |
-| `en` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | needs review | The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage. |
-| `en` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | needs review | The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage. |
-| `en` | `Show in Finder` | auto-rewritten | Show in Explorer |
-| `en` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | “%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Explorer. |
+| `en` | `FileFluss isn't allowed to move this to the Trash` | windows override | FileFluss isn't allowed to move this to the Recycle Bin |
+| `en` | `Your Trash folder can't be written to` | windows override | Your Recycle Bin can't be written to |
+| `en` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | windows override | Windows refused to move %@ to the Recycle Bin because the Recycle Bin folder (%@) belongs to the user "%@" instead of you. |
+| `en` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | windows override | Windows refused to move %@ to the Recycle Bin because the permissions of the Recycle Bin folder (%@) don't allow changes. |
+| `en` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | windows override | File Explorer runs into the same problem. To repair it, copy the command and run it in a terminal opened as administrator. |
+| `en` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | windows override | You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security. |
+| `en` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | windows override | Windows refused to let FileFluss move %@ to the Recycle Bin. If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. |
+| `en` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | windows override | The files pass through this PC on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage. |
+| `en` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | windows override | The files pass through this PC on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage. |
+| `en` | `The files pass through this Mac: %@ doesn't have room for that.` | windows override | The files pass through this PC: %@ doesn't have room for that. |
+| `en` | `Needs on this Mac:` | windows override | Needs on this PC: |
+| `en` | `Show in Finder` | windows override | Show in Explorer |
+| `en` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | windows override | “%@” was changed on this PC after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, map the account as a network drive. |
 | `en` | ` and ` | windows override |  and  |
 | `en` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | "Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page. |
 | `en` | `%@ usually need a paid plan.` | windows override | %@ usually need a paid plan. |
 | `en` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead. |
 | `en` | `Allow downloading` | windows override | Allow downloading |
 | `en` | `Analyse` | windows override | Analyse |
+| `en` | `Analyse any folder on this Mac` | windows override | Analyse any folder on this PC |
 | `en` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | Anyone with this link can download the file until it expires. The link cannot be revoked early. |
 | `en` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box kept the public link in place — check whether your administrator manages sharing for this item. |
 | `en` | `Change Sharing…` | windows override | Change Sharing… |
@@ -139,14 +144,10 @@ were left alone and want a human decision.
 | `en` | `Cloud Storage Providers` | windows override | Cloud Storage Providers |
 | `en` | `Other Protocols` | windows override | Other Protocols |
 | `en` | `Cameras & Devices` | windows override | Cameras & Devices |
-| `en` | `Show Archive in Finder` | auto-rewritten | Show Archive in Explorer |
-| `en` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
-
-RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss can download RAR %@ for Windows from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
-
-RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com. |
+| `en` | `Show Archive in Finder` | windows override | Show Archive in Explorer |
+| `en` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss can download RAR %@ for Windows from rarlab.com, check it against a known fingerprint, and keep it in its own folder. No administrator rights are needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com. |
 | `en` | `Open` | windows override | Open |
-| `en` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | needs review | Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain. |
+| `en` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored encrypted in the Windows credential store. |
 | `en` | `The file changed while it was being uploaded.` | windows override | The file changed while it was being uploaded. |
 | `en` | `Quit Anyway` | windows override | Quit Anyway |
 | `en` | `Cloud` | windows override | Cloud |
@@ -170,7 +171,7 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `Done: %@ %@` | windows override | Done: %@ %@ |
 | `en` | `Share link copied` | windows override | Share link copied |
 | `en` | `Link copied — not public` | windows override | Link copied — not public |
-| `en` | `Failed to move %@ to the Trash: %@` | needs review | Failed to move %@ to the Trash: %@ |
+| `en` | `Failed to move %@ to the Trash: %@` | windows override | Failed to move %@ to the Recycle Bin: %@ |
 | `en` | `Left newer` | windows override | Left newer |
 | `en` | `Right newer` | windows override | Right newer |
 | `en` | `Could not read folders: %@` | windows override | Could not read folders: %@ |
@@ -178,9 +179,9 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `Could not save the index: %@` | windows override | Could not save the index: %@ |
 | `en` | `Account not connected` | windows override | Account not connected |
 | `en` | `Space` | windows override | Space |
-| `en` | `Could not mount in Finder: %@` | auto-rewritten | Could not mount in Explorer: %@ |
-| `en` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it. |
-| `en` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows found nothing to mount at the internal server (NetFS status %d). |
+| `en` | `Could not mount in Finder: %@` | windows override | Could not map as a network drive: %@ |
+| `en` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | windows override | Windows and the internal server couldn't agree on an authentication method (status %d). Please report it. |
+| `en` | `macOS found nothing to mount at the internal server (NetFS status %d).` | windows override | Windows found nothing to map at the internal server (status %d). |
 | `en` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | The internal WebDAV server didn't respond with 200 OK to OPTIONS. |
 | `en` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | Could not reach the internal WebDAV server on 127.0.0.1:%@: %@ |
 | `en` | `Current Folder` | windows override | Current Folder |
@@ -189,14 +190,14 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `%@ (offline)` | windows override | %@ (offline) |
 | `en` | `Local Files` | windows override | Local Files |
 | `en` | `Local` | windows override | Local |
-| `en` | `Reveal “%@” in Finder` | auto-rewritten | Reveal “%@” in Explorer |
+| `en` | `Reveal “%@” in Finder` | windows override | Show “%@” in Explorer |
 | `en` | `Clear the cache?` | windows override | Clear the cache? |
 | `en` | `Erase all offline indexes?` | windows override | Erase all offline indexes? |
 | `en` | `1 transfer — click for details` | windows override | 1 transfer — click for details |
 | `en` | `1 folder size — click for details` | windows override | 1 folder size — click for details |
 | `en` | `Index for Offline Search…` | windows override | Index for Offline Search… |
 | `en` | `Re-index for Offline Search…` | windows override | Re-index for Offline Search… |
-| `en` | `Unmount from Finder` | auto-rewritten | Unmount from Explorer |
+| `en` | `Unmount from Finder` | windows override | Disconnect Network Drive |
 | `en` | `Could not compute plan: %@` | windows override | Could not compute plan: %@ |
 | `en` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field. |
 | `en` | `Desktop` | windows override | Desktop |
@@ -230,8 +231,8 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `10 MB and up` | windows override | 10 MB and up |
 | `en` | `100 MB and up` | windows override | 100 MB and up |
 | `en` | `1 GB and up` | windows override | 1 GB and up |
-| `en` | `Keychain save failed (OSStatus %d)` | auto-rewritten | credential store save failed (OSStatus %d) |
-| `en` | `Keychain delete failed (OSStatus %d)` | auto-rewritten | credential store delete failed (OSStatus %d) |
+| `en` | `Keychain save failed (OSStatus %d)` | windows override | Couldn't save to the Windows credential store (error %d) |
+| `en` | `Keychain delete failed (OSStatus %d)` | windows override | Couldn't delete from the Windows credential store (error %d) |
 | `en` | `Box authentication failed: %@` | windows override | Box authentication failed: %@ |
 | `en` | `Could not resolve host. Check the server address.` | windows override | Could not resolve host. Check the server address. |
 | `en` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | Could not connect — check the host, port, and that FTP is reachable. |
@@ -245,7 +246,7 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen file metadata not cached — re-open the folder and try again. |
 | `en` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info returned an unexpected payload. |
 | `en` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder didn't return a root UUID. |
-| `en` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | auto-rewritten | You're not signed into iCloud on this Mac. Open Settings → Apple Account → iCloud → iCloud Drive and turn it on. |
+| `en` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | windows override | You're not signed into iCloud on this PC. Open iCloud for Windows, sign in with your Apple Account and turn on iCloud Drive. |
 | `en` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead. |
 | `en` | `Timed out waiting for browser sign-in.` | windows override | Timed out waiting for browser sign-in. |
 | `en` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box). |
@@ -255,6 +256,7 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `Wrong passphrase for the private key.` | windows override | Wrong passphrase for the private key. |
 | `en` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | Connection refused — is the SSH daemon running on this host and port? |
 | `en` | `Connection timed out. Check the hostname, port, and your network.` | windows override | Connection timed out. Check the hostname, port, and your network. |
+| `en` | `Network is unreachable from this Mac.` | windows override | Network is unreachable from this PC. |
 | `en` | `Could not resolve hostname. Check spelling or DNS.` | windows override | Could not resolve hostname. Check spelling or DNS. |
 | `en` | `Server URL is not a valid URL.` | windows override | Server URL is not a valid URL. |
 | `en` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | Cannot upload directly to the Seafile library root — pick a library first. |
@@ -295,7 +297,11 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `en` | `Filen API error` | windows override | Filen API error |
 | `de` | `System Default follows the language selected in macOS.` | windows override | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
 | `de` | `Search all sources (⌘F)` | windows override | Alle Quellen durchsuchen (Strg+F) |
-| `de` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows fragt einmal pro geschütztem Ordner (Schreibtisch, Dokumente, Downloads, …). Das erste Öffnen kann jeweils einige Sekunden dauern – aber nur beim ersten Mal. |
+| `de` | `Open System Settings…` | windows override | Windows-Einstellungen öffnen … |
+| `de` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | windows override | Windows kann Änderungen in geschützten Ordnern (Desktop, Dokumente, Downloads, …) blockieren, solange der überwachte Ordnerzugriff in Windows-Sicherheit aktiviert ist. |
+| `de` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | windows override | Windows-Sicherheit ist nun geöffnet. Wähle unter **Überwachter Ordnerzugriff** die Option **App durch überwachten Ordnerzugriff zulassen** und füge FileFluss hinzu – klicke dann auf **Beenden & neu starten**, damit die neue Berechtigung wirksam wird. |
+| `de` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | windows override | Klicke dort auf **Zulässige App hinzufügen** und wähle FileFluss.exe aus dem Ordner, in dem FileFluss installiert ist. |
+| `de` | `Get Info` | windows override | Eigenschaften |
 | `de` | `Move to Trash` | windows override | In den Papierkorb verschieben |
 | `de` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | „%@“ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden. |
 | `de` | `%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.` | windows override | %d Objekte können nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden. |
@@ -328,21 +334,26 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `de` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird. |
 | `de` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“. |
 | `de` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann. |
+| `de` | `Mount and Open in Terminal` | windows override | Als Netzlaufwerk verbinden und im Terminal öffnen |
 | `de` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin. |
-| `de` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil der Papierkorb-Ordner (%@) dem Benutzer „%@“ gehört statt dir. |
-| `de` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners (%@) keine Änderungen erlauben. |
-| `de` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl, füge ihn im Terminal ein und gib dein Passwort ein. |
-| `de` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Ablage → Informationen ändern. |
-| `de` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Falls FileFluss noch keinen Festplattenvollzugriff hat, kann es helfen, ihn unter Systemeinstellungen → Datenschutz & Sicherheit zu erteilen; danach muss FileFluss neu gestartet werden. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss. |
-| `de` | `Show in Finder` | auto-rewritten | Im Explorer zeigen |
-| `de` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | „%@“ wurde auf diesem Mac geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten das Konto im Explorer einbinden. |
+| `de` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | windows override | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil der Papierkorb-Ordner (%@) dem Benutzer „%@“ gehört statt dir. |
+| `de` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | windows override | Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners (%@) keine Änderungen erlauben. |
+| `de` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | windows override | Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl und führe ihn in einem Terminal aus, das du als Administrator geöffnet hast. |
+| `de` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | windows override | Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Eigenschaften → Sicherheit ändern. |
+| `de` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | windows override | Windows hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss. |
+| `de` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | windows override | Die Dateien laufen unterwegs über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen. |
+| `de` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | windows override | Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner. |
+| `de` | `The files pass through this Mac: %@ doesn't have room for that.` | windows override | Die Dateien laufen über diesen PC: Auf %@ ist dafür kein Platz. |
+| `de` | `Needs on this Mac:` | windows override | Benötigt auf diesem PC: |
+| `de` | `Show in Finder` | windows override | Im Explorer anzeigen |
+| `de` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | windows override | „%@“ wurde auf diesem PC geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten verbinde das Konto als Netzlaufwerk. |
 | `de` | ` and ` | windows override |  und  |
 | `de` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | „Freigabelink kopieren“ kopiert dann einen Link, der die Datei sofort herunterlädt, statt der Vorschauseite des Anbieters. Anbieter ohne direkten Link liefern immer ihre eigene Seite. |
 | `de` | `%@ usually need a paid plan.` | windows override | %@ erfordern meist ein kostenpflichtiges Abo. |
 | `de` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | Ein Ordner, den es nicht mehr gibt – ein gelöschter Ordner, ein entferntes Laufwerk, ein getrenntes Cloud-Konto –, öffnet stattdessen deinen Benutzerordner. |
 | `de` | `Allow downloading` | windows override | Herunterladen erlauben |
 | `de` | `Analyse` | windows override | Analysieren |
-| `de` | `Analyse any folder on this Mac` | needs review | Beliebigen Ordner auf diesem Mac analysieren |
+| `de` | `Analyse any folder on this Mac` | windows override | Einen beliebigen Ordner auf diesem PC analysieren |
 | `de` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | Jeder mit diesem Link kann die Datei herunterladen, bis er abläuft. Der Link kann nicht vorzeitig widerrufen werden. |
 | `de` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box hat den öffentlichen Link beibehalten – prüfe, ob dein Administrator die Freigabe für dieses Objekt verwaltet. |
 | `de` | `Change Sharing…` | windows override | Freigabe ändern… |
@@ -416,13 +427,10 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
 | `de` | `Cloud Storage Providers` | windows override | Cloud-Speicheranbieter |
 | `de` | `Other Protocols` | windows override | Andere Protokolle |
 | `de` | `Cameras & Devices` | windows override | Kameras & Geräte |
-| `de` | `Show Archive in Finder` | auto-rewritten | Archiv im Explorer zeigen |
-| `de` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
-
-RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss kann RAR %@ für Windows von rarlab.com laden (unter 1 MB), es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Ein Administratorpasswort ist nicht nötig.
-
-RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden. |
+| `de` | `Show Archive in Finder` | windows override | Archiv im Explorer anzeigen |
+| `de` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss kann RAR %@ für Windows von rarlab.com laden, es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Administratorrechte sind nicht nötig.\n\nRAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden. |
 | `de` | `Open` | windows override | Öffnen |
+| `de` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt. |
 | `de` | `The file changed while it was being uploaded.` | windows override | Die Datei wurde während des Hochladens geändert. |
 | `de` | `Quit Anyway` | windows override | Trotzdem beenden |
 | `de` | `Cloud` | windows override | Cloud |
@@ -453,9 +461,9 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `Could not save the index: %@` | windows override | Der Index konnte nicht gespeichert werden: %@ |
 | `de` | `Account not connected` | windows override | Konto nicht verbunden |
 | `de` | `Space` | windows override | Leertaste |
-| `de` | `Could not mount in Finder: %@` | auto-rewritten | Einbinden im Explorer fehlgeschlagen: %@ |
-| `de` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (NetFS-Status %d). Bitte melde es. |
-| `de` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows hat auf dem internen Server nichts zum Einbinden gefunden (NetFS-Status %d). |
+| `de` | `Could not mount in Finder: %@` | windows override | Konnte nicht als Netzlaufwerk verbunden werden: %@ |
+| `de` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | windows override | Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (Status %d). Bitte melde es. |
+| `de` | `macOS found nothing to mount at the internal server (NetFS status %d).` | windows override | Windows hat auf dem internen Server nichts zum Verbinden gefunden (Status %d). |
 | `de` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet. |
 | `de` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | Der interne WebDAV-Server auf 127.0.0.1:%@ ist nicht erreichbar: %@ |
 | `de` | `Current Folder` | windows override | Aktueller Ordner |
@@ -464,14 +472,14 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `%@ (offline)` | windows override | %@ (offline) |
 | `de` | `Local Files` | windows override | Lokale Dateien |
 | `de` | `Local` | windows override | Lokal |
-| `de` | `Reveal “%@” in Finder` | auto-rewritten | „%@“ im Explorer zeigen |
+| `de` | `Reveal “%@” in Finder` | windows override | „%@“ im Explorer anzeigen |
 | `de` | `Clear the cache?` | windows override | Cache leeren? |
 | `de` | `Erase all offline indexes?` | windows override | Alle Offline-Indizes löschen? |
 | `de` | `1 transfer — click for details` | windows override | 1 Übertragung – für Details klicken |
 | `de` | `1 folder size — click for details` | windows override | 1 Ordnergröße – für Details klicken |
 | `de` | `Index for Offline Search…` | windows override | Für die Offline-Suche indizieren… |
 | `de` | `Re-index for Offline Search…` | windows override | Für die Offline-Suche neu indizieren… |
-| `de` | `Unmount from Finder` | auto-rewritten | Aus dem Explorer auswerfen |
+| `de` | `Unmount from Finder` | windows override | Netzlaufwerk trennen |
 | `de` | `Could not compute plan: %@` | windows override | Plan konnte nicht berechnet werden: %@ |
 | `de` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein. |
 | `de` | `Desktop` | windows override | Desktop |
@@ -505,6 +513,8 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `10 MB and up` | windows override | Ab 10 MB |
 | `de` | `100 MB and up` | windows override | Ab 100 MB |
 | `de` | `1 GB and up` | windows override | Ab 1 GB |
+| `de` | `Keychain save failed (OSStatus %d)` | windows override | Speichern im Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d) |
+| `de` | `Keychain delete failed (OSStatus %d)` | windows override | Löschen aus dem Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d) |
 | `de` | `Box authentication failed: %@` | windows override | Box-Authentifizierung fehlgeschlagen: %@ |
 | `de` | `Could not resolve host. Check the server address.` | windows override | Host konnte nicht aufgelöst werden. Prüfe die Serveradresse. |
 | `de` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | Verbindung fehlgeschlagen – prüfe Host und Port und ob FTP erreichbar ist. |
@@ -518,7 +528,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen-Dateimetadaten nicht im Cache – öffne den Ordner erneut und versuche es noch einmal. |
 | `de` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info hat unerwartete Daten geliefert. |
 | `de` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder hat keine Stamm-UUID geliefert. |
-| `de` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | Du bist auf diesem Mac nicht bei iCloud angemeldet. Öffne Systemeinstellungen → Apple Account → iCloud → iCloud Drive und schalte es ein. |
+| `de` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | windows override | Du bist auf diesem PC nicht bei iCloud angemeldet. Öffne iCloud für Windows, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive. |
 | `de` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | Dieser Nextcloud-Server bietet keinen Login Flow v2 an. Verwende stattdessen die Anmeldung mit App-Passwort. |
 | `de` | `Timed out waiting for browser sign-in.` | windows override | Zeitüberschreitung beim Warten auf die Anmeldung im Browser. |
 | `de` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | Der SSH-Schlüssel wurde vom Server abgelehnt. Stelle sicher, dass der öffentliche Schlüssel in ~/.ssh/authorized_keys auf dem Server steht (oder bei verwalteten Diensten wie der Hetzner Storage Box in der SSH-Schlüssel-Verwaltung des Anbieters hinterlegt ist). |
@@ -528,7 +538,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `Wrong passphrase for the private key.` | windows override | Falsche Passphrase für den privaten Schlüssel. |
 | `de` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | Verbindung abgelehnt – läuft der SSH-Dienst auf diesem Host und Port? |
 | `de` | `Connection timed out. Check the hostname, port, and your network.` | windows override | Zeitüberschreitung der Verbindung. Prüfe Hostname, Port und dein Netzwerk. |
-| `de` | `Network is unreachable from this Mac.` | needs review | Das Netzwerk ist von diesem Mac aus nicht erreichbar. |
+| `de` | `Network is unreachable from this Mac.` | windows override | Das Netzwerk ist von diesem PC aus nicht erreichbar. |
 | `de` | `Could not resolve hostname. Check spelling or DNS.` | windows override | Hostname konnte nicht aufgelöst werden. Prüfe die Schreibweise oder das DNS. |
 | `de` | `Server URL is not a valid URL.` | windows override | Die Server-URL ist keine gültige URL. |
 | `de` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | In die oberste Ebene der Seafile-Bibliotheken kann nicht direkt hochgeladen werden – wähle zuerst eine Bibliothek. |
@@ -569,7 +579,11 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `de` | `Filen API error` | windows override | Filen-API-Fehler |
 | `zh-Hans` | `System Default follows the language selected in macOS.` | windows override | “跟随系统”将使用 Windows 中设置的语言。 |
 | `zh-Hans` | `Search all sources (⌘F)` | windows override | 搜索所有来源（Ctrl+F） |
-| `zh-Hans` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 会对每个受保护的文件夹（桌面、文稿、下载……）询问一次。每个文件夹首次打开可能需要几秒钟——但仅限首次。 |
+| `zh-Hans` | `Open System Settings…` | windows override | 打开 Windows 设置… |
+| `zh-Hans` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | windows override | 在 Windows 安全中心中开启“受控文件夹访问”时，Windows 可能会阻止对受保护文件夹（桌面、文档、下载……）的更改。 |
+| `zh-Hans` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | windows override | Windows 安全中心已打开。在**受控文件夹访问**下选择**允许应用通过受控文件夹访问**并添加 FileFluss，然后单击**退出并重新启动**以使新权限生效。 |
+| `zh-Hans` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | windows override | 在该处单击**添加允许的应用**，然后从 FileFluss 的安装文件夹中选择 FileFluss.exe。 |
+| `zh-Hans` | `Get Info` | windows override | 属性 |
 | `zh-Hans` | `Copy Path` | windows override | 复制路径 |
 | `zh-Hans` | `Move to Trash` | windows override | 移到回收站 |
 | `zh-Hans` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | “%@”无法移到回收站，因为其所在的驱动器没有回收站。要永久删除吗？此操作无法撤销。 |
@@ -604,18 +618,27 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `zh-Hans` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据，并加密存储在 Windows 凭据存储中。 |
 | `zh-Hans` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登录——此处无可编辑内容。请在 Windows 版 iCloud 应用中管理 iCloud 云盘。 |
 | `zh-Hans` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 请先将此账户映射为网络驱动器——云端文件夹没有终端可以打开的路径。 |
+| `zh-Hans` | `Mount and Open in Terminal` | windows override | 映射为网络驱动器并在终端中打开 |
 | `zh-Hans` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 终端只能打开这台电脑上存在的文件夹。将此账户映射为网络驱动器后，它会出现在文件资源管理器中，终端将在其中打开。 |
-| `zh-Hans` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）属于用户“%@”而不是你。 |
-| `zh-Hans` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows 拒绝将 %@ 移到废纸篓，因为废纸篓文件夹（%@）的权限不允许更改。 |
-| `zh-Hans` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows 拒绝了 FileFluss 将 %@ 移到废纸篓。如果 FileFluss 尚未获得“完全磁盘访问权限”，在“系统设置 → 隐私与安全性”中授予可能会有帮助，之后需要重新启动 FileFluss。如果访达也无法将其移到废纸篓，则原因不在 FileFluss。 |
-| `zh-Hans` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | needs review | FileFluss 打开“%@”之后，该文件在这台 Mac 上被修改过。FileFluss 尚不会将其他 App 中的修改上传回去，因此已保留修改后的副本，并改为打开账户中的版本。若要就地编辑，请在访达中装载该账户。 |
+| `zh-Hans` | `FileFluss isn't allowed to move this to the Trash` | windows override | FileFluss 无权将其移到回收站 |
+| `zh-Hans` | `Your Trash folder can't be written to` | windows override | 无法写入你的回收站 |
+| `zh-Hans` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | windows override | Windows 拒绝将 %@ 移到回收站，因为回收站文件夹（%@）属于用户“%@”而不是你。 |
+| `zh-Hans` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | windows override | Windows 拒绝将 %@ 移到回收站，因为回收站文件夹（%@）的权限不允许更改。 |
+| `zh-Hans` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | windows override | 文件资源管理器也会遇到同样的问题。要修复，请复制该命令，并在以管理员身份打开的终端中运行。 |
+| `zh-Hans` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | windows override | 你没有权限更改 %@ 所在的文件夹（%@），因此无法将其移到回收站或删除。该文件夹的所有者可以在文件资源管理器的“属性 → 安全”中更改。 |
+| `zh-Hans` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | windows override | Windows 拒绝了 FileFluss 将 %@ 移到回收站。如果文件资源管理器也无法将其移到回收站，则原因不在 FileFluss。 |
+| `zh-Hans` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | windows override | 文件会途经这台电脑：这需要 %@ 位于 %@，而该处仅剩 %@。中转文件夹可在“设置 → 存储”中设置。 |
+| `zh-Hans` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | windows override | 文件在两个账户之间会途经这台电脑：这需要 %@ 位于 %@，而该处仅剩 %@。请释放空间，或在“设置 → 存储”中选择其他文件夹。 |
+| `zh-Hans` | `The files pass through this Mac: %@ doesn't have room for that.` | windows override | 文件会途经这台电脑：%@ 上没有足够空间。 |
+| `zh-Hans` | `Show in Finder` | windows override | 在文件资源管理器中显示 |
+| `zh-Hans` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | windows override | FileFluss 打开“%@”之后，该文件在这台电脑上被修改过。FileFluss 尚不会将其他应用中的修改上传回去，因此已保留修改后的副本，并改为打开账户中的版本。若要就地编辑，请将该账户映射为网络驱动器。 |
 | `zh-Hans` | ` and ` | windows override | 和 |
 | `zh-Hans` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | 这样，“复制共享链接”会复制一个可直接下载文件的链接，而不是服务商的预览页面。不提供直接链接的服务商始终给出其自己的页面。 |
 | `zh-Hans` | `%@ usually need a paid plan.` | windows override | %@通常需要付费套餐。 |
 | `zh-Hans` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | 已不存在的文件夹（已删除的文件夹、已拔出的驱动器、已断开的云账户）将改为打开你的主文件夹。 |
 | `zh-Hans` | `Allow downloading` | windows override | 允许下载 |
 | `zh-Hans` | `Analyse` | windows override | 分析 |
-| `zh-Hans` | `Analyse any folder on this Mac` | needs review | 分析这台 Mac 上的任意文件夹 |
+| `zh-Hans` | `Analyse any folder on this Mac` | windows override | 分析这台电脑上的任意文件夹 |
 | `zh-Hans` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | 在链接过期之前，任何拥有此链接的人都可以下载该文件。此链接无法提前撤销。 |
 | `zh-Hans` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box 保留了公开链接——请确认你的管理员是否管理此项目的共享。 |
 | `zh-Hans` | `Change Sharing…` | windows override | 更改共享… |
@@ -700,12 +723,10 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
 | `zh-Hans` | `Cloud Storage Providers` | windows override | 云存储服务商 |
 | `zh-Hans` | `Other Protocols` | windows override | 其他协议 |
 | `zh-Hans` | `Cameras & Devices` | windows override | 相机和设备 |
-| `zh-Hans` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
-
-RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@（不到 1 MB），用已知指纹校验后放在自己的文件夹中，无需管理员密码。
-
-RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。 |
+| `zh-Hans` | `Show Archive in Finder` | windows override | 在文件资源管理器中显示压缩文件 |
+| `zh-Hans` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@，用已知指纹校验后放在自己的文件夹中，无需管理员权限。\n\nRAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。 |
 | `zh-Hans` | `Open` | windows override | 打开 |
+| `zh-Hans` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | 请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌会加密存储在 Windows 凭据存储中。 |
 | `zh-Hans` | `The file changed while it was being uploaded.` | windows override | 文件在上传过程中发生了更改。 |
 | `zh-Hans` | `Quit Anyway` | windows override | 仍要退出 |
 | `zh-Hans` | `Cloud` | windows override | 云端 |
@@ -729,6 +750,7 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `Done: %@ %@` | windows override | 完成——%@：%@ |
 | `zh-Hans` | `Share link copied` | windows override | 共享链接已复制 |
 | `zh-Hans` | `Link copied — not public` | windows override | 链接已复制——非公开 |
+| `zh-Hans` | `Failed to move %@ to the Trash: %@` | windows override | 无法将 %@ 移到回收站：%@ |
 | `zh-Hans` | `Left newer` | windows override | 左侧较新 |
 | `zh-Hans` | `Right newer` | windows override | 右侧较新 |
 | `zh-Hans` | `Could not read folders: %@` | windows override | 无法读取文件夹：%@ |
@@ -736,8 +758,9 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `Could not save the index: %@` | windows override | 无法保存索引：%@ |
 | `zh-Hans` | `Account not connected` | windows override | 账户未连接 |
 | `zh-Hans` | `Space` | windows override | 空格键 |
-| `zh-Hans` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows 与内部服务器无法就认证方式达成一致（NetFS 状态 %d）。请报告此问题。 |
-| `zh-Hans` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows 在内部服务器上找不到可装载的内容（NetFS 状态 %d）。 |
+| `zh-Hans` | `Could not mount in Finder: %@` | windows override | 无法映射为网络驱动器：%@ |
+| `zh-Hans` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | windows override | Windows 与内部服务器无法就认证方式达成一致（状态 %d）。请报告此问题。 |
+| `zh-Hans` | `macOS found nothing to mount at the internal server (NetFS status %d).` | windows override | Windows 在内部服务器上找不到可映射的内容（状态 %d）。 |
 | `zh-Hans` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | 内部 WebDAV 服务器未对 OPTIONS 返回 200 OK。 |
 | `zh-Hans` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | 无法访问 127.0.0.1:%@ 上的内部 WebDAV 服务器：%@ |
 | `zh-Hans` | `Current Folder` | windows override | 当前文件夹 |
@@ -746,12 +769,14 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `%@ (offline)` | windows override | %@（离线） |
 | `zh-Hans` | `Local Files` | windows override | 本地文件 |
 | `zh-Hans` | `Local` | windows override | 本地 |
+| `zh-Hans` | `Reveal “%@” in Finder` | windows override | 在文件资源管理器中显示“%@” |
 | `zh-Hans` | `Clear the cache?` | windows override | 要清除缓存吗？ |
 | `zh-Hans` | `Erase all offline indexes?` | windows override | 要清除所有离线索引吗？ |
 | `zh-Hans` | `1 transfer — click for details` | windows override | 1 个传输——单击查看详情 |
 | `zh-Hans` | `1 folder size — click for details` | windows override | 1 个文件夹大小——单击查看详情 |
 | `zh-Hans` | `Index for Offline Search…` | windows override | 为离线搜索编制索引… |
 | `zh-Hans` | `Re-index for Offline Search…` | windows override | 为离线搜索重新编制索引… |
+| `zh-Hans` | `Unmount from Finder` | windows override | 断开网络驱动器 |
 | `zh-Hans` | `Could not compute plan: %@` | windows override | 无法计算同步计划：%@ |
 | `zh-Hans` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。 |
 | `zh-Hans` | `Desktop` | windows override | 桌面 |
@@ -785,6 +810,8 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `10 MB and up` | windows override | 10 MB 及以上 |
 | `zh-Hans` | `100 MB and up` | windows override | 100 MB 及以上 |
 | `zh-Hans` | `1 GB and up` | windows override | 1 GB 及以上 |
+| `zh-Hans` | `Keychain save failed (OSStatus %d)` | windows override | 无法保存到 Windows 凭据存储（错误 %d） |
+| `zh-Hans` | `Keychain delete failed (OSStatus %d)` | windows override | 无法从 Windows 凭据存储中删除（错误 %d） |
 | `zh-Hans` | `Box authentication failed: %@` | windows override | Box 认证失败：%@ |
 | `zh-Hans` | `Could not resolve host. Check the server address.` | windows override | 无法解析主机。请检查服务器地址。 |
 | `zh-Hans` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | 无法连接——请检查主机、端口以及 FTP 是否可访问。 |
@@ -798,7 +825,7 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen 文件元数据未缓存——请重新打开文件夹后重试。 |
 | `zh-Hans` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info 返回了意外的数据。 |
 | `zh-Hans` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder 未返回根 UUID。 |
-| `zh-Hans` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | 你尚未在这台 Mac 上登录 iCloud。打开“系统设置 → Apple 账户 → iCloud → iCloud 云盘”并将其打开。 |
+| `zh-Hans` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | windows override | 你尚未在这台电脑上登录 iCloud。请打开 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。 |
 | `zh-Hans` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | 此 Nextcloud 服务器未提供 Login Flow v2。请改用应用专用密码登录方式。 |
 | `zh-Hans` | `Timed out waiting for browser sign-in.` | windows override | 等待浏览器登录超时。 |
 | `zh-Hans` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | 服务器拒绝了 SSH 密钥。请确保公钥位于服务器的 ~/.ssh/authorized_keys 中（对于 Hetzner Storage Box 等托管服务，请将其添加到服务商的 SSH 密钥面板中）。 |
@@ -808,7 +835,7 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `Wrong passphrase for the private key.` | windows override | 私钥的密码短语错误。 |
 | `zh-Hans` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | 连接被拒绝——此主机和端口上是否运行着 SSH 服务？ |
 | `zh-Hans` | `Connection timed out. Check the hostname, port, and your network.` | windows override | 连接超时。请检查主机名、端口和你的网络。 |
-| `zh-Hans` | `Network is unreachable from this Mac.` | needs review | 无法从这台 Mac 访问网络。 |
+| `zh-Hans` | `Network is unreachable from this Mac.` | windows override | 从这台电脑无法访问网络。 |
 | `zh-Hans` | `Could not resolve hostname. Check spelling or DNS.` | windows override | 无法解析主机名。请检查拼写或 DNS。 |
 | `zh-Hans` | `Server URL is not a valid URL.` | windows override | 服务器 URL 不是有效的 URL。 |
 | `zh-Hans` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | 无法直接上传到 Seafile 资料库的根目录——请先选择一个资料库。 |
@@ -849,7 +876,11 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hans` | `Filen API error` | windows override | Filen API 错误 |
 | `zh-Hant` | `System Default follows the language selected in macOS.` | windows override | 「跟隨系統」會使用 Windows 中設定的語言。 |
 | `zh-Hant` | `Search all sources (⌘F)` | windows override | 搜尋所有來源（Ctrl+F） |
-| `zh-Hant` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | auto-rewritten | Windows 會對每個受保護的資料夾（桌面、文件、下載……）詢問一次。每個資料夾首次打開可能需要幾秒鐘——但僅限首次。 |
+| `zh-Hant` | `Open System Settings…` | windows override | 開啟 Windows 設定… |
+| `zh-Hant` | `macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time.` | windows override | 在 Windows 安全性中開啟「受控資料夾存取權」時，Windows 可能會封鎖對受保護資料夾（桌面、文件、下載……）的變更。 |
+| `zh-Hant` | `System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect.` | windows override | Windows 安全性已開啟。在**受控資料夾存取權**下選擇**允許應用程式通過受控資料夾存取權**並新增 FileFluss，然後按一下**結束並重新啟動**以使新權限生效。 |
+| `zh-Hant` | `Or click the **+** button in System Settings and pick FileFluss from your Applications folder.` | windows override | 在該處按一下**新增允許的應用程式**，然後從 FileFluss 的安裝資料夾中選擇 FileFluss.exe。 |
+| `zh-Hant` | `Get Info` | windows override | 內容 |
 | `zh-Hant` | `Copy Path` | windows override | 複製路徑 |
 | `zh-Hant` | `Move to Trash` | windows override | 移到資源回收筒 |
 | `zh-Hant` | `"%@" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone.` | windows override | 「%@」無法移到資源回收筒，因為其所在的磁碟機沒有資源回收筒。要永久刪除嗎？此操作無法復原。 |
@@ -885,21 +916,27 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hant` | `Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.` | windows override | Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。 |
 | `zh-Hant` | `iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.` | windows override | iCloud 使用 Windows 版 iCloud 的登入——此處無可編輯內容。請在 Windows 版 iCloud 應用程式中管理 iCloud 雲碟。 |
 | `zh-Hant` | `Mount this account in Finder first — a cloud folder has no path a terminal can open.` | windows override | 請先將此帳戶連線為網路磁碟機——雲端資料夾沒有終端機可以開啟的路徑。 |
+| `zh-Hant` | `Mount and Open in Terminal` | windows override | 連線為網路磁碟機並在終端機中開啟 |
 | `zh-Hant` | `A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it.` | windows override | 終端機只能開啟這台電腦上存在的資料夾。將此帳戶連線為網路磁碟機後，它會出現在檔案總管中，終端機將在其中開啟。 |
-| `zh-Hant` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | auto-rewritten | Windows 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）屬於使用者「%@」而不是你。 |
-| `zh-Hant` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | auto-rewritten | Windows 拒絕將 %@ 移到垃圾桶，因為垃圾桶檔案夾（%@）的權限不允許更改。 |
-| `zh-Hant` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | auto-rewritten | Explorer 也會遇到相同的問題。若要修復，請拷貝該指令，貼到「終端機」中並輸入你的密碼。 |
-| `zh-Hant` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | auto-rewritten | 你沒有權限更改 %@ 所在的檔案夾（%@），因此無法將其移到垃圾桶或刪除。該檔案夾的擁有者可以在 Explorer 的「檔案 → 取得資訊」中更改。 |
-| `zh-Hant` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | Windows 拒絕 FileFluss 將 %@ 移到垃圾桶。如果 FileFluss 尚未獲得「完全取用磁碟」，在「系統設定 → 隱私權與安全性」中授予可能會有幫助，之後需要重新啟動 FileFluss。如果 Explorer 也無法將其移到垃圾桶，則原因不在 FileFluss。 |
-| `zh-Hant` | `Show in Finder` | auto-rewritten | 在 Explorer 中顯示 |
-| `zh-Hant` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | auto-rewritten | FileFluss 開啟「%@」之後，該檔案在這台 Mac 上被修改過。FileFluss 尚不會將其他 App 中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請在 Explorer 中掛載該帳戶。 |
+| `zh-Hant` | `FileFluss isn't allowed to move this to the Trash` | windows override | FileFluss 無權將其移到資源回收筒 |
+| `zh-Hant` | `Your Trash folder can't be written to` | windows override | 無法寫入你的資源回收筒 |
+| `zh-Hant` | `macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user "%@" instead of you.` | windows override | Windows 拒絕將 %@ 移到資源回收筒，因為資源回收筒資料夾（%@）屬於使用者「%@」而不是你。 |
+| `zh-Hant` | `macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.` | windows override | Windows 拒絕將 %@ 移到資源回收筒，因為資源回收筒資料夾（%@）的權限不允許變更。 |
+| `zh-Hant` | `Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.` | windows override | 檔案總管也會遇到相同的問題。若要修復，請複製該命令，並在以系統管理員身分開啟的終端機中執行。 |
+| `zh-Hant` | `You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.` | windows override | 你沒有權限變更 %@ 所在的資料夾（%@），因此無法將其移到資源回收筒或刪除。該資料夾的擁有者可以在檔案總管的「內容 → 安全性」中變更。 |
+| `zh-Hant` | `macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | windows override | Windows 拒絕讓 FileFluss 將 %@ 移到資源回收筒。如果檔案總管也無法將其移到資源回收筒，則原因不在 FileFluss。 |
+| `zh-Hant` | `The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.` | windows override | 檔案會途經這台電腦：這需要 %@ 位於 %@，而該處僅剩 %@。中轉資料夾可在「設定 → 儲存空間」中設定。 |
+| `zh-Hant` | `The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.` | windows override | 檔案在兩個帳戶之間會途經這台電腦：這需要 %@ 位於 %@，而該處僅剩 %@。請釋出空間，或在「設定 → 儲存空間」中選擇其他資料夾。 |
+| `zh-Hant` | `The files pass through this Mac: %@ doesn't have room for that.` | windows override | 檔案會途經這台電腦：%@ 上沒有足夠空間。 |
+| `zh-Hant` | `Show in Finder` | windows override | 在檔案總管中顯示 |
+| `zh-Hant` | `“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.` | windows override | FileFluss 開啟「%@」之後，該檔案在這台電腦上被修改過。FileFluss 尚不會將其他應用程式中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請將該帳戶連線為網路磁碟機。 |
 | `zh-Hant` | ` and ` | windows override | 和 |
 | `zh-Hant` | `"Copy Share Link" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page.` | windows override | 這樣，「複製共用連結」會複製可直接下載檔案的連結，而不是服務商的預覽頁面。不提供直接連結的服務商一律提供其自己的頁面。 |
 | `zh-Hant` | `%@ usually need a paid plan.` | windows override | %@通常需要付費方案。 |
 | `zh-Hant` | `A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead.` | windows override | 已不存在的資料夾（已刪除的資料夾、已拔除的磁碟機、已中斷連線的雲端帳戶）會改為開啟你的主資料夾。 |
 | `zh-Hant` | `Allow downloading` | windows override | 允許下載 |
 | `zh-Hant` | `Analyse` | windows override | 分析 |
-| `zh-Hant` | `Analyse any folder on this Mac` | needs review | 分析這台 Mac 上的任意檔案夾 |
+| `zh-Hant` | `Analyse any folder on this Mac` | windows override | 分析這台電腦上的任意資料夾 |
 | `zh-Hant` | `Anyone with this link can download the file until it expires. The link cannot be revoked early.` | windows override | 在連結到期之前，任何擁有此連結的人都可以下載該檔案。此連結無法提前撤銷。 |
 | `zh-Hant` | `Box kept the public link in place — check whether your administrator manages sharing for this item.` | windows override | Box 保留了公開連結——請確認你的系統管理員是否管理此項目的共用。 |
 | `zh-Hant` | `Change Sharing…` | windows override | 變更共用… |
@@ -984,13 +1021,10 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
 | `zh-Hant` | `Cloud Storage Providers` | windows override | 雲端儲存服務商 |
 | `zh-Hant` | `Other Protocols` | windows override | 其他通訊協定 |
 | `zh-Hant` | `Cameras & Devices` | windows override | 相機與裝置 |
-| `zh-Hant` | `Show Archive in Finder` | auto-rewritten | 在 Explorer 中顯示壓縮檔 |
-| `zh-Hant` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.
-
-RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | auto-rewritten | FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR %@（不到 1 MB），用已知指紋驗證後放在自己的資料夾中，無需管理者密碼。
-
-RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。 |
+| `zh-Hant` | `Show Archive in Finder` | windows override | 在檔案總管中顯示壓縮檔 |
+| `zh-Hant` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR %@，用已知指紋驗證後放在自己的資料夾中，無需系統管理員權限。\n\nRAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。 |
 | `zh-Hant` | `Open` | windows override | 開啟 |
+| `zh-Hant` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | 請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會加密儲存在 Windows 認證存放區中。 |
 | `zh-Hant` | `The file changed while it was being uploaded.` | windows override | 檔案在上傳期間已變更。 |
 | `zh-Hant` | `Quit Anyway` | windows override | 仍要結束 |
 | `zh-Hant` | `Cloud` | windows override | 雲端 |
@@ -1014,6 +1048,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `Done: %@ %@` | windows override | 完成——%@：%@ |
 | `zh-Hant` | `Share link copied` | windows override | 共用連結已複製 |
 | `zh-Hant` | `Link copied — not public` | windows override | 連結已複製——非公開 |
+| `zh-Hant` | `Failed to move %@ to the Trash: %@` | windows override | 無法將 %@ 移到資源回收筒：%@ |
 | `zh-Hant` | `Left newer` | windows override | 左側較新 |
 | `zh-Hant` | `Right newer` | windows override | 右側較新 |
 | `zh-Hant` | `Could not read folders: %@` | windows override | 無法讀取資料夾：%@ |
@@ -1021,9 +1056,9 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `Could not save the index: %@` | windows override | 無法儲存索引：%@ |
 | `zh-Hant` | `Account not connected` | windows override | 帳戶未連線 |
 | `zh-Hant` | `Space` | windows override | 空白鍵 |
-| `zh-Hant` | `Could not mount in Finder: %@` | auto-rewritten | 無法在 Explorer 中裝載：%@ |
-| `zh-Hant` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | auto-rewritten | Windows 與內部伺服器無法就認證方式達成一致（NetFS 狀態 %d）。請回報此問題。 |
-| `zh-Hant` | `macOS found nothing to mount at the internal server (NetFS status %d).` | auto-rewritten | Windows 在內部伺服器上找不到可裝載的內容（NetFS 狀態 %d）。 |
+| `zh-Hant` | `Could not mount in Finder: %@` | windows override | 無法連線為網路磁碟機：%@ |
+| `zh-Hant` | `macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.` | windows override | Windows 與內部伺服器無法就驗證方式達成一致（狀態 %d）。請回報此問題。 |
+| `zh-Hant` | `macOS found nothing to mount at the internal server (NetFS status %d).` | windows override | Windows 在內部伺服器上找不到可連線的內容（狀態 %d）。 |
 | `zh-Hant` | `The internal WebDAV server didn't respond with 200 OK to OPTIONS.` | windows override | 內部 WebDAV 伺服器未對 OPTIONS 回應 200 OK。 |
 | `zh-Hant` | `Could not reach the internal WebDAV server on 127.0.0.1:%@: %@` | windows override | 無法連線到 127.0.0.1:%@ 上的內部 WebDAV 伺服器：%@ |
 | `zh-Hant` | `Current Folder` | windows override | 目前資料夾 |
@@ -1032,14 +1067,14 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `%@ (offline)` | windows override | %@（離線） |
 | `zh-Hant` | `Local Files` | windows override | 本機檔案 |
 | `zh-Hant` | `Local` | windows override | 本機 |
-| `zh-Hant` | `Reveal “%@” in Finder` | auto-rewritten | 在 Explorer 中顯示「%@」 |
+| `zh-Hant` | `Reveal “%@” in Finder` | windows override | 在檔案總管中顯示「%@」 |
 | `zh-Hant` | `Clear the cache?` | windows override | 要清除快取嗎？ |
 | `zh-Hant` | `Erase all offline indexes?` | windows override | 要清除所有離線索引嗎？ |
 | `zh-Hant` | `1 transfer — click for details` | windows override | 1 個傳輸——按一下查看詳細資料 |
 | `zh-Hant` | `1 folder size — click for details` | windows override | 1 個資料夾大小——按一下查看詳細資料 |
 | `zh-Hant` | `Index for Offline Search…` | windows override | 為離線搜尋建立索引… |
 | `zh-Hant` | `Re-index for Offline Search…` | windows override | 為離線搜尋重新建立索引… |
-| `zh-Hant` | `Unmount from Finder` | auto-rewritten | 從 Explorer 中退出 |
+| `zh-Hant` | `Unmount from Finder` | windows override | 中斷網路磁碟機連線 |
 | `zh-Hant` | `Could not compute plan: %@` | windows override | 無法計算同步計畫：%@ |
 | `zh-Hant` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 現在要求第三方應用程式使用 OAuth，且已停止新應用程式註冊。請在 my.pcloud.com 登入，複製「pcauth」Cookie 的值，並將其貼到「存取權杖」欄位中。 |
 | `zh-Hant` | `Desktop` | windows override | 桌面 |
@@ -1073,6 +1108,8 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `10 MB and up` | windows override | 10 MB 以上 |
 | `zh-Hant` | `100 MB and up` | windows override | 100 MB 以上 |
 | `zh-Hant` | `1 GB and up` | windows override | 1 GB 以上 |
+| `zh-Hant` | `Keychain save failed (OSStatus %d)` | windows override | 無法儲存至 Windows 認證存放區（錯誤 %d） |
+| `zh-Hant` | `Keychain delete failed (OSStatus %d)` | windows override | 無法從 Windows 認證存放區刪除（錯誤 %d） |
 | `zh-Hant` | `Box authentication failed: %@` | windows override | Box 驗證失敗：%@ |
 | `zh-Hant` | `Could not resolve host. Check the server address.` | windows override | 無法解析主機。請檢查伺服器位址。 |
 | `zh-Hant` | `Could not connect — check the host, port, and that FTP is reachable.` | windows override | 無法連線——請檢查主機、連接埠，以及 FTP 是否可以存取。 |
@@ -1086,7 +1123,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `Filen file metadata not cached — re-open the folder and try again.` | windows override | Filen 檔案中繼資料未快取——請重新開啟資料夾後再試一次。 |
 | `zh-Hant` | `Filen /v3/auth/info returned an unexpected payload.` | windows override | Filen /v3/auth/info 傳回了非預期的資料。 |
 | `zh-Hant` | `Filen /v3/user/baseFolder didn't return a root UUID.` | windows override | Filen /v3/user/baseFolder 未傳回根 UUID。 |
-| `zh-Hant` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | needs review | 你尚未在這台 Mac 上登入 iCloud。打開「系統設定 → Apple 帳戶 → iCloud → iCloud 雲碟」並將其開啟。 |
+| `zh-Hant` | `You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.` | windows override | 你尚未在這台電腦上登入 iCloud。請開啟 Windows 版 iCloud，使用你的 Apple 帳戶登入並開啟 iCloud 雲碟。 |
 | `zh-Hant` | `This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.` | windows override | 此 Nextcloud 伺服器未提供 Login Flow v2。請改用應用程式專用密碼登入方式。 |
 | `zh-Hant` | `Timed out waiting for browser sign-in.` | windows override | 等候瀏覽器登入逾時。 |
 | `zh-Hant` | `SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).` | windows override | 伺服器拒絕了 SSH 金鑰。請確認公開金鑰位於伺服器的 ~/.ssh/authorized_keys 中（若是 Hetzner Storage Box 等代管服務，請將其加入服務商的 SSH 金鑰面板）。 |
@@ -1096,7 +1133,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 | `zh-Hant` | `Wrong passphrase for the private key.` | windows override | 私密金鑰的複雜密碼錯誤。 |
 | `zh-Hant` | `Connection refused — is the SSH daemon running on this host and port?` | windows override | 連線遭拒——此主機和連接埠上是否正在執行 SSH 服務？ |
 | `zh-Hant` | `Connection timed out. Check the hostname, port, and your network.` | windows override | 連線逾時。請檢查主機名稱、連接埠和你的網路。 |
-| `zh-Hant` | `Network is unreachable from this Mac.` | needs review | 無法從這台 Mac 存取網路。 |
+| `zh-Hant` | `Network is unreachable from this Mac.` | windows override | 無法從這台電腦存取網路。 |
 | `zh-Hant` | `Could not resolve hostname. Check spelling or DNS.` | windows override | 無法解析主機名稱。請檢查拼字或 DNS。 |
 | `zh-Hant` | `Server URL is not a valid URL.` | windows override | 伺服器 URL 不是有效的 URL。 |
 | `zh-Hant` | `Cannot upload directly to the Seafile library root — pick a library first.` | windows override | 無法直接上傳到 Seafile 資料庫的根目錄——請先選擇一個資料庫。 |

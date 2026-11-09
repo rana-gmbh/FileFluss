@@ -565,3 +565,43 @@
 "%@ files, 1 folder — %@" = "%@ Dateien, 1 Ordner – %@";
 "Selected: 1 item, calculating…" = "Ausgewählt: 1 Objekt, wird berechnet …";
 "Selected: 1 item, %@" = "Ausgewählt: 1 Objekt, %@";
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of the macOS 1.6 strings (see en.lproj). Mac translations that already read right
+   on Windows — "Papierkorb" is the Recycle Bin's German name too — are not repeated here.
+   --------------------------------------------------------------------------------------------- */
+
+"Open System Settings…" = "Windows-Einstellungen öffnen …";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "Windows kann Änderungen in geschützten Ordnern (Desktop, Dokumente, Downloads, …) blockieren, solange der überwachte Ordnerzugriff in Windows-Sicherheit aktiviert ist.";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "Windows-Sicherheit ist nun geöffnet. Wähle unter **Überwachter Ordnerzugriff** die Option **App durch überwachten Ordnerzugriff zulassen** und füge FileFluss hinzu – klicke dann auf **Beenden & neu starten**, damit die neue Berechtigung wirksam wird.";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "Klicke dort auf **Zulässige App hinzufügen** und wähle FileFluss.exe aus dem Ordner, in dem FileFluss installiert ist.";
+"Get Info" = "Eigenschaften";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil der Papierkorb-Ordner (%@) dem Benutzer „%@“ gehört statt dir.";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners (%@) keine Änderungen erlauben.";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl und führe ihn in einem Terminal aus, das du als Administrator geöffnet hast.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Eigenschaften → Sicherheit ändern.";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "Windows hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss.";
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "Die Dateien laufen unterwegs über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen.";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner.";
+"The files pass through this Mac: %@ doesn't have room for that." = "Die Dateien laufen über diesen PC: Auf %@ ist dafür kein Platz.";
+"Needs on this Mac:" = "Benötigt auf diesem PC:";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "„%@“ wurde auf diesem PC geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten verbinde das Konto als Netzlaufwerk.";
+"Analyse any folder on this Mac" = "Einen beliebigen Ordner auf diesem PC analysieren";
+"Network is unreachable from this Mac." = "Das Netzwerk ist von diesem PC aus nicht erreichbar.";
+"You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." = "Du bist auf diesem PC nicht bei iCloud angemeldet. Öffne iCloud für Windows, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
+"Show in Finder" = "Im Explorer anzeigen";
+"Show Archive in Finder" = "Archiv im Explorer anzeigen";
+"Reveal “%@” in Finder" = "„%@“ im Explorer anzeigen";
+"Could not mount in Finder: %@" = "Konnte nicht als Netzlaufwerk verbunden werden: %@";
+"Unmount from Finder" = "Netzlaufwerk trennen";
+"Mount and Open in Terminal" = "Als Netzlaufwerk verbinden und im Terminal öffnen";
+"macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it." = "Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (Status %d). Bitte melde es.";
+"macOS found nothing to mount at the internal server (NetFS status %d)." = "Windows hat auf dem internen Server nichts zum Verbinden gefunden (Status %d).";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt.";
+"Keychain save failed (OSStatus %d)" = "Speichern im Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d)";
+"Keychain delete failed (OSStatus %d)" = "Löschen aus dem Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d)";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss kann RAR %@ für Windows von rarlab.com laden, es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Administratorrechte sind nicht nötig.\n\nRAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden.";
+
+/* Transfers: a move whose copy failed verification, and a download cut short. */
+"\"%@\" didn't arrive complete, so the original was kept." = "„%@“ ist nicht vollständig angekommen, deshalb wurde das Original behalten.";
+"The download ended after %@ of %@ bytes." = "Der Download brach nach %@ von %@ Bytes ab.";
