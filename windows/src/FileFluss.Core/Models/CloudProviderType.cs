@@ -39,6 +39,7 @@ public enum CloudProviderType
     [JsonStringEnumMemberName("googleDrivePicker")] GoogleDrivePicker,
     [JsonStringEnumMemberName("gopro")] GoPro,
     [JsonStringEnumMemberName("github")] GitHub,
+    [JsonStringEnumMemberName("drime")] Drime,
 }
 
 /// <summary>How the Add Cloud Account picker groups a provider, as on macOS.</summary>
@@ -84,6 +85,7 @@ public static class CloudProviderTypeExtensions
         CloudProviderType.GoogleDrivePicker => "Google Drive (Selected Folders)",
         CloudProviderType.GoPro => "GoPro Camera",
         CloudProviderType.GitHub => "GitHub",
+        CloudProviderType.Drime => "Drime",
         _ => type.ToString(),
     };
 
