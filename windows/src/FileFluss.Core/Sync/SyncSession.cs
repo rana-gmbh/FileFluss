@@ -23,6 +23,7 @@ public sealed class SyncSession : INotifyPropertyChanged
     private PlanDirection _direction = PlanDirection.LeftToRight;
     private SyncMode _mode = SyncMode.Newer;
     private bool _confirmDestructive;
+    private bool _confirmLargeDeletion;
     private bool _isCalculating;
     private SyncPlan? _plan;
     private string? _errorMessage;
@@ -131,8 +132,60 @@ public sealed class SyncSession : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// "Yes, delete n of the m items at the destination." — required to start a plan that
+    /// deletes most of the destination (<see cref="SyncPlan.DeletesMostOfDestination"/>).
+    /// Reset by every new plan.
+    /// </summary>
+    public bool ConfirmLargeDeletion
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _confirmLargeDeletion;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                if (_confirmLargeDeletion == value)
+                {
+                    return;
+                }
+
+                _confirmLargeDeletion = value;
+            }
+
+            Notify();
+        }
+    }
+
     /// <summary>Show the mirror confirmation checkbox.</summary>
     public bool RequiresConfirmation => Mode.IsDestructive();
+
+    /// <summary>
+    /// "The source is empty, so Mirror would delete everything at the destination." in red under
+    /// the plan; null when the plan doesn't empty the destination. Such a plan can't be started.
+    /// </summary>
+    public string? EmptyDestinationWarning
+        => Plan is { WouldEmptyDestination: true }
+            ? L("The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open.")
+            : null;
+
+    /// <summary>The text of the large-deletion checkbox; null hides it.</summary>
+    public string? LargeDeletionConfirmationText
+        => Plan is { WouldEmptyDestination: false, DeletesMostOfDestination: true } plan
+            ? L("Yes, delete {0} of the {1} items at the destination.", plan.FilesToDelete + plan.FoldersToDelete, plan.DestinationEntryCount)
+            : null;
+
+    /// <summary>"Leaving n file(s) alone: a folder with the same name is at the destination."; null hides it.</summary>
+    public string? TypeClashText
+        => Plan is { TypeClashes: > 0 } plan
+            ? L("Leaving {0} file(s) alone: a folder with the same name is at the destination.", plan.TypeClashes)
+            : null;
 
     public SyncEndpoint? Source => Direction == PlanDirection.LeftToRight ? Left : Right;
 
@@ -220,19 +273,29 @@ public sealed class SyncSession : INotifyPropertyChanged
         {
             lock (_gate)
             {
-                if (_plan is not { } plan || _isCalculating)
-                {
-                    return false;
-                }
-
-                if (_mode.IsDestructive() && !_confirmDestructive)
-                {
-                    return false;
-                }
-
-                return !plan.IsEmpty;
+                return _plan is { } plan && CanStartLocked(plan);
             }
         }
+    }
+
+    private bool CanStartLocked(SyncPlan plan)
+    {
+        if (_isCalculating || !plan.Matches(_mode, _direction) || plan.IsEmpty)
+        {
+            return false;
+        }
+
+        if (plan.Mode.IsDestructive() && !_confirmDestructive)
+        {
+            return false;
+        }
+
+        if (plan.WouldEmptyDestination)
+        {
+            return false;
+        }
+
+        return !plan.DeletesMostOfDestination || _confirmLargeDeletion;
     }
 
     // MARK: - Display rows
@@ -301,8 +364,10 @@ public sealed class SyncSession : INotifyPropertyChanged
                 throw new InvalidOperationException(L("A folder can't be copied or moved into itself."));
             }
 
-            var sourceTask = Task.Run(() => SyncPlanner.EnumerateAsync(source, token), token);
-            var destinationTask = Task.Run(() => SyncPlanner.EnumerateAsync(destination, token), token);
+            var sourceHidden = new List<string>();
+            var destinationHidden = new List<string>();
+            var sourceTask = Task.Run(() => SyncPlanner.EnumerateAsync(source, token, hiddenPaths: sourceHidden), token);
+            var destinationTask = Task.Run(() => SyncPlanner.EnumerateAsync(destination, token, hiddenPaths: destinationHidden), token);
             await Task.WhenAll(sourceTask, destinationTask).ConfigureAwait(false);
             plan = SyncPlanner.Plan(
                 await sourceTask.ConfigureAwait(false),
@@ -311,7 +376,9 @@ public sealed class SyncSession : INotifyPropertyChanged
                 direction,
                 source.IsCloud,
                 destination.IsCloud,
-                ignoreCase: !source.IsCloud || !destination.IsCloud);
+                ignoreCase: !source.IsCloud || !destination.IsCloud,
+                dateTolerance: SyncPlanner.DateToleranceFor(source, destination),
+                hiddenPaths: [.. sourceHidden, .. destinationHidden]);
             available = await SpaceCheck.AvailableSpaceAsync(destination.Provider, destination.Path, token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -337,6 +404,7 @@ public sealed class SyncSession : INotifyPropertyChanged
             {
                 _plan = plan;
                 _destinationAvailable = available;
+                _confirmLargeDeletion = false;
             }
             else if (error is not null)
             {
@@ -375,15 +443,16 @@ public sealed class SyncSession : INotifyPropertyChanged
         PanelSide side;
         lock (_gate)
         {
-            if (_plan is not { IsEmpty: false } current || _isCalculating || (_mode.IsDestructive() && !_confirmDestructive))
+            if (_plan is not { } current || !CanStartLocked(current))
             {
                 return null;
             }
 
+            // The sides the plan was worked out for, never whatever the controls say by now.
             plan = current;
-            source = (_direction == PlanDirection.LeftToRight ? Left : Right)!;
-            destination = (_direction == PlanDirection.LeftToRight ? Right : Left)!;
-            side = _direction == PlanDirection.LeftToRight ? PanelSide.Right : PanelSide.Left;
+            source = (plan.Direction == PlanDirection.LeftToRight ? Left : Right)!;
+            destination = (plan.Direction == PlanDirection.LeftToRight ? Right : Left)!;
+            side = plan.Direction == PlanDirection.LeftToRight ? PanelSide.Right : PanelSide.Left;
         }
 
         var progress = SyncExecutor.CreateProgress(plan, source, destination, side);
@@ -403,6 +472,7 @@ public sealed class SyncSession : INotifyPropertyChanged
         _plan = null;
         _destinationAvailable = null;
         _errorMessage = null;
+        _confirmLargeDeletion = false;
     }
 
     private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));

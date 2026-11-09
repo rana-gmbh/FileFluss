@@ -164,7 +164,9 @@ public sealed class HostileNameTests : IDisposable
         var destination = Destination();
         var outside = Path.Combine(_root, "escaped"); // in WritableHostileNames: Path.Combine would return it unchanged
         var server = new HostileProvider();
-        foreach (var name in WritableHostileNames)
+
+        // A name that climbs ("..", "a\..\..\x") stops the scan instead (SyncListingWithTraversalStopsThePlan).
+        foreach (var name in WritableHostileNames.Where(n => !CloudPath.IsTraversalName(n)))
         {
             var folder = server.AddFolder("/", name);
             server.AddFile(folder, "inside.txt");
@@ -187,6 +189,22 @@ public sealed class HostileNameTests : IDisposable
         Assert.False(Directory.Exists(outside));
         Assert.Empty(Outside(destination));
         Assert.NotEmpty(Directory.EnumerateFileSystemEntries(destination));
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData(".")]
+    [InlineData("../../evil.txt")]
+    [InlineData("a\\..\\..\\evil.txt")]
+    public async Task SyncListingWithTraversalStopsThePlan(string name)
+    {
+        // macOS 1.6: skipping the entry would let Mirror delete it on the other side instead,
+        // so the whole scan stops with the server's path in the message.
+        var server = new HostileProvider();
+        server.AddFile("/", "fine.txt");
+        server.AddFile(server.AddFolder("/", "sub"), name);
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => SyncPlanner.EnumerateAsync(new SyncEndpoint(server, "/")));
     }
 
     // MARK: - Transfers
