@@ -847,9 +847,32 @@ public sealed class SftpProvider : CloudProvider
     public override Task MoveItemAsync(string path, string newPath, CancellationToken cancellationToken = default)
         => RunAsync<bool>(path, async transport =>
         {
-            await transport.RenameAsync(CloudPath.Normalize(path), CloudPath.Normalize(newPath), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await transport.RenameAsync(CloudPath.Normalize(path), CloudPath.Normalize(newPath), cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException && IsRefusedServerSideOperation(e))
+            {
+                // A rename the server won't do — across file systems, most often — is not a
+                // failure to report but a reason to copy the bytes through instead (macOS 1.6).
+                // An ordinary refusal such as a denied permission stays a failure.
+                SupportLogger.Shared.Log($"Server-side move refused, falling back: {e.Message}", LogCategory, LogLevel.Notice);
+                throw CloudProviderException.NotImplemented();
+            }
+
             return true;
         }, cancellationToken);
+
+    /// <summary>A server-side operation the server declined where copying through the client would still work.</summary>
+    internal static bool IsRefusedServerSideOperation(Exception error)
+    {
+        var text = error.Message.ToLowerInvariant();
+        return error is Renci.SshNet.Common.SftpPermissionDeniedException
+            ? false
+            : text.Contains("cross-device", StringComparison.Ordinal) ||
+              text.Contains("operation unsupported", StringComparison.Ordinal) ||
+              text.Contains("op unsupported", StringComparison.Ordinal);
+    }
 
     public override Task SetModificationDateAsync(string path, DateTimeOffset date, CancellationToken cancellationToken = default)
         => RunAsync<bool>(path, async transport =>
