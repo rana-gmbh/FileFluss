@@ -48,21 +48,56 @@ public sealed record PanelLocation
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DriveId { get; init; }
 
+    /// <summary>
+    /// For a folder inside an archive: the archive's own path where it is stored — a Windows
+    /// path, or a POSIX path on the account in <see cref="ArchiveAccountId"/>. <see cref="Path"/>
+    /// is then the POSIX path inside the archive ("/" for its root).
+    /// </summary>
+    [JsonPropertyName("archive")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ArchivePath { get; init; }
+
+    /// <summary>The account an archive is stored on; null for an archive on this PC. Kept apart from <see cref="AccountId"/> so nothing mistakes the archive for the account.</summary>
+    [JsonPropertyName("archiveAccountId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ArchiveAccountId { get; init; }
+
     [JsonIgnore]
     public bool IsCloud => Kind == "cloud" && AccountId is not null;
 
     [JsonIgnore]
     public bool IsOfflineDrive => Kind == OfflineDriveKind && DriveId is not null;
 
-    /// <summary>A folder on disk (not a cloud account, not an unplugged drive).</summary>
+    /// <summary>A folder inside an archive (ZIP, RAR, 7z, a tarball), browsed read-only.</summary>
     [JsonIgnore]
-    public bool IsLocal => !IsCloud && !IsOfflineDrive;
+    public bool IsArchive => Kind == ArchiveKind && ArchivePath is not null;
+
+    /// <summary>A folder on disk (not a cloud account, not an unplugged drive, not inside an archive).</summary>
+    [JsonIgnore]
+    public bool IsLocal => !IsCloud && !IsOfflineDrive && !IsArchive;
+
+    /// <summary>The folder an archive sits in, for "up" out of its root and for what a session remembers.</summary>
+    [JsonIgnore]
+    public PanelLocation? ArchiveContainer => !IsArchive ? null
+        : ArchiveAccountId is { } account ? Cloud(account, IO.CloudPath.Parent(ArchivePath!))
+        : Local(System.IO.Path.GetDirectoryName(ArchivePath!) ?? string.Empty);
+
+    /// <summary>The archive's own file name.</summary>
+    [JsonIgnore]
+    public string ArchiveName => ArchivePath is null ? string.Empty
+        : ArchiveAccountId is null ? System.IO.Path.GetFileName(ArchivePath) : IO.CloudPath.Name(ArchivePath);
 
     public static PanelLocation Local(string path) => new() { Kind = "local", Path = path };
 
     public static PanelLocation Cloud(Guid accountId, string path) => new() { Kind = "cloud", AccountId = accountId, Path = path };
 
     public static PanelLocation OfflineDrive(string driveId, string path) => new() { Kind = OfflineDriveKind, DriveId = driveId, Path = path };
+
+    /// <summary>A folder inside the archive at <paramref name="archivePath"/> (on <paramref name="accountId"/>, or on this PC when null).</summary>
+    public static PanelLocation Archive(string archivePath, Guid? accountId, string innerPath = "/")
+        => new() { Kind = ArchiveKind, ArchivePath = archivePath, ArchiveAccountId = accountId, Path = innerPath };
+
+    private const string ArchiveKind = "archive";
 }
 
 /// <summary>How each panel starts (issue #49).</summary>

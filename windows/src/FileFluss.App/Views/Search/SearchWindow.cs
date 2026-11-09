@@ -225,6 +225,9 @@ public sealed class SearchWindow : Window
         var other = main.OtherPanel.Location;
         string LocalFallback() => other.IsLocal && other.Path.Length > 0 ? other.Path : home;
 
+        // Inside an archive the search starts where the archive sits.
+        active = active.ArchiveContainer ?? active;
+
         // "This PC" or an unplugged drive have no folder tree to walk; search home instead.
         if (active.IsOfflineDrive || (active.IsLocal && active.Path.Length == 0))
         {

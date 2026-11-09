@@ -509,7 +509,8 @@ public partial class PanelView : UserControl
             return;
         }
 
-        if (!vm.IsLocal)
+        // Inside an archive a typed "C:\…" or "%USERPROFILE%" means this PC, anything else the archive.
+        if (!vm.IsLocal && !(vm.IsArchive && (text.Contains('%') || (Path.IsPathRooted(text) && !text.StartsWith('/')))))
         {
             var target = text.StartsWith('/') ? text : Core.IO.CloudPath.Combine(vm.CurrentPath, text);
             await vm.NavigateAsync(vm.Location with { Path = Core.IO.CloudPath.Normalize(target) });
@@ -922,7 +923,8 @@ public partial class PanelView : UserControl
                 return;
             }
 
-            var verb = Main.ResolveDropVerb(payload.Items.Count, destinationName, forced);
+            // Out of an archive there is only copying: it is read, never rewritten.
+            var verb = payload.Provider is Core.Archives.ArchiveProvider ? false : Main.ResolveDropVerb(payload.Items.Count, destinationName, forced);
             if (verb is { } isMove)
             {
                 await Main.TransferAsync(payload.Provider, payload.Items, destination, isMove, side);

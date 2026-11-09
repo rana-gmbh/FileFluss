@@ -528,7 +528,8 @@ public sealed class SidebarViewModel : Observable
     /// <summary>Highlights the entry that best matches where the panel is.</summary>
     public void UpdateSelection()
     {
-        var location = _panel.Location;
+        // Inside an archive, the entry for the folder it sits in.
+        var location = _panel.Location.ArchiveContainer ?? _panel.Location;
         SidebarEntry? best = null;
         var bestLength = -1;
         foreach (var entry in Favorites.Concat(Drives).Concat(Accounts))

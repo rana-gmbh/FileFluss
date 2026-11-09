@@ -1,12 +1,14 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
 using FileFluss.App.Views.Dialogs;
+using FileFluss.Core.Archives;
 using FileFluss.Core.Commands;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
@@ -103,6 +105,14 @@ public static class ContextMenus
             items.Add(Item(L("Open in Terminal"), Glyphs.Terminal, Shortcut(KeyboardCommand.OpenInTerminal), () => _ = main.ExecuteAsync(KeyboardCommand.OpenInTerminal)));
         }
 
+        if (panel.IsArchive)
+        {
+            // Inside an archive there is nothing to cut, paste, rename or delete, and the rows
+            // have no files behind them: beyond opening an entry, the menu unpacks it.
+            items.AddRange(ArchiveEntryItems(main, panel));
+            return TrimSeparators(items);
+        }
+
         items.Add(new Separator());
         if (modifiable)
         {
@@ -125,6 +135,7 @@ public static class ContextMenus
             }
         }
 
+        items.AddRange(CompressAndExtractItems(main, panel, selection));
         items.Add(new Separator());
         if (single is not null && modifiable)
         {
@@ -174,6 +185,97 @@ public static class ContextMenus
         }
 
         return TrimSeparators(items);
+    }
+
+    // MARK: - Archives
+
+    /// <summary>Inside an archive: "Extract to … Panel" for the selection, and the archive itself in Explorer.</summary>
+    private static List<object> ArchiveEntryItems(MainViewModel main, PanelViewModel panel)
+    {
+        var items = new List<object> { new Separator() };
+        if (!main.SinglePaneMode)
+        {
+            var otherName = panel.Side == PanelSide.Left ? L("Right") : L("Left");
+            items.Add(Item(L("Extract to {0} Panel", otherName), Glyphs.MoveTo, null, () => _ = main.ExtractSelectionToOtherPanelAsync(panel)));
+        }
+
+        // The archive, not the entry: an entry has no path Explorer could show.
+        if (panel.Location is { ArchiveAccountId: null })
+        {
+            items.Add(new Separator());
+            items.Add(Item(L("Show in Explorer"), Glyphs.OpenFolder, null, () => main.RevealArchive(panel)));
+        }
+
+        items.Add(new Separator());
+        if (panel.Selection is [{ } single])
+        {
+            items.Add(Item(L("Properties"), Glyphs.Info, null, () => main.Shell.ShowProperties(panel, single.Item)));
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// "Compress" (a submenu of formats) for any selection, and "Extract Here" / "Extract to …
+    /// Panel" for one archive — offered for one at a time, as each would want its own
+    /// destination (macOS <c>CompressMenu</c> and <c>NativeFileList</c>).
+    /// </summary>
+    private static List<object> CompressAndExtractItems(MainViewModel main, PanelViewModel panel, IReadOnlyList<FileRowViewModel> selection)
+    {
+        var items = new List<object>();
+        if (panel.IsOffline || panel.Provider is null || (panel.IsLocal && panel.CurrentPath.Length == 0) || selection.Any(r => r.Item.Role != CloudItemRole.Normal))
+        {
+            return items;
+        }
+
+        items.Add(new Separator());
+        if (!panel.IsReadOnly)
+        {
+            var title = selection.Count == 1 ? L("Compress") : L("Compress {0} Items", selection.Count);
+            var compress = new MenuItem { Header = title };
+            AutomationProperties.SetName(compress, title);
+            var chosen = selection.Select(r => r.Item).ToList();
+            foreach (var format in ArchiveCreationFormats.All)
+            {
+                if (format == ArchiveCreationFormat.Rar)
+                {
+                    // RAR sits below a separator: the one format that needs something installed.
+                    compress.Items.Add(new Separator());
+                    if (!format.IsAvailable())
+                    {
+                        // Shown rather than hidden, and clickable: it offers to fetch the tool.
+                        var install = Item(L("RAR — Install rar Tool…"), null, null, main.OfferRarInstall);
+                        install.ToolTip = L("RAR archives can only be made with RARLAB's rar tool. FileFluss can download it for you.");
+                        compress.Items.Add(install);
+                        continue;
+                    }
+                }
+                else if (!format.IsAvailable())
+                {
+                    continue;
+                }
+
+                compress.Items.Add(Item(format.DisplayName(), null, null, () => main.Compress(panel, chosen, format)));
+            }
+
+            items.Add(compress);
+        }
+
+        if (selection is [{ IsDirectory: false } archive] && ArchiveFormats.Detect(archive.Name) is not null)
+        {
+            if (!panel.IsReadOnly)
+            {
+                items.Add(Item(L("Extract Here"), null, null, () => main.ExtractArchive(panel, archive.Item, panel)));
+            }
+
+            if (!main.SinglePaneMode)
+            {
+                var otherName = panel.Side == PanelSide.Left ? L("Right") : L("Left");
+                items.Add(Item(L("Extract to {0} Panel", otherName), null, null, () => main.ExtractArchive(panel, archive.Item, main.Panel(panel.Side.Other()))));
+            }
+        }
+
+        return items;
     }
 
     // MARK: - Sharing
