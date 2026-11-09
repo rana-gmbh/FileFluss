@@ -274,10 +274,12 @@ public sealed partial class MainViewModel
             return;
         }
 
+        // The macOS key, so its translations apply; windows/Localization overrides its wording
+        // for Windows (the WinRAR installer, about 4 MB, read but never run).
         var answer = MessageDialog.Show(
             Shell.Window,
             L("Install the rar tool?"),
-            L("FileFluss can download WinRAR {0} from rarlab.com (about 4 MB), check it against a known fingerprint, and keep only its command-line rar tool in its own folder. The installer is never run, and no administrator rights are needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.", RarTool.Version),
+            L("FileFluss can download RAR {0} for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.", RarTool.Version),
             DialogIcon.Question,
             new DialogButton("cancel", L("Cancel"), IsCancel: true),
             new DialogButton("site", L("Open rarlab.com")),
