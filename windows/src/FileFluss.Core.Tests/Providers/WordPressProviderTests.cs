@@ -404,6 +404,23 @@ public sealed class WordPressProviderTests : IDisposable
         Assert.False(_http.Single(HttpMethod.Get, "https://i0.wp.com/").Headers.ContainsKey("Authorization"));
     }
 
+    [Theory]
+    [InlineData("http://example.com/wp-content/uploads/photo.jpg")]
+    [InlineData("https://example.com:8443/wp-content/uploads/photo.jpg")]
+    public async Task DownloadOverAWeakerSchemeOrAnotherPortSendsNoCredentials(string sourceUrl)
+    {
+        // macOS 1.6 CredentialScope: same host is not enough — the password would cross the
+        // network in the clear, or reach another service on that machine.
+        _http.On(HttpMethod.Get, "after=2026-04-01", (_, _) => Paged(AprilMedia, 1))
+             .OnJson(HttpMethod.Get, "/wp/v2/media/5", $$"""{ "id": 5, "date": "2026-04-08T12:00:00", "source_url": "{{sourceUrl}}" }""")
+             .OnBytes(HttpMethod.Get, "/wp-content/uploads/photo.jpg", [1, 2, 3]);
+        var provider = SignedIn();
+
+        await provider.DownloadFileAsync("/2026/04/photo.jpg", Path.Combine(_temp, "x.jpg"));
+
+        Assert.False(_http.Single(HttpMethod.Get, "/wp-content/uploads/photo.jpg").Headers.ContainsKey("Authorization"));
+    }
+
     // MARK: - Search and sharing
 
     [Fact]

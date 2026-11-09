@@ -445,6 +445,24 @@ public sealed class AccountDialog : Window, IConnectPrompt
             stack.Children.Add(new TextBlock { Text = L(field.Help), TextWrapping = TextWrapping.Wrap, Style = (Style)FindResource("Caption"), TextTrimming = TextTrimming.None, Margin = new Thickness(0, 3, 0, 0) });
         }
 
+        if (field.Kind == ConnectFieldKind.Url && input is TextBox address)
+        {
+            // macOS 1.6: a password sent to a plain-HTTP address beyond the local network
+            // crosses it unencrypted, and nothing said so.
+            var plainHttp = new TextBlock
+            {
+                Text = "⚠ " + L("This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between."),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xD0, 0x7A, 0x00)),
+            };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(plainHttp, "PlainHttpWarning");
+            void Update() => plainHttp.Visibility = CredentialScope.ExposesPassword(address.Text) ? Visibility.Visible : Visibility.Collapsed;
+            address.TextChanged += (_, _) => Update();
+            Update();
+            stack.Children.Add(plainHttp);
+        }
+
         if (field.Required)
         {
             _requiredControls.Add((field, input));
