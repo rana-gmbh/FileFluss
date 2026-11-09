@@ -227,17 +227,24 @@ internal sealed class WebDavClient
     }
 
     /// <summary>
-    /// A Depth-1 PROPFIND answers with the folder itself as well as its children. macOS drops
-    /// the first response blindly; here the entry whose path is the folder's is dropped, and
-    /// only when none matches (a server echoing the href in another form) the first one —
-    /// so a root whose own entry has no name can no longer cost a real child its place.
+    /// A Depth-1 PROPFIND answers with the folder itself as well as its children. The folder's
+    /// own entry is found by path, not by position (macOS #64: a Hetzner Storage Box with two
+    /// folders showed one — the root's nameless entry was already gone, and dropping "the
+    /// first" took a real folder instead). Nothing in the spec fixes the ordering either.
+    ///
+    /// <para>When no entry has the folder's path, nothing is removed: a server that doesn't
+    /// list the folder itself must lose nothing. The one exception is a server that echoes
+    /// the href in another form (a different base prefix): a first entry that is a folder
+    /// whose path <i>ends</i> with the listed folder's is taken as its own entry. The root
+    /// has no such fallback, so the #64 shape can never cost a child its place.</para>
+    ///
     /// Children are placed under <paramref name="folder"/> by their href's last component,
     /// which stays right even when the server's hrefs don't start with the base path.
     /// </summary>
     internal static IReadOnlyList<CloudFileItem> ListingItems(List<WebDavEntry> entries, string folder)
     {
         var self = entries.FindIndex(e => SamePath(e.Path, folder));
-        if (self < 0 && entries.Count > 0)
+        if (self < 0 && entries.Count > 0 && IsSameFolderUnderAnotherPrefix(entries[0], folder))
         {
             self = 0;
         }
@@ -259,8 +266,20 @@ internal sealed class WebDavClient
     }
 
     private static bool SamePath(string a, string b)
-        => string.Equals(CloudPath.Normalize(a), CloudPath.Normalize(b), StringComparison.Ordinal)
-           || string.Equals(CloudPath.Normalize(a), CloudPath.Normalize(b), StringComparison.OrdinalIgnoreCase);
+        => string.Equals(CloudPath.Normalize(a), CloudPath.Normalize(b), StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSameFolderUnderAnotherPrefix(WebDavEntry entry, string folder)
+    {
+        var target = CloudPath.Normalize(folder);
+        if (!entry.IsDirectory || CloudPath.IsRoot(target))
+        {
+            return false;
+        }
+
+        // The target starts with "/", so a suffix match is always at a component boundary.
+        var path = CloudPath.Normalize(entry.Path);
+        return path.Length > target.Length && path.EndsWith(target, StringComparison.OrdinalIgnoreCase);
+    }
 
     public async Task<CloudFileItem> GetFileInfoAsync(string path, CancellationToken cancellationToken)
     {
