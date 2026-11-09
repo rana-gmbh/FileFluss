@@ -54,9 +54,24 @@ public sealed class SettingsStore
     /// <summary>Raised after a change, on the thread that made it; the write follows within <see cref="SaveDelay"/>, off that thread.</summary>
     public event EventHandler<string?>? Changed;
 
-    /// <summary>%LOCALAPPDATA%\FileFluss — settings, accounts, the index and logs live here.</summary>
+    /// <summary>
+    /// %LOCALAPPDATA%\FileFluss — settings, accounts, credentials, the index and logs live here.
+    /// Debug builds use <c>FileFluss-Debug</c> instead (macOS 1.6 keeps the debug account list
+    /// apart too): a debugging session must never change, remove or rotate the accounts of the
+    /// FileFluss the user actually works with.
+    /// </summary>
     public static string DataDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), DataFolderName);
+
+    /// <summary>The release app's folder, which a debug build reads once to start from (never writes).</summary>
+    public static string ReleaseDataDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileFluss");
+
+#if DEBUG
+    public const string DataFolderName = "FileFluss-Debug";
+#else
+    public const string DataFolderName = "FileFluss";
+#endif
 
     public static string DefaultPath => Path.Combine(DataDirectory, "settings.json");
 

@@ -56,12 +56,36 @@ public sealed class AccountsService : Observable
 
     public CloudProvider CreateProvider(CloudProviderType type, Guid accountId) => CreateProvider(type, accountId, _credentials);
 
+#if DEBUG
+    /// <summary>
+    /// Debug builds' "Restore Test Accounts": adds saved accounts that aren't here (their
+    /// credentials already written back) and connects them. Returns how many were added.
+    /// </summary>
+    public async Task<int> RestoreTestAccountsAsync(IReadOnlyList<CloudAccount> saved)
+    {
+        var added = saved.Where(a => Find(a.Id) is null).Select(a => a with { IsConnected = false }).ToList();
+        foreach (var account in added)
+        {
+            Accounts.Add(account);
+        }
+
+        if (added.Count > 0)
+        {
+            Save();
+            await ReconnectSavedAccountsAsync(added.Select(a => a.Id).ToHashSet());
+        }
+
+        return added.Count;
+    }
+#endif
+
     /// <summary>Restores every stored account's provider from its credentials (no network for most).</summary>
-    public async Task ReconnectSavedAccountsAsync()
+    /// <param name="only">Just these accounts; null for all.</param>
+    public async Task ReconnectSavedAccountsAsync(IReadOnlySet<Guid>? only = null)
     {
         // Making a provider reads and decrypts its stored credentials (DPAPI, files): on the
         // thread pool, so a dozen accounts don't hold up the UI thread at startup.
-        var saved = Accounts.Where(a => CloudProviderRegistry.IsAvailable(a.ProviderType)).ToList();
+        var saved = Accounts.Where(a => CloudProviderRegistry.IsAvailable(a.ProviderType) && (only is null || only.Contains(a.Id))).ToList();
         var restored = await Task.Run(() =>
         {
             var providers = new List<(CloudAccount Account, CloudProvider Provider)>();

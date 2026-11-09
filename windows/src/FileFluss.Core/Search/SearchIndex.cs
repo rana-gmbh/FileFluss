@@ -63,9 +63,8 @@ public sealed class SearchIndex : IDisposable
         }.ToString();
     }
 
-    /// <summary><c>%LOCALAPPDATA%\FileFluss\index.sqlite</c>.</summary>
-    public static string DefaultPath
-        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileFluss", "index.sqlite");
+    /// <summary><c>%LOCALAPPDATA%\FileFluss\index.sqlite</c> (a debug build's own folder in Debug).</summary>
+    public static string DefaultPath => Path.Combine(Settings.SettingsStore.DataDirectory, "index.sqlite");
 
     public string DatabasePath { get; }
 

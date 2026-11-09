@@ -23,7 +23,11 @@ by hand. Windows 10 2004 (19041) or later; the builds are self-contained, so no 
 is needed. `SHA256SUMS.txt` beside them lists every file's SHA-256.
 
 Settings, accounts, the search index and logs live in `%LOCALAPPDATA%\FileFluss` — not in
-the install folder — so neither an update nor uninstalling touches them.
+the install folder — so neither an update nor uninstalling touches them. Debug builds use
+`%LOCALAPPDATA%\FileFluss-Debug` instead, copied once from the release folder on their first
+launch and never written back, and run beside an installed FileFluss rather than handing
+over to it. Help → Save / Restore Test Accounts (debug only) keeps the test accounts and
+their DPAPI-encrypted credentials in `%LOCALAPPDATA%\FileFluss Test Accounts`.
 
 FileFluss checks for a newer Windows release once a day (Settings → "Check for updates
 automatically", the same switch as on macOS) and on Help → Check for Updates…. An installed

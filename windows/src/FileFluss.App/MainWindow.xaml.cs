@@ -387,6 +387,10 @@ public partial class MainWindow : Window, IShell
 #if DEBUG
         // macOS: right after "Support Log", debug builds only — never shipped to users.
         help.Items.Add(ContextMenus.Item(L("Run Version Test…"), null, null, () => VersionTestRunner.Run(this)));
+
+        // Dev-only and English-only, like the version test itself (macOS 1.6).
+        help.Items.Add(ContextMenus.Item("Save Test Accounts…", null, null, () => TestAccountsMenu.Save(this)));
+        help.Items.Add(ContextMenus.Item("Restore Test Accounts…", null, null, () => TestAccountsMenu.Restore(this)));
 #endif
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("About FileFluss"), null, null, ShowAbout));
