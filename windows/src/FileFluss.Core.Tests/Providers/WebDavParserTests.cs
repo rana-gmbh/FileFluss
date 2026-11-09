@@ -247,10 +247,58 @@ public class WebDavParserTests
     }
 
     [Fact]
+    public void HetznerStorageBoxRootKeepsBothFolders()
+    {
+        // macOS #64: the root's own entry has no displayname, so the parser had already
+        // dropped it, and removing "the first entry" took Backups with it.
+        const string xml = """
+            <D:multistatus xmlns:D="DAV:">
+              <D:response><D:href>/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response>
+              <D:response><D:href>/Backups/</D:href><D:propstat><D:prop><D:displayname>Backups</D:displayname><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response>
+              <D:response><D:href>/Photos/</D:href><D:propstat><D:prop><D:displayname>Photos</D:displayname><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response>
+            </D:multistatus>
+            """;
+        var entries = WebDavResponseParser.Parse(xml, "https://u123456.your-storagebox.de");
+
+        Assert.Equal(["Backups", "Photos"], WebDavClient.ListingItems(entries, "/").Select(i => i.Name));
+    }
+
+    [Fact]
+    public void TheFolderItselfIsFoundByPathWhereverItIsListed()
+    {
+        // Percent-encoded, with a trailing slash, and last rather than first.
+        const string xml = """
+            <d:multistatus xmlns:d="DAV:">
+              <d:response><d:href>/dav/My%20Docs/a.txt</d:href><d:propstat><d:prop><d:getcontentlength>1</d:getcontentlength></d:prop></d:propstat></d:response>
+              <d:response><d:href>/dav/My%20Docs/Sub/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>
+              <d:response><d:href>/dav/My%20Docs/</d:href><d:propstat><d:prop><d:displayname>My Docs</d:displayname><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>
+            </d:multistatus>
+            """;
+        var entries = WebDavResponseParser.Parse(xml, "https://dav.example.com/dav");
+
+        Assert.Equal(["/My Docs/a.txt", "/My Docs/Sub"], WebDavClient.ListingItems(entries, "/My Docs").Select(i => i.Path));
+    }
+
+    [Fact]
+    public void AServerThatDoesntListTheFolderItselfLosesNothing()
+    {
+        const string xml = """
+            <d:multistatus xmlns:d="DAV:">
+              <d:response><d:href>/dav/Docs/Sub/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>
+              <d:response><d:href>/dav/Docs/b.txt</d:href><d:propstat><d:prop><d:getcontentlength>2</d:getcontentlength></d:prop></d:propstat></d:response>
+            </d:multistatus>
+            """;
+        var entries = WebDavResponseParser.Parse(xml, "https://dav.example.com/dav");
+
+        Assert.Equal(["Sub", "b.txt"], WebDavClient.ListingItems(entries, "/Docs").Select(i => i.Name));
+        Assert.Equal(["Sub", "b.txt"], WebDavClient.ListingItems(WebDavResponseParser.Parse(xml.Replace("/dav/Docs/", "/dav/", StringComparison.Ordinal), "https://dav.example.com/dav"), "/").Select(i => i.Name));
+    }
+
+    [Fact]
     public void ChildrenLandUnderTheRequestedFolderEvenWhenHrefsMissTheBase()
     {
-        // A server echoing the base in another form: the self entry falls back to "first",
-        // children still land under the folder that was listed.
+        // A server echoing the base in another form: a first entry that is a folder ending in
+        // the listed path is the folder itself; children still land under the folder listed.
         const string xml = """
             <d:multistatus xmlns:d="DAV:">
               <d:response><d:href>/webdav/Docs/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>

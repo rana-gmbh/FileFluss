@@ -29,17 +29,22 @@ internal sealed class SynologyDriveApiClient
 {
     private const string Category = "Synology";
 
+    /// <summary>The name DSM lists under "Trusted devices" for the token requested at an OTP login.</summary>
+    internal const string DeviceName = "FileFluss";
+
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _loginGate = new(1, 1);
+    private SynologyDriveCredentials _credentials;
     private string? _sid;
 
     public SynologyDriveApiClient(HttpClient http, SynologyDriveCredentials credentials)
     {
         _http = http;
-        Credentials = credentials;
+        _credentials = credentials;
     }
 
-    public SynologyDriveCredentials Credentials { get; }
+    /// <summary>The account's credentials, including a device token an OTP login obtained.</summary>
+    public SynologyDriveCredentials Credentials => Volatile.Read(ref _credentials);
 
     /// <summary>Delay between task-status polls; tests shorten it.</summary>
     internal TimeSpan PollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
@@ -50,22 +55,38 @@ internal sealed class SynologyDriveApiClient
     /// Logs in (with <paramref name="otp"/> when 2-factor is on) and keeps the SID. Returns
     /// null on success and DSM's auth error code otherwise, so sign-in can react to 403
     /// ("this account needs an OTP code") by asking for one.
+    ///
+    /// <para>An OTP login asks DSM for a device token and keeps it in
+    /// <see cref="Credentials"/>; a login without an OTP presents a stored one instead. Without
+    /// it every later login — the first listing after Connect, a restart, an expired SID —
+    /// went out without a code, and DSM refused 2-factor accounts with 403 (macOS #66).</para>
     /// </summary>
     public async Task<int?> TryLoginAsync(string? otp, CancellationToken cancellationToken)
     {
+        var credentials = Credentials;
+        var code = NormalizeOtp(otp);
         var query = new List<(string, string)>
         {
             ("api", "SYNO.API.Auth"),
             ("version", "6"),
             ("method", "login"),
-            ("account", Credentials.Username),
-            ("passwd", Credentials.Password),
+            ("account", credentials.Username),
+            ("passwd", credentials.Password),
             ("session", "FileStation"),
             ("format", "sid"),
         };
-        if (!string.IsNullOrEmpty(otp))
+        if (code.Length > 0)
         {
-            query.Add(("otp_code", otp));
+            query.Add(("otp_code", code));
+            // Ask DSM for a device token so later logins can skip the OTP.
+            query.Add(("enable_device_token", "yes"));
+            query.Add(("device_name", DeviceName));
+        }
+        else if (!string.IsNullOrEmpty(credentials.DeviceId))
+        {
+            // Re-login without an OTP (a restart, an expired SID): present the stored token.
+            query.Add(("device_name", DeviceName));
+            query.Add(("device_id", credentials.DeviceId));
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("/webapi/auth.cgi", query));
@@ -78,9 +99,30 @@ internal sealed class SynologyDriveApiClient
         }
 
         Volatile.Write(ref _sid, envelope.Data?.Sid ?? throw CloudProviderException.InvalidResponse());
-        SupportLogger.Shared.Log($"[Synology] Logged in as {Credentials.Username} at {HostFrom(Credentials.ServerUrl)}", Category);
+        if (code.Length > 0)
+        {
+            // API v6 names the token `did`, v7 `device_id`. The value is a credential and is never logged.
+            if ((envelope.Data?.Did ?? envelope.Data?.DeviceId) is { Length: > 0 } token)
+            {
+                Volatile.Write(ref _credentials, credentials with { DeviceId = token });
+                SupportLogger.Shared.Log("[Synology] DSM issued a device token; later logins skip the OTP", Category);
+            }
+            else
+            {
+                SupportLogger.Shared.Log("[Synology] OTP login worked but DSM issued no device token; a later re-login will ask for an OTP again", Category, LogLevel.Notice);
+            }
+        }
+
+        SupportLogger.Shared.Log($"[Synology] Logged in as {credentials.Username} at {HostFrom(credentials.ServerUrl)}", Category);
         return null;
     }
+
+    /// <summary>
+    /// Every whitespace character removed: authenticator apps show the code in two groups
+    /// ("123 456") and people paste it that way.
+    /// </summary>
+    public static string NormalizeOtp(string? otp)
+        => otp is null ? string.Empty : string.Concat(otp.Where(c => !char.IsWhiteSpace(c)));
 
     /// <summary>The current SID, logging in first when there is none — one login for all concurrent callers.</summary>
     private async Task<string> EnsureSessionAsync(CancellationToken cancellationToken)

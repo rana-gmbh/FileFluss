@@ -38,6 +38,9 @@ public enum CloudProviderType
     [JsonStringEnumMemberName("jottacloud")] Jottacloud,
     [JsonStringEnumMemberName("googleDrivePicker")] GoogleDrivePicker,
     [JsonStringEnumMemberName("gopro")] GoPro,
+    [JsonStringEnumMemberName("qnap")] Qnap,
+    [JsonStringEnumMemberName("ugreen")] Ugreen,
+    [JsonStringEnumMemberName("asustor")] Asustor,
 }
 
 /// <summary>How the Add Cloud Account picker groups a provider, as on macOS.</summary>
@@ -46,6 +49,9 @@ public enum ProviderCategory
     CloudStorage,
     OtherProtocols,
     Devices,
+
+    /// <summary>Network storage boxes on the user's own network, signed in to with a NAS account.</summary>
+    Nas,
 }
 
 public static class CloudProviderTypeExtensions
@@ -79,6 +85,9 @@ public static class CloudProviderTypeExtensions
         CloudProviderType.Jottacloud => "Jottacloud",
         CloudProviderType.GoogleDrivePicker => "Google Drive (Selected Folders)",
         CloudProviderType.GoPro => "GoPro Camera",
+        CloudProviderType.Qnap => "QNAP",
+        CloudProviderType.Ugreen => "UGREEN NAS",
+        CloudProviderType.Asustor => "ASUSTOR",
         _ => type.ToString(),
     };
 
@@ -99,12 +108,21 @@ public static class CloudProviderTypeExtensions
         _ => type.ToString(),
     };
 
+    /// <summary>
+    /// Whether Add Account offers the type. TeraBox stays out of the list until TeraBox issues
+    /// the Open Platform keys: without them sign-in can only fail (macOS 8503dad).
+    /// </summary>
+    public static bool IsOfferedInAddAccount(this CloudProviderType type)
+        => type != CloudProviderType.TeraBox || Providers.TeraBox.TeraBoxProvider.IsAvailable;
+
     public static ProviderCategory Category(this CloudProviderType type) => type switch
     {
         CloudProviderType.Ftp or CloudProviderType.S3 or CloudProviderType.S3Compatible or
-            CloudProviderType.Sftp or CloudProviderType.SynologyDrive or CloudProviderType.WebDav or
+            CloudProviderType.Sftp or CloudProviderType.WebDav or
             CloudProviderType.WordPress => ProviderCategory.OtherProtocols,
         CloudProviderType.GoPro => ProviderCategory.Devices,
+        CloudProviderType.SynologyDrive or CloudProviderType.Qnap or CloudProviderType.Ugreen or
+            CloudProviderType.Asustor => ProviderCategory.Nas,
         _ => ProviderCategory.CloudStorage,
     };
 }

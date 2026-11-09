@@ -23,6 +23,13 @@ public sealed class TeraBoxProvider : CloudProvider
     private readonly TeraBoxAppCredentials _app;
     private volatile TeraBoxApiClient? _client;
 
+    /// <summary>
+    /// Whether this build carries the Open Platform keys sign-in needs. Without them every
+    /// login fails with "not yet implemented", so Add Account doesn't offer TeraBox; an
+    /// account added earlier keeps working as far as it can.
+    /// </summary>
+    public static bool IsAvailable => TeraBoxAppCredentials.Default.IsConfigured;
+
     public TeraBoxProvider(Guid accountId, ICredentialStore credentials)
         : this(accountId, credentials, null, null)
     {

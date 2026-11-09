@@ -6,14 +6,21 @@ namespace FileFluss.Core.Providers.SynologyDrive;
 
 /// <summary>
 /// What a Synology Drive account stores — the macOS <c>SynologyDriveCredentials</c>, same JSON
-/// keys. DSM's web API has no long-lived token: each session logs in with the password.
+/// keys. DSM's web API has no long-lived session: each session logs in with the password.
 /// </summary>
+/// <param name="DeviceId">
+/// Device token DSM hands out at an OTP login (<c>enable_device_token</c>). Replaying it as
+/// <c>device_id</c> lets later logins skip the OTP, so a 2-factor account survives a restart or
+/// an expired session. Optional so credentials saved by older versions still read back.
+/// A credential: never logged.
+/// </param>
 internal sealed record SynologyDriveCredentials(
     [property: JsonPropertyName("serverURL")] string ServerUrl,
     [property: JsonPropertyName("username")] string Username,
     [property: JsonPropertyName("password")] string Password,
     [property: JsonPropertyName("allowSelfSignedCertificate")] bool AllowSelfSignedCertificate,
-    [property: JsonPropertyName("displayName")] string DisplayName);
+    [property: JsonPropertyName("displayName")] string DisplayName,
+    [property: JsonPropertyName("deviceId")] string? DeviceId = null);
 
 /// <summary>Every DSM web API answer: <c>{"success":…,"data":…,"error":{"code":…}}</c>.</summary>
 internal sealed record SynologyEnvelope<T>(
@@ -26,7 +33,11 @@ internal sealed record SynologyErrorInfo([property: JsonPropertyName("code")] in
 /// <summary>Stands in for endpoints that succeed without a payload (delete, rename, sharing edit).</summary>
 internal sealed record SynologyEmpty;
 
-internal sealed record SynologyAuthData([property: JsonPropertyName("sid")] string? Sid);
+/// <summary>The login answer. A device token comes back as <c>did</c> (API v6) or <c>device_id</c> (v7).</summary>
+internal sealed record SynologyAuthData(
+    [property: JsonPropertyName("sid")] string? Sid,
+    [property: JsonPropertyName("did")] string? Did = null,
+    [property: JsonPropertyName("device_id")] string? DeviceId = null);
 
 /// <summary><c>additional.time</c>: POSIX timestamps.</summary>
 internal sealed record SynologyTime([property: JsonPropertyName("mtime")] double? Mtime)

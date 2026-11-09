@@ -19,7 +19,7 @@ namespace FileFluss.App.Views.Accounts;
 
 /// <summary>
 /// Add Cloud Account and Edit Account. The provider grid mirrors the macOS sheet (Cloud
-/// Storage Providers / Other Protocols / Cameras &amp; Devices); the sign-in form is generated
+/// Storage Providers / NAS / Other Protocols / Cameras &amp; Devices); the sign-in form is generated
 /// from the provider's <see cref="ConnectSpec"/>, so every provider gets the same behaviour:
 /// Connect stays disabled until required fields are filled, errors appear inline, browser
 /// sign-ins can be cancelled, and nothing is saved unless sign-in succeeded.
@@ -36,6 +36,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
     private ConnectMode? _mode;
     private TextBlock? _status;
     private TextBlock? _error;
+    private TextBlock? _plainHttpWarning;
     private Button? _connect;
     private Button? _back;
     private ProgressBar? _busy;
@@ -104,12 +105,13 @@ public sealed class AccountDialog : Window, IConnectPrompt
         foreach (var (category, title) in new[]
                  {
                      (ProviderCategory.CloudStorage, "Cloud Storage Providers"),
+                     (ProviderCategory.Nas, "NAS"),
                      (ProviderCategory.OtherProtocols, "Other Protocols"),
                      (ProviderCategory.Devices, "Cameras & Devices"),
                  })
         {
             var types = Enum.GetValues<CloudProviderType>()
-                .Where(t => t.Category() == category && CloudProviderRegistry.IsAvailable(t))
+                .Where(t => t.Category() == category && CloudProviderRegistry.IsAvailable(t) && t.IsOfferedInAddAccount())
                 .OrderBy(t => t.DisplayName(), StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
             if (types.Count == 0)
@@ -274,6 +276,19 @@ public sealed class AccountDialog : Window, IConnectPrompt
         {
             root.Children.Add(BuildField(field, prefill));
         }
+
+        // Shown while a server address would send the password over plain HTTP to a host
+        // beyond the local network (macOS 1.6); kept current by UpdateConnectEnabled.
+        _plainHttpWarning = new TextBlock
+        {
+            Text = L("This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between."),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD0, 0x7A, 0x00)),
+            Visibility = Visibility.Collapsed,
+        };
+        System.Windows.Automation.AutomationProperties.SetLiveSetting(_plainHttpWarning, System.Windows.Automation.AutomationLiveSetting.Polite);
+        root.Children.Add(_plainHttpWarning);
 
         _status = new TextBlock { Style = (Style)FindResource("Caption"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
         _error = new TextBlock { TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
@@ -467,6 +482,12 @@ public sealed class AccountDialog : Window, IConnectPrompt
         var missing = _mode.Fields.Any(f => f.Required && f.HasValue && f.Kind != ConnectFieldKind.Checkbox &&
                                             string.IsNullOrWhiteSpace(values.Get(f.Key)));
         _connect.IsEnabled = !missing && _connecting is null;
+
+        if (_plainHttpWarning is not null)
+        {
+            var exposed = _mode.Fields.Any(f => f.Kind == ConnectFieldKind.Url && ServerAddress.ExposesPassword(values.Get(f.Key)));
+            _plainHttpWarning.Visibility = exposed ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private async Task ConnectAsync()

@@ -106,27 +106,39 @@ public sealed class SynologyDriveProvider : CloudProvider
     {
         var serverUrl = SynologyDriveApiClient.NormalizeServerUrl(values.GetTrimmed(ServerUrlKey));
         var username = values.GetTrimmed(UsernameKey);
-        var otp = values.GetOptional(OtpKey);
+        var otp = SynologyDriveApiClient.NormalizeOtp(values.Get(OtpKey));
+
+        // Carry a device token this account already has into the new login, so editing a
+        // 2-factor account — a changed password, a toggled certificate setting — doesn't
+        // demand a fresh OTP or throw the token away. Only when the server and user are
+        // unchanged: a token belongs to one DSM account and must not be sent to another host.
+        var reusableDeviceId = Credentials.Load<SynologyDriveCredentials>(CredentialKey) is { } stored
+                               && stored.Username == username
+                               && SynologyDriveApiClient.NormalizeServerUrl(stored.ServerUrl) == serverUrl
+            ? stored.DeviceId
+            : null;
+
         var credentials = new SynologyDriveCredentials(
             serverUrl,
             username,
             values.Get(PasswordKey),
             values.GetBool(AllowSelfSignedKey, fallback: true),
-            $"{username}@{SynologyDriveApiClient.HostFrom(serverUrl)}");
+            $"{username}@{SynologyDriveApiClient.HostFrom(serverUrl)}",
+            reusableDeviceId);
 
         var client = CreateClient(credentials, out var http);
         try
         {
             var failure = await client.TryLoginAsync(otp, cancellationToken).ConfigureAwait(false);
-            if (failure == 403 && otp is null)
+            if (failure == 403 && otp.Length == 0)
             {
-                var code = await prompt.RequestCodeAsync(
+                var code = SynologyDriveApiClient.NormalizeOtp(await prompt.RequestCodeAsync(
                     CloudProviderType.SynologyDrive.DisplayName(),
                     Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
-                    cancellationToken).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(code))
+                    cancellationToken).ConfigureAwait(false));
+                if (code.Length > 0)
                 {
-                    failure = await client.TryLoginAsync(code.Trim(), cancellationToken).ConfigureAwait(false);
+                    failure = await client.TryLoginAsync(code, cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -142,10 +154,14 @@ public sealed class SynologyDriveProvider : CloudProvider
             throw;
         }
 
-        Credentials.Save(CredentialKey, credentials);
+        // The logged-in client's credentials carry the device token its OTP login obtained.
+        // Keep that client too: it already holds the session, so the first listing doesn't
+        // trigger a second login without an OTP.
+        var signedIn = client.Credentials;
+        Credentials.Save(CredentialKey, signedIn);
         Volatile.Write(ref _client, client);
-        SupportLogger.Shared.Log($"[Synology] Authenticated as {credentials.DisplayName}", "Synology");
-        return new ConnectResult(credentials.DisplayName);
+        SupportLogger.Shared.Log($"[Synology] Authenticated as {signedIn.DisplayName}", "Synology");
+        return new ConnectResult(signedIn.DisplayName);
     }
 
     /// <summary>Server, user and the certificate choice; the password is retyped, as on macOS.</summary>
