@@ -1,9 +1,11 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Core.Diagnostics;
+using FileFluss.Core.Formatting;
 using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
+using FileFluss.Core.Storage;
 using static FileFluss.Core.Localization;
 
 namespace FileFluss.Core.Transfers;
@@ -181,6 +183,15 @@ public static class TransferEngine
 
             var clash = existingByName.GetValueOrDefault(targetName);
 
+            // Moving /A/foo/foo to /A: the item it would replace is a folder holding the item
+            // itself, so "Replace" would delete both. (A folder onto a folder merges instead.)
+            if (sameProvider && choice == ConflictChoice.Replace && !item.IsDirectory &&
+                clash is { IsDirectory: true } && IsInside(source, item.Path, clash.Path))
+            {
+                progress.RecordFailure(item.Name, L("“{0}” can't replace a folder it's inside.", item.Name));
+                continue;
+            }
+
             // Copying onto itself (same folder, same account) is Explorer's "- Copy".
             var sameFolder = sameProvider && PathsEqual(source, source.GetParentPath(item.Path), request.DestinationPath);
             if (sameFolder)
@@ -230,6 +241,22 @@ public static class TransferEngine
                 totalFiles++;
                 expectedBytes += Math.Max(0, item.Size);
             }
+        }
+
+        // Between two accounts every file passes through the staging folder, which may be on a
+        // nearly full disk the destination's quota says nothing about. The sizes are summed
+        // already, so checking costs nothing; stopping here with a reason beats failing half
+        // way with a disk-full error (macOS 1.6). Windows stages one file at a time.
+        if (progress.IsCloudToCloud && StagingNeedFor(plans) is { WouldExceed: true } need)
+        {
+            var message = L(
+                "The files pass through this Mac on the way between the two accounts: that needs {0} on {1}, which has {2} free. Free up space, or choose another folder in Settings → Storage.",
+                ByteFormatter.Format(need.Needed),
+                need.VolumeName,
+                ByteFormatter.Format(Math.Max(0, need.Free ?? 0)));
+            SupportLogger.Shared.Log($"Cloud-to-cloud refused: needs {need.Needed} bytes staged on {need.VolumeName}, {need.Free} free", "Transfer", LogLevel.Error);
+            progress.Fail(message);
+            return;
         }
 
         progress.SetPlan(totalFiles, progress.IsCloudToCloud ? expectedBytes * 2 : expectedBytes);
@@ -307,6 +334,31 @@ public static class TransferEngine
                 TryDeleteDirectory(staging);
             }
         }
+    }
+
+    /// <summary>The largest file of the planned byte copies: what the staging folder must hold at once.</summary>
+    private static StagingNeed? StagingNeedFor(IEnumerable<ItemPlan> plans)
+    {
+        long largest = 0;
+        foreach (var plan in plans)
+        {
+            if (plan.Tree is { } tree)
+            {
+                foreach (var entry in tree)
+                {
+                    if (!entry.Item.IsDirectory)
+                    {
+                        largest = Math.Max(largest, entry.Item.Size);
+                    }
+                }
+            }
+            else if (!plan.Item.IsDirectory)
+            {
+                largest = Math.Max(largest, plan.Item.Size);
+            }
+        }
+
+        return StagingSpace.For(largest);
     }
 
     // MARK: - Conflicts
@@ -439,13 +491,27 @@ public static class TransferEngine
     private static async Task<bool> TryServerSideAsync(TransferRequest request, ItemPlan plan, string targetPath, CancellationToken ct)
     {
         var provider = request.Source;
-        try
+
+        // Replace sets the old item aside rather than deleting it, so a move that fails, or a
+        // provider that turns out not to support moves at all, can put it back (macOS 1.6).
+        string? setAside = null;
+        if (plan.Replace && plan.Existing is { } existing)
         {
-            if (plan.Replace && plan.Existing is { } existing)
+            var asideName = TemporaryReplacementName(existing.Name);
+            try
             {
+                await provider.RenameItemAsync(existing.Path, asideName, ct).ConfigureAwait(false);
+                setAside = provider.CombinePath(provider.GetParentPath(existing.Path), asideName);
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotImplemented)
+            {
+                // Nothing can be set aside here; clear the way as before.
                 await DeleteExistingAsync(provider, existing.Path, ct).ConfigureAwait(false);
             }
+        }
 
+        try
+        {
             if (request.IsMove)
             {
                 await provider.MoveItemAsync(plan.Item.Path, targetPath, ct).ConfigureAwait(false);
@@ -454,12 +520,140 @@ public static class TransferEngine
             {
                 await provider.CopyItemAsync(plan.Item.Path, targetPath, ct).ConfigureAwait(false);
             }
-
-            return true;
         }
-        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotImplemented)
+        catch (Exception e)
         {
-            return false;
+            if (setAside is not null && plan.Existing is { } original)
+            {
+                await TryRestoreAsync(provider, setAside, original.Name).ConfigureAwait(false);
+            }
+
+            if (e is CloudProviderException { Kind: CloudErrorKind.NotImplemented })
+            {
+                return false;
+            }
+
+            throw;
+        }
+
+        if (setAside is not null)
+        {
+            try
+            {
+                await DeleteExistingAsync(provider, setAside, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                SupportLogger.Shared.Log($"Replaced item kept as {setAside}: {e.Message}", "Transfer", LogLevel.Error);
+            }
+        }
+
+        return true;
+    }
+
+    private static async Task TryRestoreAsync(FileProvider provider, string setAside, string name)
+    {
+        try
+        {
+            await provider.RenameItemAsync(setAside, name, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Couldn't put {setAside} back as {name}: {e.Message}", "Transfer", LogLevel.Error);
+        }
+    }
+
+    // MARK: - Replacing
+
+    /// <summary>
+    /// A name for the new copy while it's being written next to the item it will replace
+    /// (macOS <c>FileSystemService.temporaryReplacementName</c>). Visible on purpose: if the app
+    /// dies part way, whatever is left can be seen and deleted. The extension stays last
+    /// because some servers judge an upload by it.
+    /// </summary>
+    public static string TemporaryReplacementName(string name)
+    {
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var dot = name.LastIndexOf('.');
+        var (stem, extension) = dot > 0 ? (name[..dot], name[(dot + 1)..]) : (name, string.Empty);
+
+        // Leaves room in the 255 characters most file systems allow for a name.
+        var root = stem.Length > 150 ? stem[..150] : stem;
+        var temporary = $"{root}.filefluss-part-{tag}";
+        return extension.Length == 0 ? temporary : $"{temporary}.{extension}";
+    }
+
+    /// <summary>
+    /// Replaces the item at <paramref name="existingPath"/> with one <paramref name="write"/>
+    /// creates, without ever leaving neither (macOS <c>CloudProvider.replacingItem</c>).
+    /// <paramref name="write"/> gets a temporary path beside the old item and returns where the
+    /// new one landed (an exported document gains an extension). Only once it has finished does
+    /// the old item go and the new one take its place, so a failed upload, a full account or a
+    /// cancel leaves things as they were.
+    /// </summary>
+    /// <returns>The final path of the new item.</returns>
+    private static async Task<string> ReplaceAsync(
+        FileProvider provider, string existingPath, string finalName, Func<string, Task<string>> write, CancellationToken ct)
+    {
+        var parent = provider.GetParentPath(existingPath);
+        var temporaryName = TemporaryReplacementName(finalName);
+        var temporaryPath = provider.CombinePath(parent, temporaryName);
+        string landed = temporaryPath;
+        try
+        {
+            landed = await write(temporaryPath).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            await DeleteExistingAsync(provider, existingPath, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Whichever step failed, the old item is still there.
+            await TryDeleteQuietlyAsync(provider, landed).ConfigureAwait(false);
+            if (landed != temporaryPath)
+            {
+                await TryDeleteQuietlyAsync(provider, temporaryPath).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+
+        // "Report.filefluss-part-1a2b3c4d.docx" → "Report.docx": whatever the write appended stays.
+        var landedName = provider.GetName(landed);
+        var name = landedName.StartsWith(temporaryName, StringComparison.Ordinal)
+            ? finalName + landedName[temporaryName.Length..]
+            : finalName;
+        try
+        {
+            // Past the point of no return: the old item is gone, so a cancel must not stop this.
+            await provider.RenameItemAsync(landed, name, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Replacement {landed} couldn't be renamed to {name}: {e.Message}", "Transfer", LogLevel.Error);
+            throw CloudProviderException.CommandFailed(
+                L("The new copy of “{0}” was uploaded, but it couldn't be renamed and is still called “{1}”.", name, landedName), e);
+        }
+
+        return provider.CombinePath(parent, name);
+    }
+
+    private static async Task TryDeleteQuietlyAsync(FileProvider provider, string path)
+    {
+        try
+        {
+            if (provider.IsLocal)
+            {
+                // A half-written copy isn't worth a place in the Recycle Bin.
+                await Task.Run(() => LocalFileProvider.DeletePermanently(path)).ConfigureAwait(false);
+            }
+            else
+            {
+                await provider.DeleteItemAsync(path, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // Never written, or already gone: nothing to clean up.
         }
     }
 
@@ -488,15 +682,32 @@ public static class TransferEngine
 
         if (!plan.Item.IsDirectory)
         {
-            if (plan.Replace && plan.Existing is { } existing && (existing.IsDirectory || !destination.IsLocal))
-            {
-                // A local file is overwritten in place by the staged copy (the old one survives
-                // a failure); a cloud upload may create a duplicate instead, so clear it first.
-                await DeleteExistingAsync(destination, existing.Path, ct).ConfigureAwait(false);
-            }
-
             try
             {
+                if (plan.Replace && plan.Existing is { } existing && (existing.IsDirectory || !destination.IsLocal))
+                {
+                    // A local file is overwritten by the staged copy only once that is complete
+                    // (the old one survives a failure). Anywhere else the new copy is written
+                    // beside the old item under a temporary name and swapped in when whole:
+                    // deleting first lost the old version to any failed upload.
+                    if (destination.CanVerifyArrivals)
+                    {
+                        Arrival? written = null;
+                        var final = await ReplaceAsync(destination, existing.Path, plan.TargetName, async temporary =>
+                        {
+                            written = await CopyFileAsync(request, plan.Item, temporary, staging, progress, ct).ConfigureAwait(false);
+                            return written.DestinationPath;
+                        }, ct).ConfigureAwait(false);
+                        outcome.Arrivals.Add(written! with { DestinationPath = final });
+                        await RestampAfterRenameAsync(request, plan.Item, final, ct).ConfigureAwait(false);
+                        return outcome;
+                    }
+
+                    // An upload that doesn't land where it was sent (WordPress files it under
+                    // the month) can't be renamed into place; clear the way as before.
+                    await DeleteExistingAsync(destination, existing.Path, ct).ConfigureAwait(false);
+                }
+
                 outcome.Arrivals.Add(await CopyFileAsync(request, plan.Item, targetPath, staging, progress, ct).ConfigureAwait(false));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -513,8 +724,80 @@ public static class TransferEngine
 
         if (plan.Replace && plan.Existing is { IsDirectory: false } fileInTheWay)
         {
+            if (destination.CanVerifyArrivals)
+            {
+                // A folder replacing a file: built beside it under a temporary name, swapped in
+                // only when every file arrived.
+                try
+                {
+                    var built = string.Empty;
+                    var final = await ReplaceAsync(destination, fileInTheWay.Path, plan.TargetName, async temporary =>
+                    {
+                        built = temporary;
+                        await CopyTreeAsync(request, plan, temporary, staging, progress, outcome, ct).ConfigureAwait(false);
+                        if (outcome.Failures.Count > 0)
+                        {
+                            throw CloudProviderException.CommandFailed(outcome.Failures[0]);
+                        }
+
+                        return temporary;
+                    }, ct).ConfigureAwait(false);
+
+                    // What arrived did so under the temporary folder, which now has its real name.
+                    var written = outcome.Arrivals.ToList();
+                    outcome.Arrivals.Clear();
+                    foreach (var arrival in written)
+                    {
+                        outcome.Arrivals.Add(arrival with { DestinationPath = final + arrival.DestinationPath[built.Length..] });
+                    }
+
+                    await RestampAfterRenameAsync(request, plan.Item, final, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception e)
+                {
+                    if (outcome.Failures.Count == 0)
+                    {
+                        outcome.Failures.Add(Describe(e));
+                    }
+                }
+
+                return outcome;
+            }
+
             await DeleteExistingAsync(destination, fileInTheWay.Path, ct).ConfigureAwait(false);
         }
+
+        await CopyTreeAsync(request, plan, targetPath, staging, progress, outcome, ct).ConfigureAwait(false);
+        return outcome;
+    }
+
+    /// <summary>Some servers count a rename as a change; the copy keeps the source's date all the same.</summary>
+    private static async Task RestampAfterRenameAsync(TransferRequest request, CloudFileItem item, string path, CancellationToken ct)
+    {
+        if (request.PreserveModificationDates && item.HasKnownModificationDate && !request.Destination.IsLocal)
+        {
+            await TryStampAsync(request.Destination, path, item.ModificationDate, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Copies a top-level folder's tree to <paramref name="targetPath"/>, recording what arrived
+    /// and what failed on <paramref name="outcome"/>.
+    /// </summary>
+    private static async Task CopyTreeAsync(
+        TransferRequest request,
+        ItemPlan plan,
+        string targetPath,
+        string? staging,
+        TransferProgress progress,
+        CopyOutcome outcome,
+        CancellationToken ct)
+    {
+        var destination = request.Destination;
 
         // Folders merge into an existing folder of the same name, as Explorer does.
         await destination.CreateDirectoryAsync(targetPath, ct).ConfigureAwait(false);
@@ -602,8 +885,22 @@ public static class TransferEngine
 
                 if (clash is { IsDirectory: false } && !destination.IsLocal)
                 {
-                    // Merging into an existing cloud folder: clear a same-named file first so
-                    // providers that keep duplicates don't end up with two.
+                    // Merging into an existing cloud folder: providers that keep duplicates
+                    // would end up with two, so the new copy is written beside the old one
+                    // and swapped in once complete.
+                    if (destination.CanVerifyArrivals)
+                    {
+                        Arrival? written = null;
+                        var final = await ReplaceAsync(destination, clash.Path, name, async temporary =>
+                        {
+                            written = await CopyFileAsync(request, entry.Item, temporary, staging, progress, ct).ConfigureAwait(false);
+                            return written.DestinationPath;
+                        }, ct).ConfigureAwait(false);
+                        outcome.Arrivals.Add(written! with { DestinationPath = final });
+                        await RestampAfterRenameAsync(request, entry.Item, final, ct).ConfigureAwait(false);
+                        continue;
+                    }
+
                     await DeleteExistingAsync(destination, clash.Path, ct).ConfigureAwait(false);
                 }
 
@@ -625,8 +922,6 @@ public static class TransferEngine
         {
             await TryStampAsync(destination, targetPath, plan.Item.ModificationDate, ct).ConfigureAwait(false);
         }
-
-        return outcome;
     }
 
     /// <summary>Clears the item a "Replace" overwrites. Already gone (a retried fallback, another client) is fine.</summary>
@@ -684,6 +979,11 @@ public static class TransferEngine
             }
 
             targetPath = landed;
+
+            // Whatever comes down from an account came from someone else's server, as a
+            // browser download does: SmartScreen and Protected View check it when opened
+            // (macOS 1.6 quarantines every download for Gatekeeper the same way).
+            MarkOfTheWeb.Apply(landed);
         }
         else if (ReferenceEquals(source, destination) && await TryServerSideFileCopyAsync(source, item, targetPath, ct).ConfigureAwait(false))
         {
@@ -1026,6 +1326,18 @@ public static class TransferEngine
         }
 
         return CloudPath.IsWithin(destinationPath, item.Path);
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits somewhere below <paramref name="folder"/>.</summary>
+    private static bool IsInside(FileProvider provider, string path, string folder)
+    {
+        if (provider.IsLocal)
+        {
+            var parent = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(parent, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return !PathsEqual(provider, path, folder) && CloudPath.IsWithin(path, folder);
     }
 
     private static bool PathsEqual(FileProvider provider, string a, string b)

@@ -12,10 +12,32 @@ namespace FileFluss.Core.Providers.Ftp;
 internal sealed class FluentFtpConnection : IFtpConnection
 {
     private readonly AsyncFtpClient _client;
+    private readonly Lock _rawGate = new();
+
+    /// <summary>The running listing's raw rows as the server sent them; null outside a listing.</summary>
+    private List<string>? _raw;
 
     private FluentFtpConnection(AsyncFtpClient client)
     {
         _client = client;
+
+        // FluentFTP drops a row none of its parsers understood and only says so in its log. The
+        // raw rows it logs are collected here, so a listing with rows missing fails instead of
+        // passing for the whole folder (see ListAsync).
+        _client.LegacyLogger = OnLog;
+    }
+
+    private void OnLog(FtpTraceLevel level, string message)
+    {
+        if (!message.StartsWith(FtpListingCheck.RawLinePrefix, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        lock (_rawGate)
+        {
+            _raw?.Add(message[FtpListingCheck.RawLinePrefix.Length..]);
+        }
     }
 
     public bool IsConnected => _client.IsConnected;
@@ -72,7 +94,29 @@ internal sealed class FluentFtpConnection : IFtpConnection
 
     public async Task<IReadOnlyList<FtpEntry>> ListAsync(string path, CancellationToken cancellationToken)
     {
-        var listing = await _client.GetListing(path, FtpListOption.Auto, cancellationToken).ConfigureAwait(false);
+        // One command at a time per connection (the pool leases it), so one collector suffices.
+        List<string> raw = [];
+        lock (_rawGate)
+        {
+            _raw = raw;
+        }
+
+        FtpListItem[] listing;
+        try
+        {
+            listing = await _client.GetListing(path, FtpListOption.Auto, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_rawGate)
+            {
+                _raw = null;
+            }
+        }
+
+        // The rows no item came from are the ones the parser gave up on.
+        var parsed = new HashSet<string>(listing.Select(item => (item.Input ?? string.Empty).Trim()), StringComparer.Ordinal);
+        FtpListingCheck.Validate(raw.Where(line => !parsed.Contains(line.Trim())), listing.Length);
         return listing.Select(item => new FtpEntry(
             item.Name,
             item.Type switch

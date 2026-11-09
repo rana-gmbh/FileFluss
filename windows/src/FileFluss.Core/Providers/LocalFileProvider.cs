@@ -29,9 +29,15 @@ public sealed class LocalFileProvider : FileProvider
     /// </summary>
     public static Func<string, IO.RecycleRefusal?>? RecycleHandler { get; set; }
 
+    /// <summary>
+    /// <see cref="EnumerationOptions.IgnoreInaccessible"/> is off on purpose: on, a folder that
+    /// can't be opened lists as empty, and an empty-looking folder tells Mirror to delete its
+    /// contents on the other side (macOS 1.6: "Mirror stops on a folder it can't read"). A
+    /// one-level listing never opens its entries, so nothing else is affected.
+    /// </summary>
     private static readonly EnumerationOptions ListingOptions = new()
     {
-        IgnoreInaccessible = true,
+        IgnoreInaccessible = false,
         AttributesToSkip = 0,
         RecurseSubdirectories = false,
         ReturnSpecialDirectories = false,

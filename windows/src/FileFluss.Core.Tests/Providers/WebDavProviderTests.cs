@@ -248,6 +248,19 @@ public sealed class WebDavProviderTests : IDisposable
         Assert.Null(_http.All(Propfind)[1].Header("Authorization"));
     }
 
+    [Fact]
+    public async Task RedirectToAnotherPortOfTheSameHostDropsTheCredentials()
+    {
+        // macOS 1.6 CredentialScope: another port is another service.
+        _http.On(Propfind, "https://dav.example.com:8443/", (_, _) => Multistatus(RootSelf));
+        _http.On(Propfind, "/dav/Docs", (_, _) => Redirect(HttpStatusCode.TemporaryRedirect, "https://dav.example.com:8443/Docs/"));
+        using var provider = Connected();
+
+        await provider.ListDirectoryAsync("/Docs");
+
+        Assert.Null(_http.All(Propfind)[1].Header("Authorization"));
+    }
+
     [Theory]
     [InlineData("http://dav.example.com/dav/r.bin")]
     [InlineData("file:///C:/Windows/win.ini")]

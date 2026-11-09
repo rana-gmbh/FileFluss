@@ -81,6 +81,23 @@ public sealed record SyncEntry(
             return slash < 0 ? RelativePath : RelativePath[(slash + 1)..];
         }
     }
+
+    /// <summary>Whether this entry or a folder above it is a dotfile (macOS <c>SyncEntry.isHidden</c>).</summary>
+    public bool IsDotHidden
+    {
+        get
+        {
+            foreach (var component in RelativePath.Split('/'))
+            {
+                if (component.StartsWith('.'))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 }
 
 public enum SyncOperationKind
@@ -140,4 +157,35 @@ public sealed record SyncPlan(
     long NetDestinationDelta)
 {
     public bool IsEmpty => Operations.Count == 0;
+
+    /// <summary>What the source held when the plan was made, hidden files aside.</summary>
+    public int SourceEntryCount { get; init; }
+
+    /// <summary>What the destination held when the plan was made, hidden files aside.</summary>
+    public int DestinationEntryCount { get; init; }
+
+    /// <summary>
+    /// Files left alone because a folder of the same name is at the destination, in a mode that
+    /// promises never to delete (Update newer).
+    /// </summary>
+    public int TypeClashes { get; init; }
+
+    /// <summary>
+    /// Mirroring nothing over something. This is what a scan gone wrong looks like far more
+    /// often than a real wish to wipe the destination, so it isn't offered.
+    /// </summary>
+    public bool WouldEmptyDestination => Mode == SyncMode.Mirror && SourceEntryCount == 0 && DestinationEntryCount > 0;
+
+    /// <summary>Deletes at least half of a destination of any real size, which needs a confirmation of its own.</summary>
+    public bool DeletesMostOfDestination
+    {
+        get
+        {
+            var deletions = FilesToDelete + FoldersToDelete;
+            return deletions >= 10 && deletions * 2 >= DestinationEntryCount;
+        }
+    }
+
+    /// <summary>Whether this is the plan for what's selected now. A plan calculated for one direction or mode must not run under another.</summary>
+    public bool Matches(SyncMode mode, PlanDirection direction) => Mode == mode && Direction == direction;
 }

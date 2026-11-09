@@ -55,6 +55,13 @@ public static class SyncExecutor
                 throw new InvalidOperationException(L("Sync needs a live folder on both sides."));
             }
 
+            // Checked here as well as in the Sync window: a GoPro's delete works and its upload
+            // doesn't, so a sync toward one would only ever destroy footage.
+            if (destination.Provider is CloudProvider cloud && cloud.ProviderType.IsReadOnly())
+            {
+                throw new InvalidOperationException(L("{0} can't be written to, so it can't be a sync destination.", cloud.ProviderType.DisplayName()));
+            }
+
             progress.SetPhase(progress.IsCloudToCloud ? TransferPhase.Downloading : TransferPhase.Copying);
             await CreateFoldersAsync(plan, destination, progress, ct).ConfigureAwait(false);
             await CopyFilesAsync(plan, source, destination, progress, ct).ConfigureAwait(false);

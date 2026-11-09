@@ -18,9 +18,17 @@ namespace FileFluss.App.Services;
 public sealed class TransferCenter : Observable
 {
     private readonly DispatcherTimer _pump;
+    private readonly SleepBlocker _sleep;
 
     public TransferCenter()
+        : this(new SleepBlocker())
     {
+    }
+
+    /// <param name="sleep">Holds off system sleep while anything runs.</param>
+    public TransferCenter(SleepBlocker sleep)
+    {
+        _sleep = sleep;
         _pump = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(150) };
         _pump.Tick += (_, _) => Pump();
     }
@@ -94,11 +102,13 @@ public sealed class TransferCenter : Observable
             }
             finally
             {
+                _sleep.Update(HasRunning);
                 TransferCompleted?.Invoke(this, progress);
                 OnAllPropertiesChanged();
             }
         });
         _pump.Start();
+        _sleep.Update(HasRunning);
         OnAllPropertiesChanged();
     }
 
@@ -132,6 +142,7 @@ public sealed class TransferCenter : Observable
         }
 
         OnAllPropertiesChanged();
+        _sleep.Update(any);
         if (!any)
         {
             _pump.Stop();

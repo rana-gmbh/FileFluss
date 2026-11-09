@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Core.Models;
+using FileFluss.Core.Providers;
 using FileFluss.Core.Providers.Jottacloud;
 
 namespace FileFluss.Core.Tests.Providers;
@@ -180,11 +181,13 @@ public class JottacloudXmlParserTests
     }
 
     [Fact]
-    public void TruncatedXmlKeepsWhatParsed()
+    public void TruncatedXmlIsAnErrorNotAShorterFolder()
     {
+        // macOS 1.6: what parsed before the error is only part of the folder, and Mirror would
+        // delete the rest from the other side.
         const string xml = "<folder><folders><folder name=\"A\"></folder><folder name=\"B\"></folder><fol";
-        var names = JottacloudXmlParser.ParseListing(xml, "/").Select(i => i.Name).ToList();
-        Assert.Equal(["A", "B"], names);
+        var error = Assert.Throws<CloudProviderException>(() => JottacloudXmlParser.ParseListing(xml, "/"));
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
     }
 
     [Theory]

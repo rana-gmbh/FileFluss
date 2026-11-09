@@ -115,9 +115,8 @@ internal static class WebDavHttp
         => status is HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
             or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
 
-    private static bool KeepsCredentials(Uri original, Uri target)
-        => string.Equals(original.Host, target.Host, StringComparison.OrdinalIgnoreCase)
-           && !(original.Scheme == Uri.UriSchemeHttps && target.Scheme == Uri.UriSchemeHttp);
+    /// <summary>Same host and port, no weaker scheme than the request was made to (macOS <c>CredentialScope</c>).</summary>
+    private static bool KeepsCredentials(Uri original, Uri target) => CredentialScope.Allows(target, original);
 
     /// <summary>The file's mtime as Unix seconds, or null when it can't be read (the header is then left out).</summary>
     public static long? UnixMtime(string localPath) => LocalModificationTime(localPath)?.ToUnixTimeSeconds();

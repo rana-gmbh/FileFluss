@@ -49,6 +49,11 @@ public sealed class SyncWindow : Window
     private readonly Grid _plan = new() { Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _hint = Secondary();
     private readonly TextBlock _spaceWarning = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _typeClashes = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _emptyDestination = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _stagingWarning = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly CheckBox _confirmLargeDeletion = new() { Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBlock _confirmLargeDeletionText = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
     private readonly TextBlock _error = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
     private readonly Button _cancel = new() { MinWidth = 96, Padding = new Thickness(12, 5, 12, 6), IsCancel = true };
     private readonly Button _start = new() { MinWidth = 96, Padding = new Thickness(12, 5, 12, 6), Margin = new Thickness(8, 0, 0, 0) };
@@ -202,9 +207,18 @@ public sealed class SyncWindow : Window
         _plan.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _hint.Margin = new Thickness(0, 6, 0, 0);
         _spaceWarning.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
+        _typeClashes.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        _emptyDestination.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
+        _stagingWarning.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
+        AutomationProperties.SetAutomationId(_emptyDestination, "SyncEmptyDestinationWarning");
+        _confirmLargeDeletion.Content = _confirmLargeDeletionText;
+        _confirmLargeDeletionText.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
+        AutomationProperties.SetAutomationId(_confirmLargeDeletion, "SyncConfirmLargeDeletion");
+        _confirmLargeDeletion.Checked += (_, _) => SetLargeDeletionConfirmed(true);
+        _confirmLargeDeletion.Unchecked += (_, _) => SetLargeDeletionConfirmed(false);
         _error.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
         AutomationProperties.SetAutomationId(_error, "SyncError");
-        var plan = new StackPanel { Children = { planHeader, _calculating, _plan, _hint, _spaceWarning, _error } };
+        var plan = new StackPanel { Children = { planHeader, _calculating, _plan, _hint, _typeClashes, _emptyDestination, _confirmLargeDeletion, _spaceWarning, _stagingWarning, _error } };
 
         // Footer.
         AutomationProperties.SetAutomationId(_cancel, "SyncCancelButton");
@@ -328,6 +342,14 @@ public sealed class SyncWindow : Window
         }
     }
 
+    private void SetLargeDeletionConfirmed(bool confirmed)
+    {
+        if (!_updating)
+        {
+            _session.ConfirmLargeDeletion = confirmed;
+        }
+    }
+
     /// <summary>Why the sync can't run whatever the plan says: an offline side, a read-only destination.</summary>
     private string? Blocker()
     {
@@ -371,6 +393,14 @@ public sealed class SyncWindow : Window
             FillPlan(session, plan);
             _hint.Visibility = plan is null ? Visibility.Visible : Visibility.Collapsed;
             _spaceWarning.Visibility = plan is not null && session.WouldExceedAvailableSpace ? Visibility.Visible : Visibility.Collapsed;
+            ShowNote(_typeClashes, session.TypeClashText is { } clashes ? "⚠ " + clashes : null);
+            ShowNote(_stagingWarning, session.StagingWarning is { } stagingShort ? "⚠ " + stagingShort : null);
+            ShowNote(_emptyDestination, session.EmptyDestinationWarning is { } empty ? "⚠ " + empty : null);
+            var largeDeletion = session.LargeDeletionConfirmationText;
+            _confirmLargeDeletionText.Text = largeDeletion ?? string.Empty;
+            AutomationProperties.SetName(_confirmLargeDeletion, largeDeletion ?? string.Empty);
+            _confirmLargeDeletion.Visibility = largeDeletion is null ? Visibility.Collapsed : Visibility.Visible;
+            _confirmLargeDeletion.IsChecked = session.ConfirmLargeDeletion;
 
             var message = session.ErrorMessage ?? Blocker();
             _error.Text = message ?? string.Empty;
@@ -387,6 +417,12 @@ public sealed class SyncWindow : Window
         {
             _updating = false;
         }
+    }
+
+    private static void ShowNote(TextBlock block, string? text)
+    {
+        block.Text = text ?? string.Empty;
+        block.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void FillPlan(SyncSession session, SyncPlan? plan)
@@ -425,6 +461,15 @@ public sealed class SyncWindow : Window
             AddDivider();
             AddRow(L("Available:"), available);
             AddRow(L("After sync:"), session.AfterSyncText ?? string.Empty, danger: session.WouldExceedAvailableSpace);
+        }
+
+        // A sync between two accounts passes the files through this PC, and the disk they cross
+        // is not the destination's quota. Shown next to it, where someone is already looking.
+        if (session.Staging is { } staging)
+        {
+            AddDivider();
+            AddRow(L("Needs on this Mac:"), session.StagingNeededText ?? string.Empty, danger: staging.WouldExceed);
+            AddRow(staging.VolumeName, session.StagingFreeText ?? string.Empty);
         }
 
         void AddRow(string label, string value, bool danger = false)

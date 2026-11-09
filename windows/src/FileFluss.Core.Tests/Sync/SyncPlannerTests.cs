@@ -117,7 +117,8 @@ public class SyncPlannerTests
         var plan = Plan(
             [File("a.txt", 1), File("a (2).txt", 2), Folder("sub"), File("sub/r.tar.gz", 3), File("sub/.hidden", 4), File("noext", 5)],
             [File("a.txt", 1), Folder("sub"), File("sub/r.tar.gz", 3), File("sub/.hidden", 4), File("noext", 5)],
-            SyncMode.Additive);
+            SyncMode.Additive,
+            sourceIsCloud: true); // cloud ↔ cloud: a sync touching the local disk leaves dotfiles alone
 
         var renamed = plan.Operations.Where(o => o.Kind == SyncOperationKind.AddRenamed)
             .ToDictionary(o => o.RelativePath, o => o.DestinationRelativePath);

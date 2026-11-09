@@ -6,6 +6,7 @@ using FileFluss.Core.Providers;
 using FileFluss.Core.Providers.Sftp;
 using FileFluss.Core.Security;
 using FileFluss.Core.Tests.Support;
+using FileFluss.Core.Transfers;
 using Renci.SshNet.Common;
 
 namespace FileFluss.Core.Tests.Providers;
@@ -40,6 +41,9 @@ internal sealed class FakeSshServer
 
     /// <summary>Refuse every rename, as an upload-only drop box does.</summary>
     public bool RefuseRenames { get; set; }
+
+    /// <summary>Thrown by every rename while set.</summary>
+    public Exception? RenameFailure { get; set; }
 
     public FakeSshServer()
     {
@@ -244,6 +248,11 @@ internal sealed class FakeSftpTransport(FakeSshServer server) : ISftpTransport
     public Task RenameAsync(string path, string newPath, CancellationToken cancellationToken)
     {
         Tree.Log.Enqueue($"RENAME {path} {newPath}");
+        if (server.RenameFailure is { } failure)
+        {
+            throw failure;
+        }
+
         if (server.RefuseRenames || Tree.Get(newPath) is not null)
         {
             throw new SshException("Failure");
@@ -773,6 +782,41 @@ public class SftpProviderTests
         Assert.Contains("RENAME /home/u/a.txt /home/u/b.txt", _server.Tree.Log);
         Assert.Equal(CloudErrorKind.CommandFailed, clash.Kind);
         Assert.Equal("e", _server.Tree.Text("/home/u/dest/exists.txt"));
+    }
+
+    [Theory]
+    [InlineData("Invalid cross-device link")]
+    [InlineData("Operation unsupported")]
+    public async Task ARenameTheServerWontDoFallsBackToACopy(string message)
+    {
+        // macOS 1.6 (b96f2f4): a rename across file systems is a reason to copy the bytes
+        // through, not a failure to report.
+        _server.Tree.File("/home/u/a.txt", "a").Dir("/mnt/other");
+        _server.RenameFailure = new Renci.SshNet.Common.SftpException(Renci.SshNet.Sftp.StatusCode.Failure, message);
+        using var provider = Signed();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.MoveItemAsync("/home/u/a.txt", "/mnt/other/a.txt"));
+        Assert.Equal(CloudErrorKind.NotImplemented, error.Kind);
+
+        var items = (await provider.ListDirectoryAsync("/home/u")).Where(i => i.Name == "a.txt").ToList();
+        var progress = TransferEngine.CreateProgress(new TransferRequest(provider, items, provider, "/mnt/other", IsMove: true), PanelSide.Right);
+        await TransferEngine.RunAsync(new TransferRequest(provider, items, provider, "/mnt/other", IsMove: true), progress);
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        Assert.Equal("a", _server.Tree.Text("/mnt/other/a.txt"));
+        Assert.Null(_server.Tree.Get("/home/u/a.txt"));
+    }
+
+    [Fact]
+    public async Task ARefusedRenameStaysAFailure()
+    {
+        _server.Tree.File("/home/u/a.txt", "a").Dir("/home/u/dest");
+        _server.RenameFailure = new Renci.SshNet.Common.SftpPermissionDeniedException("Permission denied");
+        using var provider = Signed();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.MoveItemAsync("/home/u/a.txt", "/home/u/dest/a.txt"));
+
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
     }
 
     [Fact]

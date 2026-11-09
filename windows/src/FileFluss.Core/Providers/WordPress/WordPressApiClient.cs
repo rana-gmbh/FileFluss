@@ -478,7 +478,9 @@ internal sealed partial class WordPressApiClient
 
         // The Application Password authenticates REST calls only; it goes to the site itself and
         // never to a CDN host that serves the uploads (Jetpack, a separate media domain).
-        var authorize = _siteUri is not null && string.Equals(source.Host, _siteUri.Host, StringComparison.OrdinalIgnoreCase);
+        // Same host, port and no weaker scheme (macOS CredentialScope): a media URL on http, or
+        // on another port of the same name, must not receive the password either.
+        var authorize = Net.CredentialScope.Allows(source, _siteUri);
         using var response = await SendAsync(HttpMethod.Get, source, null, cancellationToken, transfer: true, authorize: authorize).ConfigureAwait(false);
         ThrowIfUnauthorized(response);
         if ((int)response.StatusCode == 404)
@@ -756,7 +758,7 @@ internal sealed partial class WordPressApiClient
         bool transfer = false,
         bool authorize = true)
     {
-        var originalHost = uri.Host;
+        var original = uri;
         for (var hop = 0; ; hop++)
         {
             HttpResponseMessage response;
@@ -788,9 +790,8 @@ internal sealed partial class WordPressApiClient
 
             response.Dispose();
 
-            var sameHost = string.Equals(next.Host, originalHost, StringComparison.OrdinalIgnoreCase) &&
-                           !(uri.Scheme == Uri.UriSchemeHttps && next.Scheme == Uri.UriSchemeHttp);
-            if (!sameHost)
+            // Credentials stay with the host (and port, and scheme) they were meant for.
+            if (!Net.CredentialScope.Allows(next, original))
             {
                 authorize = false;
                 if (status is 301 or 302 or 303 && method != HttpMethod.Get && method != HttpMethod.Head)

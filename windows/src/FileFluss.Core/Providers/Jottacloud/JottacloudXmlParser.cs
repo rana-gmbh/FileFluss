@@ -50,7 +50,7 @@ internal static class JottacloudXmlParser
         var latest = new Revision();
         Revision? revision = null;
 
-        Walk(xml, (reader, isStart, text) =>
+        Walk(xml, strict: true, visit: (reader, isStart, text) =>
         {
             var name = reader.LocalName;
             if (isStart)
@@ -290,7 +290,14 @@ internal static class JottacloudXmlParser
     /// Forward-only walk. The callback sees every start element and, on the matching end, the
     /// trimmed text directly inside it (empty for elements with children).
     /// </summary>
-    private static void Walk(string xml, Action<XmlReader, bool, string> visit)
+    private static void Walk(string xml, Action<XmlReader, bool, string> visit) => Walk(xml, strict: false, visit);
+
+    /// <param name="strict">
+    /// Malformed XML throws instead of ending the walk. A listing must (macOS 1.6): whatever was
+    /// read before the error is only part of the folder, and a folder that merely looks emptier
+    /// than it is tells Mirror to delete the rest from the other side.
+    /// </param>
+    private static void Walk(string xml, bool strict, Action<XmlReader, bool, string> visit)
     {
         var text = new System.Text.StringBuilder();
         try
@@ -318,6 +325,10 @@ internal static class JottacloudXmlParser
                         break;
                 }
             }
+        }
+        catch (XmlException e) when (strict)
+        {
+            throw CloudProviderException.CommandFailed(Localization.L("The server sent a folder listing FileFluss couldn't read."), e);
         }
         catch (XmlException)
         {

@@ -2,6 +2,7 @@
 
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Formatting;
+using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Transfers;
@@ -22,6 +23,65 @@ public sealed record SpaceImpact(string DestinationName, bool IsCloud, long? Ava
 
     /// <summary>The transfer would not fit in the known free space.</summary>
     public bool WouldExceed => Available is { } available && AddedBytes > available;
+}
+
+/// <summary>
+/// Room a transfer needs on this PC on its way through (macOS 1.6 <c>SpaceImpact.Staging</c>).
+/// Only a copy between two accounts passes through here: a download is written beside its
+/// destination and an upload streams from the file. Unlike the Mac, which downloads the whole
+/// batch first, Windows stages one file at a time, so <see cref="Needed"/> is the largest file.
+/// </summary>
+/// <param name="VolumeName">The drive the staging folder (Settings → Storage) is on, as Explorer names it.</param>
+/// <param name="Free">Free space there now; null when it couldn't be read.</param>
+public sealed record StagingNeed(string VolumeName, long Needed, long? Free)
+{
+    public bool WouldExceed => Free is { } free && Needed > free;
+}
+
+/// <summary>Measures the staging folder for <see cref="StagingNeed"/>.</summary>
+public static class StagingSpace
+{
+    /// <summary>Test seam: free bytes for a path, per async flow so parallel tests don't see each other's.</summary>
+    internal static readonly AsyncLocal<Func<string, long?>?> FreeBytesOverride = new();
+
+    /// <summary>What staging <paramref name="needed"/> bytes would take; null when nothing passes through.</summary>
+    public static StagingNeed? For(long needed)
+    {
+        if (needed <= 0)
+        {
+            return null;
+        }
+
+        var root = StagingLocation.Base();
+        return new StagingNeed(VolumeName(root), needed, (FreeBytesOverride.Value ?? FreeBytes)(root));
+    }
+
+    /// <summary>"Local Disk (C:)" — which disk needs the room — or the path when that can't be told.</summary>
+    public static string VolumeName(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            return string.IsNullOrEmpty(root) ? path : LocalFileProvider.DriveLabel(root);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path;
+        }
+    }
+
+    private static long? FreeBytes(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>The verb the warning is phrased with, as on macOS.</summary>
