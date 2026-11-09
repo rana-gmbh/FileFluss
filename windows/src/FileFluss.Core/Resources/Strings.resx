@@ -4089,4 +4089,37 @@ Trust the new key?</value>
   <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
     <value>The download ended after {0} of {1} bytes.</value>
   </data>
+  <data name="FileFluss couldn&apos;t move this to the Recycle Bin" xml:space="preserve">
+    <value>FileFluss couldn't move this to the Recycle Bin</value>
+  </data>
+  <data name="The Recycle Bin can&apos;t be used" xml:space="preserve">
+    <value>The Recycle Bin can't be used</value>
+  </data>
+  <data name="Open Storage Settings…" xml:space="preserve">
+    <value>Open Storage Settings…</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because it is open in another program. Close it there and try again." xml:space="preserve">
+    <value>Windows refused to move {0} to the Recycle Bin because it is open in another program. Close it there and try again.</value>
+  </data>
+  <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." xml:space="preserve">
+    <value>You don't have permission to change the folder {0} is in ({1}), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security.</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because the Recycle Bin on {1} is damaged or can&apos;t be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows refused to move {0} to the Recycle Bin because the Recycle Bin on {1} is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone.</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone.</value>
+  </data>
+  <data name="{0} is no longer there. It may have been moved or deleted outside FileFluss." xml:space="preserve">
+    <value>{0} is no longer there. It may have been moved or deleted outside FileFluss.</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin (error {1}). If File Explorer can&apos;t move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows refused to move {0} to the Recycle Bin (error {1}). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone.</value>
+  </data>
+  <data name="Save Test Accounts…" xml:space="preserve">
+    <value>Save Test Accounts…</value>
+  </data>
+  <data name="Restore Test Accounts…" xml:space="preserve">
+    <value>Restore Test Accounts…</value>
+  </data>
 </root>

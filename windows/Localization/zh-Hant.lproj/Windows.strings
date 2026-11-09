@@ -627,3 +627,18 @@
 
 /* Open With: Explorer names the system chooser this way. */
 "Other…" = "選擇其他應用程式…";
+
+/* Moving to the Recycle Bin refused: the real cause (macOS 1.6 "a refused Trash names the real cause"). */
+"FileFluss couldn't move this to the Recycle Bin" = "FileFluss 無法將其移至資源回收筒";
+"The Recycle Bin can't be used" = "無法使用資源回收筒";
+"Open Storage Settings…" = "開啟儲存空間設定…";
+"Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again." = "Windows 拒絕將 %@ 移至資源回收筒，因為它已在另一個程式中開啟。請在該程式中將其關閉，然後再試一次。";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." = "你沒有權限變更 %@ 所在的資料夾（%@），因此無法將其移至資源回收筒或刪除。其擁有者可以在檔案總管的「內容」→「安全性」中變更此設定。";
+"Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone." = "Windows 拒絕將 %@ 移至資源回收筒，因為 %@ 上的資源回收筒已損毀或無法寫入。檔案總管也會遇到相同的問題。清理該磁碟機的資源回收筒通常可以修復：在「設定」→「系統」→「儲存空間」→「暫存檔案」中，或以滑鼠右鍵按一下桌面上的資源回收筒。永久刪除無法復原。";
+"%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone." = "%@ 無法移至資源回收筒，因為其路徑超出資源回收筒允許的長度。要永久刪除嗎？此動作無法復原。";
+"%@ is no longer there. It may have been moved or deleted outside FileFluss." = "%@ 已不存在。它可能已在 FileFluss 之外被移動或刪除。";
+"Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone." = "Windows 拒絕將 %@ 移至資源回收筒（錯誤 %@）。如果檔案總管也無法將其移至資源回收筒，則原因不在 FileFluss。永久刪除無法復原。";
+
+/* Debug builds only: test accounts kept apart from the release app. */
+"Save Test Accounts…" = "儲存測試帳戶…";
+"Restore Test Accounts…" = "還原測試帳戶…";

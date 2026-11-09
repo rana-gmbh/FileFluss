@@ -34,6 +34,13 @@ public enum RecycleRefusalKind
 
     /// <summary>Any other failure; the code is shown so a report says what it was.</summary>
     Unknown,
+
+    /// <summary>
+    /// Windows warned that the item would be deleted for good instead of recycled (too big for
+    /// the Recycle Bin, or the bin set to delete straight away) and the user said no. Nothing
+    /// happened and there is nothing to explain.
+    /// </summary>
+    Declined,
 }
 
 /// <summary>

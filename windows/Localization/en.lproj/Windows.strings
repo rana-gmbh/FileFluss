@@ -618,3 +618,18 @@
 
 /* Open With: Explorer names the system chooser this way. */
 "Other…" = "Choose another app…";
+
+/* Moving to the Recycle Bin refused: the real cause (macOS 1.6 "a refused Trash names the real cause"). */
+"FileFluss couldn't move this to the Recycle Bin" = "FileFluss couldn't move this to the Recycle Bin";
+"The Recycle Bin can't be used" = "The Recycle Bin can't be used";
+"Open Storage Settings…" = "Open Storage Settings…";
+"Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again." = "Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." = "You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security.";
+"Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone." = "Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone.";
+"%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone." = "%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone.";
+"%@ is no longer there. It may have been moved or deleted outside FileFluss." = "%@ is no longer there. It may have been moved or deleted outside FileFluss.";
+"Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone." = "Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone.";
+
+/* Debug builds only: test accounts kept apart from the release app. */
+"Save Test Accounts…" = "Save Test Accounts…";
+"Restore Test Accounts…" = "Restore Test Accounts…";

@@ -626,3 +626,18 @@
 
 /* Open With: Explorer names the system chooser this way. */
 "Other…" = "选择其他应用…";
+
+/* Moving to the Recycle Bin refused: the real cause (macOS 1.6 "a refused Trash names the real cause"). */
+"FileFluss couldn't move this to the Recycle Bin" = "FileFluss 无法将其移到回收站";
+"The Recycle Bin can't be used" = "无法使用回收站";
+"Open Storage Settings…" = "打开存储设置…";
+"Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again." = "Windows 拒绝将 %@ 移到回收站，因为它已在另一个程序中打开。请在该程序中将其关闭，然后重试。";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." = "你没有权限更改 %@ 所在的文件夹（%@），因此无法将其移到回收站或删除。其所有者可以在文件资源管理器的“属性”→“安全”中更改此设置。";
+"Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone." = "Windows 拒绝将 %@ 移到回收站，因为 %@ 上的回收站已损坏或无法写入。文件资源管理器也会遇到同样的问题。清空该驱动器的回收站通常可以修复：在“设置”→“系统”→“存储”→“临时文件”中，或右键单击桌面上的回收站。永久删除无法撤销。";
+"%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone." = "%@ 无法移到回收站，因为其路径超出了回收站允许的长度。要永久删除吗？此操作无法撤销。";
+"%@ is no longer there. It may have been moved or deleted outside FileFluss." = "%@ 已不存在。它可能已在 FileFluss 之外被移动或删除。";
+"Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone." = "Windows 拒绝将 %@ 移到回收站（错误 %@）。如果文件资源管理器也无法将其移到回收站，则原因不在 FileFluss。永久删除无法撤销。";
+
+/* Debug builds only: test accounts kept apart from the release app. */
+"Save Test Accounts…" = "保存测试帐户…";
+"Restore Test Accounts…" = "恢复测试帐户…";

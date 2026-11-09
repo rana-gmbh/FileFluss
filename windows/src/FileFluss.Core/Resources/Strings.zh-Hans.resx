@@ -4089,4 +4089,37 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
     <value>下载在 {0} 字节（共 {1} 字节）处中断。</value>
   </data>
+  <data name="FileFluss couldn&apos;t move this to the Recycle Bin" xml:space="preserve">
+    <value>FileFluss 无法将其移到回收站</value>
+  </data>
+  <data name="The Recycle Bin can&apos;t be used" xml:space="preserve">
+    <value>无法使用回收站</value>
+  </data>
+  <data name="Open Storage Settings…" xml:space="preserve">
+    <value>打开存储设置…</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because it is open in another program. Close it there and try again." xml:space="preserve">
+    <value>Windows 拒绝将 {0} 移到回收站，因为它已在另一个程序中打开。请在该程序中将其关闭，然后重试。</value>
+  </data>
+  <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." xml:space="preserve">
+    <value>你没有权限更改 {0} 所在的文件夹（{1}），因此无法将其移到回收站或删除。其所有者可以在文件资源管理器的“属性”→“安全”中更改此设置。</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because the Recycle Bin on {1} is damaged or can&apos;t be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows 拒绝将 {0} 移到回收站，因为 {1} 上的回收站已损坏或无法写入。文件资源管理器也会遇到同样的问题。清空该驱动器的回收站通常可以修复：在“设置”→“系统”→“存储”→“临时文件”中，或右键单击桌面上的回收站。永久删除无法撤销。</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} 无法移到回收站，因为其路径超出了回收站允许的长度。要永久删除吗？此操作无法撤销。</value>
+  </data>
+  <data name="{0} is no longer there. It may have been moved or deleted outside FileFluss." xml:space="preserve">
+    <value>{0} 已不存在。它可能已在 FileFluss 之外被移动或删除。</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin (error {1}). If File Explorer can&apos;t move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows 拒绝将 {0} 移到回收站（错误 {1}）。如果文件资源管理器也无法将其移到回收站，则原因不在 FileFluss。永久删除无法撤销。</value>
+  </data>
+  <data name="Save Test Accounts…" xml:space="preserve">
+    <value>保存测试帐户…</value>
+  </data>
+  <data name="Restore Test Accounts…" xml:space="preserve">
+    <value>恢复测试帐户…</value>
+  </data>
 </root>

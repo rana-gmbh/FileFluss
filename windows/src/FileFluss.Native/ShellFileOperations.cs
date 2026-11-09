@@ -30,12 +30,21 @@ public static class ShellFileOperations
         {
             Func = FoDelete,
             From = path + "\0\0",
-            Flags = FofAllowUndo | FofNoConfirmation | FofSilent | FofNoErrorUi | FofNoConfirmMkdir,
+            // FOF_WANTNUKEWARNING: without it, FOF_NOCONFIRMATION lets Windows delete for good, without a
+            // word, an item too big for the Recycle Bin, or everything when the bin is set to "Don't move
+            // files to the Recycle Bin". With it, Windows asks first in exactly those cases.
+            Flags = FofAllowUndo | FofNoConfirmation | FofSilent | FofNoErrorUi | FofNoConfirmMkdir | FofWantNukeWarning,
         };
         var code = SHFileOperation(ref operation);
         if (code == 0 && !operation.AnyOperationsAborted && !Path.Exists(path))
         {
             return null;
+        }
+
+        if (code == 0 && operation.AnyOperationsAborted && Path.Exists(path))
+        {
+            // The user said no to Windows' "permanently delete?" warning: nothing happened, as asked.
+            return new RecycleRefusal(RecycleRefusalKind.Declined);
         }
 
         return Diagnose(path, code == 0 ? DeOpCancelled : code);
@@ -328,6 +337,7 @@ public static class ShellFileOperations
     private const ushort FofAllowUndo = 0x0040;
     private const ushort FofNoConfirmMkdir = 0x0200;
     private const ushort FofNoErrorUi = 0x0400;
+    private const ushort FofWantNukeWarning = 0x4000;
     private const uint ProgressContinue = 0;
     private const uint ProgressCancel = 1;
     private const int OaifAllowRegistration = 0x1;

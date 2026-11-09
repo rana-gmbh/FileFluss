@@ -4089,4 +4089,37 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
     <value>下載在 {0} 個位元組（共 {1} 個位元組）處中斷。</value>
   </data>
+  <data name="FileFluss couldn&apos;t move this to the Recycle Bin" xml:space="preserve">
+    <value>FileFluss 無法將其移至資源回收筒</value>
+  </data>
+  <data name="The Recycle Bin can&apos;t be used" xml:space="preserve">
+    <value>無法使用資源回收筒</value>
+  </data>
+  <data name="Open Storage Settings…" xml:space="preserve">
+    <value>開啟儲存空間設定…</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because it is open in another program. Close it there and try again." xml:space="preserve">
+    <value>Windows 拒絕將 {0} 移至資源回收筒，因為它已在另一個程式中開啟。請在該程式中將其關閉，然後再試一次。</value>
+  </data>
+  <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." xml:space="preserve">
+    <value>你沒有權限變更 {0} 所在的資料夾（{1}），因此無法將其移至資源回收筒或刪除。其擁有者可以在檔案總管的「內容」→「安全性」中變更此設定。</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because the Recycle Bin on {1} is damaged or can&apos;t be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows 拒絕將 {0} 移至資源回收筒，因為 {1} 上的資源回收筒已損毀或無法寫入。檔案總管也會遇到相同的問題。清理該磁碟機的資源回收筒通常可以修復：在「設定」→「系統」→「儲存空間」→「暫存檔案」中，或以滑鼠右鍵按一下桌面上的資源回收筒。永久刪除無法復原。</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} 無法移至資源回收筒，因為其路徑超出資源回收筒允許的長度。要永久刪除嗎？此動作無法復原。</value>
+  </data>
+  <data name="{0} is no longer there. It may have been moved or deleted outside FileFluss." xml:space="preserve">
+    <value>{0} 已不存在。它可能已在 FileFluss 之外被移動或刪除。</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin (error {1}). If File Explorer can&apos;t move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows 拒絕將 {0} 移至資源回收筒（錯誤 {1}）。如果檔案總管也無法將其移至資源回收筒，則原因不在 FileFluss。永久刪除無法復原。</value>
+  </data>
+  <data name="Save Test Accounts…" xml:space="preserve">
+    <value>儲存測試帳戶…</value>
+  </data>
+  <data name="Restore Test Accounts…" xml:space="preserve">
+    <value>還原測試帳戶…</value>
+  </data>
 </root>

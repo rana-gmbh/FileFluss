@@ -1297,13 +1297,14 @@ public sealed class MainViewModel : Observable
                         await provider.DeleteItemAsync(row.Path);
                     }
                 }
-                catch (RecycleRefusedException e) when (e.Refusal.Kind != RecycleRefusalKind.NotFound)
+                catch (RecycleRefusedException e) when (e.Refusal.Kind is not (RecycleRefusalKind.NotFound or RecycleRefusalKind.Declined))
                 {
                     refused.Add((row, e.Refusal));
                 }
                 catch (RecycleRefusedException)
                 {
-                    // Already gone (moved or deleted outside FileFluss): the refresh below shows it.
+                    // Already gone (moved or deleted outside FileFluss), or the user declined Windows'
+                    // "delete permanently?" warning: the refresh below shows how things stand.
                 }
                 catch (Exception e)
                 {

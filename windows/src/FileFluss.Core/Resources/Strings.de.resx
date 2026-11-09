@@ -4089,4 +4089,37 @@ Dem neuen Schlüssel vertrauen?</value>
   <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
     <value>Der Download brach nach {0} von {1} Bytes ab.</value>
   </data>
+  <data name="FileFluss couldn&apos;t move this to the Recycle Bin" xml:space="preserve">
+    <value>FileFluss konnte das nicht in den Papierkorb verschieben</value>
+  </data>
+  <data name="The Recycle Bin can&apos;t be used" xml:space="preserve">
+    <value>Der Papierkorb kann nicht verwendet werden</value>
+  </data>
+  <data name="Open Storage Settings…" xml:space="preserve">
+    <value>Speichereinstellungen öffnen …</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because it is open in another program. Close it there and try again." xml:space="preserve">
+    <value>Windows hat sich geweigert, {0} in den Papierkorb zu verschieben, weil es in einem anderen Programm geöffnet ist. Schließe es dort und versuche es erneut.</value>
+  </data>
+  <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." xml:space="preserve">
+    <value>Du darfst den Ordner, in dem {0} liegt ({1}), nicht ändern. Deshalb kann es weder in den Papierkorb verschoben noch gelöscht werden. Der Besitzer kann das im Explorer unter Eigenschaften → Sicherheit ändern.</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin because the Recycle Bin on {1} is damaged or can&apos;t be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows hat sich geweigert, {0} in den Papierkorb zu verschieben, weil der Papierkorb auf {1} beschädigt ist oder nicht beschrieben werden kann. Der Explorer hat dasselbe Problem. Meist hilft es, den Papierkorb dieses Laufwerks zu leeren: unter Einstellungen → System → Speicher → Temporäre Dateien oder per Rechtsklick auf den Papierkorb auf dem Desktop. Endgültiges Löschen kann nicht rückgängig gemacht werden.</value>
+  </data>
+  <data name="{0} can&apos;t be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can&apos;t be undone." xml:space="preserve">
+    <value>{0} kann nicht in den Papierkorb verschoben werden, weil der Pfad länger ist, als der Papierkorb zulässt. Endgültig löschen? Das kann nicht rückgängig gemacht werden.</value>
+  </data>
+  <data name="{0} is no longer there. It may have been moved or deleted outside FileFluss." xml:space="preserve">
+    <value>{0} ist nicht mehr vorhanden. Es wurde womöglich außerhalb von FileFluss verschoben oder gelöscht.</value>
+  </data>
+  <data name="Windows refused to move {0} to the Recycle Bin (error {1}). If File Explorer can&apos;t move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can&apos;t be undone." xml:space="preserve">
+    <value>Windows hat sich geweigert, {0} in den Papierkorb zu verschieben (Fehler {1}). Wenn auch der Explorer es nicht in den Papierkorb verschieben kann, liegt die Ursache außerhalb von FileFluss. Endgültiges Löschen kann nicht rückgängig gemacht werden.</value>
+  </data>
+  <data name="Save Test Accounts…" xml:space="preserve">
+    <value>Testkonten sichern …</value>
+  </data>
+  <data name="Restore Test Accounts…" xml:space="preserve">
+    <value>Testkonten wiederherstellen …</value>
+  </data>
 </root>

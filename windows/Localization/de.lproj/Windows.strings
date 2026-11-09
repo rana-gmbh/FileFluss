@@ -608,3 +608,18 @@
 
 /* Open With: Explorer names the system chooser this way. */
 "Other…" = "Andere App auswählen …";
+
+/* Moving to the Recycle Bin refused: the real cause (macOS 1.6 "a refused Trash names the real cause"). */
+"FileFluss couldn't move this to the Recycle Bin" = "FileFluss konnte das nicht in den Papierkorb verschieben";
+"The Recycle Bin can't be used" = "Der Papierkorb kann nicht verwendet werden";
+"Open Storage Settings…" = "Speichereinstellungen öffnen …";
+"Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben, weil es in einem anderen Programm geöffnet ist. Schließe es dort und versuche es erneut.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." = "Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb kann es weder in den Papierkorb verschoben noch gelöscht werden. Der Besitzer kann das im Explorer unter Eigenschaften → Sicherheit ändern.";
+"Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben, weil der Papierkorb auf %@ beschädigt ist oder nicht beschrieben werden kann. Der Explorer hat dasselbe Problem. Meist hilft es, den Papierkorb dieses Laufwerks zu leeren: unter Einstellungen → System → Speicher → Temporäre Dateien oder per Rechtsklick auf den Papierkorb auf dem Desktop. Endgültiges Löschen kann nicht rückgängig gemacht werden.";
+"%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone." = "%@ kann nicht in den Papierkorb verschoben werden, weil der Pfad länger ist, als der Papierkorb zulässt. Endgültig löschen? Das kann nicht rückgängig gemacht werden.";
+"%@ is no longer there. It may have been moved or deleted outside FileFluss." = "%@ ist nicht mehr vorhanden. Es wurde womöglich außerhalb von FileFluss verschoben oder gelöscht.";
+"Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben (Fehler %@). Wenn auch der Explorer es nicht in den Papierkorb verschieben kann, liegt die Ursache außerhalb von FileFluss. Endgültiges Löschen kann nicht rückgängig gemacht werden.";
+
+/* Debug builds only: test accounts kept apart from the release app. */
+"Save Test Accounts…" = "Testkonten sichern …";
+"Restore Test Accounts…" = "Testkonten wiederherstellen …";
