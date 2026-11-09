@@ -198,7 +198,7 @@
     <value>Beenden &amp; neu starten</value>
   </data>
   <data name="Open System Settings…" xml:space="preserve">
-    <value>Systemeinstellungen öffnen …</value>
+    <value>Windows-Einstellungen öffnen …</value>
   </data>
   <data name="Welcome to FileFluss" xml:space="preserve">
     <value>Willkommen bei FileFluss</value>
@@ -216,16 +216,16 @@
     <value>Oder ohne ihn fortfahren</value>
   </data>
   <data name="macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." xml:space="preserve">
-    <value>Windows fragt einmal pro geschütztem Ordner (Schreibtisch, Dokumente, Downloads, …). Das erste Öffnen kann jeweils einige Sekunden dauern – aber nur beim ersten Mal.</value>
+    <value>Windows kann Änderungen in geschützten Ordnern (Desktop, Dokumente, Downloads, …) blockieren, solange der überwachte Ordnerzugriff in Windows-Sicherheit aktiviert ist.</value>
   </data>
   <data name="Add FileFluss to Full Disk Access" xml:space="preserve">
     <value>FileFluss zum vollständigen Festplattenzugriff hinzufügen</value>
   </data>
   <data name="System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit &amp; Relaunch** so the new permission takes effect." xml:space="preserve">
-    <value>Die Systemeinstellungen sind nun geöffnet. Ziehe das FileFluss-Symbol unten in die Liste **Vollständiger Festplattenzugriff** – klicke dann auf **Beenden &amp; neu starten**, damit die neue Berechtigung wirksam wird.</value>
+    <value>Windows-Sicherheit ist nun geöffnet. Wähle unter **Überwachter Ordnerzugriff** die Option **App durch überwachten Ordnerzugriff zulassen** und füge FileFluss hinzu – klicke dann auf **Beenden &amp; neu starten**, damit die neue Berechtigung wirksam wird.</value>
   </data>
   <data name="Or click the **+** button in System Settings and pick FileFluss from your Applications folder." xml:space="preserve">
-    <value>Oder klicke in den Systemeinstellungen auf die Schaltfläche **+** und wähle FileFluss aus deinem Programme-Ordner.</value>
+    <value>Klicke dort auf **Zulässige App hinzufügen** und wähle FileFluss.exe aus dem Ordner, in dem FileFluss installiert ist.</value>
   </data>
   <data name="Drag into the Full Disk Access list" xml:space="preserve">
     <value>In die Liste „Vollständiger Festplattenzugriff“ ziehen</value>
@@ -252,7 +252,7 @@
     <value>Duplizieren</value>
   </data>
   <data name="Get Info" xml:space="preserve">
-    <value>Informationen</value>
+    <value>Eigenschaften</value>
   </data>
   <data name="Copy to Other Panel" xml:space="preserve">
     <value>In anderen Bereich kopieren</value>
@@ -2061,7 +2061,7 @@
     <value>Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.</value>
   </data>
   <data name="Mount and Open in Terminal" xml:space="preserve">
-    <value>Einbinden und im Terminal öffnen</value>
+    <value>Als Netzlaufwerk verbinden und im Terminal öffnen</value>
   </data>
   <data name="A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." xml:space="preserve">
     <value>Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin.</value>
@@ -2097,28 +2097,28 @@
     <value>Windows hat das Verschieben von {0} in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners ({1}) keine Änderungen erlauben.</value>
   </data>
   <data name="Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." xml:space="preserve">
-    <value>Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl, füge ihn im Terminal ein und gib dein Passwort ein.</value>
+    <value>Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl und führe ihn in einem Terminal aus, das du als Administrator geöffnet hast.</value>
   </data>
   <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." xml:space="preserve">
-    <value>Du darfst den Ordner, in dem {0} liegt ({1}), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Ablage → Informationen ändern.</value>
+    <value>Du darfst den Ordner, in dem {0} liegt ({1}), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Eigenschaften → Sicherheit ändern.</value>
   </data>
   <data name="macOS refused to let FileFluss move {0} to the Trash. If FileFluss doesn&apos;t have Full Disk Access yet, granting it in System Settings → Privacy &amp; Security may help; FileFluss has to be restarted afterwards. If Finder can&apos;t move it to the Trash either, the cause lies outside FileFluss." xml:space="preserve">
-    <value>Windows hat FileFluss das Verschieben von {0} in den Papierkorb verweigert. Falls FileFluss noch keinen Festplattenvollzugriff hat, kann es helfen, ihn unter Systemeinstellungen → Datenschutz &amp; Sicherheit zu erteilen; danach muss FileFluss neu gestartet werden. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss.</value>
+    <value>Windows hat FileFluss das Verschieben von {0} in den Papierkorb verweigert. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss.</value>
   </data>
   <data name="The files pass through this Mac on the way: that needs {0} on {1}, which has {2} free. The folder they pass through is set in Settings → Storage." xml:space="preserve">
-    <value>Die Dateien laufen unterwegs über diesen Mac: Dafür werden {0} auf {1} benötigt, dort sind {2} frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen.</value>
+    <value>Die Dateien laufen unterwegs über diesen PC: Dafür werden {0} auf {1} benötigt, dort sind {2} frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen.</value>
   </data>
   <data name="The files pass through this Mac on the way between the two accounts: that needs {0} on {1}, which has {2} free. Free up space, or choose another folder in Settings → Storage." xml:space="preserve">
-    <value>Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen Mac: Dafür werden {0} auf {1} benötigt, dort sind {2} frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner.</value>
+    <value>Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen PC: Dafür werden {0} auf {1} benötigt, dort sind {2} frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner.</value>
   </data>
   <data name="The files pass through this Mac: {0} doesn&apos;t have room for that." xml:space="preserve">
-    <value>Die Dateien laufen über diesen Mac: Auf {0} ist dafür kein Platz.</value>
+    <value>Die Dateien laufen über diesen PC: Auf {0} ist dafür kein Platz.</value>
   </data>
   <data name="Continue anyway?" xml:space="preserve">
     <value>Trotzdem fortfahren?</value>
   </data>
   <data name="Needs on this Mac:" xml:space="preserve">
-    <value>Benötigt auf diesem Mac:</value>
+    <value>Benötigt auf diesem PC:</value>
   </data>
   <data name="free space unknown" xml:space="preserve">
     <value>freier Speicher unbekannt</value>
@@ -2148,10 +2148,10 @@
     <value>Deine Änderungen wurden behalten, aber nicht hochgeladen</value>
   </data>
   <data name="Show in Finder" xml:space="preserve">
-    <value>Im Explorer zeigen</value>
+    <value>Im Explorer anzeigen</value>
   </data>
   <data name="“{0}” was changed on this Mac after FileFluss opened it. FileFluss doesn&apos;t upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." xml:space="preserve">
-    <value>„{0}“ wurde auf diesem Mac geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten das Konto im Explorer einbinden.</value>
+    <value>„{0}“ wurde auf diesem PC geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten verbinde das Konto als Netzlaufwerk.</value>
   </data>
   <data name=" and " xml:space="preserve">
     <value> und </value>
@@ -2196,7 +2196,7 @@
     <value>Analysieren</value>
   </data>
   <data name="Analyse any folder on this Mac" xml:space="preserve">
-    <value>Beliebigen Ordner auf diesem Mac analysieren</value>
+    <value>Einen beliebigen Ordner auf diesem PC analysieren</value>
   </data>
   <data name="Anyone with this link can download the file until it expires. The link cannot be revoked early." xml:space="preserve">
     <value>Jeder mit diesem Link kann die Datei herunterladen, bis er abläuft. Der Link kann nicht vorzeitig widerrufen werden.</value>
@@ -2553,7 +2553,7 @@
     <value>Nach Fenster {0} entpacken</value>
   </data>
   <data name="Show Archive in Finder" xml:space="preserve">
-    <value>Archiv im Explorer zeigen</value>
+    <value>Archiv im Explorer anzeigen</value>
   </data>
   <data name="The archive could not be read: {0}" xml:space="preserve">
     <value>Das Archiv konnte nicht gelesen werden: {0}</value>
@@ -2610,7 +2610,7 @@
     <value>Laden und installieren</value>
   </data>
   <data name="FileFluss can download RAR {0} for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.&#10;&#10;RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." xml:space="preserve">
-    <value>FileFluss kann RAR {0} für Windows von rarlab.com laden (unter 1 MB), es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Ein Administratorpasswort ist nicht nötig.
+    <value>FileFluss kann RAR {0} für Windows von rarlab.com laden, es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Administratorrechte sind nicht nötig.
 
 RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden.</value>
   </data>
@@ -2672,7 +2672,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Drime-Token-Einstellungen öffnen</value>
   </data>
   <data name="Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." xml:space="preserve">
-    <value>Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird in deinem Schlüsselbund gespeichert.</value>
+    <value>Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt.</value>
   </data>
   <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
     <value>Um Drime mit einem anderen Token oder Konto zu verbinden, entferne dieses Konto und füge es erneut hinzu.</value>
@@ -2987,16 +2987,16 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Die lokale Adresse für die Einbindung konnte nicht erstellt werden.</value>
   </data>
   <data name="Could not mount in Finder: {0}" xml:space="preserve">
-    <value>Einbinden im Explorer fehlgeschlagen: {0}</value>
+    <value>Konnte nicht als Netzlaufwerk verbunden werden: {0}</value>
   </data>
   <data name="the mount needed credentials (errno {0}). The internal server asks for none, so this shouldn&apos;t happen — please report it." xml:space="preserve">
     <value>die Einbindung verlangte Anmeldedaten (errno {0}). Der interne Server fragt nach keinen, das sollte also nicht passieren – bitte melde es.</value>
   </data>
   <data name="macOS and the internal server couldn&apos;t agree on an authentication method (NetFS status {0}). Please report it." xml:space="preserve">
-    <value>Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (NetFS-Status {0}). Bitte melde es.</value>
+    <value>Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (Status {0}). Bitte melde es.</value>
   </data>
   <data name="macOS found nothing to mount at the internal server (NetFS status {0})." xml:space="preserve">
-    <value>Windows hat auf dem internen Server nichts zum Einbinden gefunden (NetFS-Status {0}).</value>
+    <value>Windows hat auf dem internen Server nichts zum Verbinden gefunden (Status {0}).</value>
   </data>
   <data name="The internal WebDAV server didn&apos;t respond with 200 OK to OPTIONS." xml:space="preserve">
     <value>Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet.</value>
@@ -3035,7 +3035,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Lokal</value>
   </data>
   <data name="Reveal “{0}” in Finder" xml:space="preserve">
-    <value>„{0}“ im Explorer zeigen</value>
+    <value>„{0}“ im Explorer anzeigen</value>
   </data>
   <data name="Clear the cache?" xml:space="preserve">
     <value>Cache leeren?</value>
@@ -3068,7 +3068,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Wird ausgeworfen …</value>
   </data>
   <data name="Unmount from Finder" xml:space="preserve">
-    <value>Aus dem Explorer auswerfen</value>
+    <value>Netzlaufwerk trennen</value>
   </data>
   <data name="Mounting…" xml:space="preserve">
     <value>Wird eingebunden …</value>
@@ -3194,10 +3194,10 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>{0}: {1}</value>
   </data>
   <data name="Keychain save failed (OSStatus {0})" xml:space="preserve">
-    <value>Schlüsselbund: Speichern fehlgeschlagen (OSStatus {0})</value>
+    <value>Speichern im Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler {0})</value>
   </data>
   <data name="Keychain delete failed (OSStatus {0})" xml:space="preserve">
-    <value>Schlüsselbund: Löschen fehlgeschlagen (OSStatus {0})</value>
+    <value>Löschen aus dem Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler {0})</value>
   </data>
   <data name="S3-Compatible Storage" xml:space="preserve">
     <value>S3-kompatibler Speicher</value>
@@ -3278,7 +3278,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>PBKDF2-Ableitung fehlgeschlagen (Status={0})</value>
   </data>
   <data name="You&apos;re not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." xml:space="preserve">
-    <value>Du bist auf diesem Mac nicht bei iCloud angemeldet. Öffne Systemeinstellungen → Apple Account → iCloud → iCloud Drive und schalte es ein.</value>
+    <value>Du bist auf diesem PC nicht bei iCloud angemeldet. Öffne iCloud für Windows, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.</value>
   </data>
   <data name="iCloud Drive is enabled, but the CloudDocs folder isn&apos;t available yet. Wait a moment for the system to set it up and try again." xml:space="preserve">
     <value>iCloud Drive ist aktiviert, aber der CloudDocs-Ordner ist noch nicht verfügbar. Warte einen Moment, bis das System ihn eingerichtet hat, und versuche es erneut.</value>
@@ -3368,7 +3368,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Zeitüberschreitung der Verbindung. Prüfe Hostname, Port und dein Netzwerk.</value>
   </data>
   <data name="Network is unreachable from this Mac." xml:space="preserve">
-    <value>Das Netzwerk ist von diesem Mac aus nicht erreichbar.</value>
+    <value>Das Netzwerk ist von diesem PC aus nicht erreichbar.</value>
   </data>
   <data name="Could not resolve hostname. Check spelling or DNS." xml:space="preserve">
     <value>Hostname konnte nicht aufgelöst werden. Prüfe die Schreibweise oder das DNS.</value>
@@ -4082,5 +4082,11 @@ Dem neuen Schlüssel vertrauen?</value>
   </data>
   <data name="Selected: 1 item, {0}" xml:space="preserve">
     <value>Ausgewählt: 1 Objekt, {0}</value>
+  </data>
+  <data name="&quot;{0}&quot; didn&apos;t arrive complete, so the original was kept." xml:space="preserve">
+    <value>„{0}“ ist nicht vollständig angekommen, deshalb wurde das Original behalten.</value>
+  </data>
+  <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
+    <value>Der Download brach nach {0} von {1} Bytes ab.</value>
   </data>
 </root>

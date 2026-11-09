@@ -198,7 +198,7 @@
     <value>結束並重新啟動</value>
   </data>
   <data name="Open System Settings…" xml:space="preserve">
-    <value>打開系統設定…</value>
+    <value>開啟 Windows 設定…</value>
   </data>
   <data name="Welcome to FileFluss" xml:space="preserve">
     <value>歡迎使用 FileFluss</value>
@@ -216,16 +216,16 @@
     <value>或不授予並繼續</value>
   </data>
   <data name="macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." xml:space="preserve">
-    <value>Windows 會對每個受保護的資料夾（桌面、文件、下載……）詢問一次。每個資料夾首次打開可能需要幾秒鐘——但僅限首次。</value>
+    <value>在 Windows 安全性中開啟「受控資料夾存取權」時，Windows 可能會封鎖對受保護資料夾（桌面、文件、下載……）的變更。</value>
   </data>
   <data name="Add FileFluss to Full Disk Access" xml:space="preserve">
     <value>將 FileFluss 加入完全磁碟取用</value>
   </data>
   <data name="System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit &amp; Relaunch** so the new permission takes effect." xml:space="preserve">
-    <value>系統設定已打開。將下方的 FileFluss 圖示拖入**完全磁碟取用**列表，然後按一下**結束並重新啟動**以使新權限生效。</value>
+    <value>Windows 安全性已開啟。在**受控資料夾存取權**下選擇**允許應用程式通過受控資料夾存取權**並新增 FileFluss，然後按一下**結束並重新啟動**以使新權限生效。</value>
   </data>
   <data name="Or click the **+** button in System Settings and pick FileFluss from your Applications folder." xml:space="preserve">
-    <value>或在系統設定中按一下 **+** 按鈕，並從「應用程式」資料夾中選擇 FileFluss。</value>
+    <value>在該處按一下**新增允許的應用程式**，然後從 FileFluss 的安裝資料夾中選擇 FileFluss.exe。</value>
   </data>
   <data name="Drag into the Full Disk Access list" xml:space="preserve">
     <value>拖入完全磁碟取用列表</value>
@@ -252,7 +252,7 @@
     <value>製作副本</value>
   </data>
   <data name="Get Info" xml:space="preserve">
-    <value>顯示簡介</value>
+    <value>內容</value>
   </data>
   <data name="Copy to Other Panel" xml:space="preserve">
     <value>複製到另一面板</value>
@@ -816,10 +816,10 @@
     <value>取消</value>
   </data>
   <data name="What would you like to do with &quot;{0}&quot; in &quot;{1}&quot;?" xml:space="preserve">
-    <value>你想對「{0}」中的「{1}」執行什麼操作？</value>
+    <value>你想對「{1}」中的「{0}」執行什麼操作？</value>
   </data>
   <data name="What would you like to do with {0} items in &quot;{1}&quot;?" xml:space="preserve">
-    <value>你想對「{0}」中的 {1} 個項目執行什麼操作？</value>
+    <value>你想對「{1}」中的 {0} 個項目執行什麼操作？</value>
   </data>
   <data name="Are you sure you want to move &quot;{0}&quot; to the Trash?" xml:space="preserve">
     <value>確定要將「{0}」移到資源回收筒嗎？</value>
@@ -855,10 +855,10 @@
     <value>刪除</value>
   </data>
   <data name="Are you sure you want to delete &quot;{0}&quot; from {1}?" xml:space="preserve">
-    <value>確定要從 {0} 刪除「{1}」嗎？</value>
+    <value>確定要從 {1} 刪除「{0}」嗎？</value>
   </data>
   <data name="Are you sure you want to delete {0} items from {1}?" xml:space="preserve">
-    <value>確定要從 {0} 刪除 {1} 個項目嗎？</value>
+    <value>確定要從 {1} 刪除 {0} 個項目嗎？</value>
   </data>
   <data name="Loading..." xml:space="preserve">
     <value>正在載入…</value>
@@ -2028,7 +2028,7 @@
     <value>請先將此帳戶連線為網路磁碟機——雲端資料夾沒有終端機可以開啟的路徑。</value>
   </data>
   <data name="Mount and Open in Terminal" xml:space="preserve">
-    <value>掛載並在終端機中開啟</value>
+    <value>連線為網路磁碟機並在終端機中開啟</value>
   </data>
   <data name="A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." xml:space="preserve">
     <value>終端機只能開啟這台電腦上存在的資料夾。將此帳戶連線為網路磁碟機後，它會出現在檔案總管中，終端機將在其中開啟。</value>
@@ -2046,7 +2046,7 @@
     <value>停止並儲存……</value>
   </data>
   <data name="FileFluss isn&apos;t allowed to move this to the Trash" xml:space="preserve">
-    <value>FileFluss 無權將其移到垃圾桶</value>
+    <value>FileFluss 無權將其移到資源回收筒</value>
   </data>
   <data name="Open Privacy Settings…" xml:space="preserve">
     <value>打開隱私權設定……</value>
@@ -2055,31 +2055,31 @@
     <value>拷貝修復指令</value>
   </data>
   <data name="Your Trash folder can&apos;t be written to" xml:space="preserve">
-    <value>無法寫入你的垃圾桶檔案夾</value>
+    <value>無法寫入你的資源回收筒</value>
   </data>
   <data name="macOS refused to move {0} to the Trash because the Trash folder ({1}) belongs to the user &quot;{2}&quot; instead of you." xml:space="preserve">
-    <value>Windows 拒絕將 {0} 移到垃圾桶，因為垃圾桶檔案夾（{1}）屬於使用者「{2}」而不是你。</value>
+    <value>Windows 拒絕將 {0} 移到資源回收筒，因為資源回收筒資料夾（{1}）屬於使用者「{2}」而不是你。</value>
   </data>
   <data name="macOS refused to move {0} to the Trash because the permissions of the Trash folder ({1}) don&apos;t allow changes." xml:space="preserve">
-    <value>Windows 拒絕將 {0} 移到垃圾桶，因為垃圾桶檔案夾（{1}）的權限不允許更改。</value>
+    <value>Windows 拒絕將 {0} 移到資源回收筒，因為資源回收筒資料夾（{1}）的權限不允許變更。</value>
   </data>
   <data name="Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." xml:space="preserve">
-    <value>Explorer 也會遇到相同的問題。若要修復，請拷貝該指令，貼到「終端機」中並輸入你的密碼。</value>
+    <value>檔案總管也會遇到相同的問題。若要修復，請複製該命令，並在以系統管理員身分開啟的終端機中執行。</value>
   </data>
   <data name="You don&apos;t have permission to change the folder {0} is in ({1}), so it can&apos;t be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." xml:space="preserve">
-    <value>你沒有權限更改 {0} 所在的檔案夾（{1}），因此無法將其移到垃圾桶或刪除。該檔案夾的擁有者可以在 Explorer 的「檔案 → 取得資訊」中更改。</value>
+    <value>你沒有權限變更 {0} 所在的資料夾（{1}），因此無法將其移到資源回收筒或刪除。該資料夾的擁有者可以在檔案總管的「內容 → 安全性」中變更。</value>
   </data>
   <data name="macOS refused to let FileFluss move {0} to the Trash. If FileFluss doesn&apos;t have Full Disk Access yet, granting it in System Settings → Privacy &amp; Security may help; FileFluss has to be restarted afterwards. If Finder can&apos;t move it to the Trash either, the cause lies outside FileFluss." xml:space="preserve">
-    <value>Windows 拒絕 FileFluss 將 {0} 移到垃圾桶。如果 FileFluss 尚未獲得「完全取用磁碟」，在「系統設定 → 隱私權與安全性」中授予可能會有幫助，之後需要重新啟動 FileFluss。如果 Explorer 也無法將其移到垃圾桶，則原因不在 FileFluss。</value>
+    <value>Windows 拒絕讓 FileFluss 將 {0} 移到資源回收筒。如果檔案總管也無法將其移到資源回收筒，則原因不在 FileFluss。</value>
   </data>
   <data name="The files pass through this Mac on the way: that needs {0} on {1}, which has {2} free. The folder they pass through is set in Settings → Storage." xml:space="preserve">
-    <value>檔案會途經這台 Mac：這需要 {0} 位於 {1}，而該處僅剩 {2}。中轉檔案夾可在「設定 → 儲存空間」中設定。</value>
+    <value>檔案會途經這台電腦：這需要 {0} 位於 {1}，而該處僅剩 {2}。中轉資料夾可在「設定 → 儲存空間」中設定。</value>
   </data>
   <data name="The files pass through this Mac on the way between the two accounts: that needs {0} on {1}, which has {2} free. Free up space, or choose another folder in Settings → Storage." xml:space="preserve">
-    <value>檔案在兩個帳戶之間會途經這台 Mac：這需要 {0} 位於 {1}，而該處僅剩 {2}。請釋出空間，或在「設定 → 儲存空間」中選擇其他檔案夾。</value>
+    <value>檔案在兩個帳戶之間會途經這台電腦：這需要 {0} 位於 {1}，而該處僅剩 {2}。請釋出空間，或在「設定 → 儲存空間」中選擇其他資料夾。</value>
   </data>
   <data name="The files pass through this Mac: {0} doesn&apos;t have room for that." xml:space="preserve">
-    <value>檔案會途經這台 Mac：{0} 上沒有足夠空間。</value>
+    <value>檔案會途經這台電腦：{0} 上沒有足夠空間。</value>
   </data>
   <data name="Continue anyway?" xml:space="preserve">
     <value>仍要繼續嗎？</value>
@@ -2115,10 +2115,10 @@
     <value>你的變更已保留，但未上傳</value>
   </data>
   <data name="Show in Finder" xml:space="preserve">
-    <value>在 Explorer 中顯示</value>
+    <value>在檔案總管中顯示</value>
   </data>
   <data name="“{0}” was changed on this Mac after FileFluss opened it. FileFluss doesn&apos;t upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." xml:space="preserve">
-    <value>FileFluss 開啟「{0}」之後，該檔案在這台 Mac 上被修改過。FileFluss 尚不會將其他 App 中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請在 Explorer 中掛載該帳戶。</value>
+    <value>FileFluss 開啟「{0}」之後，該檔案在這台電腦上被修改過。FileFluss 尚不會將其他應用程式中的修改上傳回去，因此已保留修改後的副本，並改為開啟帳戶中的版本。若要就地編輯，請將該帳戶連線為網路磁碟機。</value>
   </data>
   <data name=" and " xml:space="preserve">
     <value>和</value>
@@ -2163,7 +2163,7 @@
     <value>分析</value>
   </data>
   <data name="Analyse any folder on this Mac" xml:space="preserve">
-    <value>分析這台 Mac 上的任意檔案夾</value>
+    <value>分析這台電腦上的任意資料夾</value>
   </data>
   <data name="Anyone with this link can download the file until it expires. The link cannot be revoked early." xml:space="preserve">
     <value>在連結到期之前，任何擁有此連結的人都可以下載該檔案。此連結無法提前撤銷。</value>
@@ -2553,7 +2553,7 @@
     <value>解壓縮到{0}面板</value>
   </data>
   <data name="Show Archive in Finder" xml:space="preserve">
-    <value>在 Explorer 中顯示壓縮檔</value>
+    <value>在檔案總管中顯示壓縮檔</value>
   </data>
   <data name="The archive could not be read: {0}" xml:space="preserve">
     <value>無法讀取此壓縮檔：{0}</value>
@@ -2610,7 +2610,7 @@
     <value>下載並安裝</value>
   </data>
   <data name="FileFluss can download RAR {0} for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.&#10;&#10;RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." xml:space="preserve">
-    <value>FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR {0}（不到 1 MB），用已知指紋驗證後放在自己的資料夾中，無需管理者密碼。
+    <value>FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR {0}，用已知指紋驗證後放在自己的資料夾中，無需系統管理員權限。
 
 RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。</value>
   </data>
@@ -2672,7 +2672,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>開啟 Drime 權杖設定</value>
   </data>
   <data name="Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." xml:space="preserve">
-    <value>請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會儲存在你的鑰匙圈中。</value>
+    <value>請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會加密儲存在 Windows 認證存放區中。</value>
   </data>
   <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
     <value>要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。</value>
@@ -2747,7 +2747,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>來源為空，因此鏡像會刪除目標中的所有內容。請檢查開啟的檔案夾是否正確。</value>
   </data>
   <data name="Yes, delete {0} of the {1} items at the destination." xml:space="preserve">
-    <value>是，刪除目標中 {0} 個項目中的 {1} 個。</value>
+    <value>是，刪除目標中 {1} 個項目中的 {0} 個。</value>
   </data>
   <data name="“{0}” can&apos;t replace a folder it&apos;s inside." xml:space="preserve">
     <value>「{0}」無法取代包含它自身的檔案夾。</value>
@@ -2921,7 +2921,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>無法下載 {0}：{1}</value>
   </data>
   <data name="Failed to move {0} to the Trash: {1}" xml:space="preserve">
-    <value>無法將 {0} 移到垃圾桶：{1}</value>
+    <value>無法將 {0} 移到資源回收筒：{1}</value>
   </data>
   <data name="Failed to move {0}: {1}" xml:space="preserve">
     <value>無法移動 {0}：{1}</value>
@@ -2987,16 +2987,16 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>無法產生本機裝載位址。</value>
   </data>
   <data name="Could not mount in Finder: {0}" xml:space="preserve">
-    <value>無法在 Explorer 中裝載：{0}</value>
+    <value>無法連線為網路磁碟機：{0}</value>
   </data>
   <data name="the mount needed credentials (errno {0}). The internal server asks for none, so this shouldn&apos;t happen — please report it." xml:space="preserve">
     <value>裝載需要憑證（errno {0}）。內部伺服器不要求任何憑證，因此這不應發生——請回報此問題。</value>
   </data>
   <data name="macOS and the internal server couldn&apos;t agree on an authentication method (NetFS status {0}). Please report it." xml:space="preserve">
-    <value>Windows 與內部伺服器無法就認證方式達成一致（NetFS 狀態 {0}）。請回報此問題。</value>
+    <value>Windows 與內部伺服器無法就驗證方式達成一致（狀態 {0}）。請回報此問題。</value>
   </data>
   <data name="macOS found nothing to mount at the internal server (NetFS status {0})." xml:space="preserve">
-    <value>Windows 在內部伺服器上找不到可裝載的內容（NetFS 狀態 {0}）。</value>
+    <value>Windows 在內部伺服器上找不到可連線的內容（狀態 {0}）。</value>
   </data>
   <data name="The internal WebDAV server didn&apos;t respond with 200 OK to OPTIONS." xml:space="preserve">
     <value>內部 WebDAV 伺服器未對 OPTIONS 回應 200 OK。</value>
@@ -3035,7 +3035,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>本機</value>
   </data>
   <data name="Reveal “{0}” in Finder" xml:space="preserve">
-    <value>在 Explorer 中顯示「{0}」</value>
+    <value>在檔案總管中顯示「{0}」</value>
   </data>
   <data name="Clear the cache?" xml:space="preserve">
     <value>要清除快取嗎？</value>
@@ -3068,7 +3068,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>正在退出…</value>
   </data>
   <data name="Unmount from Finder" xml:space="preserve">
-    <value>從 Explorer 中退出</value>
+    <value>中斷網路磁碟機連線</value>
   </data>
   <data name="Mounting…" xml:space="preserve">
     <value>正在裝載…</value>
@@ -3194,10 +3194,10 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>{0}：{1}</value>
   </data>
   <data name="Keychain save failed (OSStatus {0})" xml:space="preserve">
-    <value>鑰匙圈儲存失敗（OSStatus {0}）</value>
+    <value>無法儲存至 Windows 認證存放區（錯誤 {0}）</value>
   </data>
   <data name="Keychain delete failed (OSStatus {0})" xml:space="preserve">
-    <value>鑰匙圈刪除失敗（OSStatus {0}）</value>
+    <value>無法從 Windows 認證存放區刪除（錯誤 {0}）</value>
   </data>
   <data name="S3-Compatible Storage" xml:space="preserve">
     <value>S3 相容儲存空間</value>
@@ -3278,7 +3278,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>PBKDF2 衍生失敗（status={0}）</value>
   </data>
   <data name="You&apos;re not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." xml:space="preserve">
-    <value>你尚未在這台 Mac 上登入 iCloud。打開「系統設定 → Apple 帳戶 → iCloud → iCloud 雲碟」並將其開啟。</value>
+    <value>你尚未在這台電腦上登入 iCloud。請開啟 Windows 版 iCloud，使用你的 Apple 帳戶登入並開啟 iCloud 雲碟。</value>
   </data>
   <data name="iCloud Drive is enabled, but the CloudDocs folder isn&apos;t available yet. Wait a moment for the system to set it up and try again." xml:space="preserve">
     <value>iCloud 雲碟已啟用，但 CloudDocs 資料夾尚無法使用。請稍候，等系統完成設定後再試。</value>
@@ -3368,7 +3368,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>連線逾時。請檢查主機名稱、連接埠和你的網路。</value>
   </data>
   <data name="Network is unreachable from this Mac." xml:space="preserve">
-    <value>無法從這台 Mac 存取網路。</value>
+    <value>無法從這台電腦存取網路。</value>
   </data>
   <data name="Could not resolve hostname. Check spelling or DNS." xml:space="preserve">
     <value>無法解析主機名稱。請檢查拼字或 DNS。</value>
@@ -4082,5 +4082,11 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   </data>
   <data name="Selected: 1 item, {0}" xml:space="preserve">
     <value>已選擇 1 個項目，{0}</value>
+  </data>
+  <data name="&quot;{0}&quot; didn&apos;t arrive complete, so the original was kept." xml:space="preserve">
+    <value>「{0}」未完整送達目的地，因此已保留原始檔案。</value>
+  </data>
+  <data name="The download ended after {0} of {1} bytes." xml:space="preserve">
+    <value>下載在 {0} 個位元組（共 {1} 個位元組）處中斷。</value>
   </data>
 </root>

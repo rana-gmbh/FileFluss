@@ -570,3 +570,48 @@
 "%@ files, 1 folder — %@" = "%@ files, 1 folder — %@";
 "Selected: 1 item, calculating…" = "Selected: 1 item, calculating…";
 "Selected: 1 item, %@" = "Selected: 1 item, %@";
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of the macOS 1.6 strings: Trash → Recycle Bin, Finder → Explorer, Keychain → the
+   Windows credential store (DPAPI, not Credential Manager), "this Mac" → "this PC". Several of
+   them belong to macOS-only features (Full Disk Access, NetFS); they get Windows wording anyway
+   so nothing Mac-specific can surface if a feature is ported.
+   --------------------------------------------------------------------------------------------- */
+
+"Open System Settings…" = "Open Windows Settings…";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "Windows may block changes in protected folders (Desktop, Documents, Downloads, …) while Controlled folder access is turned on in Windows Security.";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "Windows Security is now open. Under **Controlled folder access**, choose **Allow an app through Controlled folder access** and add FileFluss — then click **Quit & Relaunch** so the new permission takes effect.";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "Click **Add an allowed app** there and pick FileFluss.exe from the folder FileFluss is installed in.";
+"Get Info" = "Properties";
+"FileFluss isn't allowed to move this to the Trash" = "FileFluss isn't allowed to move this to the Recycle Bin";
+"Your Trash folder can't be written to" = "Your Recycle Bin can't be written to";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "Windows refused to move %@ to the Recycle Bin because the Recycle Bin folder (%@) belongs to the user \"%@\" instead of you.";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "Windows refused to move %@ to the Recycle Bin because the permissions of the Recycle Bin folder (%@) don't allow changes.";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "File Explorer runs into the same problem. To repair it, copy the command and run it in a terminal opened as administrator.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security.";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "Windows refused to let FileFluss move %@ to the Recycle Bin. If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss.";
+"Failed to move %@ to the Trash: %@" = "Failed to move %@ to the Recycle Bin: %@";
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "The files pass through this PC on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "The files pass through this PC on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.";
+"The files pass through this Mac: %@ doesn't have room for that." = "The files pass through this PC: %@ doesn't have room for that.";
+"Needs on this Mac:" = "Needs on this PC:";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "“%@” was changed on this PC after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, map the account as a network drive.";
+"Analyse any folder on this Mac" = "Analyse any folder on this PC";
+"Network is unreachable from this Mac." = "Network is unreachable from this PC.";
+"You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." = "You're not signed into iCloud on this PC. Open iCloud for Windows, sign in with your Apple Account and turn on iCloud Drive.";
+"Show in Finder" = "Show in Explorer";
+"Show Archive in Finder" = "Show Archive in Explorer";
+"Reveal “%@” in Finder" = "Show “%@” in Explorer";
+"Could not mount in Finder: %@" = "Could not map as a network drive: %@";
+"Unmount from Finder" = "Disconnect Network Drive";
+"Mount and Open in Terminal" = "Map as Network Drive and Open in Terminal";
+"macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it." = "Windows and the internal server couldn't agree on an authentication method (status %d). Please report it.";
+"macOS found nothing to mount at the internal server (NetFS status %d)." = "Windows found nothing to map at the internal server (status %d).";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored encrypted in the Windows credential store.";
+"Keychain save failed (OSStatus %d)" = "Couldn't save to the Windows credential store (error %d)";
+"Keychain delete failed (OSStatus %d)" = "Couldn't delete from the Windows credential store (error %d)";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss can download RAR %@ for Windows from rarlab.com, check it against a known fingerprint, and keep it in its own folder. No administrator rights are needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.";
+
+/* Transfers: a move whose copy failed verification, and a download cut short. */
+"\"%@\" didn't arrive complete, so the original was kept." = "\"%@\" didn't arrive complete, so the original was kept.";
+"The download ended after %@ of %@ bytes." = "The download ended after %@ of %@ bytes.";
