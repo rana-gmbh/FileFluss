@@ -531,6 +531,30 @@ public sealed class ArchiveTests : IDisposable
     }
 
     [Fact]
+    public async Task SevenZipEntriesComeOutOneByOneAndAllAtOnce()
+    {
+        var folder = Dir("7z-source");
+        for (var i = 0; i < 5; i++)
+        {
+            File.WriteAllText(Path.Combine(folder, $"file{i}.txt"), new string((char)('a' + i), 1000 + i));
+        }
+
+        var names = Enumerable.Range(0, 5).Select(i => $"file{i}.txt").ToList();
+        var archive = await ArchiveWriter.CreateAsync(folder, names, "set.7z", ArchiveCreationFormat.SevenZip);
+        var provider = new ArchiveProvider(archive, ArchiveFormat.SevenZip, "set.7z");
+
+        var target = Path.Combine(_root, "file3.txt");
+        await provider.DownloadFileAsync("/file3.txt", target);
+        Assert.Equal(new string('d', 1003), File.ReadAllText(target));
+
+        var items = await provider.ListDirectoryAsync("/");
+        await provider.PrepareForTransferAsync(items);
+        var staged = await provider.MaterializeAsync(["/file4.txt"]);
+        Assert.Equal(new string('e', 1004), File.ReadAllText(staged[0]));
+        provider.Release();
+    }
+
+    [Fact]
     public async Task MaterializeUnpacksFoldersAndReusesWhatIsUnpacked()
     {
         var archive = Zip("mat.zip", ("folder/x.txt", "x"), ("folder/y/z.txt", "z"), ("solo.txt", "s"));

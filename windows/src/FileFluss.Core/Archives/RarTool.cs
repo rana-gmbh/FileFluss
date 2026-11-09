@@ -149,10 +149,14 @@ public static class RarTool
     {
         try
         {
+            // Read front to back: RARLAB's installers are solid, and a solid archive's entries
+            // can only be reached through the ones before them.
             using var archive = RarArchive.OpenArchive(installer, new ReaderOptions { LookForHeader = true });
-            foreach (var entry in archive.Entries)
+            using var reader = archive.ExtractAllEntries();
+            while (reader.MoveToNextEntry())
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var entry = reader.Entry;
                 if (entry.IsDirectory || entry.Key is not { } key)
                 {
                     continue;
@@ -165,7 +169,7 @@ public static class RarTool
                     continue;
                 }
 
-                using var data = entry.OpenEntryStream();
+                using var data = reader.OpenEntryStream();
                 using var output = File.Create(Path.Combine(destination, name));
                 data.CopyTo(output);
             }

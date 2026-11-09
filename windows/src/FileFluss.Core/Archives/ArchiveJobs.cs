@@ -181,6 +181,10 @@ public static class ArchiveJobs
                 await source.DownloadFileAsync(archive.Path, requested, d => { Interlocked.Add(ref reported, d); progress.AddDownloadBytes(d); }, ct).ConfigureAwait(false);
                 progress.TopUp(false, reported, archive.Size);
                 localArchive = DownloadedFile.Locate(requested);
+
+                // It came off someone's server: what is unpacked from it carries the mark of the
+                // web too (macOS carries the quarantine flag the same way).
+                MarkOfTheWeb.Apply(localArchive);
             }
 
             // Phase 2: unpack — straight into a local destination, into staging for a cloud one.
