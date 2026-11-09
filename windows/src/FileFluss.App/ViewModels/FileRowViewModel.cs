@@ -166,6 +166,11 @@ public sealed class FileRowViewModel : Observable
 
     private string ComputeKind()
     {
+        if (Item.KindOverride is { } kind)
+        {
+            return kind;
+        }
+
         if (IsDrive)
         {
             return L("Drive");

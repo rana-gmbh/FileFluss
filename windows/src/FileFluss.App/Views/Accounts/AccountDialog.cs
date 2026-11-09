@@ -107,6 +107,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
                      (ProviderCategory.CloudStorage, "Cloud Storage Providers"),
                      (ProviderCategory.Nas, "NAS"),
                      (ProviderCategory.OtherProtocols, "Other Protocols"),
+                     (ProviderCategory.CodeHosting, "Code Hosting"),
                      (ProviderCategory.Devices, "Cameras & Devices"),
                  })
         {

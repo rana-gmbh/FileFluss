@@ -38,6 +38,8 @@ public enum CloudProviderType
     [JsonStringEnumMemberName("jottacloud")] Jottacloud,
     [JsonStringEnumMemberName("googleDrivePicker")] GoogleDrivePicker,
     [JsonStringEnumMemberName("gopro")] GoPro,
+    [JsonStringEnumMemberName("github")] GitHub,
+    [JsonStringEnumMemberName("drime")] Drime,
     [JsonStringEnumMemberName("qnap")] Qnap,
     [JsonStringEnumMemberName("ugreen")] Ugreen,
     [JsonStringEnumMemberName("asustor")] Asustor,
@@ -48,6 +50,9 @@ public enum ProviderCategory
 {
     CloudStorage,
     OtherProtocols,
+    /// <summary>Source-code hosts: browsed and copied out of, never written back to.</summary>
+    CodeHosting,
+
     Devices,
 
     /// <summary>Network storage boxes on the user's own network, signed in to with a NAS account.</summary>
@@ -85,6 +90,8 @@ public static class CloudProviderTypeExtensions
         CloudProviderType.Jottacloud => "Jottacloud",
         CloudProviderType.GoogleDrivePicker => "Google Drive (Selected Folders)",
         CloudProviderType.GoPro => "GoPro Camera",
+        CloudProviderType.GitHub => "GitHub",
+        CloudProviderType.Drime => "Drime",
         CloudProviderType.Qnap => "QNAP",
         CloudProviderType.Ugreen => "UGREEN NAS",
         CloudProviderType.Asustor => "ASUSTOR",
@@ -93,9 +100,18 @@ public static class CloudProviderTypeExtensions
 
     /// <summary>
     /// Import-only: media can be browsed, downloaded and deleted, but nothing can be created,
-    /// renamed or uploaded. Hides the write affordances for a GoPro camera.
+    /// renamed or uploaded. Hides the write affordances for a GoPro camera and a GitHub account.
     /// </summary>
-    public static bool IsReadOnly(this CloudProviderType type) => type == CloudProviderType.GoPro;
+    public static bool IsReadOnly(this CloudProviderType type) => type is CloudProviderType.GoPro or CloudProviderType.GitHub;
+
+    /// <summary>
+    /// Whether items may be deleted from FileFluss. <see cref="IsReadOnly"/> deliberately still
+    /// allows it — a GoPro is an import source you clear down after copying the footage off.
+    /// A GitHub account is not: the only thing a delete could mean there is deleting a
+    /// repository or rewriting a branch, so the affordance is withheld rather than offered
+    /// and then refused.
+    /// </summary>
+    public static bool AllowsDeletion(this CloudProviderType type) => type != CloudProviderType.GitHub;
 
     /// <summary>WordPress' media library has no folders, and read-only devices have no writes.</summary>
     public static bool CanCreateFolders(this CloudProviderType type)
@@ -121,6 +137,7 @@ public static class CloudProviderTypeExtensions
             CloudProviderType.Sftp or CloudProviderType.WebDav or
             CloudProviderType.WordPress => ProviderCategory.OtherProtocols,
         CloudProviderType.GoPro => ProviderCategory.Devices,
+        CloudProviderType.GitHub => ProviderCategory.CodeHosting,
         CloudProviderType.SynologyDrive or CloudProviderType.Qnap or CloudProviderType.Ugreen or
             CloudProviderType.Asustor => ProviderCategory.Nas,
         _ => ProviderCategory.CloudStorage,
