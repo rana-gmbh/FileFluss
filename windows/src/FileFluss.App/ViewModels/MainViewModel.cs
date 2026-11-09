@@ -640,17 +640,27 @@ public sealed class MainViewModel : Observable
             return;
         }
 
-        var dispatcher = Application.Current.Dispatcher;
         var request = new TransferRequest(source, items, target, destination.Path, isMove)
         {
-            // Asked from the transfer's thread. Once FileFluss is closing there is nobody to
-            // ask (and no window to own the question): stop instead of waiting forever.
-            ResolveConflict = (conflict, _) => dispatcher.HasShutdownStarted
-                ? Task.FromResult(new ConflictResolution(ConflictChoice.Stop, false))
-                : dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict)).Task,
+            // One question at a time across every running transfer, in the order asked; a
+            // cancelled transfer's question is withdrawn or closed (macOS 1.6 ConflictPrompter).
+            ResolveConflict = Conflicts.AskAsync,
         };
         _services.Transfers.Start(request, panel, _ => RefreshAfterTransfer(source, destination));
     }
+
+    private ConflictPrompter? _conflicts;
+
+    /// <summary>The app's one conflict question, shared by every transfer started here.</summary>
+    private ConflictPrompter Conflicts => _conflicts ??= new ConflictPrompter((conflict, ct) =>
+    {
+        // Asked from the transfer's thread. Once FileFluss is closing there is nobody to
+        // ask (and no window to own the question): stop instead of waiting forever.
+        var dispatcher = Application.Current.Dispatcher;
+        return dispatcher.HasShutdownStarted
+            ? Task.FromResult(new ConflictResolution(ConflictChoice.Stop, false))
+            : dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict, ct)).Task;
+    });
 
     private readonly List<CancellationTokenSource> _spaceChecks = [];
 
