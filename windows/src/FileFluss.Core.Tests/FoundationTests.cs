@@ -233,6 +233,41 @@ public class LocalFileProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task AFolderShutToThisUserSaysSoInsteadOfListingEmpty()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var shut = new DirectoryInfo(Path.Combine(_root, "shut"));
+        shut.Create();
+        File.WriteAllText(Path.Combine(shut.FullName, "inside.txt"), "x");
+        var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(user, System.Security.AccessControl.FileSystemRights.ListDirectory, System.Security.AccessControl.AccessControlType.Deny);
+        var security = shut.GetAccessControl();
+        security.AddAccessRule(deny);
+        shut.SetAccessControl(security);
+        try
+        {
+            var failure = await Assert.ThrowsAsync<CloudProviderException>(() => _provider.ListDirectoryAsync(shut.FullName));
+            Assert.Contains("shut", failure.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            security.RemoveAccessRule(deny);
+            shut.SetAccessControl(security);
+        }
+    }
+
+    [Fact]
+    public async Task AnEmptyFolderStillListsEmpty()
+    {
+        var empty = Directory.CreateDirectory(Path.Combine(_root, "empty")).FullName;
+        Assert.Empty(await _provider.ListDirectoryAsync(empty));
+    }
+
+    [Fact]
     public async Task ThisPcListsDrives()
     {
         var drives = await _provider.ListDirectoryAsync(string.Empty);

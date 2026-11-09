@@ -534,8 +534,12 @@ public sealed class PanelViewModel : Observable
         await LoadAsync(select, quiet: false);
     }
 
+    /// <summary>
+    /// Lists the folder on screen again. The selection kept is the one when the new listing
+    /// arrives, not when it was asked for: on a slow share the user may have moved on meanwhile.
+    /// </summary>
     public async Task RefreshAsync(bool quiet = false)
-        => await LoadAsync(_selection.Select(r => r.Name).ToList(), quiet);
+        => await LoadAsync(null, quiet);
 
     public Task GoUpAsync()
     {
@@ -598,7 +602,8 @@ public sealed class PanelViewModel : Observable
 
     // MARK: - Loading
 
-    private async Task LoadAsync(IReadOnlyCollection<string> select, bool quiet)
+    /// <param name="select">Names to select once listed; null keeps whatever is selected when the listing arrives.</param>
+    private async Task LoadAsync(IReadOnlyCollection<string>? select, bool quiet)
     {
         var generation = ++_loadGeneration;
         _loadCancellation?.Cancel();
@@ -648,6 +653,8 @@ public sealed class PanelViewModel : Observable
                 return;
             }
 
+            // Read before the rows are swapped: the list clears its selection when they are.
+            select ??= _selection.Select(r => r.Name).ToList();
             _viewGeneration++;
             _allRows = rows;
             (_sortedRows, _sortedField, _sortedFolderCount) = (sorted, field, folderCount);
@@ -1000,6 +1007,22 @@ public sealed class PanelViewModel : Observable
             watcher.Deleted += changed;
             watcher.Changed += changed;
             watcher.Renamed += (_, _) => OnWatcherEvent();
+
+            // Too many changes at once (its buffer overflowed), or the folder itself went away
+            // or its share dropped: the watcher has missed changes or stopped. List again, and
+            // watch afresh — a folder that is gone then shows why instead of going stale.
+            watcher.Error += (_, e) =>
+            {
+                SupportLogger.Shared.Log($"Folder watch interrupted: {e.GetException().Message}", "Panel", LogLevel.Notice);
+                Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (ReferenceEquals(_watcher, watcher))
+                    {
+                        Watch();
+                        _ = RefreshAsync(quiet: true);
+                    }
+                }, DispatcherPriority.Background);
+            };
             watcher.EnableRaisingEvents = true;
             return watcher;
         }

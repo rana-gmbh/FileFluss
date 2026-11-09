@@ -167,8 +167,39 @@ public sealed class LocalFileProvider : FileProvider
                 throw CloudProviderException.CommandFailed(Localization.L("You don't have permission to open \"{0}\".", GetName(path)));
             }
 
+            // Skipping what can't be read hides the folder itself being shut too: a folder of
+            // another user's, or System Volume Information, listed as "Empty Folder". Asked
+            // only when nothing came back, so an ordinary listing costs nothing extra.
+            if (items.Count == 0)
+            {
+                ThrowIfUnreadable(path);
+            }
+
             return items;
         }, cancellationToken);
+
+    /// <summary>Opens the folder for listing without skipping a refusal, and turns one into a message the panel shows.</summary>
+    private void ThrowIfUnreadable(string path)
+    {
+        try
+        {
+            using var probe = Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions { IgnoreInaccessible = false, AttributesToSkip = 0 }).GetEnumerator();
+            _ = probe.MoveNext();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw CloudProviderException.CommandFailed(Localization.L("You don't have permission to open \"{0}\".", GetName(path)));
+        }
+        catch (DirectoryNotFoundException)
+        {
+            throw CloudProviderException.NotFound(path);
+        }
+        catch (IOException e)
+        {
+            // A drive or share gone mid-listing, a device not ready.
+            throw CloudProviderException.CommandFailed(e.Message, e);
+        }
+    }
 
     private static List<CloudFileItem> ListDrives()
     {
