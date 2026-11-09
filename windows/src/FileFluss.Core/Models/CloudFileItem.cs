@@ -76,6 +76,13 @@ public sealed record CloudFileItem
 
     public CloudItemRole Role { get; init; } = CloudItemRole.Normal;
 
+    /// <summary>
+    /// Replaces the Kind column's text derived from the extension. Providers whose items
+    /// aren't ordinary files say what a row actually is — a GitHub account labels a
+    /// repository private or public there, the one thing its overview has to make obvious.
+    /// </summary>
+    public string? KindOverride { get; init; }
+
     /// <summary>Known for local files and a few providers; <see cref="UnknownDate"/> otherwise.</summary>
     public DateTimeOffset CreationDate { get; init; } = UnknownDate;
 

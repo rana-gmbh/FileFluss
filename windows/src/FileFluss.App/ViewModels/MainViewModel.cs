@@ -1051,7 +1051,8 @@ public sealed class MainViewModel : Observable
     public async Task DeleteSelectionAsync(PanelViewModel panel)
     {
         var rows = panel.Selection.Where(r => r.Item.IsModifiable).ToList();
-        if (rows.Count == 0 || panel.Provider is not { } provider || panel.IsReadOnly && !(panel.Account?.ProviderType.IsReadOnly() ?? false))
+        if (rows.Count == 0 || panel.Provider is not { } provider || panel.IsReadOnly && !(panel.Account?.ProviderType.IsReadOnly() ?? false)
+            || !(panel.Account?.ProviderType.AllowsDeletion() ?? true))
         {
             return;
         }
