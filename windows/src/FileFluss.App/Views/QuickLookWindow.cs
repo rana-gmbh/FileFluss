@@ -160,7 +160,17 @@ public sealed class QuickLookWindow : Window
         Title = item.Name;
         _caption.Text = $"{item.Name}  ·  {ByteFormatter.Format(item.Size)}  ·  {row.DateText}";
         string? path = item.Path;
-        if (!_panel.IsLocal)
+        if (_panel.Archive is { } archive)
+        {
+            // Nothing inside an archive exists on disk yet: just this entry is unpacked.
+            ShowFacts(row, L("Loading preview…"));
+            path = await _main.PreviewArchiveEntryAsync(archive, item);
+            if (cts.IsCancellationRequested || _closed)
+            {
+                return;
+            }
+        }
+        else if (!_panel.IsLocal)
         {
             ShowFacts(row, L("Loading preview…"));
             path = await _main.OpenCloudFileAsync(_panel, item, launch: false);

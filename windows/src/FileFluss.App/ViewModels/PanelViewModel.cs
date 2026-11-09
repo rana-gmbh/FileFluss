@@ -121,6 +121,12 @@ public sealed class PanelViewModel : Observable
 
     public bool IsLocal => _location.IsLocal;
 
+    /// <summary>Inside an archive (browsed like a folder, read-only).</summary>
+    public bool IsArchive => _location.IsArchive;
+
+    /// <summary>The open archive, while the panel is inside one.</summary>
+    public Core.Archives.ArchiveProvider? Archive => _provider as Core.Archives.ArchiveProvider;
+
     /// <summary>Showing an offline account or an unplugged drive from the search index.</summary>
     public bool IsOffline => _provider is Core.Search.OfflineIndexProvider;
 
@@ -151,8 +157,8 @@ public sealed class PanelViewModel : Observable
 
     public string CurrentPath => _location.Path;
 
-    /// <summary>Read-only: a camera, a source that is offline.</summary>
-    public bool IsReadOnly => IsOffline || _location.IsOfflineDrive || (Account is { } account && (account.ProviderType.IsReadOnly() || account.IsEffectivelyOffline));
+    /// <summary>Read-only: a camera, a source that is offline, the inside of an archive.</summary>
+    public bool IsReadOnly => IsOffline || _location.IsOfflineDrive || _location.IsArchive || (Account is { } account && (account.ProviderType.IsReadOnly() || account.IsEffectivelyOffline));
 
     public bool CanCreateFolders => IsLocal ? CurrentPath.Length > 0 : Account?.ProviderType.CanCreateFolders() == true && !IsReadOnly;
 
@@ -160,6 +166,7 @@ public sealed class PanelViewModel : Observable
     public string Title => _provider is null ? string.Empty
         : IsCloud && _provider.IsRoot(CurrentPath) ? Account?.DisplayName ?? string.Empty
         : _location.IsOfflineDrive && _provider.IsRoot(CurrentPath) ? OfflineDriveName
+        : _location.IsArchive && _provider.IsRoot(CurrentPath) ? _location.ArchiveName
         : _provider.GetName(CurrentPath);
 
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => BuildBreadcrumbs();
@@ -463,7 +470,7 @@ public sealed class PanelViewModel : Observable
 
     public bool CanGoForward => _historyIndex >= 0 && _historyIndex < _history.Count - 1;
 
-    public bool CanGoUp => _provider is not null && !_provider.IsRoot(CurrentPath);
+    public bool CanGoUp => _provider is not null && (!_provider.IsRoot(CurrentPath) || _location.IsArchive);
 
     // MARK: - Navigation
 
@@ -487,6 +494,8 @@ public sealed class PanelViewModel : Observable
         _provider = provider;
         if (changed)
         {
+            // An archive no panel shows any more lets go of what it unpacked.
+            _services.Archives.Show(this, location);
             if (addToHistory)
             {
                 if (_historyIndex < _history.Count - 1)
@@ -543,6 +552,12 @@ public sealed class PanelViewModel : Observable
 
     public Task GoUpAsync()
     {
+        if (_location.IsArchive && (_provider is null || _provider.IsRoot(CurrentPath)))
+        {
+            // Out of the archive's root: back to its folder, with the archive selected.
+            return NavigateCoreAsync(_location.ArchiveContainer!, addToHistory: true, [_location.ArchiveName]);
+        }
+
         if (_provider is null || _provider.IsRoot(CurrentPath))
         {
             return Task.CompletedTask;
@@ -1072,11 +1087,12 @@ public sealed class PanelViewModel : Observable
 
     private List<BreadcrumbSegment> BuildBreadcrumbs()
     {
-        var segments = new List<(string Title, PanelLocation Location)>();
-        if (_location.IsOfflineDrive)
+        // Inside an archive: the folder it sits in, then the archive, then the folders in it —
+        // so every crumb is somewhere the panel can go.
+        var segments = CrumbsFor(_location.ArchiveContainer ?? _location);
+        if (_location.IsArchive)
         {
-            var root = _location with { Path = "/" };
-            segments.Add((OfflineDriveName, root));
+            segments.Add((_location.ArchiveName, _location with { Path = "/" }));
             var accumulated = "/";
             foreach (var part in Core.IO.CloudPath.Components(CurrentPath))
             {
@@ -1084,12 +1100,30 @@ public sealed class PanelViewModel : Observable
                 segments.Add((part, _location with { Path = accumulated }));
             }
         }
-        else         if (IsCloud)
+
+        return segments.Select((s, i) => new BreadcrumbSegment(s.Title, s.Location, i == segments.Count - 1)).ToList();
+    }
+
+    private List<(string Title, PanelLocation Location)> CrumbsFor(PanelLocation location)
+    {
+        var segments = new List<(string Title, PanelLocation Location)>();
+        if (location.IsOfflineDrive)
         {
-            var account = Account;
+            var root = location with { Path = "/" };
+            segments.Add((OfflineDriveName, root));
+            var accumulated = "/";
+            foreach (var part in Core.IO.CloudPath.Components(location.Path))
+            {
+                accumulated = Core.IO.CloudPath.Combine(accumulated, part);
+                segments.Add((part, location with { Path = accumulated }));
+            }
+        }
+        else if (location.IsCloud)
+        {
+            var account = _services.Accounts.Find(location.AccountId!.Value);
             var root = account?.EffectiveRootPath ?? "/";
-            segments.Add((account?.DisplayName ?? L("Cloud"), _location with { Path = root }));
-            var path = CurrentPath;
+            segments.Add((account?.DisplayName ?? L("Cloud"), location with { Path = root }));
+            var path = location.Path;
             if (Core.IO.CloudPath.IsWithin(path, root) && Core.IO.CloudPath.Normalize(path) != Core.IO.CloudPath.Normalize(root))
             {
                 var relative = Core.IO.CloudPath.Normalize(path)[Core.IO.CloudPath.Normalize(root).TrimEnd('/').Length..];
@@ -1097,7 +1131,7 @@ public sealed class PanelViewModel : Observable
                 foreach (var part in relative.Split('/', StringSplitOptions.RemoveEmptyEntries))
                 {
                     accumulated = Core.IO.CloudPath.Combine(accumulated, part);
-                    segments.Add((part, _location with { Path = accumulated }));
+                    segments.Add((part, location with { Path = accumulated }));
                 }
             }
             else if (Core.IO.CloudPath.Normalize(path) != Core.IO.CloudPath.Normalize(root))
@@ -1106,14 +1140,14 @@ public sealed class PanelViewModel : Observable
                 foreach (var part in Core.IO.CloudPath.Components(path))
                 {
                     accumulated = Core.IO.CloudPath.Combine(accumulated, part);
-                    segments.Add((part, _location with { Path = accumulated }));
+                    segments.Add((part, location with { Path = accumulated }));
                 }
             }
         }
         else
         {
             segments.Add((L("This PC"), PanelLocation.Local(string.Empty)));
-            var path = CurrentPath;
+            var path = location.Path;
             if (path.Length > 0)
             {
                 var chain = new List<string>();
@@ -1134,7 +1168,7 @@ public sealed class PanelViewModel : Observable
             }
         }
 
-        return segments.Select((s, i) => new BreadcrumbSegment(s.Title, s.Location, i == segments.Count - 1)).ToList();
+        return segments;
     }
 
     // MARK: - Helpers for commands

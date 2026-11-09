@@ -2,6 +2,7 @@
 
 using System.IO;
 using FileFluss.App.Services;
+using FileFluss.Core.Archives;
 using FileFluss.Core.Commands;
 using FileFluss.Core.IO;
 using FileFluss.Core.Models;
@@ -31,6 +32,8 @@ public sealed class AppServices
         Keyboard = new KeyboardMap(Settings);
         Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
         Mount = new MountService(SettingsStore, dataDirectory);
+        Archives = new ArchiveSessions();
+        RarTool.InstallDirectory = Path.Combine(dataDirectory, "Tools", "rar");
 
         // Win32 implementations of the operations Core leaves pluggable.
         LocalFileProvider.CopyFileHandler = ShellFileOperations.CopyFileAsync;
@@ -72,12 +75,21 @@ public sealed class AppServices
     /// <summary>Accounts mapped as drives in File Explorer (macOS "Mount in Finder").</summary>
     public MountService Mount { get; }
 
+    /// <summary>The archives open in the panels (browsed like folders, read-only).</summary>
+    public ArchiveSessions Archives { get; }
+
     /// <summary>
     /// What a panel lists for a location: the disk, a connected account — or, for an account in
-    /// offline mode or an unplugged drive, the read-only view of its index.
+    /// offline mode or an unplugged drive, the read-only view of its index — or the inside of
+    /// an archive opened this session.
     /// </summary>
     public FileProvider? ProviderFor(PanelLocation location)
     {
+        if (location.IsArchive)
+        {
+            return Archives.Find(location);
+        }
+
         var account = location.AccountId is { } id ? Accounts.Find(id) : null;
         return Search.OfflineProvider(location, account) ?? Hub.For(location);
     }

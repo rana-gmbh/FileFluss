@@ -95,7 +95,7 @@ internal static class Features
             }
         };
 
-        vm.IndexRequested += (_, location) => IndexLocation(window, services, location);
+        vm.IndexRequested += (_, location) => IndexLocation(window, services, location.ArchiveContainer ?? location);
         search.Indexing.IndexingFinished += (_, e) =>
         {
             if (e.Job.ErrorMessage is { } error && !e.Job.IsCancelled)

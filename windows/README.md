@@ -8,6 +8,7 @@ single source of truth for every shared string.
 |---|---|
 | Panels | Two independent panels (or one), local folders and cloud accounts side by side; copy, move, rename, delete to the Recycle Bin, drag & drop |
 | Cloud accounts | ASUSTOR, Box, Drime, Dropbox, Filen, FTP/FTPS, GitHub (read-only), GMX Cloud, GoPro, Google Drive, iCloud Drive, Internxt, Jottacloud, kDrive, Koofr, MEGA, Nextcloud, OneDrive, pCloud, QNAP, S3 and S3-compatible, Seafile, SFTP, Synology C2 / Drive, TeraBox, UGREEN, WebDAV, WordPress — credentials encrypted with DPAPI |
+| Archives | ZIP, RAR, 7z and TAR (.tar.gz/.tgz/.tar.bz2/.tar.xz) open in the panel like folders, on this PC and on cloud accounts; preview, open, drag or extract single entries; Extract Here / Extract to the other panel; Compress to ZIP, 7-Zip, TAR.GZ, TAR.BZ2, TAR.XZ (and RAR with RARLAB's rar tool) |
 | Tools | Transfers with details and conflict handling, search across disks and accounts, offline index of drives and accounts (browse and search them while unplugged or offline), compare folders, sync, storage analysis, share links, Quick Look previews |
 | Windows integration | Map any account as a network drive in File Explorer (local WebDAV server), drag and paste cloud files into Explorer, Recycle Bin, shell icons and Properties, Open With, Open in Terminal (Windows Terminal, PowerShell, cmd, Git Bash), Explorer or Commander keyboard layouts, light and dark mode |
 | Languages | English, German, Simplified and Traditional Chinese |
@@ -33,6 +34,22 @@ FileFluss checks for a newer Windows release once a day (Settings → "Check for
 automatically", the same switch as on macOS) and on Help → Check for Updates…. An installed
 copy downloads the new setup, verifies it against the release's `SHA256SUMS.txt` and
 relaunches updated; a portable copy is pointed at the release page.
+
+## Archives
+
+Archives are read with [SharpCompress](https://github.com/adamhathcock/sharpcompress)
+(MIT, pure C#, no native code) and .NET's own tar, GZip and ZIP classes; the macOS app uses
+the system libarchive, which Windows doesn't offer. Windows' own `tar.exe` is used for one
+thing only — compressing a finished tarball to XZ, in its "raw" mode, because nothing
+in-process writes XZ — since it crashes on file names outside the ANSI code page. TAR.XZ is
+hidden from Compress on a system without `tar.exe`. Entries that would land outside their
+folder (`..`, drive letters, alternate data streams, device names) are refused.
+
+RAR archives open out of the box; *creating* one needs RARLAB's `Rar.exe`. FileFluss uses an
+installed WinRAR, or offers to download the WinRAR 7.23 installer from rarlab.com, checks it
+against a pinned SHA-256, and reads `Rar.exe` and its licence out of it into
+`%LOCALAPPDATA%\FileFluss\Tools\rar` — the installer is never run. RAR is 40-day trial
+software from RARLAB.
 
 ## Network drives
 

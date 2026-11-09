@@ -65,7 +65,7 @@ public sealed record FileClipboard(FileProvider Source, PanelLocation SourceFold
 /// which one is active, drag &amp; drop mode, the file clipboard, and every command the menus,
 /// toolbar and keyboard map can trigger.
 /// </summary>
-public sealed class MainViewModel : Observable
+public sealed partial class MainViewModel : Observable
 {
     private readonly AppServices _services;
     private PanelSide _activeSide = PanelSide.Left;
@@ -212,6 +212,11 @@ public sealed class MainViewModel : Observable
 
         async Task RestoreAsync(PanelViewModel panel, PanelLocation? target)
         {
+            if (target is { IsArchive: true })
+            {
+                target = Rememberable(target);
+            }
+
             if (target is null)
             {
                 if (!cloudOnly)
@@ -264,8 +269,8 @@ public sealed class MainViewModel : Observable
         {
             _services.SettingsStore.Batch(s =>
             {
-                s.LastSessionLeft = Left.Location;
-                s.LastSessionRight = Right.Location;
+                s.LastSessionLeft = Rememberable(Left.Location);
+                s.LastSessionRight = Rememberable(Right.Location);
             });
         }
     }
@@ -289,8 +294,9 @@ public sealed class MainViewModel : Observable
             KeyboardCommand.Rename => selected == 1 && !panel.IsReadOnly,
             KeyboardCommand.Duplicate or KeyboardCommand.CutFiles or KeyboardCommand.MoveToOtherPanel or KeyboardCommand.DeleteToTrash
                 => selected > 0 && !panel.IsReadOnly,
-            KeyboardCommand.GetInfo or KeyboardCommand.CopyToOtherPanel or KeyboardCommand.CopyPath or KeyboardCommand.CopyFiles
+            KeyboardCommand.GetInfo or KeyboardCommand.CopyToOtherPanel or KeyboardCommand.CopyPath
                 => selected > 0,
+            KeyboardCommand.CopyFiles => selected > 0 && !panel.IsArchive,
             KeyboardCommand.PasteFiles => !panel.IsReadOnly,
             KeyboardCommand.HistoryBack => panel.CanGoBack,
             KeyboardCommand.HistoryForward => panel.CanGoForward,
@@ -478,6 +484,19 @@ public sealed class MainViewModel : Observable
         {
             await panel.NavigateAsync(panel.Location with { Path = row.Path });
             Shell.FocusPanel(panel.Side);
+            return;
+        }
+
+        // Inside an archive: unpack just that entry and open it. An archive file: open it in
+        // the panel, like a folder, unless it turns out not to be one.
+        if (panel.Archive is { } archive)
+        {
+            await OpenArchiveEntryAsync(panel, archive, row.Item);
+            return;
+        }
+
+        if (Core.Archives.ArchiveFormats.Detect(row.Name) is { } format && await TryOpenArchiveAsync(panel, row.Item, format))
+        {
             return;
         }
 
@@ -803,7 +822,13 @@ public sealed class MainViewModel : Observable
             return;
         }
 
-        if (destination.IsOfflineDrive)
+        // Nothing moves out of an archive: it is read, never rewritten.
+        if (source is Core.Archives.ArchiveProvider)
+        {
+            isMove = false;
+        }
+
+        if (destination.IsOfflineDrive || destination.IsArchive)
         {
             MessageDialog.Error(Shell.Window, L("Transfer"), L("This location is read-only."));
             return;
@@ -834,6 +859,12 @@ public sealed class MainViewModel : Observable
             // cancelled transfer's question is withdrawn or closed (macOS 1.6 ConflictPrompter).
             ResolveConflict = Conflicts.AskAsync,
         };
+        if (source is Core.Archives.ArchiveProvider archive)
+        {
+            StartArchiveCopy(archive, request, panel, _ => RefreshAfterTransfer(source, destination));
+            return;
+        }
+
         _services.Transfers.Start(request, panel, _ => RefreshAfterTransfer(source, destination));
     }
 
@@ -985,6 +1016,13 @@ public sealed class MainViewModel : Observable
         }
 
         if (isCut && panel.IsReadOnly)
+        {
+            return;
+        }
+
+        // Entries inside an archive have no file behind them yet: "Extract to … Panel" and
+        // dragging are the ways out (macOS keeps them off the clipboard the same way).
+        if (panel.IsArchive)
         {
             return;
         }
@@ -1491,6 +1529,11 @@ public sealed class MainViewModel : Observable
         if (panel.IsLocal)
         {
             directory = folder;
+        }
+        else if (panel.Location.ArchiveContainer is { IsLocal: true } container)
+        {
+            // Inside an archive on this PC: the folder the archive sits in.
+            directory = container.Path;
         }
         else if (panel.IsCloud && !panel.IsOffline && panel.Account is { } account)
         {

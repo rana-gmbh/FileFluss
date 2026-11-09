@@ -645,7 +645,7 @@ public partial class MainWindow : Window, IShell
         var lines = new List<string>
         {
             $"{L("Kind")}: {ShellIcons.TypeName(item.Name, item.IsDirectory)}",
-            $"{L("Where")}: {panel.Account?.DisplayName} — {item.Path}",
+            $"{L("Where")}: {(panel.IsArchive ? panel.Location.ArchiveName : panel.Account?.DisplayName)} — {item.Path}",
         };
         if (!item.IsDirectory)
         {
@@ -919,6 +919,10 @@ public partial class MainWindow : Window, IShell
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
         _services.Settings.MainWindow = new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height, WindowState == WindowState.Maximized);
         _vm.RecordSessionLocations();
+
+        // Unpacked archive entries go with the session; what is still open elsewhere is left
+        // for the cache's age-based clean-up.
+        _services.Archives.ReleaseAll();
     }
 }
 

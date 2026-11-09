@@ -36,9 +36,9 @@ public sealed class CloudFileExport
         VirtualFileDataObject.Wait = WaitPumping;
     }
 
-    /// <summary>Whether a panel's selection can go to other apps as virtual files: a connected cloud, not an offline index.</summary>
+    /// <summary>Whether a panel's selection can go to other apps as virtual files: a connected cloud (not an offline index), or the inside of an archive — each entry unpacked as the other app reads it.</summary>
     public static bool CanExport(PanelViewModel panel)
-        => panel.IsCloud && panel.Provider is { } provider && VirtualFileSource.CanProvideContents(provider) && panel.Account is not { IsEffectivelyOffline: true };
+        => (panel.IsCloud || panel.IsArchive) && panel.Provider is { } provider && VirtualFileSource.CanProvideContents(provider) && panel.Account is not { IsEffectivelyOffline: true };
 
     // MARK: - Drag
 
@@ -150,6 +150,28 @@ public sealed class CloudFileExport
         var source = new VirtualFileSource(panel.Provider!, items, panel.Side);
         var dispatcher = Application.Current.Dispatcher;
         source.SessionStarted += progress => dispatcher.BeginInvoke(() => _transfers.Track(progress));
+        if (panel.Provider is Core.Archives.ArchiveProvider archive)
+        {
+            // Out of a tarball or a solid archive, reading entries one by one would read the
+            // archive once per file: once the other app starts, unpack the lot in one pass.
+            source.SessionStarted += progress =>
+            {
+                var lease = archive.Lease();
+                progress.Completed += (_, _) => lease.Dispose();
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await archive.PrepareForTransferAsync(items, progress.CancellationToken);
+                    }
+                    catch (Exception e)
+                    {
+                        // Each file is then read on its own, as it would have been anyway.
+                        SupportLogger.Shared.Log($"Unpacking for a drag failed: {e.Message}", "archive", LogLevel.Notice);
+                    }
+                });
+            };
+        }
         return new VirtualFileDataObject(source) { HideFormatsWhenUnavailable = forDrag };
     }
 
