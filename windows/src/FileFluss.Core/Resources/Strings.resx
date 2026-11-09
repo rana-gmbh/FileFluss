@@ -2610,7 +2610,7 @@
     <value>Download and Install</value>
   </data>
   <data name="FileFluss can download RAR {0} for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.&#10;&#10;RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." xml:space="preserve">
-    <value>FileFluss can download RAR {0} for Windows from rarlab.com, check it against a known fingerprint, and keep it in its own folder. No administrator rights are needed.
+    <value>FileFluss can download WinRAR {0} from rarlab.com (about 4 MB), check it against a known fingerprint, and keep only its command-line rar tool in its own folder. The installer is never run, and no administrator rights are needed.
 
 RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.</value>
   </data>

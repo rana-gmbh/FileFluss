@@ -2610,7 +2610,7 @@
     <value>下载并安装</value>
   </data>
   <data name="FileFluss can download RAR {0} for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.&#10;&#10;RAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." xml:space="preserve">
-    <value>FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR {0}，用已知指纹校验后放在自己的文件夹中，无需管理员权限。
+    <value>FileFluss 可以从 rarlab.com 下载 WinRAR {0}（约 4 MB），用已知指纹进行校验，并只将其命令行工具 rar 保存在单独的文件夹中。安装程序永远不会运行，也不需要管理员权限。
 
 RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。</value>
   </data>

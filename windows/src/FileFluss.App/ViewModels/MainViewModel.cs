@@ -587,6 +587,37 @@ public sealed partial class MainViewModel : Observable
         {
             paths.AddRange(items.Select(i => i.Path));
         }
+        else if (panel.Provider is Core.Archives.ArchiveProvider archive)
+        {
+            // Entries of an archive: unpack just these, as opening one does.
+            try
+            {
+                var cursor = Mouse.OverrideCursor;
+                Mouse.OverrideCursor = Cursors.AppStarting;
+                try
+                {
+                    paths.AddRange(await archive.ExtractForOpeningAsync(items.Select(i => i.Path).ToList()));
+                }
+                finally
+                {
+                    Mouse.OverrideCursor = cursor;
+                }
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                MessageDialog.Error(Shell.Window, L("Couldn't open \"{0}\"", items[0].Name), e.Message);
+                return;
+            }
+
+            // Out of a downloaded archive: SmartScreen and Protected View apply.
+            if (panel.Location.ArchiveAccountId is not null)
+            {
+                foreach (var path in paths)
+                {
+                    MarkOfTheWeb.Apply(path);
+                }
+            }
+        }
         else if (await MountedPathsAsync(panel, items) is { } mounted)
         {
             paths.AddRange(mounted);

@@ -618,7 +618,7 @@
 "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌会加密存储在 Windows 凭据存储中。";
 "Keychain save failed (OSStatus %d)" = "无法保存到 Windows 凭据存储（错误 %d）";
 "Keychain delete failed (OSStatus %d)" = "无法从 Windows 凭据存储中删除（错误 %d）";
-"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@，用已知指纹校验后放在自己的文件夹中，无需管理员权限。\n\nRAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss 可以从 rarlab.com 下载 WinRAR %@（约 4 MB），用已知指纹进行校验，并只将其命令行工具 rar 保存在单独的文件夹中。安装程序永远不会运行，也不需要管理员权限。\n\nRAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。";
 
 /* Transfers: a move whose copy failed verification, and a download cut short. */
 "\"%@\" didn't arrive complete, so the original was kept." = "“%@”未完整到达目标位置，因此已保留原始文件。";

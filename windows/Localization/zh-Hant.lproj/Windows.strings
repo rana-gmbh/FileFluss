@@ -619,7 +619,7 @@
 "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會加密儲存在 Windows 認證存放區中。";
 "Keychain save failed (OSStatus %d)" = "無法儲存至 Windows 認證存放區（錯誤 %d）";
 "Keychain delete failed (OSStatus %d)" = "無法從 Windows 認證存放區刪除（錯誤 %d）";
-"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR %@，用已知指紋驗證後放在自己的資料夾中，無需系統管理員權限。\n\nRAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss 可以從 rarlab.com 下載 WinRAR %@（約 4 MB），以已知指紋進行驗證，並只將其命令列工具 rar 保留在獨立的資料夾中。安裝程式永遠不會執行，也不需要系統管理員權限。\n\nRAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。";
 
 /* Transfers: a move whose copy failed verification, and a download cut short. */
 "\"%@\" didn't arrive complete, so the original was kept." = "「%@」未完整送達目的地，因此已保留原始檔案。";
