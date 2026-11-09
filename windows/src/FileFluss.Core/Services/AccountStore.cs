@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.IO;
 using FileFluss.Core.Models;
@@ -18,6 +19,10 @@ namespace FileFluss.Core.Services;
 /// back to when the main file is damaged. When the file could not even be read (locked by a
 /// scanner at launch), the accounts in it are merged back into the next save instead of being
 /// overwritten by the shorter list the app saw.</para>
+///
+/// <para><b>One damaged entry never costs the others</b> (macOS 1.6 <c>StoredList</c>): the
+/// list is read entry by entry, and one this version can't read — an account for a provider
+/// from a newer version, say — is kept aside and written back unchanged.</para>
 /// </summary>
 public sealed class AccountStore
 {
@@ -27,6 +32,9 @@ public sealed class AccountStore
     private readonly Lock _gate = new();
     private bool _loadFailed;
     private bool _unread;
+
+    /// <summary>Entries this version can't read (a provider from a newer version, a damaged entry), written back as they were.</summary>
+    private List<JsonNode> _unreadable = [];
 
     public AccountStore(string path)
     {
@@ -54,7 +62,7 @@ public sealed class AccountStore
             {
                 try
                 {
-                    return Decode(text);
+                    return Keep(Decode(text));
                 }
                 catch (JsonException e)
                 {
@@ -69,7 +77,7 @@ public sealed class AccountStore
             {
                 try
                 {
-                    var restored = Decode(backup);
+                    var restored = Keep(Decode(backup));
                     SupportLogger.Shared.Log($"Restored {restored.Count} account(s) from accounts.json.bak", "Accounts", LogLevel.Notice);
                     return restored;
                 }
@@ -101,7 +109,9 @@ public sealed class AccountStore
                 try
                 {
                     var known = accounts.Select(a => a.Id).ToHashSet();
-                    toWrite = [.. accounts, .. Decode(text).Where(a => !known.Contains(a.Id))];
+                    var (stored, unreadable) = Decode(text);
+                    toWrite = [.. accounts, .. stored.Where(a => !known.Contains(a.Id))];
+                    _unreadable = unreadable;
                 }
                 catch (JsonException)
                 {
@@ -119,7 +129,7 @@ public sealed class AccountStore
 
             try
             {
-                AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(toWrite, Options));
+                AtomicFile.WriteAllText(_path, StoredList.Encode(toWrite, _unreadable, Options).ToJsonString(Options));
                 _loadFailed = false;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -129,8 +139,20 @@ public sealed class AccountStore
         }
     }
 
-    private static List<CloudAccount> Decode(string text)
-        => JsonSerializer.Deserialize<List<CloudAccount>>(text, Options) ?? throw new JsonException("The account list is null.");
+    /// <summary>Entry by entry: one that can't be read is set aside instead of failing the whole list.</summary>
+    private static (List<CloudAccount> Items, List<JsonNode> Unreadable) Decode(string text)
+        => StoredList.Decode<CloudAccount>(text, Options) ?? throw new JsonException("The account list isn't a JSON array.");
+
+    private List<CloudAccount> Keep((List<CloudAccount> Items, List<JsonNode> Unreadable) decoded)
+    {
+        _unreadable = decoded.Unreadable;
+        if (decoded.Unreadable.Count > 0)
+        {
+            SupportLogger.Shared.Log($"Keeping {decoded.Unreadable.Count} account(s) this version can't read", "Accounts", LogLevel.Notice);
+        }
+
+        return decoded.Items;
+    }
 
     /// <summary>The file's text, retrying briefly through a sharing violation; null when it can't be read.</summary>
     private static string? ReadWithRetries(string path)
