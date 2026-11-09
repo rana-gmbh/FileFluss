@@ -23,8 +23,11 @@ public sealed class LocalFileProvider : FileProvider
 
     public static CopyFile CopyFileHandler { get; set; } = StreamCopyAsync;
 
-    /// <summary>Moves a path to the Recycle Bin; returns false when it could not (permanent delete is then refused).</summary>
-    public static Func<string, bool>? RecycleHandler { get; set; }
+    /// <summary>
+    /// Moves a path to the Recycle Bin; returns null once it is there, or why it could not be
+    /// moved (permanent delete is then refused — the panel explains and offers it instead).
+    /// </summary>
+    public static Func<string, IO.RecycleRefusal?>? RecycleHandler { get; set; }
 
     private static readonly EnumerationOptions ListingOptions = new()
     {
@@ -164,8 +167,39 @@ public sealed class LocalFileProvider : FileProvider
                 throw CloudProviderException.CommandFailed(Localization.L("You don't have permission to open \"{0}\".", GetName(path)));
             }
 
+            // Skipping what can't be read hides the folder itself being shut too: a folder of
+            // another user's, or System Volume Information, listed as "Empty Folder". Asked
+            // only when nothing came back, so an ordinary listing costs nothing extra.
+            if (items.Count == 0)
+            {
+                ThrowIfUnreadable(path);
+            }
+
             return items;
         }, cancellationToken);
+
+    /// <summary>Opens the folder for listing without skipping a refusal, and turns one into a message the panel shows.</summary>
+    private void ThrowIfUnreadable(string path)
+    {
+        try
+        {
+            using var probe = Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions { IgnoreInaccessible = false, AttributesToSkip = 0 }).GetEnumerator();
+            _ = probe.MoveNext();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw CloudProviderException.CommandFailed(Localization.L("You don't have permission to open \"{0}\".", GetName(path)));
+        }
+        catch (DirectoryNotFoundException)
+        {
+            throw CloudProviderException.NotFound(path);
+        }
+        catch (IOException e)
+        {
+            // A drive or share gone mid-listing, a device not ready.
+            throw CloudProviderException.CommandFailed(e.Message, e);
+        }
+    }
 
     private static List<CloudFileItem> ListDrives()
     {
@@ -300,9 +334,11 @@ public sealed class LocalFileProvider : FileProvider
         {
             if (RecycleHandler is { } recycle)
             {
-                if (!recycle(path))
+                if (recycle(path) is { } refusal)
                 {
-                    throw CloudProviderException.CommandFailed(Localization.L("\"{0}\" couldn't be moved to the Recycle Bin.", GetName(path)));
+                    var where = refusal.Location is null ? string.Empty : $", at {refusal.Location}";
+                    Diagnostics.SupportLogger.Shared.Log($"Recycle Bin refused an item: {refusal.Kind}, code {refusal.CodeText}{where}", "fs", Diagnostics.LogLevel.Error);
+                    throw new IO.RecycleRefusedException(path, refusal);
                 }
 
                 return;

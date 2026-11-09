@@ -143,6 +143,7 @@ public sealed class SidebarViewModel : Observable
         EnsureFavorites();
         Rebuild();
         services.Accounts.Accounts.CollectionChanged += (_, _) => RebuildAccounts();
+        services.Accounts.SignInChanged += (_, _) => RebuildAccounts();
         services.Accounts.QuotaChanged += (_, id) => OnQuotaChanged(id);
         services.SettingsStore.Changed += (_, name) =>
         {
@@ -430,7 +431,7 @@ public sealed class SidebarViewModel : Observable
                 Location = PanelLocation.Cloud(account.Id, account.EffectiveRootPath),
                 Account = account,
                 Glyph = Glyphs.Cloud,
-                IsConnected = account.IsConnected && !account.IsOfflineMode,
+                IsConnected = _services.Accounts.IsSignedIn(account),
                 IsOffline = account.IsOfflineMode,
                 RestingTrailing = account.IsOfflineMode ? L("Offline") : null,
                 Trailing = account.IsOfflineMode ? L("Offline") : null,

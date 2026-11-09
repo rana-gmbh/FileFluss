@@ -566,19 +566,45 @@ public partial class PanelView : UserControl
         }
     }
 
+    private CancellationTokenSource? _signingIn;
+
+    /// <summary>
+    /// "Sign In Again". While the browser sign-in waits, the same button reads "Cancel Sign-In"
+    /// and ends it (macOS 1.6: any sign-in can be cancelled) — instead of waiting out the
+    /// five-minute timeout, or starting a second sign-in on top of the first.
+    /// </summary>
     private async void OnReauthenticate(object sender, RoutedEventArgs e)
     {
-        if (Vm is { } vm)
+        if (_signingIn is { } running)
         {
-            var owner = Window.GetWindow(this);
-            try
-            {
-                await Reauthentication.RunAsync(owner, Main.Services, vm);
-            }
-            catch (Exception failure) when (failure is not OperationCanceledException)
-            {
-                TaskFailures.ShowFailure(failure, L("Sign In Again"), owner);
-            }
+            running.Cancel();
+            return;
+        }
+
+        if (Vm is not { } vm)
+        {
+            return;
+        }
+
+        var owner = Window.GetWindow(this);
+        using var signingIn = _signingIn = new CancellationTokenSource();
+        // SetCurrentValue keeps the {u:Loc} binding, which follows a change of language.
+        ReauthButton.SetCurrentValue(ContentControl.ContentProperty, L("Cancel Sign-In"));
+        try
+        {
+            await Reauthentication.RunAsync(owner, Main.Services, vm, signingIn.Token);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            TaskFailures.ShowFailure(failure, L("Sign In Again"), owner);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _signingIn = null;
+            System.Windows.Data.BindingOperations.GetBindingExpression(ReauthButton, ContentControl.ContentProperty)?.UpdateTarget();
         }
     }
 

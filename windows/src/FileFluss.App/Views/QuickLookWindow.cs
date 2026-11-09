@@ -89,15 +89,20 @@ public sealed class QuickLookWindow : Window
             _handlerHost?.Dispose();
             _handlerHost = null;
         };
+        // Closed by Esc or by the Quick Look shortcut itself — whatever it is bound to (F3 in
+        // the Commander preset, or the user's own key), not Space alone (macOS 1.6).
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key is Key.Space or Key.Escape)
+            if (e.Key == Key.Escape || IsQuickLookShortcut(main, e))
             {
                 e.Handled = true;
                 Close();
             }
         };
     }
+
+    private static bool IsQuickLookShortcut(MainViewModel main, KeyEventArgs e)
+        => MainWindow.ShortcutFromKey(e) is { } pressed && main.Services.Keyboard.CommandFor(pressed) == Core.Commands.KeyboardCommand.QuickLook;
 
     public static void Toggle(Window owner, MainViewModel main, PanelViewModel panel)
     {

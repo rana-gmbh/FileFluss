@@ -119,6 +119,9 @@ public static class VersionTestRunner
             _running = null;
         }
 
+        // Some services rotate their tokens on every refresh: the saved set would be stale now.
+        TestAccountsMenu.RefreshAfterVersionTest();
+
         var report = new VersionTestReport(startDate, DateTimeOffset.Now, testfiles, localFiles, results, UpdateService.CurrentVersion, BuildNumber());
         var reportPath = Path.Combine(testfiles, VersionTestEngine.ReportFileName(startDate));
         try
@@ -139,7 +142,7 @@ public static class VersionTestRunner
     /// <summary>
     /// macOS reads <c>Testfiles/</c> beside the project source (<c>#filePath</c>). Here: the
     /// Testfiles folder of the checkout the build runs from, else
-    /// <c>%LOCALAPPDATA%\FileFluss\Testfiles</c>, created so there is a place to put files.
+    /// <c>Testfiles</c> in the debug build's data folder, created so there is a place to put files.
     /// </summary>
     private static string LocateTestfiles()
     {
@@ -148,7 +151,7 @@ public static class VersionTestRunner
             return inRepository;
         }
 
-        var fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileFluss", "Testfiles");
+        var fallback = Path.Combine(SettingsStore.DataDirectory, "Testfiles");
         Directory.CreateDirectory(fallback);
         return fallback;
     }

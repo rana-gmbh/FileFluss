@@ -32,6 +32,15 @@ public partial class App : Application
         // closing it would quietly shut FileFluss down.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
+#if DEBUG
+        // Its own data folder, started once from the release app's before anything writes to
+        // it (macOS 1.6): debugging never changes or removes the accounts of the FileFluss the
+        // user works with.
+        if (Core.Diagnostics.TestAccountSnapshot.SeedDebugFolder(SettingsStore.ReleaseDataDirectory, SettingsStore.DataDirectory))
+        {
+            FileFluss.Native.PrivateFolder.Apply(System.IO.Path.Combine(SettingsStore.DataDirectory, "credentials"));
+        }
+#endif
         CrashLog.Install(this);
 
         // One FileFluss at a time: a second launch brings the running window forward.
@@ -120,7 +129,7 @@ public partial class App : Application
         await Step("local panels", () => vm.RestoreStartupLocationsAsync(cloudOnly: false, indexStarted));
         StartupTrace.Mark("local panels listed");
         await indexStarted;
-        await Step("accounts", services.Accounts.ReconnectSavedAccountsAsync);
+        await Step("accounts", () => services.Accounts.ReconnectSavedAccountsAsync());
 
         // Cloud panels list in the background: a slow or hanging server must not hold back
         // the rest of startup (command-line folders, updates, the welcome screen).

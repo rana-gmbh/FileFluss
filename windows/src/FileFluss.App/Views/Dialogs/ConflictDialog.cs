@@ -73,20 +73,34 @@ public sealed class ConflictDialog : Window
         Content = root;
     }
 
-    public static ConflictResolution Ask(Window? owner, ConflictInfo conflict)
+    /// <summary>
+    /// Asks on the UI thread. Cancelling <paramref name="cancellationToken"/> (the transfer's
+    /// Cancel) closes the question with Stop, so the transfer ends instead of waiting on it.
+    /// </summary>
+    public static ConflictResolution Ask(Window? owner, ConflictInfo conflict, CancellationToken cancellationToken = default)
     {
         // A closed window can't own a dialog (WPF throws), and neither can the main window
         // while FileFluss closes: then the transfer stops instead.
         var fallback = Application.Current?.MainWindow;
         var parent = owner is { IsLoaded: true } ? owner : fallback is { IsLoaded: true } ? fallback : null;
-        if (parent is null || parent.Dispatcher.HasShutdownStarted)
+        if (parent is null || parent.Dispatcher.HasShutdownStarted || cancellationToken.IsCancellationRequested)
         {
             return new ConflictResolution(ConflictChoice.Stop, false);
         }
 
         var dialog = new ConflictDialog(conflict) { Owner = parent };
+        using var closeOnCancel = cancellationToken.Register(() => dialog.Dispatcher.BeginInvoke(() =>
+        {
+            if (dialog.IsVisible)
+            {
+                dialog._choice = ConflictChoice.Stop;
+                dialog.Close();
+            }
+        }));
         dialog.ShowDialog();
-        return new ConflictResolution(dialog._choice, dialog._applyToAll.IsChecked == true);
+        return cancellationToken.IsCancellationRequested
+            ? new ConflictResolution(ConflictChoice.Stop, false)
+            : new ConflictResolution(dialog._choice, dialog._applyToAll.IsChecked == true);
     }
 
     private Button MakeButton(string caption, ConflictChoice choice, bool isDefault = false, bool isCancel = false)

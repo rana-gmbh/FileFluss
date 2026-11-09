@@ -25,6 +25,9 @@ namespace FileFluss.App;
 
 public partial class MainWindow : Window, IShell
 {
+    /// <summary>The privacy policy the macOS Help menu opens (PRIVACY.md in the repository).</summary>
+    public const string PrivacyPolicyUrl = "https://github.com/rana-gmbh/filefluss/blob/main/PRIVACY.md";
+
     private readonly MainViewModel _vm;
     private readonly AppServices _services;
     private Popup? _transfersPopup;
@@ -374,6 +377,9 @@ public partial class MainWindow : Window, IShell
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("Check for Updates…"), null, null, () => RequestUpdateCheck(null)));
         help.Items.Add(ContextMenus.Item(L("GitHub Repository"), null, null, () => Core.Net.BrowserLauncher.Open("https://github.com/rana-gmbh/FileFluss")));
+
+        // macOS 1.5.2: the repository copy, because that one exists at every moment the app ships.
+        help.Items.Add(ContextMenus.Item(L("Privacy Policy"), null, null, () => Core.Net.BrowserLauncher.Open(PrivacyPolicyUrl)));
         help.Items.Add(ContextMenus.Item(L("Support the FileFluss Project"), null, null, () => Core.Net.BrowserLauncher.Open("https://buymeacoffee.com/robertrudolph")));
         _supportLogItem = ContextMenus.Item(L("Support Log"), null, null, SupportLogService.Shared.Start);
         UpdateSupportLogItem();
@@ -381,6 +387,10 @@ public partial class MainWindow : Window, IShell
 #if DEBUG
         // macOS: right after "Support Log", debug builds only — never shipped to users.
         help.Items.Add(ContextMenus.Item(L("Run Version Test…"), null, null, () => VersionTestRunner.Run(this)));
+
+        // Dev-only and English-only, like the version test itself (macOS 1.6).
+        help.Items.Add(ContextMenus.Item("Save Test Accounts…", null, null, () => TestAccountsMenu.Save(this)));
+        help.Items.Add(ContextMenus.Item("Restore Test Accounts…", null, null, () => TestAccountsMenu.Restore(this)));
 #endif
         help.Items.Add(new Separator());
         help.Items.Add(ContextMenus.Item(L("About FileFluss"), null, null, ShowAbout));

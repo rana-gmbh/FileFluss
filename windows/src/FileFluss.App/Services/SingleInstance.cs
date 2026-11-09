@@ -36,9 +36,17 @@ internal static class SingleInstance
     /// <summary>
     /// Session and user SID: another account signed in to the same session (runas) can't
     /// squat the names and keep this user's FileFluss from starting or receiving paths.
+    /// A debug build has names of its own, as it has its own data folder: launched while the
+    /// installed FileFluss runs, it starts instead of handing its command line to that one.
     /// </summary>
     private static string Scope { get; } =
-        $"{System.Diagnostics.Process.GetCurrentProcess().SessionId}.{System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName}";
+        $"{System.Diagnostics.Process.GetCurrentProcess().SessionId}.{System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName}{DebugSuffix}";
+
+#if DEBUG
+    private const string DebugSuffix = ".Debug";
+#else
+    private const string DebugSuffix = "";
+#endif
 
     private static string PipeName => $"FileFluss.Commands.{Scope}";
 

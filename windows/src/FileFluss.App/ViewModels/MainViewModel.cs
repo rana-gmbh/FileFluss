@@ -828,17 +828,27 @@ public sealed class MainViewModel : Observable
             return;
         }
 
-        var dispatcher = Application.Current.Dispatcher;
         var request = new TransferRequest(source, items, target, destination.Path, isMove)
         {
-            // Asked from the transfer's thread. Once FileFluss is closing there is nobody to
-            // ask (and no window to own the question): stop instead of waiting forever.
-            ResolveConflict = (conflict, _) => dispatcher.HasShutdownStarted
-                ? Task.FromResult(new ConflictResolution(ConflictChoice.Stop, false))
-                : dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict)).Task,
+            // One question at a time across every running transfer, in the order asked; a
+            // cancelled transfer's question is withdrawn or closed (macOS 1.6 ConflictPrompter).
+            ResolveConflict = Conflicts.AskAsync,
         };
         _services.Transfers.Start(request, panel, _ => RefreshAfterTransfer(source, destination));
     }
+
+    private ConflictPrompter? _conflicts;
+
+    /// <summary>The app's one conflict question, shared by every transfer started here.</summary>
+    private ConflictPrompter Conflicts => _conflicts ??= new ConflictPrompter((conflict, ct) =>
+    {
+        // Asked from the transfer's thread. Once FileFluss is closing there is nobody to
+        // ask (and no window to own the question): stop instead of waiting forever.
+        var dispatcher = Application.Current.Dispatcher;
+        return dispatcher.HasShutdownStarted
+            ? Task.FromResult(new ConflictResolution(ConflictChoice.Stop, false))
+            : dispatcher.InvokeAsync(() => ConflictDialog.Ask(Shell.Window, conflict, ct)).Task;
+    });
 
     private readonly List<CancellationTokenSource> _spaceChecks = [];
 
@@ -1271,6 +1281,7 @@ public sealed class MainViewModel : Observable
         }
 
         var failures = new List<string>();
+        var refused = new List<(FileRowViewModel Row, RecycleRefusal Refusal)>();
         await Task.Run(async () =>
         {
             foreach (var row in rows)
@@ -1286,6 +1297,14 @@ public sealed class MainViewModel : Observable
                         await provider.DeleteItemAsync(row.Path);
                     }
                 }
+                catch (RecycleRefusedException e) when (e.Refusal.Kind != RecycleRefusalKind.NotFound)
+                {
+                    refused.Add((row, e.Refusal));
+                }
+                catch (RecycleRefusedException)
+                {
+                    // Already gone (moved or deleted outside FileFluss): the refresh below shows it.
+                }
                 catch (Exception e)
                 {
                     failures.Add($"{row.Name}: {e.Message}");
@@ -1298,6 +1317,11 @@ public sealed class MainViewModel : Observable
             MessageDialog.Error(Shell.Window, L("Delete"), string.Join(Environment.NewLine, failures));
         }
 
+        if (refused.Count > 0)
+        {
+            await ExplainRecycleRefusalAsync(refused);
+        }
+
         if (panel.Location.AccountId is { } id)
         {
             _services.Accounts.InvalidateQuota(id);
@@ -1307,6 +1331,81 @@ public sealed class MainViewModel : Observable
         if (OtherPanel.Location == panel.Location)
         {
             await OtherPanel.RefreshAsync(quiet: true);
+        }
+    }
+
+    /// <summary>
+    /// macOS 1.6 "a refused Trash names the real cause": says why the Recycle Bin refused —
+    /// a file open elsewhere, a folder this user can't change, a damaged Recycle Bin — and
+    /// offers what can help: Storage settings for a damaged bin, deleting outright where that
+    /// may still work, nothing but the explanation where deleting needs the same access.
+    /// </summary>
+    private async Task ExplainRecycleRefusalAsync(IReadOnlyList<(FileRowViewModel Row, RecycleRefusal Refusal)> refused)
+    {
+        // One explanation for the lot, led by the most telling cause (the bin itself first).
+        var refusal = refused.Select(r => r.Refusal).OrderBy(r => r.Kind switch
+        {
+            RecycleRefusalKind.RecycleBinDamaged => 0,
+            RecycleRefusalKind.NoPermission => 1,
+            RecycleRefusalKind.InUse => 2,
+            _ => 3,
+        }).First();
+        var label = refused.Count == 1 ? $"\"{refused[0].Row.Name}\"" : L("{0} items", refused.Count);
+
+        var buttons = new List<DialogButton>();
+        if (refusal.Kind == RecycleRefusalKind.RecycleBinDamaged)
+        {
+            buttons.Add(new DialogButton("settings", L("Open Storage Settings…"), IsDefault: true));
+        }
+
+        if (refusal.OffersPermanentDelete)
+        {
+            buttons.Add(new DialogButton("delete", L("Delete Permanently"), IsDestructive: true));
+            buttons.Add(new DialogButton("cancel", L("Cancel"), IsCancel: true));
+        }
+        else
+        {
+            buttons.Add(new DialogButton("ok", L("OK"), IsDefault: true, IsCancel: true));
+        }
+
+        // Cancel sits first, as everywhere else in the app's dialogs.
+        buttons.Sort((a, b) => b.IsCancel.CompareTo(a.IsCancel));
+        switch (MessageDialog.Show(Shell.Window, refusal.Title, refusal.Message(label), DialogIcon.Warning, [.. buttons]))
+        {
+            case "settings":
+                try
+                {
+                    // A fixed system URI, not one from a server: the browser launcher (web URLs only) isn't the place.
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:storagesense") { UseShellExecute = true })?.Dispose();
+                }
+                catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+                {
+                    SupportLogger.Shared.Log($"Couldn't open Storage settings: {e.Message}", "fs", LogLevel.Notice);
+                }
+
+                break;
+            case "delete":
+                var failures = new List<string>();
+                await Task.Run(() =>
+                {
+                    foreach (var (row, _) in refused)
+                    {
+                        try
+                        {
+                            LocalFileProvider.DeletePermanently(row.Path);
+                        }
+                        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                        {
+                            failures.Add($"{row.Name}: {e.Message}");
+                        }
+                    }
+                });
+                if (failures.Count > 0)
+                {
+                    MessageDialog.Error(Shell.Window, L("Delete"), string.Join(Environment.NewLine, failures));
+                }
+
+                break;
         }
     }
 

@@ -91,6 +91,26 @@ public static class Localization
         return key;
     }
 
+    /// <summary>Whether a catalogue has <paramref name="key"/> at all — for the test that keeps English-only text out.</summary>
+    internal static bool HasKey(string key)
+    {
+        var culture = CultureInfo.InvariantCulture;
+        if (Resources.GetString(key, culture) is not null)
+        {
+            return true;
+        }
+
+        for (var ordinal = 2; ordinal <= CollisionLimit; ordinal++)
+        {
+            if (Resources.GetString($"{key}{CollisionSuffix}{ordinal}", culture) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Localized string with composite formatting, e.g. <c>L("Item not found: {0}", path)</c>.</summary>
     public static string L(string key, params object?[] args)
     {

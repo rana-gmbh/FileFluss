@@ -56,12 +56,36 @@ public sealed class AccountsService : Observable
 
     public CloudProvider CreateProvider(CloudProviderType type, Guid accountId) => CreateProvider(type, accountId, _credentials);
 
+#if DEBUG
+    /// <summary>
+    /// Debug builds' "Restore Test Accounts": adds saved accounts that aren't here (their
+    /// credentials already written back) and connects them. Returns how many were added.
+    /// </summary>
+    public async Task<int> RestoreTestAccountsAsync(IReadOnlyList<CloudAccount> saved)
+    {
+        var added = saved.Where(a => Find(a.Id) is null).Select(a => a with { IsConnected = false }).ToList();
+        foreach (var account in added)
+        {
+            Accounts.Add(account);
+        }
+
+        if (added.Count > 0)
+        {
+            Save();
+            await ReconnectSavedAccountsAsync(added.Select(a => a.Id).ToHashSet());
+        }
+
+        return added.Count;
+    }
+#endif
+
     /// <summary>Restores every stored account's provider from its credentials (no network for most).</summary>
-    public async Task ReconnectSavedAccountsAsync()
+    /// <param name="only">Just these accounts; null for all.</param>
+    public async Task ReconnectSavedAccountsAsync(IReadOnlySet<Guid>? only = null)
     {
         // Making a provider reads and decrypts its stored credentials (DPAPI, files): on the
         // thread pool, so a dozen accounts don't hold up the UI thread at startup.
-        var saved = Accounts.Where(a => CloudProviderRegistry.IsAvailable(a.ProviderType)).ToList();
+        var saved = Accounts.Where(a => CloudProviderRegistry.IsAvailable(a.ProviderType) && (only is null || only.Contains(a.Id))).ToList();
         var restored = await Task.Run(() =>
         {
             var providers = new List<(CloudAccount Account, CloudProvider Provider)>();
@@ -151,6 +175,7 @@ public sealed class AccountsService : Observable
         }
 
         _hub.Register(id, provider);
+        _needingSignIn.Remove(id);
         var name = result.DisplayName ?? (string.IsNullOrWhiteSpace(result.AccountLabel) ? account.DisplayName : CloudAccount.ComposeDisplayName(account.ProviderType, result.AccountLabel));
         Replace(account with
         {
@@ -199,6 +224,7 @@ public sealed class AccountsService : Observable
             }
 
             _hub.Remove(id);
+            _needingSignIn.Remove(id);
             _quotaCache.Remove(id);
             _staleQuotas.Remove(id);
 
@@ -241,15 +267,44 @@ public sealed class AccountsService : Observable
         }
     }
 
-    /// <summary>The credentials stopped working: the sidebar must stop showing it as connected (issue #46).</summary>
+    private readonly HashSet<Guid> _needingSignIn = [];
+
+    /// <summary>
+    /// The credentials stopped working: the sidebar must stop showing it as connected (issue #46).
+    ///
+    /// <para>Kept apart from <see cref="CloudAccount.IsConnected"/> (macOS 1.6
+    /// <c>accountsNeedingSignIn</c>): clearing that flag made the panel read-only and took
+    /// the account's menus with it, for as long as the session lasted — even once a later
+    /// listing proved the sign-in worked again. Session-only, never saved.</para>
+    /// </summary>
     public void MarkNeedsReauthentication(Guid id)
     {
-        if (Find(id) is { IsConnected: true } account)
+        if (Find(id) is not null && _needingSignIn.Add(id))
         {
-            Replace(account with { IsConnected = false });
-            Save();
+            SupportLogger.Shared.Log("An account's sign-in stopped working", "Accounts", LogLevel.Notice);
+            SignInChanged?.Invoke(this, id);
+            AccountChanged?.Invoke(this, id);
         }
     }
+
+    /// <summary>A listing or a sign-in succeeded: the account no longer needs signing in again.</summary>
+    public void MarkSignInWorks(Guid id)
+    {
+        if (_needingSignIn.Remove(id))
+        {
+            SignInChanged?.Invoke(this, id);
+            AccountChanged?.Invoke(this, id);
+        }
+    }
+
+    /// <summary>Raised when an account starts or stops needing to sign in again (the sidebar's status dot).</summary>
+    public event EventHandler<Guid>? SignInChanged;
+
+    /// <summary>The account's sign-in failed this session and hasn't worked since.</summary>
+    public bool NeedsSignIn(Guid id) => _needingSignIn.Contains(id);
+
+    /// <summary>What the status dot shows: connected, not offline, and the sign-in still works.</summary>
+    public bool IsSignedIn(CloudAccount account) => account.IsConnected && !account.IsOfflineMode && !_needingSignIn.Contains(account.Id);
 
     /// <summary>Re-registers a provider after an inline re-authentication from the panel banner.</summary>
     public void MarkConnected(Guid id, CloudProvider provider)
@@ -262,6 +317,7 @@ public sealed class AccountsService : Observable
         }
 
         _hub.Register(id, provider);
+        _needingSignIn.Remove(id);
         if (Find(id) is { } account)
         {
             Replace(account with { IsConnected = true });
