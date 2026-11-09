@@ -147,6 +147,7 @@ were left alone and want a human decision.
 | `en` | `Show Archive in Finder` | windows override | Show Archive in Explorer |
 | `en` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss can download RAR %@ for Windows from rarlab.com, check it against a known fingerprint, and keep it in its own folder. No administrator rights are needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com. |
 | `en` | `Open` | windows override | Open |
+| `en` | `Other…` | windows override | Choose another app… |
 | `en` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored encrypted in the Windows credential store. |
 | `en` | `The file changed while it was being uploaded.` | windows override | The file changed while it was being uploaded. |
 | `en` | `Quit Anyway` | windows override | Quit Anyway |
@@ -430,6 +431,7 @@ were left alone and want a human decision.
 | `de` | `Show Archive in Finder` | windows override | Archiv im Explorer anzeigen |
 | `de` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss kann RAR %@ für Windows von rarlab.com laden, es mit einem bekannten Fingerabdruck prüfen und in seinem eigenen Ordner ablegen. Administratorrechte sind nicht nötig.\n\nRAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz auf rarlab.com gekauft werden. |
 | `de` | `Open` | windows override | Öffnen |
+| `de` | `Other…` | windows override | Andere App auswählen … |
 | `de` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt. |
 | `de` | `The file changed while it was being uploaded.` | windows override | Die Datei wurde während des Hochladens geändert. |
 | `de` | `Quit Anyway` | windows override | Trotzdem beenden |
@@ -726,6 +728,7 @@ were left alone and want a human decision.
 | `zh-Hans` | `Show Archive in Finder` | windows override | 在文件资源管理器中显示压缩文件 |
 | `zh-Hans` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss 可以从 rarlab.com 下载适用于 Windows 的 RAR %@，用已知指纹校验后放在自己的文件夹中，无需管理员权限。\n\nRAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab.com 购买许可证。 |
 | `zh-Hans` | `Open` | windows override | 打开 |
+| `zh-Hans` | `Other…` | windows override | 选择其他应用… |
 | `zh-Hans` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | 请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌会加密存储在 Windows 凭据存储中。 |
 | `zh-Hans` | `The file changed while it was being uploaded.` | windows override | 文件在上传过程中发生了更改。 |
 | `zh-Hans` | `Quit Anyway` | windows override | 仍要退出 |
@@ -1024,6 +1027,7 @@ were left alone and want a human decision.
 | `zh-Hant` | `Show Archive in Finder` | windows override | 在檔案總管中顯示壓縮檔 |
 | `zh-Hant` | `FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com.` | windows override | FileFluss 可以從 rarlab.com 下載適用於 Windows 的 RAR %@，用已知指紋驗證後放在自己的資料夾中，無需系統管理員權限。\n\nRAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab.com 購買授權。 |
 | `zh-Hant` | `Open` | windows override | 開啟 |
+| `zh-Hant` | `Other…` | windows override | 選擇其他應用程式… |
 | `zh-Hant` | `Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.` | windows override | 請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會加密儲存在 Windows 認證存放區中。 |
 | `zh-Hant` | `The file changed while it was being uploaded.` | windows override | 檔案在上傳期間已變更。 |
 | `zh-Hant` | `Quit Anyway` | windows override | 仍要結束 |

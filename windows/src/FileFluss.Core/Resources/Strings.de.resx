@@ -2657,7 +2657,7 @@ RAR ist Testsoftware von RARLAB: Es darf bis zu 40 Tage genutzt werden, danach m
     <value>Öffnen mit</value>
   </data>
   <data name="Other…" xml:space="preserve">
-    <value>Andere …</value>
+    <value>Andere App auswählen …</value>
   </data>
   <data name="Access Token" xml:space="preserve">
     <value>Zugriffstoken</value>

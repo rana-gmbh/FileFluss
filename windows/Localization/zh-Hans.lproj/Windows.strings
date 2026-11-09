@@ -623,3 +623,6 @@
 /* Transfers: a move whose copy failed verification, and a download cut short. */
 "\"%@\" didn't arrive complete, so the original was kept." = "“%@”未完整到达目标位置，因此已保留原始文件。";
 "The download ended after %@ of %@ bytes." = "下载在 %@ 字节（共 %@ 字节）处中断。";
+
+/* Open With: Explorer names the system chooser this way. */
+"Other…" = "选择其他应用…";

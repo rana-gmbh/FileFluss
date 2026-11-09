@@ -2657,7 +2657,7 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
     <value>打開方式</value>
   </data>
   <data name="Other…" xml:space="preserve">
-    <value>其他…</value>
+    <value>選擇其他應用程式…</value>
   </data>
   <data name="Access Token" xml:space="preserve">
     <value>存取權杖</value>

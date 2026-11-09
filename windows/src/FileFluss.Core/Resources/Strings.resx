@@ -2657,7 +2657,7 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
     <value>Open With</value>
   </data>
   <data name="Other…" xml:space="preserve">
-    <value>Other…</value>
+    <value>Choose another app…</value>
   </data>
   <data name="Access Token" xml:space="preserve">
     <value>Access Token</value>

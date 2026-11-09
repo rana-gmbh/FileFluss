@@ -605,3 +605,6 @@
 /* Transfers: a move whose copy failed verification, and a download cut short. */
 "\"%@\" didn't arrive complete, so the original was kept." = "„%@“ ist nicht vollständig angekommen, deshalb wurde das Original behalten.";
 "The download ended after %@ of %@ bytes." = "Der Download brach nach %@ von %@ Bytes ab.";
+
+/* Open With: Explorer names the system chooser this way. */
+"Other…" = "Andere App auswählen …";
