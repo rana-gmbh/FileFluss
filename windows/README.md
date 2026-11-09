@@ -7,7 +7,7 @@ single source of truth for every shared string.
 | Area | Windows |
 |---|---|
 | Panels | Two independent panels (or one), local folders and cloud accounts side by side; copy, move, rename, delete to the Recycle Bin, drag & drop |
-| Cloud accounts | Box, Dropbox, Filen, FTP/FTPS, GMX Cloud, GoPro, Google Drive, iCloud Drive, Internxt, Jottacloud, kDrive, Koofr, MEGA, Nextcloud, OneDrive, pCloud, S3 and S3-compatible, Seafile, SFTP, Synology C2 / Drive, TeraBox, WebDAV, WordPress — credentials encrypted with DPAPI |
+| Cloud accounts | ASUSTOR, Box, Drime, Dropbox, Filen, FTP/FTPS, GitHub (read-only), GMX Cloud, GoPro, Google Drive, iCloud Drive, Internxt, Jottacloud, kDrive, Koofr, MEGA, Nextcloud, OneDrive, pCloud, QNAP, S3 and S3-compatible, Seafile, SFTP, Synology C2 / Drive, TeraBox, UGREEN, WebDAV, WordPress — credentials encrypted with DPAPI |
 | Tools | Transfers with details and conflict handling, search across disks and accounts, offline index of drives and accounts (browse and search them while unplugged or offline), compare folders, sync, storage analysis, share links, Quick Look previews |
 | Windows integration | Map any account as a network drive in File Explorer (local WebDAV server), drag and paste cloud files into Explorer, Recycle Bin, shell icons and Properties, Open With, Open in Terminal (Windows Terminal, PowerShell, cmd, Git Bash), Explorer or Commander keyboard layouts, light and dark mode |
 | Languages | English, German, Simplified and Traditional Chinese |
