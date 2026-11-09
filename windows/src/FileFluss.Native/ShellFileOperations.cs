@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using FileFluss.Core.IO;
 using FileFluss.Core.Providers;
 
 namespace FileFluss.Native;
@@ -12,16 +13,17 @@ public static class ShellFileOperations
     // MARK: - Recycle Bin
 
     /// <summary>
-    /// Moves a file or folder to the Recycle Bin silently. False when it could not — notably
-    /// on network shares and removable drives without a Recycle Bin, where Explorer would
-    /// offer a permanent delete instead (the caller asks the user, as macOS does for volumes
-    /// without a Trash).
+    /// Moves a file or folder to the Recycle Bin silently. Null once it is there; otherwise why
+    /// it could not be — notably on network shares and removable drives without a Recycle Bin,
+    /// where Explorer would offer a permanent delete instead (the caller asks the user, as macOS
+    /// does for volumes without a Trash), but also a file open elsewhere, a folder this user
+    /// can't change, or a damaged Recycle Bin (macOS 1.6: "a refused Trash names the real cause").
     /// </summary>
-    public static bool MoveToRecycleBin(string path)
+    public static RecycleRefusal? MoveToRecycleBin(string path)
     {
         if (!HasRecycleBin(path))
         {
-            return false;
+            return new RecycleRefusal(RecycleRefusalKind.NoRecycleBin, 0, SafeRoot(path));
         }
 
         var operation = new ShFileOpStruct
@@ -30,7 +32,108 @@ public static class ShellFileOperations
             From = path + "\0\0",
             Flags = FofAllowUndo | FofNoConfirmation | FofSilent | FofNoErrorUi | FofNoConfirmMkdir,
         };
-        return SHFileOperation(ref operation) == 0 && !operation.AnyOperationsAborted && !Path.Exists(path);
+        var code = SHFileOperation(ref operation);
+        if (code == 0 && !operation.AnyOperationsAborted && !Path.Exists(path))
+        {
+            return null;
+        }
+
+        return Diagnose(path, code == 0 ? DeOpCancelled : code);
+    }
+
+    /// <summary>
+    /// Looks closer at a refusal, using only checks that change nothing: whether this user may
+    /// delete the item at all (a handle opened for DELETE), and whether the drive's Recycle Bin
+    /// folder for this user can be read. Mirrors the macOS check of the Trash folder and the
+    /// item's folder.
+    /// </summary>
+    internal static RecycleRefusal Diagnose(string path, int code)
+    {
+        var kind = RecycleRefusal.Classify(code);
+        var root = SafeRoot(path);
+        if (kind == RecycleRefusalKind.NotFound && Path.Exists(path))
+        {
+            kind = RecycleRefusalKind.Unknown;
+        }
+
+        // The Recycle Bin keeps paths no longer than MAX_PATH.
+        if (path.Length >= MaxPath && kind is RecycleRefusalKind.Unknown or RecycleRefusalKind.AccessDenied or RecycleRefusalKind.NotFound)
+        {
+            return new RecycleRefusal(RecycleRefusalKind.PathTooLong, code, root);
+        }
+
+        if (kind is RecycleRefusalKind.AccessDenied or RecycleRefusalKind.Unknown or RecycleRefusalKind.InUse)
+        {
+            switch (ProbeDeleteAccess(path))
+            {
+                case ErrorSharingViolation or ErrorLockViolation:
+                    return new RecycleRefusal(RecycleRefusalKind.InUse, code, Path.GetDirectoryName(path));
+                case ErrorAccessDenied:
+                    return new RecycleRefusal(RecycleRefusalKind.NoPermission, code, Path.GetDirectoryName(path) ?? root);
+                case 0 when RecycleBinFolderUnusable(root):
+                    return new RecycleRefusal(RecycleRefusalKind.RecycleBinDamaged, code, root);
+            }
+        }
+
+        return new RecycleRefusal(kind, code, kind == RecycleRefusalKind.RecycleBinDamaged ? root : Path.GetDirectoryName(path));
+    }
+
+    /// <summary>
+    /// 0 when this user could delete the item (a DELETE handle opens), else the Win32 error —
+    /// access denied for a folder that is shut to them, a sharing violation for a file open in
+    /// another program. The handle is closed at once; nothing is deleted.
+    /// </summary>
+    internal static int ProbeDeleteAccess(string path)
+    {
+        using var handle = CreateFile(ExtendedPath(path), DeleteAccess, FileShareAll, 0, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, 0);
+        return handle.IsInvalid ? Marshal.GetLastPInvokeError() : 0;
+    }
+
+    /// <summary>
+    /// Whether this user's Recycle Bin folder on the drive (<c>X:\$Recycle.Bin\&lt;SID&gt;</c>)
+    /// exists and can't be read — the state Explorer reports as "the Recycle Bin is corrupted".
+    /// A missing folder is fine: the shell creates it on first use.
+    /// </summary>
+    internal static bool RecycleBinFolderUnusable(string root)
+    {
+        try
+        {
+            if (System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value is not { } sid || root.Length == 0)
+            {
+                return false;
+            }
+
+            var folder = Path.Combine(root, "$Recycle.Bin", sid);
+            if (File.Exists(folder))
+            {
+                return true;
+            }
+
+            if (!Directory.Exists(folder))
+            {
+                return false;
+            }
+
+            using var entries = Directory.EnumerateFileSystemEntries(folder).GetEnumerator();
+            _ = entries.MoveNext();
+            return false;
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+        {
+            return true;
+        }
+    }
+
+    private static string SafeRoot(string path)
+    {
+        try
+        {
+            return Path.GetPathRoot(Path.GetFullPath(path)) ?? string.Empty;
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>Fixed local disks have a Recycle Bin; network shares and most removable media don't.</summary>
@@ -209,6 +312,16 @@ public static class ShellFileOperations
 
     // MARK: - Interop
 
+    private const int MaxPath = 260;
+    private const int DeOpCancelled = 0x75;
+    private const int ErrorAccessDenied = 5;
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
+    private const uint DeleteAccess = 0x00010000;
+    private const uint FileShareAll = 0x7;
+    private const uint OpenExisting = 3;
+    private const uint FileFlagBackupSemantics = 0x02000000;
+    private const uint FileFlagOpenReparsePoint = 0x00200000;
     private const uint FoDelete = 0x0003;
     private const ushort FofSilent = 0x0004;
     private const ushort FofNoConfirmation = 0x0010;
@@ -266,6 +379,9 @@ public static class ShellFileOperations
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperation(ref ShFileOpStruct operation);
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string name, uint access, uint share, nint security, uint disposition, uint flags, nint template);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CopyFileEx(string existing, string target, CopyProgressRoutine progress, nint data, ref int cancel, uint flags);

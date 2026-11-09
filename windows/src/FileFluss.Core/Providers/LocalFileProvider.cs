@@ -23,8 +23,11 @@ public sealed class LocalFileProvider : FileProvider
 
     public static CopyFile CopyFileHandler { get; set; } = StreamCopyAsync;
 
-    /// <summary>Moves a path to the Recycle Bin; returns false when it could not (permanent delete is then refused).</summary>
-    public static Func<string, bool>? RecycleHandler { get; set; }
+    /// <summary>
+    /// Moves a path to the Recycle Bin; returns null once it is there, or why it could not be
+    /// moved (permanent delete is then refused — the panel explains and offers it instead).
+    /// </summary>
+    public static Func<string, IO.RecycleRefusal?>? RecycleHandler { get; set; }
 
     private static readonly EnumerationOptions ListingOptions = new()
     {
@@ -300,9 +303,11 @@ public sealed class LocalFileProvider : FileProvider
         {
             if (RecycleHandler is { } recycle)
             {
-                if (!recycle(path))
+                if (recycle(path) is { } refusal)
                 {
-                    throw CloudProviderException.CommandFailed(Localization.L("\"{0}\" couldn't be moved to the Recycle Bin.", GetName(path)));
+                    var where = refusal.Location is null ? string.Empty : $", at {refusal.Location}";
+                    Diagnostics.SupportLogger.Shared.Log($"Recycle Bin refused an item: {refusal.Kind}, code {refusal.CodeText}{where}", "fs", Diagnostics.LogLevel.Error);
+                    throw new IO.RecycleRefusedException(path, refusal);
                 }
 
                 return;
