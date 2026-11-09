@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Core.Models;
+using FileFluss.Core.Providers;
 using FileFluss.Core.Providers.WebDav;
 
 namespace FileFluss.Core.Tests.Providers.WebDavFamily;
@@ -280,11 +281,12 @@ public class WebDavParserTests
     }
 
     [Fact]
-    public void MalformedBodyKeepsWhatParsedBeforeTheError()
+    public void AMalformedBodyIsAnErrorNotAShorterFolder()
     {
+        // macOS 1.6: what parsed before the error is only part of the folder.
         var truncated = ApacheRootListing[..ApacheRootListing.IndexOf("<D:href>/dav/Archive/", StringComparison.Ordinal)];
-        var entries = WebDavResponseParser.Parse(truncated, "http://files.example.org/dav");
-        Assert.Equal(["/", "/report 2024.txt"], entries.Select(e => e.Path));
+        var error = Assert.Throws<CloudProviderException>(() => WebDavResponseParser.Parse(truncated, "http://files.example.org/dav"));
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
     }
 
     [Fact]

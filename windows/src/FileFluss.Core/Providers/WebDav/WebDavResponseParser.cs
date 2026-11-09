@@ -166,9 +166,12 @@ internal static class WebDavResponseParser
                 }
             }
         }
-        catch (XmlException)
+        catch (XmlException e)
         {
-            // Keep what parsed before the error, as the macOS XMLParser delegate does.
+            // macOS 1.6: whatever was read before the error is only part of the folder, and must
+            // not pass for all of it — a folder that merely looks emptier than it is tells Mirror
+            // to delete the rest from the other side.
+            throw CloudProviderException.CommandFailed(Localization.L("The server sent a folder listing FileFluss couldn't read."), e);
         }
 
         return entries;
