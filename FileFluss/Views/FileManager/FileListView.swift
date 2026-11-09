@@ -11,8 +11,8 @@ struct FileListView: View {
     /// straight away. Kept in sync with `SettingsView`'s @AppStorage key.
     @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDropConfirmation: Bool = false
+    @State private var showSlowLoadIndicator: Bool = false
     @State private var showDeleteConfirmation: Bool = false
-    @State private var showConflict: Bool = false
     /// Drives the "Delete Immediately?" dialog. We can't bind it straight to
     /// `fm.itemsNeedingPermanentDelete` because that array is populated the
     /// instant the "Move to Trash" dialog is dismissed, and SwiftUI refuses to
@@ -20,6 +20,8 @@ struct FileListView: View {
     /// away — so the prompt silently never appeared (the no-Trash-volume bug).
     /// Instead we observe the array and flip this flag a beat later.
     @State private var showPermanentDeleteConfirmation: Bool = false
+    /// Presented when macOS refuses the Trash for want of permission.
+    @State private var showPermissionBlockedAlert: Bool = false
     @State private var showCloudDropConfirmation: Bool = false
     @State private var pendingCloudDrop: PendingCloudDrop?
     @State private var showNewFolderDialog: Bool = false
@@ -62,6 +64,23 @@ struct FileListView: View {
                 Divider()
             }
             fileArea
+                .overlay(alignment: .topTrailing) {
+                    if showSlowLoadIndicator {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(8)
+                    }
+                }
+                // Only for a load that's noticeably slow: a spinner on every
+                // refresh would be its own kind of flicker.
+                .task(id: fm.isLoading) {
+                    guard fm.isLoading else {
+                        showSlowLoadIndicator = false
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if !Task.isCancelled, fm.isLoading { showSlowLoadIndicator = true }
+                }
             if showStatusBar {
                 Divider()
                 statusFooter
@@ -112,6 +131,49 @@ struct FileListView: View {
                 Text(L10n.format("Are you sure you want to move %d items to the Trash?", items.count))
             }
         }
+        .onChange(of: fm.itemsBlockedByPermission.isEmpty) { _, isEmpty in
+            guard !isEmpty else { return }
+            // Same deferral as below: the Move-to-Trash dialog has to be
+            // gone before another one can present.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                showPermissionBlockedAlert = true
+            }
+        }
+        .confirmationDialog(
+            trashRefusalTitle(fm.trashRefusal),
+            isPresented: $showPermissionBlockedAlert
+        ) {
+            switch fm.trashRefusal {
+            case .trashFolderUnwritable(let trashPath, _):
+                Button(L10n.text("Copy Repair Command")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        FileSystemService.trashRepairCommand(trashPath: trashPath), forType: .string)
+                    fm.itemsBlockedByPermission = []
+                }
+                .keyboardShortcut(.defaultAction)
+                deletePermanentlyBlockedButton(fm)
+            case .folderNotWritable:
+                // Deleting needs the same permission, so there's nothing to
+                // offer but the explanation.
+                Button(L10n.text("OK"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            case .unknown:
+                Button(L10n.text("Open Privacy Settings…")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    fm.itemsBlockedByPermission = []
+                }
+                .keyboardShortcut(.defaultAction)
+                deletePermanentlyBlockedButton(fm)
+            }
+            if !isFolderNotWritable(fm.trashRefusal) {
+                Button(L10n.text("Cancel"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            }
+        } message: {
+            Text(trashRefusalMessage(fm.trashRefusal, items: fm.itemsBlockedByPermission))
+        }
         .onChange(of: fm.itemsNeedingPermanentDelete.isEmpty) { _, isEmpty in
             guard !isEmpty else { return }
             // Defer until the "Move to Trash" dialog has fully dismissed,
@@ -141,17 +203,6 @@ struct FileListView: View {
             } else {
                 Text(L10n.format("%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone.", items.count))
             }
-        }
-        .sheet(isPresented: $showConflict) {
-            if let conflict = fm.pendingConflict {
-                ConflictResolutionView(conflict: conflict) { resolution in
-                    showConflict = false
-                    fm.resolveConflict(resolution)
-                }
-            }
-        }
-        .onChange(of: fm.pendingConflict != nil) { _, hasConflict in
-            showConflict = hasConflict
         }
         .confirmationDialog(
             L10n.text("Move or Copy?"),
@@ -197,17 +248,43 @@ struct FileListView: View {
                 onCancel: { showRenameDialog = false }
             )
         }
+        .alert(
+            L10n.text("Error"),
+            isPresented: Binding(
+                get: { fm.error != nil },
+                set: { if !$0 { fm.error = nil } }
+            ),
+            presenting: fm.error
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { fm.error = nil }
+        } message: { message in
+            Text(message)
+        }
+        .alert(
+            L10n.text("Archive failed"),
+            isPresented: Binding(
+                get: { fm.archiveError != nil },
+                set: { if !$0 { fm.archiveError = nil } }
+            ),
+            presenting: fm.archiveError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { fm.archiveError = nil }
+        } message: { message in
+            Text(message)
+        }
         .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.quickFilter.notification)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             fm.isFilterBarVisible = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             newFolderName = L10n.text("New Folder")
             showNewFolderDialog = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuRename)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             if let item = fm.selectedItems.first, fm.selectedItems.count == 1 {
                 renameItem = item
                 renameText = item.name
@@ -215,13 +292,18 @@ struct FileListView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuDelete)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             triggerDelete()
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
             guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
             let items = fm.selectedItems
             guard !items.isEmpty else { return }
+            if fm.isBrowsingArchive {
+                extractToOtherPanel(items)
+                return
+            }
             let otherSide: PanelSide = panelSide == .left ? .right : .left
             let transfer = TransferProgress(operation: "Copying", totalItems: items.count)
             appState.addTransfer(transfer, panel: otherSide)
@@ -239,7 +321,8 @@ struct FileListView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
-            guard appState.activePanel == panelSide, !appState.isActivePanelCloud else { return }
+            guard appState.activePanel == panelSide, !appState.isActivePanelCloud,
+                  !fm.isBrowsingArchive else { return }
             let items = fm.selectedItems
             guard !items.isEmpty else { return }
             let otherSide: PanelSide = panelSide == .left ? .right : .left
@@ -250,7 +333,9 @@ struct FileListView: View {
                 cloudVM.conflictDirection = outgoingDirection
                 transfer.task = Task {
                     await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                    await fm.deleteItems(items)
+                    // Only what arrived: deleting here is permanent.
+                    let landed = transfer.succeededNames
+                    await fm.deleteItems(items.filter { landed.contains($0.url.lastPathComponent) })
                     await fm.refresh()
                 }
             } else {
@@ -303,8 +388,89 @@ struct FileListView: View {
     /// preference. Used by both the menu (`menuDelete` notification) and
     /// the keyboard / context-menu Delete callback so the preference takes
     /// effect everywhere a delete can be initiated from this view.
+    /// What a drag out of the open archive needs in order to unpack an
+    /// entry at the drop end.
+    private var archiveDragPlan: ArchiveDragPlan? {
+        guard let session = fm.archiveSession else { return nil }
+        return ArchiveDragPlan(
+            archiveURL: session.archiveURL,
+            format: session.format,
+            tree: session.tree,
+            innerPath: session.innerPath
+        )
+    }
+
+    /// Sends the selection to the other panel.
+    ///
+    /// Inside an archive the selected entries are unpacked and then moved on
+    /// — unpacking into FileFluss's staging folder first rather than straight
+    /// into the destination, so the usual conflict dialog gets its say about
+    /// a name that is already taken. The move costs nothing when staging and
+    /// destination share a volume, which is the normal case.
+    ///
+    /// Outside one, the selected archive is unpacked into the other panel's
+    /// folder — or, when that panel is a cloud account, into staging and then
+    /// uploaded.
+    private func extractToOtherPanel(_ items: [FileItem]) {
+        guard !items.isEmpty else { return }
+        let otherSide: PanelSide = panelSide == .left ? .right : .left
+        let cloudId = appState.cloudAccountId(for: otherSide)
+        let transfer = TransferProgress(operation: "Extracting", totalItems: items.count)
+        appState.addTransfer(transfer, panel: otherSide)
+        fm.conflictDirection = outgoingDirection
+
+        if fm.isBrowsingArchive {
+            transfer.task = Task {
+                let staged = await fm.materialiseFromArchive(items, progress: transfer)
+                guard !staged.isEmpty else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                if let cloudId {
+                    let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                    cloudVM.conflictDirection = outgoingDirection
+                    await cloudVM.uploadFiles(from: staged, progress: transfer)
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    await fm.performMove(
+                        items: staged.map { FileItem(url: $0) },
+                        to: otherFM.currentDirectory,
+                        progress: transfer
+                    )
+                    await appState.refreshAllPanels()
+                }
+            }
+            return
+        }
+
+        guard let archive = items.first else { return }
+        transfer.task = Task {
+            if let cloudId {
+                guard let extracted = await fm.extractArchiveToStaging(archive, progress: transfer) else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                let cloudVM = appState.cloudFileManager(for: cloudId, side: otherSide)
+                cloudVM.conflictDirection = outgoingDirection
+                await cloudVM.uploadFiles(from: extracted.items, progress: transfer)
+                try? FileManager.default.removeItem(at: extracted.staging)
+            } else {
+                let otherFM = appState.fileManager(for: otherSide)
+                await fm.extractArchive(
+                    archive, into: otherFM.currentDirectory, progress: transfer
+                )
+                await appState.refreshAllPanels()
+            }
+        }
+    }
+
     private func triggerDelete() {
-        guard !fm.selectedItems.isEmpty else { return }
+        // Deleting inside an archive would mean rewriting it, which FileFluss
+        // doesn't do — the affordance is withheld rather than offered and
+        // then refused.
+        guard !fm.isBrowsingArchive, !fm.selectedItems.isEmpty else { return }
         if confirmDelete {
             showDeleteConfirmation = true
         } else {
@@ -316,6 +482,9 @@ struct FileListView: View {
     }
 
     private func handlePathDropURLs(_ urls: [URL], target: URL) -> Bool {
+        // A breadcrumb inside an archive points at a path with no folder
+        // behind it, so there is nowhere to drop.
+        guard !fm.isBrowsingArchive else { return false }
         let urlPaths = Set(urls.map { $0.standardizedFileURL.path() })
         let matched = fm.items.filter { urlPaths.contains($0.url.standardizedFileURL.path()) }
         let droppedItems: [FileItem]
@@ -346,7 +515,8 @@ struct FileListView: View {
     /// Drop a cloud-panel drag onto a breadcrumb component. Reuses
     /// `cloudDragSource*` state set by the cloud panel's drag-start hook.
     private func handlePathDropCloudPromise(target: URL) -> Bool {
-        guard !appState.cloudDragSourceItems.isEmpty,
+        guard !fm.isBrowsingArchive,
+              !appState.cloudDragSourceItems.isEmpty,
               let sourceAccountId = appState.cloudDragSourceAccountId else { return false }
         let drop = PendingCloudDrop(
             sourceItems: appState.cloudDragSourceItems,
@@ -446,7 +616,10 @@ struct FileListView: View {
 
     private var fileArea: some View {
         Group {
-            if fm.isLoading {
+            // Only with nothing to show. The table stays up during a refresh,
+            // so a finished transfer doesn't cost the scroll position, the
+            // sort arrow or the column widths.
+            if fm.isLoading && fm.items.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -530,7 +703,9 @@ struct FileListView: View {
                                     cloudVM.conflictDirection = outgoingDirection
                                     transfer.task = Task {
                                         await cloudVM.uploadFiles(from: items.map(\.url), progress: transfer)
-                                        await fm.deleteItems(items)
+                                        // Only what arrived: deleting here is permanent.
+                                        let landed = transfer.succeededNames
+                                        await fm.deleteItems(items.filter { landed.contains($0.url.lastPathComponent) })
                                         await fm.refresh()
                                     }
                                 } else {
@@ -564,16 +739,22 @@ struct FileListView: View {
                         appState.activePanel = panelSide
                     },
                     onReceivePromises: { targetDir in
-                        if !appState.cloudDragSourceItems.isEmpty,
-                           let sourceAccountId = appState.cloudDragSourceAccountId {
-                            let drop = PendingCloudDrop(
-                                sourceItems: appState.cloudDragSourceItems,
-                                sourceAccountId: sourceAccountId,
-                                targetDirectory: targetDir
-                            )
-                            presentOrRunCloudToLocalDrop(drop)
+                        // Only a cloud panel's drag is handled here. Say so,
+                        // so anything else on the pasteboard — an entry
+                        // dragged out of an archive — goes to the standard
+                        // promise receiver instead of being swallowed.
+                        guard !appState.cloudDragSourceItems.isEmpty,
+                              let sourceAccountId = appState.cloudDragSourceAccountId else {
+                            return false
                         }
+                        let drop = PendingCloudDrop(
+                            sourceItems: appState.cloudDragSourceItems,
+                            sourceAccountId: sourceAccountId,
+                            targetDirectory: targetDir
+                        )
+                        presentOrRunCloudToLocalDrop(drop)
                         Task { await fm.refresh() }
+                        return true
                     },
                     onCreateFolder: {
                         newFolderName = L10n.text("New Folder")
@@ -585,6 +766,12 @@ struct FileListView: View {
                         showRenameDialog = true
                     },
                     onOpenInFinder: { items in
+                        // Nothing inside an archive has a path Finder knows,
+                        // so the archive file itself is what gets revealed.
+                        if let archive = fm.archiveSession?.archiveURL, items.isEmpty {
+                            NSWorkspace.shared.activateFileViewerSelecting([archive])
+                            return
+                        }
                         // Local files always have a real Finder path — reveal directly.
                         let urls = items.map(\.url)
                         guard !urls.isEmpty else { return }
@@ -604,7 +791,37 @@ struct FileListView: View {
                         }
                     },
                     focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
-                    singlePaneMode: appState.singlePaneMode
+                    singlePaneMode: appState.singlePaneMode,
+                    archiveMode: fm.isBrowsingArchive,
+                    archiveDragPlan: archiveDragPlan,
+                    onCompress: { items, format in
+                        let transfer = TransferProgress(
+                            operation: "Compressing", totalItems: items.count
+                        )
+                        appState.addTransfer(transfer, panel: panelSide)
+                        transfer.task = Task {
+                            await fm.compress(items, format: format, progress: transfer)
+                        }
+                    },
+                    onExtractHere: { archive in
+                        let transfer = TransferProgress(operation: "Extracting", totalItems: 1)
+                        appState.addTransfer(transfer, panel: panelSide)
+                        transfer.task = Task {
+                            await fm.extractArchive(
+                                archive, into: fm.currentDirectory, progress: transfer
+                            )
+                        }
+                    },
+                    onExtractToOtherPanel: { items in
+                        extractToOtherPanel(items)
+                    },
+                    onPromisedFilesReceived: { error in
+                        if let error { fm.archiveError = error.localizedDescription }
+                        Task { await appState.refreshAllPanels() }
+                    },
+                    onOpenWith: { items, app in
+                        Task { await fm.open(items, withApplication: app) }
+                    }
                 )
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()
@@ -678,3 +895,50 @@ struct FileListView: View {
     }
 }
 
+
+// MARK: - Trash refused
+
+extension FileListView {
+    private func isFolderNotWritable(_ refusal: FileSystemService.TrashRefusal) -> Bool {
+        if case .folderNotWritable = refusal { return true }
+        return false
+    }
+
+    private func trashRefusalTitle(_ refusal: FileSystemService.TrashRefusal) -> String {
+        switch refusal {
+        case .trashFolderUnwritable: L10n.text("Your Trash folder can't be written to")
+        case .folderNotWritable, .unknown: L10n.text("FileFluss isn't allowed to move this to the Trash")
+        }
+    }
+
+    private func trashRefusalMessage(_ refusal: FileSystemService.TrashRefusal, items: [FileItem]) -> String {
+        let name = items.count == 1 ? "\"\(items[0].name)\"" : L10n.format("%d items", items.count)
+        switch refusal {
+        case .trashFolderUnwritable(let trashPath, let ownerUID):
+            let cause: String
+            if ownerUID != getuid() {
+                let owner = getpwuid(ownerUID).flatMap { String(validatingCString: $0.pointee.pw_name) } ?? String(ownerUID)
+                cause = L10n.format("macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you.", name, trashPath, owner)
+            } else {
+                cause = L10n.format("macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes.", name, trashPath)
+            }
+            return cause + " " + L10n.text("Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.")
+        case .folderNotWritable(let folderPath):
+            return L10n.format("You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.", name, folderPath)
+        case .unknown:
+            return L10n.format("macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.", name)
+        }
+    }
+
+    @ViewBuilder
+    private func deletePermanentlyBlockedButton(_ fm: FileManagerViewModel) -> some View {
+        Button(L10n.text("Delete Permanently"), role: .destructive) {
+            let items = fm.itemsBlockedByPermission
+            fm.itemsBlockedByPermission = []
+            Task {
+                await fm.permanentlyDelete(items)
+                await appState.refreshAllPanels()
+            }
+        }
+    }
+}

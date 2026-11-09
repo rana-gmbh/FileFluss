@@ -102,7 +102,7 @@ struct FileToolbar: CustomizableToolbarContent {
 
         ToolbarItem(id: "refresh", placement: .primaryAction) {
             Button {
-                Task { await appState.refreshAllPanels() }
+                Task { await appState.refreshVisiblePanels() }
             } label: {
                 Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
             }

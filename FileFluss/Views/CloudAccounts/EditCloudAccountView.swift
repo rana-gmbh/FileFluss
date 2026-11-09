@@ -133,8 +133,10 @@ struct EditCloudAccountView: View {
             webDAVFields
         case .sftp:
             sftpFields
-        case .synologyDrive:
+        case .synologyDrive, .ugreen, .asustor:
             synologyDriveFields
+        case .qnap:
+            qnapFields
         case .wordpress:
             wordPressFields
         case .s3:
@@ -155,12 +157,30 @@ struct EditCloudAccountView: View {
             googleDrivePickerHint
         case .gopro:
             goProHint
+        case .github:
+            gitHubHint
+        case .drime:
+            drimeHint
         }
     }
 
     private var goProHint: some View {
         Text(L10n.text("GoPro cameras connect automatically when on and reachable. To pair a different camera, remove this one and add it again."))
             .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var gitHubHint: some View {
+        LText("To use a different personal access token, remove this account and add it again.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var drimeHint: some View {
+        LText("To connect Drime with a different token or account, remove this account and add it again.")
+            .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -428,7 +448,34 @@ struct EditCloudAccountView: View {
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.password)
                 .disabled(isAuthenticating)
-            TextField(L10n.text("OTP Code (only if 2-factor auth is on)"), text: $synologyOTP)
+            // UGREEN and ASUSTOR share this form; their WebDAV login has
+            // no second factor.
+            if account.providerType == .synologyDrive {
+                TextField(L10n.text("OTP Code (only if 2-factor auth is on)"), text: $synologyOTP)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { save() }
+            }
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $synologyAllowSelfSigned)
+                .disabled(isAuthenticating)
+        }
+    }
+
+    private var qnapFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(L10n.text("Server URL"), text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+            TextField(L10n.text("Username"), text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+            SecureField(L10n.text("Password"), text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+            TextField(L10n.text("2-step verification code (only if it's on)"), text: $synologyOTP)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isAuthenticating)
                 .onSubmit { save() }
@@ -652,9 +699,14 @@ struct EditCloudAccountView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            Button(L10n.text("Cancel")) { dismiss() }
+            // Works during a save too: one aimed at a wrong or unreachable
+            // server would otherwise hold the sheet until it timed out.
+            Button(L10n.text("Cancel")) {
+                saveTask?.cancel()
+                saveTask = nil
+                dismiss()
+            }
                 .keyboardShortcut(.cancelAction)
-                .disabled(isAuthenticating)
 
             Spacer()
             if isAuthenticating {
@@ -668,7 +720,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             EmptyView()
         case .dropbox, .googleDrive, .oneDrive, .box:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
@@ -714,7 +766,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -766,7 +818,7 @@ struct EditCloudAccountView: View {
                 || !password.isEmpty
                 || !sftpPrivateKeyContents.isEmpty
                 || !sftpPassphrase.isEmpty
-        case .synologyDrive:
+        case .synologyDrive, .qnap, .ugreen, .asustor:
             return serverURL != initial.serverURL
                 || username != initial.username
                 || !password.isEmpty
@@ -819,7 +871,7 @@ struct EditCloudAccountView: View {
             case .password: return !password.isEmpty
             case .privateKey: return !sftpPrivateKeyContents.isEmpty
             }
-        case .synologyDrive:
+        case .synologyDrive, .qnap, .ugreen, .asustor:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
         case .wordpress:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
@@ -838,7 +890,7 @@ struct EditCloudAccountView: View {
             return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             return true
         }
     }
@@ -944,13 +996,34 @@ struct EditCloudAccountView: View {
                     )
                 }
             case .synologyDrive:
-                let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Same as the Add sheet: authenticator apps show the code in
+                // two groups, and people paste it that way.
+                let otp = String(synologyOTP.filter { !$0.isWhitespace })
                 await appState.syncManager.updateSynologyDriveAccount(
                     accountId: id,
                     serverURL: serverURL,
                     username: username,
                     password: password,
                     otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .qnap:
+                let code = String(synologyOTP.filter { !$0.isWhitespace })
+                await appState.syncManager.updateQNAPAccount(
+                    accountId: id,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
+                    securityCode: code.isEmpty ? nil : code,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .ugreen, .asustor:
+                await appState.syncManager.updateNASWebDAVAccount(
+                    accountId: id,
+                    brand: account.providerType == .ugreen ? .ugreen : .asustor,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
                     allowSelfSignedCertificate: synologyAllowSelfSigned
                 )
             case .wordpress:
@@ -1002,7 +1075,7 @@ struct EditCloudAccountView: View {
                     useTLS: ftpUseTLS,
                     allowInvalidCertificate: ftpAllowSelfSigned
                 )
-            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro:
+            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
                 break
             }
 

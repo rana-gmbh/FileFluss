@@ -55,6 +55,11 @@ public actor SyncEngine {
         case .jottacloud: return JottacloudProvider()
         case .googleDrivePicker: return GoogleDrivePickerProvider()
         case .gopro: return GoProProvider()
+        case .github: return GitHubProvider()
+        case .drime: return DrimeProvider()
+        case .qnap: return QNAPProvider()
+        case .ugreen: return NASWebDAVProvider(brand: .ugreen)
+        case .asustor: return NASWebDAVProvider(brand: .asustor)
         }
     }
 }

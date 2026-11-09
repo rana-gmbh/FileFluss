@@ -3,16 +3,27 @@ import FileFlussCore
 import SwiftUI
 import AppKit
 
-/// Records a 60-second window of support events, then prompts the user to
-/// save the bundle for bug reports.
+/// Records support events until the user stops, then prompts them to save
+/// the bundle for a bug report.
+///
+/// It used to stop by itself after sixty seconds. That is shorter than the
+/// problems people need to record: someone trying to report a 1.5 GB upload
+/// failing part way through couldn't capture it at all, because the
+/// recording ended minutes before the failure did. Recording now runs until
+/// it is stopped, with a long backstop so a forgotten recording can't run
+/// for a day.
 @Observable @MainActor
 final class SupportLogService {
     static let shared = SupportLogService()
 
     private(set) var isRecording: Bool = false
-    private(set) var secondsRemaining: Int = 0
+    /// How long the current recording has been running.
+    private(set) var secondsElapsed: Int = 0
 
-    private static let recordingDuration: Int = 60
+    /// Stops a recording the user has forgotten about. Long enough for any
+    /// transfer worth reporting; the log itself is a bounded ring buffer, so
+    /// a long recording costs no memory.
+    private static let maximumDuration: Int = 60 * 60
 
     private var startDate: Date?
     private var tickTimer: Timer?
@@ -23,7 +34,7 @@ final class SupportLogService {
         guard !isRecording else { return }
         isRecording = true
         startDate = Date()
-        secondsRemaining = Self.recordingDuration
+        secondsElapsed = 0
         SupportLogger.shared.log("Support log recording started", category: "support", level: .notice)
 
         tickTimer?.invalidate()
@@ -34,12 +45,23 @@ final class SupportLogService {
         }
     }
 
+    /// Ends the recording and offers the report for saving. Called from the
+    /// menu item and the banner's Stop button.
+    func stop() {
+        guard isRecording else { return }
+        tickTimer?.invalidate()
+        tickTimer = nil
+        Task { await finish() }
+    }
+
     private func tick() {
-        secondsRemaining -= 1
-        if secondsRemaining <= 0 {
-            tickTimer?.invalidate()
-            tickTimer = nil
-            Task { await finish() }
+        secondsElapsed += 1
+        if secondsElapsed >= Self.maximumDuration {
+            SupportLogger.shared.log(
+                "Support log recording hit the one-hour limit and stopped itself",
+                category: "support", level: .notice
+            )
+            stop()
         }
     }
 
@@ -55,8 +77,13 @@ final class SupportLogService {
         tickTimer?.invalidate()
         tickTimer = nil
         startDate = nil
-        secondsRemaining = 0
+        secondsElapsed = 0
         isRecording = false
+    }
+
+    /// `3:42`, for the banner.
+    var elapsedText: String {
+        String(format: "%d:%02d", secondsElapsed / 60, secondsElapsed % 60)
     }
 
     // MARK: - Report

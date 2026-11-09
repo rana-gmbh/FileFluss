@@ -324,20 +324,20 @@ struct CompareFoldersView: View {
         var parts: [String] = []
         switch filter {
         case .all:
-            if counts.different > 0 { parts.append("\(counts.different) different") }
-            if counts.onlyLeft > 0 { parts.append("\(counts.onlyLeft) only left") }
-            if counts.onlyRight > 0 { parts.append("\(counts.onlyRight) only right") }
-            if counts.identical > 0 { parts.append("\(counts.identical) same") }
+            if counts.different > 0 { parts.append(L10n.format("%d different", counts.different)) }
+            if counts.onlyLeft > 0 { parts.append(L10n.format("%d only left", counts.onlyLeft)) }
+            if counts.onlyRight > 0 { parts.append(L10n.format("%d only right", counts.onlyRight)) }
+            if counts.identical > 0 { parts.append(L10n.format("%d same", counts.identical)) }
         case .differences:
-            if counts.different > 0 { parts.append("\(counts.different) different") }
-            if counts.onlyLeft > 0 { parts.append("\(counts.onlyLeft) only left") }
-            if counts.onlyRight > 0 { parts.append("\(counts.onlyRight) only right") }
+            if counts.different > 0 { parts.append(L10n.format("%d different", counts.different)) }
+            if counts.onlyLeft > 0 { parts.append(L10n.format("%d only left", counts.onlyLeft)) }
+            if counts.onlyRight > 0 { parts.append(L10n.format("%d only right", counts.onlyRight)) }
         case .onlyLeft:
-            if counts.onlyLeft > 0 { parts.append("\(counts.onlyLeft) only left") }
+            if counts.onlyLeft > 0 { parts.append(L10n.format("%d only left", counts.onlyLeft)) }
         case .onlyRight:
-            if counts.onlyRight > 0 { parts.append("\(counts.onlyRight) only right") }
+            if counts.onlyRight > 0 { parts.append(L10n.format("%d only right", counts.onlyRight)) }
         case .identical:
-            if counts.identical > 0 { parts.append("\(counts.identical) same") }
+            if counts.identical > 0 { parts.append(L10n.format("%d same", counts.identical)) }
         }
         return parts.joined(separator: " · ")
     }
@@ -366,7 +366,7 @@ struct CompareFoldersView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let entry, compareDates, entry.status == .differs, let newer = newerSide(entry) {
-                        Text(newer == .left ? "Left newer" : "Right newer")
+                        Text(L10n.text(newer == .left ? "Left newer" : "Right newer"))
                             .font(.caption2.bold())
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1)
@@ -614,7 +614,7 @@ struct CompareFoldersView: View {
             result = FolderComparison.compare(left: l, right: r, compareDates: compareDates)
             rebuildTree()
         } catch {
-            errorMessage = "Could not read folders: \(error.localizedDescription)"
+            errorMessage = L10n.format("Could not read folders: %@", error.localizedDescription)
             result = nil
         }
     }

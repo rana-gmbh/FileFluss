@@ -34,14 +34,31 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         otp: String? = nil,
         allowSelfSignedCertificate: Bool
     ) async throws {
-        let credentials = try await SynologyDriveAPIClient.authenticate(
+        // Carry a device token this account already has into the new login,
+        // so editing a 2FA account — a changed password, a toggled
+        // certificate setting — doesn't demand a fresh OTP or throw the
+        // token away. Only when the server and user are unchanged: a token
+        // belongs to one DSM account, and must not be sent to another host.
+        let stored = KeychainService.load(key: keychainKey, as: SynologyDriveCredentials.self)
+        let reusableDeviceId = stored.flatMap { existing -> String? in
+            guard existing.username == username,
+                  existing.serverURL == SynologyDriveAPIClient.normalizeServerURL(serverURL)
+            else { return nil }
+            return existing.deviceId
+        }
+
+        let client = try await SynologyDriveAPIClient.authenticatedClient(
             serverURL: serverURL,
             username: username,
             password: password,
             otp: otp,
-            allowSelfSignedCertificate: allowSelfSignedCertificate
+            allowSelfSignedCertificate: allowSelfSignedCertificate,
+            deviceId: reusableDeviceId
         )
-        self.apiClient = SynologyDriveAPIClient(credentials: credentials)
+        let credentials = await client.credentials
+        // Keep the client that logged in: it already holds the session, so the
+        // first folder listing doesn't trigger a second login without an OTP.
+        self.apiClient = client
         try KeychainService.save(key: keychainKey, value: credentials)
         synologyDriveProviderLog.info("[Synology] Authenticated as \(credentials.displayName)")
     }

@@ -24,11 +24,24 @@ final class SyncViewModel {
     // Box OAuth state
     var isAuthenticatingBox: Bool = false
 
+    // Drime OAuth state
+    var isAuthenticatingDrime: Bool = false
+
     // NextCloud Login Flow v2 state (browser-based sign-in)
     var isAuthenticatingNextCloud: Bool = false
 
     private let syncEngine = SyncEngine.shared
-    private static let accountsKey = "cloudAccounts"
+    #if DEBUG
+    /// Debug builds keep their own list. They share the bundle ID, and so
+    /// the preferences, of the installed release app, which showed every
+    /// test account without its credentials (Debug keeps those in its own
+    /// folder, not the Keychain). Removing them there removed them here too,
+    /// and the whole set had to be added again for the next version test.
+    static let accountsKey = "debugCloudAccounts"
+    static let sharedAccountsKey = "cloudAccounts"
+    #else
+    static let accountsKey = "cloudAccounts"
+    #endif
 
     /// True when a stored account list existed but couldn't be decoded. In
     /// that state `accounts` is empty through no fault of the user, and
@@ -104,6 +117,7 @@ final class SyncViewModel {
         isAuthenticatingOneDrive = false
         isAuthenticatingNextCloud = false
         isAuthenticatingBox = false
+        isAuthenticatingDrime = false
         authError = nil
     }
 
@@ -138,7 +152,7 @@ final class SyncViewModel {
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
         } catch CloudProviderError.serverError(1022) {
-            authError = "pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field."
+            authError = L10n.text("pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.")
         } catch {
             authError = error.localizedDescription
         }
@@ -597,6 +611,53 @@ final class SyncViewModel {
         }
     }
 
+    func addGitHubAccount(token: String) async {
+        let account = CloudAccount(providerType: .github)
+        let provider = GitHubProvider(accountId: account.id)
+        authError = nil
+        do {
+            let login = try await provider.authenticate(token: token)
+            var connectedAccount = account
+            connectedAccount.displayName = "GitHub (\(login))"
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func addDrimeAccount(personalToken: String) async {
+        await connectDrime { try await $0.authenticate(personalToken: personalToken) }
+    }
+
+    func addDrimeAccountViaBrowser() async {
+        isAuthenticatingDrime = true
+        defer { isAuthenticatingDrime = false }
+        await connectDrime { try await $0.startOAuthFlow() }
+    }
+
+    private func connectDrime(_ signIn: (DrimeProvider) async throws -> DrimeCredentials) async {
+        let account = CloudAccount(providerType: .drime)
+        let provider = DrimeProvider(accountId: account.id)
+        authError = nil
+        do {
+            let credentials = try await signIn(provider)
+            var connectedAccount = account
+            let name = credentials.email.isEmpty ? credentials.displayName : credentials.email
+            if !name.isEmpty {
+                connectedAccount.displayName = "Drime (\(name))"
+            }
+            connectedAccount.isConnected = true
+            accounts.append(connectedAccount)
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            saveAccounts()
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
     /// TeraBox device-code login: fetch a QR, surface it for the user to scan
     /// in the TeraBox app, then poll for the token and register the account.
     func connectTeraBox() async {
@@ -627,7 +688,7 @@ final class SyncViewModel {
         // Disallow more than one iCloud account — they all back the same
         // CloudDocs folder, so duplicates would only confuse the sidebar.
         if accounts.contains(where: { $0.providerType == .iCloud }) {
-            authError = "iCloud Drive is already added."
+            authError = L10n.text("iCloud Drive is already added.")
             return
         }
         let provider = ICloudProvider()
@@ -711,6 +772,78 @@ final class SyncViewModel {
             saveAccounts()
         } catch {
             authError = error.localizedDescription
+        }
+    }
+
+    func addQNAPAccount(
+        serverURL: String,
+        username: String,
+        password: String,
+        securityCode: String?,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: .qnap)
+        let provider = QNAPProvider(accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                securityCode: securityCode,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finishAddingNASAccount(account, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// UGREEN and ASUSTOR NAS accounts, both reached over the box's WebDAV
+    /// service.
+    func addNASWebDAVAccount(
+        brand: NASWebDAVBrand,
+        serverURL: String,
+        username: String,
+        password: String,
+        allowSelfSignedCertificate: Bool
+    ) async {
+        let account = CloudAccount(providerType: brand.providerType)
+        let provider = NASWebDAVProvider(brand: brand, accountId: account.id)
+        authError = nil
+
+        do {
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finishAddingNASAccount(account, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// Names the account "<Maker> (user@host)", the way Synology accounts
+    /// are named, then registers it.
+    private func finishAddingNASAccount(_ account: CloudAccount, provider: any CloudProvider) async {
+        var connectedAccount = account
+        if let userName = try? await nasUserDisplayName(provider), !userName.isEmpty {
+            connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
+        }
+        connectedAccount.isConnected = true
+        accounts.append(connectedAccount)
+        await syncEngine.registerProvider(for: account.id, provider: provider)
+        saveAccounts()
+    }
+
+    private func nasUserDisplayName(_ provider: any CloudProvider) async throws -> String? {
+        switch provider {
+        case let qnap as QNAPProvider: return try await qnap.userDisplayName()
+        case let nas as NASWebDAVProvider: return try await nas.userDisplayName()
+        default: return nil
         }
     }
 
@@ -860,7 +993,7 @@ final class SyncViewModel {
         do {
             try await provider.connectCOHN(ipAddress: ipAddress, username: username, password: password, cameraName: nil)
             var connectedAccount = account
-            connectedAccount.displayName = (try? await provider.userDisplayName()) ?? "GoPro Camera"
+            connectedAccount.displayName = (try? await provider.userDisplayName()) ?? L10n.text("GoPro Camera")
             connectedAccount.isConnected = true
             accounts.append(connectedAccount)
             await syncEngine.registerProvider(for: account.id, provider: provider)
@@ -935,6 +1068,7 @@ final class SyncViewModel {
     func providerSupportsInlineReauth(_ type: CloudProviderType) -> Bool {
         switch type {
         case .googleDrive, .dropbox, .box, .oneDrive: return true
+        case .drime: return DrimeAPIClient.isOAuthAvailable
         default: return false
         }
     }
@@ -965,6 +1099,10 @@ final class SyncViewModel {
                 let provider = OneDriveProvider(accountId: accountId)
                 _ = try await provider.startOAuthFlow()
                 await syncEngine.registerProvider(for: accountId, provider: provider)
+            case .drime where DrimeAPIClient.isOAuthAvailable:
+                let provider = DrimeProvider(accountId: accountId)
+                _ = try await provider.startOAuthFlow()
+                await syncEngine.registerProvider(for: accountId, provider: provider)
             default:
                 return
             }
@@ -972,12 +1110,28 @@ final class SyncViewModel {
                 accounts[idx].isConnected = true
                 saveAccounts()
             }
+            markSignInWorks(accountId: accountId)
         } catch {
             authError = error.localizedDescription
         }
     }
 
+    /// Accounts saved as disconnected by an expired sign-in, in versions that
+    /// recorded it that way. With credentials to try, they're live again, and
+    /// the panel shows Sign In if those credentials still don't work.
+    private func restoreDisconnectedAccounts() async {
+        var changed = false
+        for account in accounts where !account.isConnected {
+            guard await syncEngine.provider(for: account.id) != nil,
+                  let index = accounts.firstIndex(where: { $0.id == account.id }) else { continue }
+            accounts[index].isConnected = true
+            changed = true
+        }
+        if changed { saveAccounts() }
+    }
+
     func reconnectSavedAccounts() async {
+        defer { Task { await restoreDisconnectedAccounts() } }
         for account in accounts {
             switch account.providerType {
             case .googleDrive:
@@ -1062,6 +1216,16 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
+            case .qnap:
+                let provider = QNAPProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .ugreen, .asustor:
+                let provider = NASWebDAVProvider(brand: account.providerType == .ugreen ? .ugreen : .asustor, accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             case .synologyC2:
                 let provider = SynologyC2Provider(accountId: account.id)
                 if await provider.isAuthenticated {
@@ -1112,6 +1276,16 @@ final class SyncViewModel {
                 if await provider.isAuthenticated {
                     await syncEngine.registerProvider(for: account.id, provider: provider)
                 }
+            case .github:
+                let provider = GitHubProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
+            case .drime:
+                let provider = DrimeProvider(accountId: account.id)
+                if await provider.isAuthenticated {
+                    await syncEngine.registerProvider(for: account.id, provider: provider)
+                }
             case .gopro:
                 let provider = GoProProvider(accountId: account.id)
                 if await provider.isAuthenticated {
@@ -1124,6 +1298,19 @@ final class SyncViewModel {
         }
     }
 
+    /// Accounts whose sign-in stopped working this session.
+    ///
+    /// Apart from `isConnected`, which decides whether a panel shows the live
+    /// account or an offline snapshot. An expired sign-in used to clear that
+    /// flag, which took the panel, and the Sign In button with it, away, and
+    /// was saved, so the account stayed stuck after a relaunch.
+    private(set) var accountsNeedingSignIn: Set<UUID> = []
+
+    /// What the status dot shows.
+    func isSignedIn(_ account: CloudAccount) -> Bool {
+        account.isConnected && !accountsNeedingSignIn.contains(account.id)
+    }
+
     /// Records that an account's credentials stopped working, so the
     /// sidebar stops showing it as connected.
     ///
@@ -1131,10 +1318,11 @@ final class SyncViewModel {
     /// required" — the app contradicting itself in two places at once
     /// (issue #46).
     func markNeedsReAuthentication(accountId: UUID) {
-        guard let idx = accounts.firstIndex(where: { $0.id == accountId }),
-              accounts[idx].isConnected else { return }
-        accounts[idx].isConnected = false
-        saveAccounts()
+        accountsNeedingSignIn.insert(accountId)
+    }
+
+    func markSignInWorks(accountId: UUID) {
+        accountsNeedingSignIn.remove(accountId)
     }
 
     func accountFor(id: UUID) -> CloudAccount? {
@@ -1171,6 +1359,7 @@ final class SyncViewModel {
             }
             saveAccounts()
         }
+        markSignInWorks(accountId: accountId)
     }
 
     func updateDropboxAccount(accountId: UUID) async {
@@ -1333,6 +1522,39 @@ final class SyncViewModel {
                 username: username,
                 password: password,
                 otp: otp,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateQNAPAccount(accountId: UUID, serverURL: String, username: String, password: String, securityCode: String?, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = QNAPProvider(accountId: accountId)
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
+                securityCode: securityCode,
+                allowSelfSignedCertificate: allowSelfSignedCertificate
+            )
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateNASWebDAVAccount(accountId: UUID, brand: NASWebDAVBrand, serverURL: String, username: String, password: String, allowSelfSignedCertificate: Bool) async {
+        authError = nil
+        do {
+            let provider = NASWebDAVProvider(brand: brand, accountId: accountId)
+            try await provider.authenticate(
+                serverURL: serverURL,
+                username: username,
+                password: password,
                 allowSelfSignedCertificate: allowSelfSignedCertificate
             )
             await finalizeUpdate(accountId: accountId, provider: provider)
@@ -1544,7 +1766,7 @@ final class SyncViewModel {
             return
         }
         do {
-            let data = try JSONEncoder().encode(accounts)
+            let data = try StoredList.encode(accounts, unreadable: unreadableAccounts)
             Self.defaults.set(data, forKey: Self.accountsKey)
         } catch {
             // A silent failure here would lose accounts the user just added —
@@ -1553,16 +1775,47 @@ final class SyncViewModel {
         }
     }
 
+    #if DEBUG
+    /// Adds the accounts from a test-account snapshot that aren't in the
+    /// list, then connects everything whose credentials are in place.
+    /// Accounts already here are left as they are. Returns how many were added.
+    @discardableResult
+    func restoreTestAccounts(_ restored: [CloudAccount]) async -> Int {
+        let known = Set(accounts.map(\.id))
+        let added = restored.filter { !known.contains($0.id) }
+        accounts += added
+        saveAccounts()
+        await reconnectSavedAccounts()
+        return added.count
+    }
+    #endif
+
+    /// Accounts in the store that this version can't read: one added in a
+    /// newer version, usually. Kept so that saving doesn't delete them.
+    private var unreadableAccounts: [Data] = []
+
     private func loadAccounts() {
+        #if DEBUG
+        // First launch with a separate list: start from the shared one, so
+        // the accounts already set up for testing carry over.
+        if Self.defaults.data(forKey: Self.accountsKey) == nil,
+           let shared = Self.defaults.data(forKey: Self.sharedAccountsKey) {
+            Self.defaults.set(shared, forKey: Self.accountsKey)
+        }
+        #endif
         guard let data = Self.defaults.data(forKey: Self.accountsKey) else { return }
-        guard let saved = try? JSONDecoder().decode([CloudAccount].self, from: data) else {
-            // Stored data exists but doesn't decode — a model change, or a
-            // truncated write. Flag it so a later save can't replace the
-            // stored list with an empty one.
+        guard let saved = StoredList.decode(data, as: CloudAccount.self) else {
+            // Stored data exists but doesn't decode — a truncated write, say.
+            // Flag it so a later save can't replace the stored list with an
+            // empty one.
             accountsLoadFailed = true
             NSLog("[FileFluss] loadAccounts: stored account list could not be decoded — it will not be overwritten")
             return
         }
-        accounts = saved
+        accounts = saved.items
+        unreadableAccounts = saved.unreadable
+        if !saved.unreadable.isEmpty {
+            NSLog("[FileFluss] loadAccounts: keeping \(saved.unreadable.count) account(s) this version can't read")
+        }
     }
 }

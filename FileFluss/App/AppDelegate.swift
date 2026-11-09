@@ -163,6 +163,16 @@ final class FileFlussAppDelegate: NSObject, NSApplicationDelegate {
     /// we can drain them — otherwise Finder is left holding `/Volumes/`
     /// entries pointing at a server that vanishes mid-quit.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Quitting stops whatever's in flight part way, with no way to resume.
+        if let running = appState?.runningTransfers.count, running > 0 {
+            let alert = NSAlert()
+            alert.messageText = L10n.text("Quit while transfers are running?")
+            alert.informativeText = L10n.format("%d transfer(s) will stop where they are.", running)
+            alert.addButton(withTitle: L10n.text("Cancel"))
+            alert.addButton(withTitle: L10n.text("Quit Anyway"))
+            if alert.runModal() == .alertFirstButtonReturn { return .terminateCancel }
+        }
+
         // Where the panels are, for the "folders from last time" setting.
         // Recorded before the unmount path below, which may end the process
         // on a different route.

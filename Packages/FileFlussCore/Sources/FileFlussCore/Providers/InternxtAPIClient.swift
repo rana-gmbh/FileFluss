@@ -61,9 +61,7 @@ public actor InternxtAPIClient {
 
     public init(credentials: InternxtCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 600
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
         self.nodeCache = ["/": Node(uuid: credentials.rootFolderUuid, isFolder: true, fileId: nil, bucket: nil, size: 0, type: nil)]
     }
@@ -256,7 +254,7 @@ public actor InternxtAPIClient {
             throw CloudProviderError.invalidResponse
         }
         try? FileManager.default.removeItem(at: localURL)
-        try plaintext.write(to: localURL)
+        try plaintext.write(to: localURL, options: .atomic)
     }
 
     // MARK: - Upload
@@ -568,7 +566,7 @@ public actor InternxtAPIClient {
             internxtLog.error("[Internxt] HTTP \(http.statusCode): \(String(data: data, encoding: .utf8)?.prefix(300) ?? "")")
             switch http.statusCode {
             case 401, 403: throw CloudProviderError.notAuthenticated
-            case 404: throw CloudProviderError.notFound("Resource not found")
+            case 404: throw CloudProviderError.notFound(L10n.text("Resource not found"))
             case 429: throw CloudProviderError.rateLimited
             default: throw CloudProviderError.serverError(http.statusCode)
             }

@@ -156,8 +156,7 @@ public actor GoProAPIClient {
             try? FileManager.default.removeItem(at: tempURL)
             throw Self.mapHTTPError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     // MARK: - Delete

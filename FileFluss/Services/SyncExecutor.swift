@@ -34,12 +34,26 @@ enum SyncExecutor {
             inbox.addUpload(bytes)
         }
 
+        // Checked here as well as in the planner window: a GoPro's delete
+        // works and its upload doesn't, so a sync toward one would only ever
+        // destroy footage.
+        if case .cloud(let accountId, _) = destination,
+           let provider = await SyncEngine.shared.provider(for: accountId),
+           provider.providerType.isReadOnly {
+            let error = SyncPlannerError.destinationReadOnly(provider.providerType.displayName)
+            progress.errorMessage = error.localizedDescription
+            progress.endTime = Date()
+            progress.isComplete = true
+            return
+        }
+
         for op in plan.operations {
             if progress.isCancelled || Task.isCancelled { break }
             let opName = displayName(for: op)
             progress.beginFile(opName)
             do {
-                try await perform(op, source: source, destination: destination,
+                try await perform(op, modificationDates: plan.sourceModificationDates,
+                                  source: source, destination: destination,
                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
                 progress.completedItems += 1
                 if case .add(_, let isDir, _) = op, !isDir {
@@ -77,6 +91,7 @@ enum SyncExecutor {
     }
 
     private static func perform(_ op: SyncOperation,
+                                modificationDates: [String: Date],
                                 source: SyncEndpoint,
                                 destination: SyncEndpoint,
                                 onDownloadBytes: @escaping @Sendable (Int64) -> Void,
@@ -87,33 +102,81 @@ enum SyncExecutor {
                 try await createDirectory(at: rel, on: destination)
             } else {
                 try await copyFile(sourceRelative: rel, destRelative: rel,
+                                   modificationDate: modificationDates[rel],
                                    source: source, destination: destination,
                                    onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
             }
         case .replace(let rel, _):
-            try await deleteFile(at: rel, on: destination)
-            try await copyFile(sourceRelative: rel, destRelative: rel,
-                               source: source, destination: destination,
-                               onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+            try await replaceFile(at: rel, modificationDate: modificationDates[rel],
+                                  source: source, destination: destination,
+                                  onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
         case .addRenamed(let srcRel, let destRel, _):
             try await copyFile(sourceRelative: srcRel, destRelative: destRel,
+                               modificationDate: modificationDates[srcRel],
                                source: source, destination: destination,
                                onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
         case .delete(let rel, let isDir, _):
             if isDir {
-                try? await deleteDirectory(at: rel, on: destination)
+                try await deleteDirectory(at: rel, on: destination)
             } else {
-                try? await deleteFile(at: rel, on: destination)
+                try await deleteFile(at: rel, on: destination)
             }
         }
     }
 
     // MARK: - Endpoint primitives
 
+    /// Copies the source's version beside the destination's and swaps it in
+    /// once it's complete. Deleting first meant a failed copy, for any reason
+    /// from a lost connection to a file over the provider's size limit, lost
+    /// the destination's version for nothing.
+    private static func replaceFile(at rel: String,
+                                    modificationDate: Date?,
+                                    source: SyncEndpoint,
+                                    destination: SyncEndpoint,
+                                    onDownloadBytes: @escaping @Sendable (Int64) -> Void,
+                                    onUploadBytes: @escaping @Sendable (Int64) -> Void) async throws {
+        /// `rel`, in the same folder but under another name.
+        func sibling(named name: String) -> String {
+            let parent = (rel as NSString).deletingLastPathComponent
+            return parent.isEmpty ? name : "\(parent)/\(name)"
+        }
+
+        switch destination {
+        case .local(let root):
+            let target = try SafeLocalPath.destination(forRelativePath: rel, in: root)
+            let temporaryRel = sibling(named: FileSystemService.temporaryReplacementName(for: target.lastPathComponent))
+            do {
+                try await copyFile(sourceRelative: rel, destRelative: temporaryRel,
+                                   modificationDate: modificationDate,
+                                   source: source, destination: destination,
+                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+                let temporary = try SafeLocalPath.destination(forRelativePath: temporaryRel, in: root)
+                try await FileSystemService.shared.installReplacement(temporary, at: target)
+            } catch {
+                try? await deleteFile(at: temporaryRel, on: destination)
+                throw error
+            }
+        case .cloud(let accountId, let rootPath):
+            guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+                throw SyncPlannerError.providerUnavailable
+            }
+            try await provider.replacingItem(at: cloudJoin(rootPath, rel)) { temporaryPath in
+                try await copyFile(sourceRelative: rel,
+                                   destRelative: sibling(named: (temporaryPath as NSString).lastPathComponent),
+                                   modificationDate: modificationDate,
+                                   source: source, destination: destination,
+                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
+            }
+        case .offlineIndexed:
+            throw SyncPlannerError.offlineEndpointNotWritable
+        }
+    }
+
     private static func createDirectory(at rel: String, on endpoint: SyncEndpoint) async throws {
         switch endpoint {
         case .local(let root):
-            let url = root.appendingPathComponent(rel)
+            let url = try SafeLocalPath.destination(forRelativePath: rel, in: root)
             try await FileSystemService.shared.createDirectory(at: url)
         case .cloud(let accountId, let rootPath):
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
@@ -128,7 +191,7 @@ enum SyncExecutor {
     private static func deleteFile(at rel: String, on endpoint: SyncEndpoint) async throws {
         switch endpoint {
         case .local(let root):
-            let url = root.appendingPathComponent(rel)
+            let url = try SafeLocalPath.destination(forRelativePath: rel, in: root)
             if await FileSystemService.shared.itemExists(at: url) {
                 try await FileSystemService.shared.deleteItem(at: url)
             }
@@ -136,7 +199,12 @@ enum SyncExecutor {
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            try await provider.deleteItem(at: cloudJoin(rootPath, rel))
+            do {
+                try await provider.deleteItem(at: cloudJoin(rootPath, rel))
+            } catch CloudProviderError.notFound {
+                // Already gone, which is what was wanted. Mirror meets this
+                // when the file is inside a folder it has just replaced.
+            }
         case .offlineIndexed:
             throw SyncPlannerError.offlineEndpointNotWritable
         }
@@ -149,14 +217,15 @@ enum SyncExecutor {
 
     private static func copyFile(sourceRelative: String,
                                  destRelative: String,
+                                 modificationDate: Date?,
                                  source: SyncEndpoint,
                                  destination: SyncEndpoint,
                                  onDownloadBytes: @escaping @Sendable (Int64) -> Void,
                                  onUploadBytes: @escaping @Sendable (Int64) -> Void) async throws {
         switch (source, destination) {
         case let (.local(srcRoot), .local(dstRoot)):
-            let src = srcRoot.appendingPathComponent(sourceRelative)
-            let dst = dstRoot.appendingPathComponent(destRelative)
+            let src = try SafeLocalPath.destination(forRelativePath: sourceRelative, in: srcRoot)
+            let dst = try SafeLocalPath.destination(forRelativePath: destRelative, in: dstRoot)
             try await ensureParentDirectory(for: dst)
             try await FileSystemService.shared.copyItem(from: src, to: dst)
             // Local-to-local has no byte stream; emit full size once as progress.
@@ -167,19 +236,26 @@ enum SyncExecutor {
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            let src = srcRoot.appendingPathComponent(sourceRelative)
+            let src = try SafeLocalPath.destination(forRelativePath: sourceRelative, in: srcRoot)
             let destPath = cloudJoin(rootPath, destRelative)
             try await ensureCloudParentDirectory(for: destPath, on: provider)
             try await CloudProviderError.enforceUploadSizeLimit(src, provider: provider)
             try await provider.uploadFile(from: src, to: destPath, onBytes: onUploadBytes)
+            if let modificationDate {
+                try? await provider.setModificationDate(at: destPath, to: modificationDate)
+            }
 
         case let (.cloud(accountId, rootPath), .local(dstRoot)):
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
                 throw SyncPlannerError.providerUnavailable
             }
-            let dst = dstRoot.appendingPathComponent(destRelative)
+            let dst = try SafeLocalPath.destination(forRelativePath: destRelative, in: dstRoot)
             try await ensureParentDirectory(for: dst)
             try await provider.downloadFile(remotePath: cloudJoin(rootPath, sourceRelative), to: dst, onBytes: onDownloadBytes)
+            if let modificationDate {
+                try? FileManager.default.setAttributes([.modificationDate: modificationDate], ofItemAtPath: dst.path)
+            }
+            Quarantine.mark(dst)
 
         case let (.cloud(srcAccountId, srcRoot), .cloud(dstAccountId, dstRoot)):
             guard let srcProvider = await SyncEngine.shared.provider(for: srcAccountId),
@@ -189,10 +265,18 @@ enum SyncExecutor {
             let tempURL = StagingLocation.base().appendingPathComponent("filefluss-sync-\(UUID().uuidString)")
             defer { try? FileManager.default.removeItem(at: tempURL) }
             try await srcProvider.downloadFile(remotePath: cloudJoin(srcRoot, sourceRelative), to: tempURL, onBytes: onDownloadBytes)
+            // On the staged file too: some servers take the date from the
+            // upload itself.
+            if let modificationDate {
+                try? FileManager.default.setAttributes([.modificationDate: modificationDate], ofItemAtPath: tempURL.path)
+            }
             let dstPath = cloudJoin(dstRoot, destRelative)
             try await ensureCloudParentDirectory(for: dstPath, on: dstProvider)
             try await CloudProviderError.enforceUploadSizeLimit(tempURL, provider: dstProvider)
             try await dstProvider.uploadFile(from: tempURL, to: dstPath, onBytes: onUploadBytes)
+            if let modificationDate {
+                try? await dstProvider.setModificationDate(at: dstPath, to: modificationDate)
+            }
 
         case (.offlineIndexed, _), (_, .offlineIndexed):
             throw SyncPlannerError.offlineEndpointNotWritable

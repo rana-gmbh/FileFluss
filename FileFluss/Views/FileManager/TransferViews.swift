@@ -88,7 +88,7 @@ struct TransferRow: View {
             TransferDetailsView(transfer: transfer)
         }
         .confirmationDialog(
-            "Cancel this transfer?",
+            L10n.text("Cancel this transfer?"),
             isPresented: $showCancelConfirmation,
             titleVisibility: .visible
         ) {
@@ -319,7 +319,7 @@ struct TransferDetailsView: View {
                 )
                 .frame(height: 8)
 
-                Text("\(ByteCountFormatter.string(fromByteCount: min(transfer.currentFileBytes, transfer.currentFileSize), countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: transfer.currentFileSize, countStyle: .file))")
+                Text(L10n.format("%@ of %@", ByteCountFormatter.string(fromByteCount: min(transfer.currentFileBytes, transfer.currentFileSize), countStyle: .file), ByteCountFormatter.string(fromByteCount: transfer.currentFileSize, countStyle: .file)))
                     .font(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

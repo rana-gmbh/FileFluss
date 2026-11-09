@@ -165,6 +165,11 @@ public actor WebDAVServer {
 
     private func dispatch(_ request: WebDAVRequest) async -> WebDAVResponse {
         webdavLog.info("[WebDAV] \(request.method, privacy: .public) \(request.path, privacy: .public) →")
+        // `..` is how a request leaves the folder that was mounted, and for
+        // iCloud Drive that means the rest of the disk. Finder never sends it.
+        if Self.escapesMount(path: request.path, destination: request.headers["destination"].map(decodeDestination)) {
+            return WebDAVResponse(status: 400, statusText: "Bad Request")
+        }
         switch request.method.uppercased() {
         case "OPTIONS": return handleOPTIONS()
         case "PROPFIND": return await handlePROPFIND(request)
@@ -180,6 +185,12 @@ public actor WebDAVServer {
         default:
             return WebDAVResponse(status: 501, statusText: "Not Implemented")
         }
+    }
+
+    /// Whether a request's path or `Destination` tries to climb out of the
+    /// mount.
+    public static func escapesMount(path: String, destination: String?) -> Bool {
+        SafeLocalPath.hasTraversal(path) || destination.map(SafeLocalPath.hasTraversal) == true
     }
 
     // PROPPATCH stub: Finder uses this to write extended attributes (custom

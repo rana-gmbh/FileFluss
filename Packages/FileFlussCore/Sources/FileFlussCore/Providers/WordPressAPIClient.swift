@@ -60,7 +60,8 @@ private final class WPSessionDelegate: NSObject, URLSessionTaskDelegate, Sendabl
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         var redirected = request
         guard let original = task.originalRequest,
-              original.url?.host == request.url?.host else {
+              CredentialScope.allows(request.url, for: original.url) else {
+            redirected.setValue(nil, forHTTPHeaderField: "Authorization")
             completionHandler(redirected)
             return
         }
@@ -123,7 +124,7 @@ public actor WordPressAPIClient {
             throw CloudProviderError.invalidCredentials
         }
         if http.statusCode == 404 {
-            throw CloudProviderError.notFound("WordPress REST API not found. Make sure the site has the REST API enabled at /wp-json/wp/v2/media")
+            throw CloudProviderError.notFound(L10n.text("WordPress REST API not found. Make sure the site has the REST API enabled at /wp-json/wp/v2/media"))
         }
         guard (200...299).contains(http.statusCode) else {
             throw CloudProviderError.serverError(http.statusCode)
@@ -201,14 +202,17 @@ public actor WordPressAPIClient {
             throw CloudProviderError.invalidResponse
         }
         var request = URLRequest(url: url)
-        request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
+        // The address comes from the site's media library and often points at
+        // a CDN or an S3 bucket, which must not receive the site's password.
+        if CredentialScope.allows(url, for: URL(string: credentials.siteURL)) {
+            request.addValue(authHeaderValue(), forHTTPHeaderField: "Authorization")
+        }
 
         let (tempURL, response) = try await session.downloadReportingProgress(for: request, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw CloudProviderError.serverError((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {

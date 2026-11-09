@@ -17,9 +17,7 @@ public actor NextCloudAPIClient {
 
     public init(credentials: NextCloudCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
 
         let base = credentials.serverURL.hasSuffix("/")
@@ -75,7 +73,7 @@ public actor NextCloudAPIClient {
             let body = String(data: initData, encoding: .utf8) ?? ""
             nextCloudLog.error("[NextCloud] Login flow init failed: HTTP \(initHTTP.statusCode) body=\(body.prefix(300))")
             if initHTTP.statusCode == 404 {
-                throw CloudProviderError.commandFailed("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead.")
+                throw CloudProviderError.commandFailed(L10n.text("This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead."))
             }
             throw Self.mapHTTPError(statusCode: initHTTP.statusCode)
         }
@@ -132,7 +130,7 @@ public actor NextCloudAPIClient {
                 throw Self.mapHTTPError(statusCode: pollHTTP.statusCode)
             }
 
-            throw CloudProviderError.commandFailed("Timed out waiting for browser sign-in.")
+            throw CloudProviderError.commandFailed(L10n.text("Timed out waiting for browser sign-in."))
         }
 
         return NextCloudLoginFlowV2(loginURL: loginURL, poll: pollClosure)
@@ -627,9 +625,11 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
-        // PROPFIND depth 1 includes the folder itself as first entry — skip it
-        return items.dropFirst().map { $0 }
+        // Same as the generic WebDAV client: the folder's own entry goes by
+        // path, not by position (#64). Nextcloud happens to send it first
+        // and with a displayname, so this was safe here — but it is the
+        // same latent bug, one server-side change away.
+        return try WebDAVResponseParser.children(data: data, basePath: davBaseURL, requestPath: path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -651,8 +651,7 @@ public actor NextCloudAPIClient {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
@@ -665,7 +664,6 @@ public actor NextCloudAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        let fileData = try Data(contentsOf: localURL)
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
@@ -677,7 +675,9 @@ public actor NextCloudAPIClient {
             request.setValue("\(Int64(modDate.timeIntervalSince1970))", forHTTPHeaderField: "X-OC-Mtime")
         }
 
-        let (data, response) = try await session.uploadReportingProgress(for: request, body: fileData, onBytes: onBytes)
+        // Streamed from disk rather than read into memory first: a 1.5 GB
+        // video was a 1.5 GB allocation before a byte went out.
+        let (data, response) = try await session.uploadReportingProgress(for: request, fromFile: localURL, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
             let status = http?.statusCode ?? 0
@@ -835,7 +835,7 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
 
-        let items = WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
+        let items = try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: path)
         guard let item = items.first else {
             throw CloudProviderError.notFound(path)
         }
@@ -918,7 +918,7 @@ public actor NextCloudAPIClient {
             throw Self.mapHTTPError(statusCode: http.statusCode)
         }
 
-        return WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
+        return try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
     }
 
     // MARK: - Private
@@ -956,7 +956,7 @@ public actor NextCloudAPIClient {
         switch statusCode {
         case 401: return .invalidCredentials
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 409: return .serverError(409)
         case 429: return .rateLimited
         case 507: return .quotaExceeded

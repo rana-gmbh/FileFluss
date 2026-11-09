@@ -14,16 +14,60 @@ struct SpaceImpact: Sendable {
     /// Net bytes the destination will gain (already accounts for files that
     /// overwrite existing ones, which free their old size).
     let addedBytes: Int64
+    /// Room the transfer needs on this Mac on its way through, when it has
+    /// to pass through. nil when nothing is staged locally.
+    let staging: Staging?
+
+    init(
+        destinationName: String,
+        isCloud: Bool,
+        available: Int64?,
+        addedBytes: Int64,
+        staging: Staging? = nil
+    ) {
+        self.destinationName = destinationName
+        self.isCloud = isCloud
+        self.available = available
+        self.addedBytes = addedBytes
+        self.staging = staging
+    }
+
+    /// What a transfer needs on the local disk while it is running.
+    ///
+    /// A cloud-to-cloud transfer is a download followed by an upload: every
+    /// byte lands on this Mac first. The destination's quota can be ample
+    /// while the Mac's disk is not, and nothing used to say so — the hole
+    /// a user pointed out, with the words "a nearly full Mac SSD".
+    struct Staging: Sendable {
+        /// Where the bytes queue up — the cache folder from Settings →
+        /// Storage, which may be on another disk entirely.
+        let volumeName: String
+        /// Most the folder will hold at once.
+        let needed: Int64
+        /// Free space there now, or nil when it couldn't be read.
+        let free: Int64?
+
+        var wouldExceed: Bool {
+            guard let free else { return false }
+            return needed > free
+        }
+    }
 
     /// Free space remaining after the transfer, or `nil` when unlimited.
     var projectedFree: Int64? {
         available.map { $0 - addedBytes }
     }
 
-    /// True when the transfer would not fit in the known available space.
-    var wouldExceed: Bool {
+    /// True when the destination can't take it.
+    var destinationWouldExceed: Bool {
         guard let available else { return false }
         return addedBytes > available
+    }
+
+    /// True when either end is short: the destination, or the disk the
+    /// bytes travel across.
+    var wouldExceed: Bool {
+        destinationWouldExceed || (staging?.wouldExceed ?? false)
     }
 }
 
@@ -69,6 +113,16 @@ enum SpaceCheck {
         return (free, Int64(total))
     }
 
+    /// The volume's name as the user knows it — "Macintosh HD", the name
+    /// of an external drive — falling back to the path when it can't be
+    /// read. Used to say *which* disk needs the room.
+    static func volumeName(at url: URL) -> String {
+        if let name = (try? url.resourceValues(forKeys: [.volumeNameKey]))?.volumeName, !name.isEmpty {
+            return name
+        }
+        return url.path
+    }
+
     /// Whether two locations live on the same volume. A move within one
     /// volume is a rename and consumes no extra space, so the pre-flight can
     /// skip the warning. Returns false when either identifier can't be read.
@@ -99,9 +153,55 @@ enum SpaceImpactFormatter {
         let freeStr = impact.available.map { ByteCountFormatter.string(fromByteCount: max(0, $0), countStyle: .file) }
         let location = impact.isCloud ? impact.destinationName : "\"\(impact.destinationName)\""
         let verbL = L10n.text(verb)
-        if let freeStr {
-            return L10n.format("%@ %@ into %@ would exceed the available space (only %@ free). Continue anyway?", verbL, added, location, freeStr)
+
+        // Which end is short decides what the user has to do about it —
+        // free space on the Mac, or at the destination — so the two are
+        // never merged into one vague sentence.
+        var sentences: [String] = []
+        if impact.destinationWouldExceed {
+            if let freeStr {
+                sentences.append(L10n.format("%@ %@ into %@ would exceed the available space (only %@ free).", verbL, added, location, freeStr))
+            } else {
+                sentences.append(L10n.format("%@ %@ into %@ may exceed the available space.", verbL, added, location))
+            }
         }
-        return L10n.format("%@ %@ into %@ may exceed the available space. Continue anyway?", verbL, added, location)
+        if let staging = impact.staging, staging.wouldExceed {
+            let needed = ByteCountFormatter.string(fromByteCount: staging.needed, countStyle: .file)
+            let free = staging.free.map { ByteCountFormatter.string(fromByteCount: max(0, $0), countStyle: .file) } ?? "?"
+            sentences.append(L10n.format(
+                "The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage.",
+                needed, staging.volumeName, free
+            ))
+        }
+        if sentences.isEmpty {
+            // Shouldn't be reachable — the dialog only shows for a warning —
+            // but say something true rather than nothing.
+            sentences.append(L10n.format("%@ %@ into %@ may exceed the available space.", verbL, added, location))
+        }
+        sentences.append(L10n.text("Continue anyway?"))
+        return sentences.joined(separator: " ")
+    }
+
+    /// The line shown before a transfer starts, whether or not anything is
+    /// short: what the destination has, and what the Mac needs on the way.
+    static func preview(_ impact: SpaceImpact) -> String {
+        var parts: [String] = []
+        let added = ByteCountFormatter.string(fromByteCount: impact.addedBytes, countStyle: .file)
+        if let available = impact.available {
+            let free = ByteCountFormatter.string(fromByteCount: max(0, available), countStyle: .file)
+            parts.append(L10n.format("%@ to %@ — %@ free", added, impact.destinationName, free))
+        } else {
+            parts.append(L10n.format("%@ to %@", added, impact.destinationName))
+        }
+        if let staging = impact.staging, staging.needed > 0 {
+            let needed = ByteCountFormatter.string(fromByteCount: staging.needed, countStyle: .file)
+            if let free = staging.free {
+                let freeStr = ByteCountFormatter.string(fromByteCount: max(0, free), countStyle: .file)
+                parts.append(L10n.format("needs %@ on %@ on the way (%@ free)", needed, staging.volumeName, freeStr))
+            } else {
+                parts.append(L10n.format("needs %@ on %@ on the way", needed, staging.volumeName))
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 }

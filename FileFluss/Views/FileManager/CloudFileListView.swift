@@ -18,7 +18,6 @@ struct CloudFileListView: View {
     /// the cloud straight away. Kept in sync with `SettingsView`'s key.
     @AppStorage("confirmDelete") private var confirmDelete = true
     @State private var showDeleteConfirmation = false
-    @State private var showConflict = false
     @State private var showDropConfirmation = false
     @State private var pendingUpload: PendingUpload?
     @State private var showCloudToCloudDropConfirmation = false
@@ -71,13 +70,24 @@ struct CloudFileListView: View {
     /// Cloud Accounts are reflected immediately in confirmation dialogs.
     private var accountDisplayName: String {
         appState.syncManager.accounts.first(where: { $0.id == accountId })?.displayName
-            ?? "this account"
+            ?? L10n.text("this account")
     }
 
     /// True for import-only devices (e.g. a GoPro camera): browse, download and
     /// delete are allowed, but New Folder / Rename / Paste / drops-in are not.
+    ///
+    /// Also true while the panel is inside an archive: FileFluss reads
+    /// archives but never rewrites them, and every write affordance this
+    /// panel withholds for a read-only account is wrong there for the same
+    /// reason.
     private var isReadOnly: Bool {
-        appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false
+        vm.isBrowsingArchive
+            || (appState.syncManager.accountFor(id: accountId)?.providerType.isReadOnly ?? false)
+    }
+
+    private var canDelete: Bool {
+        !vm.isBrowsingArchive
+            && (appState.syncManager.accountFor(id: accountId)?.providerType.allowsDeletion ?? true)
     }
 
     private var incomingDirection: ConflictDirection {
@@ -96,6 +106,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuNewFolder)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !isReadOnly else { return }
                 guard appState.canCreateFolderInActivePanel else { return }
                 newFolderName = L10n.text("New Folder")
                 showNewFolderDialog = true
@@ -115,12 +126,17 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: KeyboardCommand.openInTerminal.notification)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !vm.isBrowsingArchive else { return }
                 openInTerminal(vm.selectedItems)
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuCopyToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
+                if vm.isBrowsingArchive {
+                    extractToOtherPanel(items)
+                    return
+                }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
                 vm.conflictDirection = outgoingDirection
                 if let otherCloudId = appState.cloudAccountId(for: otherSide) {
@@ -141,6 +157,7 @@ struct CloudFileListView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .menuMoveToOtherPanel)) { _ in
                 guard appState.activePanel == panelSide, appState.cloudAccountId(for: panelSide) == accountId else { return }
+                guard !vm.isBrowsingArchive else { return }
                 let items = vm.selectedItems
                 guard !items.isEmpty else { return }
                 let otherSide: PanelSide = panelSide == .left ? .right : .left
@@ -157,7 +174,9 @@ struct CloudFileListView: View {
                     appState.addTransfer(transfer, panel: otherSide)
                     transfer.task = Task {
                         await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                        await vm.deleteItems(items)
+                        // Only what arrived: deleting here is permanent.
+                        let landed = transfer.succeededNames
+                        await vm.deleteItems(items.filter { landed.contains($0.name) })
                         await otherFM.refresh()
                     }
                 }
@@ -184,16 +203,29 @@ struct CloudFileListView: View {
                 Text(L10n.format("Are you sure you want to delete %d items from %@?", items.count, accountDisplayName))
             }
         }
-        .sheet(isPresented: $showConflict) {
-            if let conflict = vm.pendingConflict {
-                ConflictResolutionView(conflict: conflict) { resolution in
-                    showConflict = false
-                    vm.resolveConflict(resolution)
-                }
-            }
+        .alert(
+            L10n.text("Archive failed"),
+            isPresented: Binding(
+                get: { vm.archiveError != nil },
+                set: { if !$0 { vm.archiveError = nil } }
+            ),
+            presenting: vm.archiveError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { vm.archiveError = nil }
+        } message: { message in
+            Text(message)
         }
-        .onChange(of: vm.pendingConflict != nil) { _, hasConflict in
-            showConflict = hasConflict
+        .alert(
+            L10n.text("Error"),
+            isPresented: Binding(
+                get: { vm.actionError != nil },
+                set: { if !$0 { vm.actionError = nil } }
+            ),
+            presenting: vm.actionError
+        ) { _ in
+            Button(L10n.text("OK"), role: .cancel) { vm.actionError = nil }
+        } message: { message in
+            Text(message)
         }
         .alert(L10n.text("New Folder"), isPresented: $showNewFolderDialog) {
             TextField(L10n.text("Folder name"), text: $newFolderName)
@@ -313,6 +345,27 @@ struct CloudFileListView: View {
         } message: {
             Text(L10n.text("A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it."))
         }
+        // An edit FileFluss can't upload yet, kept rather than overwritten.
+        // Saying nothing would leave the user believing the work is gone.
+        .alert(
+            L10n.text("Your changes were kept, but not uploaded"),
+            isPresented: Binding(
+                get: { vm.preservedEdit != nil },
+                set: { if !$0 { vm.preservedEdit = nil } }
+            ),
+            presenting: vm.preservedEdit
+        ) { edit in
+            Button(L10n.text("Show in Finder")) {
+                NSWorkspace.shared.activateFileViewerSelecting([edit.url])
+                vm.preservedEdit = nil
+            }
+            Button(L10n.text("OK"), role: .cancel) { vm.preservedEdit = nil }
+        } message: { edit in
+            Text(L10n.format(
+                "“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder.",
+                edit.fileName
+            ))
+        }
         .alert(L10n.text("Could not mount in Finder"), isPresented: $showMountError, presenting: mountErrorMessage) { _ in
             Button(L10n.text("OK"), role: .cancel) {}
         } message: { message in
@@ -336,7 +389,7 @@ struct CloudFileListView: View {
             }
             Button(L10n.text("Cancel"), role: .cancel) { pendingUpload = nil }
         } message: { upload in
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
             let name = upload.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             if upload.urls.count == 1 {
@@ -357,7 +410,7 @@ struct CloudFileListView: View {
             Button(L10n.text("Cancel"), role: .cancel) { pendingCloudToCloudDrop = nil }
         } message: { drop in
             let count = drop.sourceItems.count
-            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+            let providerName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
             let name = drop.targetFolder?.name
                 ?? (vm.currentPath == "/" ? providerName : (vm.currentPath as NSString).lastPathComponent)
             Text(count == 1
@@ -488,7 +541,7 @@ struct CloudFileListView: View {
     /// kicks off the cloud delete straight away. Shared by the menu
     /// (`menuDelete` notification), keyboard, and context-menu paths.
     private func triggerDelete() {
-        guard !vm.selectedItems.isEmpty else { return }
+        guard canDelete, !vm.selectedItems.isEmpty else { return }
         if confirmDelete {
             showDeleteConfirmation = true
         } else {
@@ -594,7 +647,11 @@ struct CloudFileListView: View {
                 transfer.task = Task {
                     await vm.uploadFiles(from: urls, toPath: targetPath, progress: transfer)
                     if isMove {
-                        for url in urls { try? FileManager.default.removeItem(at: url) }
+                        // Only what arrived: deleting here is permanent.
+                        let landed = transfer.succeededNames
+                        for url in urls where landed.contains(url.lastPathComponent) {
+                            try? await FileSystemService.shared.deleteItem(at: url)
+                        }
                         let otherSide: PanelSide = panelSide == .left ? .right : .left
                         await appState.fileManager(for: otherSide).refresh()
                     }
@@ -836,7 +893,144 @@ struct CloudFileListView: View {
         }
     }
 
+    /// What a drag out of the open archive needs in order to unpack an
+    /// entry at the drop end.
+    private var archiveDragPlan: ArchiveDragPlan? {
+        guard let session = vm.archiveSession else { return nil }
+        return ArchiveDragPlan(
+            archiveURL: session.archiveURL,
+            format: session.format,
+            tree: session.tree,
+            innerPath: session.innerPath
+        )
+    }
+
+    /// Opens an archive in this panel instead of handing it to Archive
+    /// Utility. It has to be downloaded first, so the transfer row shows
+    /// that; a second visit finds it in the preview cache. A file that turns
+    /// out not to be an archive opens the ordinary way.
+    private func openArchiveInPanel(_ item: CloudFileItem, format: ArchiveFormat) {
+        let transfer = TransferProgress(operation: "Opening", totalItems: 1)
+        transfer.transferredFileNames = [item.name]
+        transfer.totalFiles = 1
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            let opened = await vm.openArchive(item, format: format, progress: transfer)
+            transfer.completedItems = 1
+            transfer.endTime = Date()
+            transfer.isComplete = true
+            if opened {
+                transfer.recordSuccess(item.name)
+                appState.requestActivePanelFocus()
+            } else {
+                openCloudFile(item)
+            }
+        }
+    }
+
+    /// Sends the selection to the other panel by unpacking it: inside an
+    /// archive, the selected entries; outside one, the clicked archive.
+    private func extractToOtherPanel(_ items: [CloudFileItem]) {
+        guard !items.isEmpty else { return }
+        let otherSide: PanelSide = panelSide == .left ? .right : .left
+        let otherCloudId = appState.cloudAccountId(for: otherSide)
+        let transfer = TransferProgress(operation: "Extracting", totalItems: items.count)
+        appState.addTransfer(transfer, panel: otherSide)
+
+        if vm.isBrowsingArchive {
+            transfer.task = Task {
+                let staged = await vm.materialiseFromArchive(items, progress: transfer)
+                guard !staged.isEmpty else {
+                    transfer.endTime = Date()
+                    transfer.isComplete = true
+                    return
+                }
+                if let otherCloudId {
+                    let otherVM = appState.cloudFileManager(for: otherCloudId, side: otherSide)
+                    otherVM.conflictDirection = outgoingDirection
+                    await otherVM.uploadFiles(from: staged, progress: transfer)
+                } else {
+                    let otherFM = appState.fileManager(for: otherSide)
+                    otherFM.conflictDirection = outgoingDirection
+                    await otherFM.performMove(
+                        items: staged.map { FileItem(url: $0) },
+                        to: otherFM.currentDirectory,
+                        progress: transfer
+                    )
+                }
+                await appState.refreshAllPanels()
+            }
+            return
+        }
+
+        guard let archive = items.first else { return }
+        let destination: CloudFileManagerViewModel.ExtractDestination = otherCloudId.map {
+            .cloud(appState.cloudFileManager(for: $0, side: otherSide))
+        } ?? .local(appState.fileManager(for: otherSide).currentDirectory)
+        transfer.task = Task {
+            await vm.extract(archive, to: destination, progress: transfer)
+            await appState.refreshAllPanels()
+        }
+    }
+
+    /// Right-click → Open With. Same route to a local file as a
+    /// double-click: through the mount when the account is mounted, so a
+    /// save goes back to the server; otherwise a downloaded copy, with the
+    /// download shown in the transfer list.
+    private func openCloudFiles(_ items: [CloudFileItem], withApplication app: URL) {
+        if !vm.isBrowsingArchive, let mount = appState.mountService.mount(for: accountId) {
+            let mounted = items.map { mount.url(forRemotePath: $0.path) }
+            if mounted.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                NSWorkspace.shared.open(mounted, withApplication: app)
+                return
+            }
+        }
+
+        let transfer = TransferProgress(operation: "Opening", totalItems: items.count)
+        transfer.transferredFileNames = items.map(\.name)
+        transfer.totalFiles = items.count
+        appState.addTransfer(transfer, panel: panelSide)
+        transfer.task = Task {
+            var local: [URL] = []
+            for item in items {
+                if transfer.isCancelled { break }
+                if let url = await vm.downloadToTemp(item) {
+                    local.append(url)
+                    transfer.recordSuccess(item.name)
+                } else {
+                    transfer.recordFailure(item.name, error: L10n.text("Could not download file"))
+                }
+                transfer.completedItems += 1
+            }
+            transfer.endTime = Date()
+            transfer.isComplete = true
+            if !transfer.isCancelled {
+                NSWorkspace.shared.open(local, withApplication: app)
+            }
+        }
+    }
+
     private func openCloudFile(_ item: CloudFileItem) {
+        // When the account is mounted, open the file where it really is.
+        // The copy below is just that — a copy — and anything the user
+        // saves into it stays on this Mac: a user lost an afternoon of
+        // Pages edits that way. Through the mount the save goes back to
+        // the server, in Pages or anything else.
+        if let mount = appState.mountService.mount(for: accountId) {
+            let mounted = mount.url(forRemotePath: item.path)
+            if FileManager.default.fileExists(atPath: mounted.path) {
+                NSWorkspace.shared.open(mounted)
+                return
+            }
+            // The path didn't resolve inside the volume — a mount rooted
+            // somewhere else, or a listing from before it moved. Fall back
+            // to the copy rather than refusing to open anything.
+            SupportLogger.shared.log(
+                "open: \(item.path) not found inside the mount at \(mount.mountPoint.path); opening a copy instead",
+                category: "cloud"
+            )
+        }
+
         let transfer = TransferProgress(operation: "Opening", totalItems: 1)
         transfer.transferredFileNames = [item.name]
         transfer.totalFiles = 1
@@ -900,6 +1094,9 @@ struct CloudFileListView: View {
                             // arrow keys keep working without re-clicking.
                             appState.requestActivePanelFocus()
                         }
+                    } else if !vm.isBrowsingArchive,
+                              let format = ArchiveFormat.detect(fileName: item.name) {
+                        openArchiveInPanel(item, format: format)
                     } else {
                         openCloudFile(item)
                     }
@@ -972,7 +1169,9 @@ struct CloudFileListView: View {
                                 appState.addTransfer(transfer, panel: otherSide)
                                 transfer.task = Task {
                                     await vm.downloadItems(items, to: otherFM.currentDirectory, progress: transfer)
-                                    await vm.deleteItems(items)
+                                    // Only what arrived: deleting here is permanent.
+                                    let landed = transfer.succeededNames
+                                    await vm.deleteItems(items.filter { landed.contains($0.name) })
                                     await otherFM.refresh()
                                 }
                             }
@@ -1025,8 +1224,14 @@ struct CloudFileListView: View {
                     appState.cloudDragSourceSide = nil
                 },
                 onReceiveCloudDrop: { targetFolder in
+                    // Not a cloud-to-cloud drag: say so, so a promise that
+                    // really does write a file — an entry dragged out of an
+                    // archive — is written and uploaded instead of silently
+                    // doing nothing.
                     guard !appState.cloudDragSourceItems.isEmpty,
-                          let sourceAccountId = appState.cloudDragSourceAccountId else { return }
+                          let sourceAccountId = appState.cloudDragSourceAccountId else {
+                        return false
+                    }
                     let sourceItems = appState.cloudDragSourceItems
 
                     if sourceAccountId == accountId {
@@ -1041,10 +1246,11 @@ struct CloudFileListView: View {
                             return cloudFolder(forPath: path, name: name)
                         }()
 
-                        // No-op when the drop wouldn't move anything.
+                        // No-op when the drop wouldn't move anything — but
+                        // still this flow's drag, so it stays handled here.
                         let currentParents = Set(sourceItems.map { ($0.path as NSString).deletingLastPathComponent })
-                        if currentParents.contains(resolvedTarget.path) { return }
-                        if sourceItems.contains(where: { $0.path == resolvedTarget.path }) { return }
+                        if currentParents.contains(resolvedTarget.path) { return true }
+                        if sourceItems.contains(where: { $0.path == resolvedTarget.path }) { return true }
 
                         presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
                             sourceItems: sourceItems,
@@ -1057,6 +1263,7 @@ struct CloudFileListView: View {
                             targetFolder: targetFolder
                         ))
                     }
+                    return true
                 },
                 onInternalCloudDrop: { items, target in
                     presentOrRunInternalCloudDrop(PendingInternalCloudDrop(
@@ -1080,7 +1287,7 @@ struct CloudFileListView: View {
                     openInTerminal(items)
                 },
                 canCreateFolder: appState.syncManager.accountFor(id: accountId)?.providerType != .wordpress && !isReadOnly,
-                shareCapabilities: vm.shareCapabilities,
+                shareCapabilities: vm.isBrowsingArchive ? .unsupported : vm.shareCapabilities,
                 onCreateShareLink: { item, wantsOptions in
                     if wantsOptions {
                         shareLinkItem = item
@@ -1105,6 +1312,31 @@ struct CloudFileListView: View {
                     ? Set(vm.shareStates.compactMap { $0.value == nil ? nil : $0.key })
                     : [],
                 isReadOnly: isReadOnly,
+                canDelete: canDelete,
+                onCompress: isReadOnly ? nil : { items, format in
+                    let transfer = TransferProgress(
+                        operation: "Compressing", totalItems: items.count
+                    )
+                    appState.addTransfer(transfer, panel: panelSide)
+                    transfer.task = Task {
+                        await vm.compress(items, format: format, progress: transfer)
+                    }
+                },
+                archiveMode: vm.isBrowsingArchive,
+                archiveDragPlan: archiveDragPlan,
+                onExtractHere: isReadOnly ? nil : { archive in
+                    let transfer = TransferProgress(operation: "Extracting", totalItems: 1)
+                    appState.addTransfer(transfer, panel: panelSide)
+                    transfer.task = Task {
+                        await vm.extract(archive, to: .here, progress: transfer)
+                    }
+                },
+                onExtractToOtherPanel: { items in
+                    extractToOtherPanel(items)
+                },
+                onOpenWith: { items, app in
+                    openCloudFiles(items, withApplication: app)
+                },
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode
             )
@@ -1131,7 +1363,7 @@ struct CloudFileListView: View {
 
     /// Download items from source cloud to a temp directory, then upload to target cloud.
     /// Conflicts are resolved BEFORE downloading to avoid wasting bandwidth.
-    private static func cloudToCloudTransfer(
+    static func cloudToCloudTransfer(
         items: [CloudFileItem],
         from sourceVM: CloudFileManagerViewModel,
         to targetVM: CloudFileManagerViewModel,
@@ -1144,7 +1376,14 @@ struct CloudFileListView: View {
         let targetExistingItems: [CloudFileItem]?
         if let targetSubfolderPath {
             let provider = await SyncEngine.shared.provider(for: targetVM.accountId)
-            targetExistingItems = (try? await provider?.listDirectory(at: targetSubfolderPath)) ?? []
+            do {
+                targetExistingItems = try await provider?.listDirectory(at: targetSubfolderPath) ?? []
+            } catch {
+                // Not knowing what's there isn't the same as nothing being
+                // there: going on would overwrite without asking.
+                progress?.failAll(items.map(\.name), error: L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription))
+                return
+            }
         } else {
             targetExistingItems = nil
         }
@@ -1160,8 +1399,11 @@ struct CloudFileListView: View {
         // Build lookup for resolution per item name
         let resolutionByName = Dictionary(resolutions.map { ($0.0.name, $0.1) }, uniquingKeysWith: { _, last in last })
 
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cloud-transfer-\(UUID().uuidString)")
+        // The folder the user chose in Settings → Storage, not the system
+        // temp folder: moving the cache to an external drive exists so a
+        // big transfer doesn't fill the internal disk, and this path was
+        // quietly ignoring it.
+        let tempDir = StagingLocation.stagingDirectory(prefix: "cloud-transfer")
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
         defer {
@@ -1182,6 +1424,35 @@ struct CloudFileListView: View {
             }
         }
 
+        // Everything is downloaded before anything is uploaded, so the
+        // staging folder has to hold the whole transfer at once. The
+        // destination's quota says nothing about that, and a cloud-to-cloud
+        // copy is an easy place to forget a nearly full disk — so this is
+        // checked whether or not the optional pre-flight is switched on.
+        // Stopping here with a reason beats failing half way with a disk
+        // full error.
+        if expectedBytes > 0,
+           let free = SpaceCheck.localVolumeFreeBytes(at: tempDir),
+           expectedBytes > free {
+            let needed = ByteCountFormatter.string(fromByteCount: expectedBytes, countStyle: .file)
+            let available = ByteCountFormatter.string(fromByteCount: max(0, free), countStyle: .file)
+            let volume = SpaceCheck.volumeName(at: tempDir)
+            let message = L10n.format(
+                "The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage.",
+                needed, volume, available
+            )
+            SupportLogger.shared.log(
+                "cloud-to-cloud refused: needs \(expectedBytes) bytes staged on \(volume), \(free) free",
+                category: "transfer", level: .error
+            )
+            if let progress {
+                progress.errorMessage = message
+                progress.endTime = Date()
+                progress.isComplete = true
+            }
+            return
+        }
+
         // Phase 1: Download only non-skipped items
         if let progress {
             progress.isCloudToCloud = true
@@ -1191,7 +1462,10 @@ struct CloudFileListView: View {
             progress.expectedBytesUpload = expectedBytes
         }
 
-        await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        // Only what downloaded in full goes on. A folder that failed part way
+        // still has a partial copy in staging, and uploading that as if it
+        // were the folder is how a move came to delete the original.
+        let downloaded = await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.downloadEndTime = Date()
@@ -1204,22 +1478,16 @@ struct CloudFileListView: View {
             }
         }
 
-        // Phase 2: Delete items that need replacing, then upload
-        let provider = await SyncEngine.shared.provider(for: targetVM.accountId)
+        // Phase 2: Upload. Items that replace something are passed along so
+        // the old copy stays until the new one has landed.
         let conflictPool = targetExistingItems ?? targetVM.items
-        for item in itemsToTransfer {
-            if resolutionByName[item.name] == .replace {
-                // Find and delete existing item on target
-                if let existing = conflictPool.first(where: { $0.name == item.name }) {
-                    try? await provider?.deleteItem(at: existing.path)
-                }
-            }
-        }
+        var replacing: [String: CloudFileItem] = [:]
 
         // Build local URLs for upload, renaming "keepBoth" items
         let existingNames = Set(conflictPool.map(\.name))
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            guard let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
+            guard downloaded.contains(item.name),
+                  let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
             var localURL: URL?
             if FileManager.default.fileExists(atPath: expected.path) {
                 localURL = expected
@@ -1233,6 +1501,11 @@ struct CloudFileListView: View {
                 }
             }
             guard let url = localURL else { return nil }
+
+            if resolutionByName[item.name] == .replace,
+               let existing = conflictPool.first(where: { $0.name == item.name }) {
+                replacing[url.lastPathComponent] = existing
+            }
 
             // For keepBoth, rename the local temp file to a unique name
             if resolutionByName[item.name] == .keepBoth {
@@ -1256,7 +1529,7 @@ struct CloudFileListView: View {
         }
 
         // Upload with conflict check skipped — we already handled conflicts
-        await targetVM.uploadFiles(from: localURLs, toPath: targetSubfolderPath, progress: progress, skipConflictCheck: true)
+        await targetVM.uploadFiles(from: localURLs, toPath: targetSubfolderPath, progress: progress, skipConflictCheck: true, replacing: replacing)
 
         if let progress {
             progress.uploadEndTime = Date()
@@ -1272,9 +1545,8 @@ struct CloudFileListView: View {
             // Only what actually arrived at the destination: the loop above
             // records per-item outcomes, and a failure, a skip or a cancel
             // all leave sources that were never transferred.
-            let landed = progress?.succeededNames
-            let transferred = landed.map { names in itemsToTransfer.filter { names.contains($0.name) } }
-                ?? itemsToTransfer
+            let landed = progress?.succeededNames ?? []
+            let transferred = itemsToTransfer.filter { landed.contains($0.name) }
             if !transferred.isEmpty {
                 await sourceVM.deleteItems(transferred)
                 await sourceVM.loadDirectory()
@@ -1311,6 +1583,12 @@ struct CloudFileListView: View {
                         Button(L10n.text("Sign In Again")) {
                             Task {
                                 await appState.syncManager.reauthenticate(accountId: accountId)
+                                // Otherwise shown only in the account sheets,
+                                // which aren't open.
+                                if let failure = appState.syncManager.authError {
+                                    appState.syncManager.authError = nil
+                                    vm.actionError = failure
+                                }
                                 await vm.loadDirectory()
                             }
                         }
@@ -1318,10 +1596,17 @@ struct CloudFileListView: View {
                         .controlSize(.regular)
                     }
                     Button(canReauthInline ? L10n.text("Open Settings…") : L10n.text("Open Settings to Re-Connect…")) {
+                        appState.requestedSettingsTab = .cloud
                         openWindow(id: "settings")
                     }
                     .controlSize(.regular)
                 }
+                .padding(.top, 4)
+            } else {
+                Button(L10n.text("Try Again")) {
+                    Task { await vm.loadDirectory() }
+                }
+                .controlSize(.regular)
                 .padding(.top, 4)
             }
         }
@@ -1331,7 +1616,7 @@ struct CloudFileListView: View {
     }
 
     private var pathComponents: [(name: String, path: String)] {
-        let rootName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? "Cloud"
+        let rootName = appState.syncManager.accountFor(id: accountId)?.providerType.displayName ?? L10n.text("Cloud")
         var components: [(String, String)] = [(rootName, "/")]
         let parts = vm.currentPath.split(separator: "/", omittingEmptySubsequences: true)
         var accumulated = ""

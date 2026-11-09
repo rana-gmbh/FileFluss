@@ -10,11 +10,11 @@ import Foundation
 /// child `<folder>` entries.
 public enum JottacloudXMLParser {
 
-    public static func parseListing(data: Data, basePath: String) -> [CloudFileItem] {
+    public static func parseListing(data: Data, basePath: String) throws -> [CloudFileItem] {
         let delegate = ListingDelegate(basePath: basePath)
         let parser = XMLParser(data: data)
         parser.delegate = delegate
-        parser.parse()
+        guard parser.parse() else { throw CloudProviderError.unreadableListing }
         return delegate.items
     }
 

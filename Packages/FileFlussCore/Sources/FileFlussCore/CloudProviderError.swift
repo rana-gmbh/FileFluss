@@ -1,6 +1,13 @@
 import Foundation
 
 public enum CloudProviderError: LocalizedError {
+    /// A listing arrived but couldn't be read in full. It has to be an error:
+    /// a folder that merely looks empty tells Mirror to delete its contents
+    /// from the other side.
+    public static var unreadableListing: CloudProviderError {
+        .commandFailed(L10n.text("The server sent a folder listing FileFluss couldn't read."))
+    }
+
     case notAuthenticated
     case notImplemented
     case networkError(Error)

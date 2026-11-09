@@ -35,6 +35,109 @@ final class WebDAVServerTests: XCTestCase {
         XCTAssertTrue((response.value(forHTTPHeaderField: "Allow") ?? "").contains("PROPFIND"))
     }
 
+    // MARK: - How a document app saves
+
+    /// What Pages (and every other NSDocument app) does to save: write the
+    /// new copy into a temporary folder beside the original, swap it over
+    /// the original, then remove the folder. TextEdit saves the simple way,
+    /// which is why a user saw Pages lose its changes while TextEdit kept
+    /// them.
+    func testSafeSaveSequenceLeavesTheNewContents() async throws {
+        await stub.seedFile(path: "/Doc.pages", contents: Data("old".utf8))
+
+        let tempFolder = "/(A Document Being Saved By Pages 2)"
+        let (_, mkcol) = try await send(method: "MKCOL", path: tempFolder)
+        XCTAssertTrue((200...299).contains(mkcol.statusCode), "MKCOL for the save folder: \(mkcol.statusCode)")
+
+        let (_, put) = try await send(
+            method: "PUT", path: "\(tempFolder)/Doc.pages", body: Data("new".utf8)
+        )
+        XCTAssertTrue((200...299).contains(put.statusCode), "PUT of the new copy: \(put.statusCode)")
+
+        let (_, move) = try await send(
+            method: "MOVE", path: "\(tempFolder)/Doc.pages",
+            headers: ["Destination": "http://127.0.0.1:\(port)/Doc.pages", "Overwrite": "T"]
+        )
+        XCTAssertTrue((200...299).contains(move.statusCode), "MOVE over the original: \(move.statusCode)")
+
+        _ = try await send(method: "DELETE", path: tempFolder)
+
+        let stored = await stub.contents(at: "/Doc.pages")
+        XCTAssertEqual(stored.map { String(decoding: $0, as: UTF8.self) }, "new",
+                       "the document still holds its old contents after a safe save")
+
+        let (body, get) = try await send(method: "GET", path: "/Doc.pages")
+        XCTAssertEqual(get.statusCode, 200)
+        XCTAssertEqual(String(decoding: body, as: UTF8.self), "new",
+                       "reading the document back returned the old contents")
+    }
+
+    /// The same save with the paths encoded the way macOS sends them. The
+    /// folder NSDocument saves through is called "(A Document Being Saved
+    /// By Pages 2)" — spaces and parentheses — so every request in the
+    /// sequence carries a percent-encoded path, including the Destination
+    /// header of the MOVE.
+    func testSafeSaveWithEncodedPathsLeavesTheNewContents() async throws {
+        await stub.seedFile(path: "/My Report.pages", contents: Data("old".utf8))
+
+        let folder = "(A Document Being Saved By Pages 2)"
+        let encodedFolder = folder.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
+        let encodedDoc = "My Report.pages".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!
+
+        _ = try await send(method: "MKCOL", path: "/\(encodedFolder)")
+        _ = try await send(method: "PUT", path: "/\(encodedFolder)/\(encodedDoc)", body: Data("new".utf8))
+
+        let (_, move) = try await send(
+            method: "MOVE", path: "/\(encodedFolder)/\(encodedDoc)",
+            headers: [
+                "Destination": "http://127.0.0.1:\(port)/\(encodedDoc)",
+                "Overwrite": "T",
+            ]
+        )
+        XCTAssertTrue((200...299).contains(move.statusCode), "MOVE over the original: \(move.statusCode)")
+
+        _ = try await send(method: "DELETE", path: "/\(encodedFolder)")
+
+        let stored = await stub.contents(at: "/My Report.pages")
+        XCTAssertEqual(stored.map { String(decoding: $0, as: UTF8.self) }, "new",
+                       "the document still holds its old contents after a safe save")
+    }
+
+    // MARK: - Uploading through the client
+
+    /// The upload path used to read the whole file into memory before
+    /// sending it: a customer's 1.5 GB video became a 1.5 GB allocation
+    /// before a byte went out. It streams from disk now, and this drives
+    /// the real client against the real server over a socket to check that
+    /// what arrives is byte-for-byte what was sent.
+    func testClientStreamsAFileUploadIntact() async throws {
+        // Big enough to span many chunks, small enough to stay quick.
+        var contents = Data(count: 6 * 1024 * 1024)
+        contents.withUnsafeMutableBytes { raw in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return }
+            for i in 0..<raw.count { base[i] = UInt8((i &* 31 &+ 7) % 251) }
+        }
+        let localURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-\(UUID().uuidString).bin")
+        try contents.write(to: localURL)
+        defer { try? FileManager.default.removeItem(at: localURL) }
+
+        let client = WebDAVAPIClient(credentials: WebDAVCredentials(
+            serverURL: "http://127.0.0.1:\(port)",
+            username: "user",
+            password: "pass",
+            displayName: "test"
+        ))
+
+        let reported = Counter()
+        try await client.uploadFile(from: localURL, to: "/big.bin", onBytes: { reported.add($0) })
+
+        let stored = await stub.contents(at: "/big.bin")
+        XCTAssertEqual(stored?.count, contents.count, "the server stored a different number of bytes than were sent")
+        XCTAssertEqual(stored, contents, "the uploaded bytes differ from the file on disk")
+        XCTAssertEqual(reported.total, Int64(contents.count), "progress reported a different total than was sent")
+    }
+
     // MARK: - PROPFIND
 
     func testPROPFINDRootListsChildren() async throws {
@@ -167,6 +270,22 @@ final class WebDAVServerTests: XCTestCase {
 }
 
 // MARK: - In-memory CloudProvider stub
+
+/// Byte counter for the progress callback, which arrives off the test's
+/// own thread.
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Int64 = 0
+
+    func add(_ bytes: Int64) {
+        lock.lock(); value += bytes; lock.unlock()
+    }
+
+    var total: Int64 {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+}
 
 /// Minimal in-memory CloudProvider for testing. Stores files as Data keyed
 /// by full provider path; folders are tracked separately so listing knows

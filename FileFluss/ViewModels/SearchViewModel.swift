@@ -47,7 +47,7 @@ final class SearchViewModel {
                 group.items.append(item)
                 cloudGroups[accountId] = group
             case .offline(_, _, _, _, _, let sourceId, let sourceName, _):
-                var group = offlineGroups[sourceId] ?? (name: "\(sourceName) (offline)", items: [])
+                var group = offlineGroups[sourceId] ?? (name: L10n.format("%@ (offline)", sourceName), items: [])
                 group.items.append(item)
                 offlineGroups[sourceId] = group
             }
@@ -55,7 +55,7 @@ final class SearchViewModel {
 
         var groups: [(source: String, icon: String?, providerType: CloudProviderType?, items: [SearchResultItem])] = []
         if !localItems.isEmpty {
-            groups.append((source: "Local Files", icon: "externaldrive.fill", providerType: nil, items: localItems))
+            groups.append((source: L10n.text("Local Files"), icon: "externaldrive.fill", providerType: nil, items: localItems))
         }
         for (_, group) in cloudGroups.sorted(by: { $0.value.name < $1.value.name }) {
             groups.append((source: group.name, icon: nil, providerType: group.providerType, items: group.items))
@@ -69,11 +69,11 @@ final class SearchViewModel {
     /// Available filter options based on current results
     var availableSources: [(label: String, filter: SourceFilter, providerType: CloudProviderType?)] {
         var sources: [(label: String, filter: SourceFilter, providerType: CloudProviderType?)] = []
-        sources.append(("All", .all, nil))
+        sources.append((L10n.text("All"), .all, nil))
 
         let hasLocal = results.contains { $0.localFileItem != nil }
         if hasLocal {
-            sources.append(("Local", .local, nil))
+            sources.append((L10n.text("Local"), .local, nil))
         }
 
         var seenAccounts = Set<UUID>()

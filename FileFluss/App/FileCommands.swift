@@ -186,7 +186,7 @@ struct FileCommands: Commands {
 
         CommandGroup(after: .toolbar) {
             applyShortcut(.refreshAll, to: Button(L10n.text("Refresh Both Panels")) {
-                Task { await appState.refreshAllPanels() }
+                Task { await appState.refreshVisiblePanels() }
             })
             applyShortcut(.refreshActive, to: Button(L10n.text("Refresh Active Panel")) {
                 NotificationCenter.default.post(name: KeyboardCommand.refreshActive.notification, object: nil)
@@ -288,6 +288,12 @@ struct FileCommands: Commands {
             Button(L10n.text("GitHub Repository")) {
                 NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss")!)
             }
+            // Points at the repository copy because that is the one that
+            // exists at every moment the app ships; switch it to the
+            // filefluss.de page once that is published.
+            Button(L10n.text("Privacy Policy")) {
+                NSWorkspace.shared.open(URL(string: "https://github.com/rana-gmbh/filefluss/blob/main/PRIVACY.md")!)
+            }
         }
 
         // Grouped together so the surrounding `commands { … }` builder stays
@@ -300,14 +306,28 @@ struct FileCommands: Commands {
             }
 
             CommandGroup(after: .help) {
-                Button(SupportLogService.shared.isRecording ? "Support Log (Recording…)" : "Support Log") {
-                    SupportLogService.shared.start()
+                // The same item starts and stops: a recording now runs
+                // until it is stopped, so there has to be a way to stop it.
+                if SupportLogService.shared.isRecording {
+                    Button(L10n.text("Stop Support Log & Save…")) {
+                        SupportLogService.shared.stop()
+                    }
+                } else {
+                    Button(L10n.text("Record Support Log")) {
+                        SupportLogService.shared.start()
+                    }
                 }
-                .disabled(SupportLogService.shared.isRecording)
 
                 #if DEBUG
                 Button(L10n.text("Run Version Test…")) {
                     Task { await VersionTestRunner.run(appState: appState) }
+                }
+                // Dev-only and English-only, like the version test itself.
+                Button(String("Save Test Accounts…")) {
+                    TestAccountSnapshot.saveFromMenu(appState: appState)
+                }
+                Button(String("Restore Test Accounts…")) {
+                    TestAccountSnapshot.restoreFromMenu(appState: appState)
                 }
                 #endif
             }
@@ -333,10 +353,14 @@ private struct HelpMenuButton: View {
 /// because its NSWindow refuses to resize on macOS Tahoe).
 private struct SettingsMenuButton: View {
     @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button(L10n.text("Settings…")) {
+    @ViewBuilder var body: some View {
+        let button = Button(L10n.text("Settings…")) {
             openWindow(id: "settings")
         }
-        .keyboardShortcut(",", modifiers: .command)
+        if let shortcut = KeyboardShortcutManager.shared.binding(for: .openSettings)?.swiftUIShortcut {
+            button.keyboardShortcut(shortcut)
+        } else {
+            button
+        }
     }
 }

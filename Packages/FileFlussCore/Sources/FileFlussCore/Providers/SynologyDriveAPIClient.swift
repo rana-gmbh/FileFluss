@@ -9,6 +9,10 @@ public struct SynologyDriveCredentials: Codable, Sendable {
     let password: String
     let allowSelfSignedCertificate: Bool
     let displayName: String
+    /// Device token DSM hands out at an OTP login (`enable_device_token`).
+    /// Replaying it as `device_id` lets later logins skip the OTP prompt.
+    /// Optional so credentials saved by older versions still decode.
+    var deviceId: String?
 }
 
 /// Talks to the Synology DSM Web API (`SYNO.API.Auth` + `SYNO.FileStation.*`)
@@ -16,17 +20,17 @@ public struct SynologyDriveCredentials: Codable, Sendable {
 /// (rclone, Mountain Duck, the official Drive client) uses — works for
 /// any Synology NAS reachable on the network or via QuickConnect.
 public actor SynologyDriveAPIClient {
-    let credentials: SynologyDriveCredentials
+    private(set) var credentials: SynologyDriveCredentials
     private let session: URLSession
     /// Session ID returned by `SYNO.API.Auth` on login. Re-login when nil
     /// or after the server reports it has expired.
     private var sid: String?
+    /// Name DSM lists under "Trusted devices" for the token requested at OTP login.
+    private static let deviceName = "FileFluss"
 
     public init(credentials: SynologyDriveCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 1800
+        let config = URLSessionConfiguration.fileTransfer()
         if credentials.allowSelfSignedCertificate {
             self.session = URLSession(
                 configuration: config,
@@ -42,8 +46,14 @@ public actor SynologyDriveAPIClient {
 
     // MARK: - Authentication
 
-    /// Validates credentials by logging in. Stores the SID for use by
-    /// subsequent calls. `otp` is required when the account has 2FA on.
+    /// Validates credentials by logging in and hands back the credentials.
+    ///
+    /// Prefer `authenticatedClient`, which hands back the logged-in client
+    /// as well: a caller that builds a new client from these credentials
+    /// starts without a session, and its first request logs in again
+    /// without an OTP — which DSM rejects on a 2FA account. That was the
+    /// bug in issue #66.
+    @available(*, deprecated, message: "Use authenticatedClient, which keeps the session the OTP login established.")
     public static func authenticate(
         serverURL: String,
         username: String,
@@ -62,7 +72,38 @@ public actor SynologyDriveAPIClient {
         )
         let client = SynologyDriveAPIClient(credentials: creds)
         try await client.login(otp: otp)
-        return creds
+        return await client.credentials
+    }
+
+    /// Same login as `authenticate`, but hands back the client that performed
+    /// it, so the caller keeps the logged-in session. A fresh client would
+    /// start without a session and log in again without an OTP, which DSM
+    /// rejects for 2FA accounts right after the first successful login.
+    /// `deviceId` is a token this account was given earlier. Pass it when
+    /// re-authenticating the same account — editing its password, say —
+    /// so a 2FA account doesn't have to produce a fresh OTP, and doesn't
+    /// lose the token it already has. The caller is responsible for only
+    /// passing a token that belongs to this server and user.
+    static func authenticatedClient(
+        serverURL: String,
+        username: String,
+        password: String,
+        otp: String? = nil,
+        allowSelfSignedCertificate: Bool,
+        deviceId: String? = nil
+    ) async throws -> SynologyDriveAPIClient {
+        let normalized = normalizeServerURL(serverURL)
+        let creds = SynologyDriveCredentials(
+            serverURL: normalized,
+            username: username,
+            password: password,
+            allowSelfSignedCertificate: allowSelfSignedCertificate,
+            displayName: "\(username)@\(host(from: normalized))",
+            deviceId: deviceId
+        )
+        let client = SynologyDriveAPIClient(credentials: creds)
+        try await client.login(otp: otp)
+        return client
     }
 
     private func login(otp: String? = nil) async throws {
@@ -75,8 +116,17 @@ public actor SynologyDriveAPIClient {
             URLQueryItem(name: "session", value: "FileStation"),
             URLQueryItem(name: "format", value: "sid")
         ]
-        if let otp, !otp.isEmpty {
+        let hasOTP = !(otp ?? "").isEmpty
+        if hasOTP, let otp {
             query.append(URLQueryItem(name: "otp_code", value: otp))
+            // Ask DSM for a device token so later logins can skip the OTP.
+            query.append(URLQueryItem(name: "enable_device_token", value: "yes"))
+            query.append(URLQueryItem(name: "device_name", value: Self.deviceName))
+        } else if let deviceId = credentials.deviceId, !deviceId.isEmpty {
+            // Re-login without an OTP (after a restart or an expired SID):
+            // present the stored device token instead.
+            query.append(URLQueryItem(name: "device_name", value: Self.deviceName))
+            query.append(URLQueryItem(name: "device_id", value: deviceId))
         }
         let url = try buildURL(path: "/webapi/auth.cgi", queryItems: query)
         let (data, _) = try await session.data(for: URLRequest(url: url))
@@ -86,6 +136,16 @@ public actor SynologyDriveAPIClient {
         }
         guard let newSid = decoded.data?.sid else { throw CloudProviderError.invalidResponse }
         self.sid = newSid
+        if hasOTP {
+            // API v6 names the token `did`, v7 `device_id`. The value itself
+            // is a credential and is never logged.
+            if let token = decoded.data?.did ?? decoded.data?.deviceId, !token.isEmpty {
+                self.credentials.deviceId = token
+                synologyLog.info("[Synology] DSM issued a device token; later logins skip the OTP")
+            } else {
+                synologyLog.warning("[Synology] OTP login worked but DSM issued no device token; a later re-login will ask for an OTP again")
+            }
+        }
         synologyLog.info("[Synology] Logged in as \(self.credentials.username) at \(self.credentials.serverURL)")
     }
 
@@ -172,8 +232,7 @@ public actor SynologyDriveAPIClient {
         let (tmp, response) = try await session.downloadReportingProgress(for: URLRequest(url: url), onBytes: onBytes)
         try validateHTTP(response)
 
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tmp, to: localURL)
+        try FileSystemService.placeDownload(from: tmp, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
@@ -631,7 +690,7 @@ public actor SynologyDriveAPIClient {
 
     /// DSM builds the link from whatever address it believes it has, which is
     /// frequently a LAN address or an unreachable DDNS name.
-    private static let lanAddressNote = "The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it."
+    private static var lanAddressNote: String { L10n.text("The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it.") }
 
     /// `date_expired` as File Station wants it: a UTC calendar day.
     private static func expiryDateString(_ date: Date) -> String {
@@ -657,9 +716,9 @@ public actor SynologyDriveAPIClient {
 
     private static func mapSharingError(code: Int) -> CloudProviderError {
         switch code {
-        case 2000: return .commandFailed("The sharing link does not exist.")
-        case 2001: return .commandFailed("The NAS has reached its maximum number of sharing links — delete some in File Station and try again.")
-        case 2002: return .commandFailed("Failed to access the NAS's sharing links.")
+        case 2000: return .commandFailed(L10n.text("The sharing link does not exist."))
+        case 2001: return .commandFailed(L10n.text("The NAS has reached its maximum number of sharing links — delete some in File Station and try again."))
+        case 2002: return .commandFailed(L10n.text("Failed to access the NAS's sharing links."))
         default: return .serverError(code)
         }
     }
@@ -730,7 +789,10 @@ public actor SynologyDriveAPIClient {
         throw CloudProviderError.serverError(http.statusCode)
     }
 
-    private static func normalizeServerURL(_ raw: String) -> String {
+    /// Internal rather than private: the provider compares a stored
+    /// server URL against a freshly entered one before reusing a device
+    /// token, and both have to be normalised the same way.
+    static func normalizeServerURL(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if !s.lowercased().hasPrefix("http://") && !s.lowercased().hasPrefix("https://") {
             s = "https://" + s
@@ -761,32 +823,32 @@ public actor SynologyDriveAPIClient {
 
     private static func mapAuthError(code: Int) -> CloudProviderError {
         switch code {
-        case 400: return .commandFailed("No such account or incorrect password.")
-        case 401: return .commandFailed("Account is disabled.")
-        case 402: return .commandFailed("Permission denied.")
-        case 403: return .commandFailed("This account requires a 2-factor authentication (OTP) code.")
-        case 404: return .commandFailed("OTP code is incorrect.")
-        case 405: return .commandFailed("OTP code authentication has failed too many times.")
-        case 406: return .commandFailed("Synology administrator must enforce 2-factor authentication.")
-        case 407: return .commandFailed("Maximum number of OTP retries reached. Try again later.")
-        case 408: return .commandFailed("Password expired — please reset it from DSM.")
-        case 409: return .commandFailed("Password must be changed at first login.")
-        default: return .commandFailed("Synology login failed (code \(code)).")
+        case 400: return .commandFailed(L10n.text("No such account or incorrect password."))
+        case 401: return .commandFailed(L10n.text("Account is disabled."))
+        case 402: return .commandFailed(L10n.text("Permission denied."))
+        case 403: return .commandFailed(L10n.text("This account requires a 2-factor authentication (OTP) code."))
+        case 404: return .commandFailed(L10n.text("OTP code is incorrect."))
+        case 405: return .commandFailed(L10n.text("OTP code authentication has failed too many times."))
+        case 406: return .commandFailed(L10n.text("Synology administrator must enforce 2-factor authentication."))
+        case 407: return .commandFailed(L10n.text("Maximum number of OTP retries reached. Try again later."))
+        case 408: return .commandFailed(L10n.text("Password expired — please reset it from DSM."))
+        case 409: return .commandFailed(L10n.text("Password must be changed at first login."))
+        default: return .commandFailed(L10n.format("Synology login failed (code %d).", code))
         }
     }
 
     private func mapAPIError(code: Int) -> CloudProviderError {
         switch code {
-        case 400: return .commandFailed("Invalid parameter for the request.")
-        case 401: return .commandFailed("Unknown API method.")
-        case 402: return .commandFailed("Invalid API method version.")
-        case 403: return .commandFailed("Invalid API method.")
-        case 405: return .commandFailed("Insufficient user privilege.")
-        case 406: return .commandFailed("Connection time out.")
-        case 407: return .commandFailed("Multiple login detected.")
-        case 408: return .commandFailed("Request denied — too many connections.")
+        case 400: return .commandFailed(L10n.text("Invalid parameter for the request."))
+        case 401: return .commandFailed(L10n.text("Unknown API method."))
+        case 402: return .commandFailed(L10n.text("Invalid API method version."))
+        case 403: return .commandFailed(L10n.text("Invalid API method."))
+        case 405: return .commandFailed(L10n.text("Insufficient user privilege."))
+        case 406: return .commandFailed(L10n.text("Connection time out."))
+        case 407: return .commandFailed(L10n.text("Multiple login detected."))
+        case 408: return .commandFailed(L10n.text("Request denied — too many connections."))
         case 119: return .notAuthenticated
-        case 401_400, 1_400, 1_401, 1_402: return .commandFailed("Synology rejected the file path.")
+        case 401_400, 1_400, 1_401, 1_402: return .commandFailed(L10n.text("Synology rejected the file path."))
         default: return .serverError(code)
         }
     }
@@ -837,7 +899,15 @@ private struct SynologyAuthResponse: Decodable {
     let data: AuthData?
     let error: ErrorCode?
 
-    struct AuthData: Decodable { let sid: String? }
+    struct AuthData: Decodable {
+        let sid: String?
+        let did: String?
+        let deviceId: String?
+        enum CodingKeys: String, CodingKey {
+            case sid, did
+            case deviceId = "device_id"
+        }
+    }
     struct ErrorCode: Decodable { let code: Int }
 }
 

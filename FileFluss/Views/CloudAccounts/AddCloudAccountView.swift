@@ -113,6 +113,19 @@ struct AddCloudAccountView: View {
     }
     @State private var nextCloudMode: NextCloudAuthMode = .browser
 
+    enum DrimeAuthMode: String, CaseIterable, Hashable, Identifiable {
+        case browser = "Browser Login"
+        case token = "Access Token"
+        var id: String { rawValue }
+    }
+    @State private var drimeMode: DrimeAuthMode = DrimeAPIClient.isOAuthAvailable ? .browser : .token
+
+    /// Browser sign-in exists only once FileFluss has a Drime client ID;
+    /// until then the token is the only way in.
+    private var effectiveDrimeMode: DrimeAuthMode {
+        DrimeAPIClient.isOAuthAvailable ? drimeMode : .token
+    }
+
     @State private var synologyC2AccessKeyId = ""
     @State private var synologyC2SecretAccessKey = ""
     @State private var synologyC2Region = ""
@@ -138,6 +151,7 @@ struct AddCloudAccountView: View {
         case .oneDrive: return appState.syncManager.isAuthenticatingOneDrive
         case .nextCloud: return appState.syncManager.isAuthenticatingNextCloud
         case .box: return appState.syncManager.isAuthenticatingBox
+        case .drime: return appState.syncManager.isAuthenticatingDrime
         default: return false
         }
     }
@@ -153,20 +167,32 @@ struct AddCloudAccountView: View {
     /// branded consumer/business cloud services. Sorted alphabetically
     /// by display name at render time.
     private let cloudStorageProviders: [CloudProviderType] = [
-        .box, .dropbox, .filen, .gmxCloud, .googleDrive, .googleDrivePicker, .iCloud, .internxt,
+        .box, .drime, .dropbox, .filen, .gmxCloud, .googleDrive, .googleDrivePicker, .iCloud, .internxt,
         .jottacloud, .kDrive, .koofr, .mega, .nextCloud, .oneDrive, .pCloud, .seafile, .synologyC2, .terabox,
     ]
 
     /// Providers that show up under "Other Protocols" — generic transport
     /// or open-standard endpoints rather than a specific branded service.
     private let otherProtocolProviders: [CloudProviderType] = [
-        .ftp, .s3, .s3Compatible, .sftp, .synologyDrive, .webDAV, .wordpress,
+        .ftp, .s3, .s3Compatible, .sftp, .webDAV, .wordpress,
+    ]
+
+    /// Network storage boxes on the user's own network, each signed in to
+    /// with a NAS account.
+    private let nasProviders: [CloudProviderType] = [
+        .asustor, .qnap, .synologyDrive, .ugreen,
     ]
 
     /// Local devices reached over their own HTTP API rather than a cloud
     /// account — browsed and imported from, not synced to.
     private let deviceProviders: [CloudProviderType] = [
         .gopro,
+    ]
+
+    /// Source-code hosts. Repositories are browsed and copied out of, never
+    /// written back to, so they don't belong with the storage providers.
+    private let codeHostingProviders: [CloudProviderType] = [
+        .github,
     ]
 
     var body: some View {
@@ -203,23 +229,39 @@ struct AddCloudAccountView: View {
                 .foregroundStyle(.secondary)
 
             providerSection(
-                title: "Cloud Storage Providers",
-                providers: cloudStorageProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+                title: L10n.text("Cloud Storage Providers"),
+                providers: cloudStorageProviders.filter(isOffered).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
-                title: "Other Protocols",
+                title: L10n.text("NAS"),
+                providers: nasProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: L10n.text("Other Protocols"),
                 providers: otherProtocolProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             providerSection(
-                title: "Cameras & Devices",
+                title: L10n.text("Code Hosting"),
+                providers: codeHostingProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            )
+
+            providerSection(
+                title: L10n.text("Cameras & Devices"),
                 providers: deviceProviders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             )
 
             Button(L10n.text("Cancel")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
+    }
+
+    /// TeraBox stays out of the list until TeraBox issues the Open Platform
+    /// keys: without them sign-in can only fail.
+    private func isOffered(_ provider: CloudProviderType) -> Bool {
+        provider != .terabox || TeraBoxAPIClient.isAvailable
     }
 
     private func providerSection(title: String, providers: [CloudProviderType]) -> some View {
@@ -294,6 +336,8 @@ struct AddCloudAccountView: View {
                 s3Fields
             case .synologyDrive:
                 synologyDriveFields
+            case .qnap, .ugreen, .asustor:
+                nasFields(for: provider)
             case .synologyC2:
                 synologyC2Fields
             case .s3Compatible:
@@ -316,6 +360,18 @@ struct AddCloudAccountView: View {
                 ftpFields
             case .gopro:
                 goProFields
+            case .github:
+                gitHubFields
+            case .drime:
+                drimeFields
+            }
+
+            if CredentialScope.exposesPassword(address: serverURL) {
+                Label(L10n.text("This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between."),
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let authError = appState.syncManager.authError {
@@ -379,10 +435,13 @@ struct AddCloudAccountView: View {
                         .scaleEffect(0.7)
                 }
 
-                if isPendingBrowserAuth {
+                // Any sign-in can be stopped: one aimed at a wrong or unreachable
+                // server would otherwise hold the sheet until it timed out.
+                if isPendingBrowserAuth || isAuthenticating {
                     Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                         cancelPendingBrowserAuth()
                     }
+                    .keyboardShortcut(.cancelAction)
                 } else {
                     Button(L10n.text("Connect")) { login() }
                         .keyboardShortcut(.defaultAction)
@@ -936,6 +995,93 @@ struct AddCloudAccountView: View {
         }
     }
 
+    private var drimeFields: some View {
+        VStack(spacing: 12) {
+            if DrimeAPIClient.isOAuthAvailable {
+                Picker(L10n.text("Sign-in method"), selection: $drimeMode) {
+                    ForEach(DrimeAuthMode.allCases) { mode in
+                        Text(L10n.text(mode.rawValue)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(isAuthenticating || appState.syncManager.isAuthenticatingDrime)
+                .labelsHidden()
+            }
+
+            switch effectiveDrimeMode {
+            case .browser:
+                if appState.syncManager.isAuthenticatingDrime {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7)
+                        LText("Waiting for sign-in in browser…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    LText("Click Connect to sign in with your Drime account. Your browser will open for authentication.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .token:
+                LText("Create a personal access token in your Drime account under Settings → Developers, then paste it below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    NSWorkspace.shared.open(DrimeAPIClient.tokenSettingsURL)
+                } label: {
+                    Label(L10n.text("Open Drime token settings"), systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+
+                SecureField(L10n.text("Personal Access Token"), text: $apiToken)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { login() }
+
+                LText("Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var gitHubFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LText("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                if let url = URL(string: "https://github.com/settings/tokens") {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Label(L10n.text("Open GitHub token settings"), systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
+            SecureField(L10n.text("Personal Access Token"), text: $apiToken)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            LText("FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     @ViewBuilder
     private var goProFields: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1255,6 +1401,64 @@ struct AddCloudAccountView: View {
         }
     }
 
+    /// QNAP, UGREEN and ASUSTOR. QNAP signs in to File Station itself and
+    /// can ask for a 2-step code; UGREEN and ASUSTOR go through the box's
+    /// WebDAV service, which has to be switched on first. The OTP and
+    /// certificate state is shared with the Synology form — only one
+    /// provider's form is ever on screen.
+    private func nasFields(for provider: CloudProviderType) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Group {
+                switch provider {
+                case .qnap:
+                    LText("Enter your NAS address and QTS account. HTTPS uses port 443 unless you add another one; plain HTTP uses 8080.")
+                case .ugreen:
+                    LText("Turn on WebDAV on the NAS first (Control Panel → File Service → WebDAV), then enter its address and your UGOS account. The default port is 5006 for HTTPS.")
+                default:
+                    LText("Turn on WebDAV on the NAS first (Services → WebDAV in ADM), then enter its address and your ADM account. The default port is 9802 for HTTPS.")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            TextField(nasServerPlaceholder(for: provider), text: $serverURL)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.URL)
+                .disabled(isAuthenticating)
+
+            TextField(L10n.text("Username"), text: $username)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.username)
+                .disabled(isAuthenticating)
+
+            SecureField(L10n.text("Password"), text: $password)
+                .textFieldStyle(.roundedBorder)
+                .textContentType(.password)
+                .disabled(isAuthenticating)
+                .onSubmit { login() }
+
+            if provider == .qnap {
+                TextField(L10n.text("2-step verification code (only if it's on)"), text: $synologyOTP)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isAuthenticating)
+                    .onSubmit { login() }
+            }
+
+            Toggle(L10n.text("Allow self-signed certificate"), isOn: $synologyAllowSelfSigned)
+                .help(L10n.text("Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt)."))
+                .disabled(isAuthenticating)
+        }
+    }
+
+    private func nasServerPlaceholder(for provider: CloudProviderType) -> String {
+        switch provider {
+        case .qnap: return L10n.text("Server URL (e.g. https://my-nas.local)")
+        case .ugreen: return L10n.text("Server URL (e.g. https://my-nas.local:5006)")
+        default: return L10n.text("Server URL (e.g. https://my-nas.local:9802)")
+        }
+    }
+
     private var s3Fields: some View {
         VStack(alignment: .leading, spacing: 12) {
             LText("Enter an AWS access key with S3 permissions and the region your buckets live in. You can create a key under IAM → Users → Security credentials → Access keys.")
@@ -1351,7 +1555,7 @@ struct AddCloudAccountView: View {
         case .mega: return email.isEmpty || password.isEmpty
         case .gmxCloud: return email.isEmpty || password.isEmpty
         case .s3: return s3AccessKeyId.isEmpty || s3SecretAccessKey.isEmpty || s3Region.isEmpty
-        case .synologyDrive: return serverURL.isEmpty || username.isEmpty || password.isEmpty
+        case .synologyDrive, .qnap, .ugreen, .asustor: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .synologyC2: return synologyC2AccessKeyId.isEmpty || synologyC2SecretAccessKey.isEmpty || synologyC2Region.isEmpty
         case .s3Compatible: return s3CompatibleAccessKeyId.isEmpty || s3CompatibleSecretAccessKey.isEmpty || s3CompatibleEndpoint.isEmpty
         case .iCloud: return false
@@ -1359,6 +1563,8 @@ struct AddCloudAccountView: View {
         case .seafile: return serverURL.isEmpty || email.isEmpty || password.isEmpty
         case .filen: return email.isEmpty || password.isEmpty
         case .jottacloud: return apiToken.isEmpty
+        case .github: return apiToken.isEmpty
+        case .drime: return effectiveDrimeMode == .token && apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .terabox: return false  // device-code flow; the Connect button starts it
         case .ftp: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .gopro:
@@ -1499,12 +1705,29 @@ struct AddCloudAccountView: View {
                     rootPath: s3Path
                 )
             case .synologyDrive:
-                let otp = synologyOTP.trimmingCharacters(in: .whitespacesAndNewlines)
+                let otp = String(synologyOTP.filter { !$0.isWhitespace })
                 await appState.syncManager.addSynologyDriveAccount(
                     serverURL: serverURL,
                     username: username,
                     password: password,
                     otp: otp.isEmpty ? nil : otp,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .qnap:
+                let code = String(synologyOTP.filter { !$0.isWhitespace })
+                await appState.syncManager.addQNAPAccount(
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
+                    securityCode: code.isEmpty ? nil : code,
+                    allowSelfSignedCertificate: synologyAllowSelfSigned
+                )
+            case .ugreen, .asustor:
+                await appState.syncManager.addNASWebDAVAccount(
+                    brand: selectedProvider == .ugreen ? .ugreen : .asustor,
+                    serverURL: serverURL,
+                    username: username,
+                    password: password,
                     allowSelfSignedCertificate: synologyAllowSelfSigned
                 )
             case .synologyC2:
@@ -1557,6 +1780,19 @@ struct AddCloudAccountView: View {
                 await appState.syncManager.addJottacloudAccount(
                     personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
+            case .github:
+                await appState.syncManager.addGitHubAccount(
+                    token: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            case .drime:
+                switch effectiveDrimeMode {
+                case .browser:
+                    await appState.syncManager.addDrimeAccountViaBrowser()
+                case .token:
+                    await appState.syncManager.addDrimeAccount(
+                        personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
             case .googleDrivePicker:
                 // Step 1: OAuth (system browser). Step 2: the Google Picker,
                 // also in the system browser (it needs the user's signed-in

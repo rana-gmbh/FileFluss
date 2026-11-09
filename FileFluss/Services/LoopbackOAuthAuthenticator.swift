@@ -26,8 +26,22 @@ struct LoopbackOAuthAuthenticator: OAuthAuthenticator {
     private static let timeout: TimeInterval = 300
 
     func authenticate(
+        callbackURLScheme: String,
+        callbackPath: String,
+        authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
+    ) async throws -> OAuthCallback {
+        try await authenticate(
+            callbackURLScheme: callbackURLScheme,
+            callbackPath: callbackPath,
+            loopback: .localhost,
+            authURLBuilder: authURLBuilder
+        )
+    }
+
+    func authenticate(
         callbackURLScheme _: String,
         callbackPath _: String,
+        loopback: OAuthLoopbackRedirect,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback {
         let listener = try NWListener(using: .tcp, on: .any)
@@ -40,7 +54,7 @@ struct LoopbackOAuthAuthenticator: OAuthAuthenticator {
                 switch state {
                 case .ready:
                     guard let port = listener.port?.rawValue else { return }
-                    let redirectURI = "http://localhost:\(port)"
+                    let redirectURI = Self.redirectURI(port: port, loopback: loopback)
                     let authURL = authURLBuilder(redirectURI)
                     DispatchQueue.main.async {
                         NSWorkspace.shared.open(authURL)
@@ -116,6 +130,18 @@ struct LoopbackOAuthAuthenticator: OAuthAuthenticator {
                 listener.cancel()
                 guard_.resume(throwing: CloudProviderError.notAuthenticated)
             }
+        }
+    }
+}
+
+extension LoopbackOAuthAuthenticator {
+    /// The redirect URI handed to the provider, which must match what was
+    /// registered with the OAuth server character for character (apart
+    /// from the port, where the server allows that).
+    static func redirectURI(port: UInt16, loopback: OAuthLoopbackRedirect) -> String {
+        switch loopback {
+        case .localhost: return "http://localhost:\(port)"
+        case .ipLiteralCallback: return "http://127.0.0.1:\(port)/callback"
         }
     }
 }

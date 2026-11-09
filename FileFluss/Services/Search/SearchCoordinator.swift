@@ -167,7 +167,7 @@ actor SearchCoordinator {
                                         size: f.size,
                                         modificationDate: f.modificationDate,
                                         sourceId: f.sourceId,
-                                        sourceName: driveNames[f.sourceId] ?? "Offline Drive",
+                                        sourceName: driveNames[f.sourceId] ?? L10n.text("Offline Drive"),
                                         sourceKind: "drive"
                                     )
                                 }
@@ -192,7 +192,7 @@ actor SearchCoordinator {
                                         size: r.item.size,
                                         modificationDate: r.item.modificationDate,
                                         sourceId: r.accountId.uuidString,
-                                        sourceName: cloudNames[r.accountId] ?? "Offline Account",
+                                        sourceName: cloudNames[r.accountId] ?? L10n.text("Offline Account"),
                                         sourceKind: "cloud"
                                     )
                                 }

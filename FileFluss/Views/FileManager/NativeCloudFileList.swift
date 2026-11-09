@@ -28,7 +28,10 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
-    var onReceiveCloudDrop: ((CloudFileItem?) -> Void)?
+    /// Offers a promise drop to the cloud-to-cloud flow; returns false when
+    /// that flow isn't the source, and the promises are written to disk and
+    /// uploaded instead.
+    var onReceiveCloudDrop: ((CloudFileItem?) -> Bool)?
     var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
@@ -54,6 +57,21 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// Import-only device (e.g. GoPro): suppress Paste / New Folder / Rename in
     /// the context menu since the camera has no write path.
     var isReadOnly: Bool = false
+    var canDelete: Bool = true
+    /// Packs the selection into an archive beside it. Nil hides the entry —
+    /// on a read-only account there is nowhere to put the archive.
+    var onCompress: (([CloudFileItem], ArchiveCreationFormat) -> Void)?
+    /// True while the panel shows the inside of an archive: read-only, and
+    /// a drag hands over file promises that unpack the entry at the drop.
+    var archiveMode: Bool = false
+    var archiveDragPlan: ArchiveDragPlan?
+    /// Unpacks the clicked archive beside it. Nil on a read-only account.
+    var onExtractHere: ((CloudFileItem) -> Void)?
+    /// Unpacks the clicked archive — or, inside one, the selected entries —
+    /// into the other panel.
+    var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([CloudFileItem], URL) -> Void)?
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
@@ -188,6 +206,13 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.singlePaneMode = singlePaneMode
         coordinator.canCreateFolder = canCreateFolder
         coordinator.isReadOnly = isReadOnly
+        coordinator.onCompress = onCompress
+        coordinator.archiveMode = archiveMode
+        coordinator.archiveDragPlan = archiveDragPlan
+        coordinator.onExtractHere = onExtractHere
+        coordinator.onExtractToOtherPanel = onExtractToOtherPanel
+        coordinator.onOpenWith = onOpenWith
+        coordinator.canDelete = canDelete
         coordinator.shareCapabilities = shareCapabilities
         coordinator.onCreateShareLink = onCreateShareLink
         coordinator.onCopyExistingShareLink = onCopyExistingShareLink
@@ -257,7 +282,7 @@ class CloudTableView: NSTableView {
     var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
-        if event.charactersIgnoringModifiers == " " {
+        if KeyboardShortcutManager.shared.isQuickLook(event) {
             onSpaceKey?()
         } else if event.keyCode == 51 && event.modifierFlags.contains(.command) {
             onDelete?()
@@ -273,7 +298,11 @@ class CloudTableView: NSTableView {
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
         onDragLeft?()
-        super.draggingEnded(sender)
+        // No `super` call. `draggingEnded(_:)` is an optional
+        // NSDraggingDestination method that NSTableView doesn't implement,
+        // so passing it on raised "unrecognized selector" and aborted the
+        // app the moment AppKit delivered it — which dragging an entry out
+        // of an archive to the other panel reliably did.
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -375,7 +404,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onDownloadToTemp: ((CloudFileItem, @escaping (URL?) -> Void) -> Void)?
     var onDragSessionStarted: (([CloudFileItem]) -> Void)?
     var onDragSessionEnded: (() -> Void)?
-    var onReceiveCloudDrop: ((CloudFileItem?) -> Void)?
+    var onReceiveCloudDrop: ((CloudFileItem?) -> Bool)?
     var onInternalCloudDrop: (([CloudFileItem], CloudFileItem) -> Void)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((CloudFileItem) -> Void)?
@@ -384,6 +413,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onSpringLoadFolder: ((CloudFileItem) -> Void)?
     var canCreateFolder: Bool = true
     var isReadOnly = false
+    var onCompress: (([CloudFileItem], ArchiveCreationFormat) -> Void)?
+    var archiveMode = false
+    var archiveDragPlan: ArchiveDragPlan?
+    var onExtractHere: ((CloudFileItem) -> Void)?
+    var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
+    var onOpenWith: (([CloudFileItem], URL) -> Void)?
+    let archivePromiseDelegate = ArchiveFilePromiseDelegate()
+    var canDelete = true
     var shareCapabilities: ShareLinkCapabilities = .unsupported
     var onCreateShareLink: ((CloudFileItem, Bool) -> Void)?
     var onCopyExistingShareLink: ((CloudFileItem) -> Void)?
@@ -680,6 +717,34 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
 
+        // "Open With", first, where Finder keeps it. Files only, and real
+        // ones: a shared-drive row has nothing to open. Nothing is on this
+        // Mac yet, so the apps are looked up by type, from the names.
+        if onOpenWith != nil,
+           contextItems.allSatisfy({ !$0.isDirectory && $0.role == .normal }) {
+            let types = contextItems.map {
+                UTType(filenameExtension: ($0.name as NSString).pathExtension) ?? .data
+            }
+            menu.addItem(OpenWithMenu.item(for: .types(types)) { [weak self] app in
+                self?.onOpenWith?(contextItems, app)
+            })
+            menu.addItem(.separator())
+        }
+
+        // Inside an archive the only other thing to do with a row is unpack it.
+        if archiveMode {
+            if !singlePaneMode {
+                let extractItem = NSMenuItem(
+                    title: L10n.format("Extract to %@ Panel", otherPanelName),
+                    action: #selector(handleExtractToOtherPanel(_:)), keyEquivalent: ""
+                )
+                extractItem.target = self
+                extractItem.representedObject = contextItems
+                menu.addItem(extractItem)
+            }
+            return
+        }
+
         // Synthetic shared-drive nodes can't be renamed, deleted, moved, or
         // cut; the bare container can't even be copied. Suppress those rather
         // than offer actions that would just fail.
@@ -795,6 +860,43 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         menu.addItem(.separator())
 
+        // Extract — one archive at a time, like the local panel. Unpacking
+        // into the other panel works from a read-only account too, which is
+        // how a GitHub snapshot gets opened up.
+        if contextItems.count == 1, let archive = contextItems.first,
+           !archive.isDirectory, archive.role == .normal,
+           ArchiveFormat.detect(fileName: archive.name) != nil {
+            if onExtractHere != nil, !isReadOnly {
+                let hereItem = NSMenuItem(
+                    title: L10n.text("Extract Here"),
+                    action: #selector(handleExtractHere(_:)), keyEquivalent: ""
+                )
+                hereItem.target = self
+                hereItem.representedObject = archive
+                menu.addItem(hereItem)
+            }
+            if !singlePaneMode {
+                let thereItem = NSMenuItem(
+                    title: L10n.format("Extract to %@ Panel", otherPanelName),
+                    action: #selector(handleExtractToOtherPanel(_:)), keyEquivalent: ""
+                )
+                thereItem.target = self
+                thereItem.representedObject = contextItems
+                menu.addItem(thereItem)
+            }
+            menu.addItem(.separator())
+        }
+
+        // Compress — the archive is written back beside the selection, so
+        // the folder has to be a real, writable one.
+        if onCompress != nil, !isReadOnly, !inVirtualContainer, !containsImmovable {
+            menu.addItem(CompressMenu.item(
+                itemCount: contextItems.count, payload: contextItems,
+                target: self, action: #selector(handleCompress(_:))
+            ))
+            menu.addItem(.separator())
+        }
+
         // Rename — only for single, renamable selection (not on read-only devices)
         if contextItems.count == 1, contextItems[0].role == .normal, !isReadOnly {
             let renameItem = NSMenuItem(title: L10n.text("Rename"), action: #selector(handleRename(_:)), keyEquivalent: "")
@@ -826,7 +928,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             }
         }
 
-        if !containsImmovable {
+        if !containsImmovable, canDelete {
             menu.addItem(.separator())
             let deleteItem = NSMenuItem(title: L10n.text("Delete"), action: #selector(handleDeleteFromMenu(_:)), keyEquivalent: "")
             deleteItem.target = self
@@ -909,6 +1011,22 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         onCreateFolder?()
     }
 
+    @objc func handleExtractHere(_ sender: NSMenuItem) {
+        guard let archive = sender.representedObject as? CloudFileItem else { return }
+        onExtractHere?(archive)
+    }
+
+    @objc func handleExtractToOtherPanel(_ sender: NSMenuItem) {
+        guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
+        onExtractToOtherPanel?(contextItems)
+    }
+
+    @objc func handleCompress(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? CompressRequest,
+              let contextItems = request.items as? [CloudFileItem] else { return }
+        onCompress?(contextItems, request.format)
+    }
+
     @objc func handleRename(_ sender: NSMenuItem) {
         guard let item = sender.representedObject as? CloudFileItem else { return }
         onRename?(item)
@@ -982,6 +1100,20 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         guard row < items.count else { return nil }
         let item = items[row]
 
+        // Inside an archive the drop end gets a promise that unpacks the
+        // entry, the same as the local panel's — the cloud flow's promise is
+        // a marker for a provider download, and the provider has never heard
+        // of this path.
+        if archiveMode, let plan = archiveDragPlan {
+            archivePromiseDelegate.plan = plan
+            let fileType = item.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+            let provider = NSFilePromiseProvider(fileType: fileType, delegate: archivePromiseDelegate)
+            provider.userInfo = ArchiveEntryPromise(
+                entryPath: plan.entryPath(forName: item.name), name: item.name
+            )
+            return provider
+        }
+
         filePromiseDelegate.downloadHandler = onDownloadToTemp
         let fileType = item.isDirectory ? UTType.folder.identifier : UTType.data.identifier
         let provider = NSFilePromiseProvider(fileType: fileType, delegate: filePromiseDelegate)
@@ -994,7 +1126,9 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             guard index < items.count else { return nil }
             return items[index]
         }
-        onDragSessionStarted?(currentDragItems)
+        // Not announced from inside an archive: the receiving panel would
+        // take it for a cloud drag and try to download the entries.
+        if !archiveMode { onDragSessionStarted?(currentDragItems) }
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
@@ -1031,6 +1165,9 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     }
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        // An archive listing is read-only; there is nowhere for a drop to go.
+        if archiveMode { return [] }
+
         // Hovering a folder opens it after a moment, so a drag can be carried
         // into a subfolder without dropping first.
         armSpringLoad(row: dropOperation == .on ? row : nil)
@@ -1060,6 +1197,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
         cancelSpringLoad()
+        if archiveMode { return false }
 
         // Resolve an optional subfolder target from the drop row
         var targetFolder: CloudFileItem?
@@ -1074,9 +1212,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             return true
         }
 
-        // Handle file promises from other cloud panels — call immediately before drag session ends
+        // Handle file promises — call immediately before the drag session
+        // ends. Another cloud panel's promises are a marker only: that flow
+        // transfers cloud-to-cloud and says so by returning true. Anything
+        // else — today, entries dragged out of an archive — carries a
+        // promise that writes a real file, so it is written to a staging
+        // folder and then uploaded like any local drop.
         if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
-            onReceiveCloudDrop?(targetFolder)
+            if onReceiveCloudDrop?(targetFolder) != true {
+                uploadPromisedFiles(info, into: targetFolder)
+            }
             return true
         }
 
@@ -1085,6 +1230,41 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         }
         onDrop?(urls, targetFolder)
         return true
+    }
+
+    /// Writes the dragged promises to a staging folder and then hands them
+    /// to the ordinary upload path, which gets the conflict dialog, the
+    /// progress row and the space check for free.
+    private func uploadPromisedFiles(_ info: any NSDraggingInfo, into targetFolder: CloudFileItem?) {
+        guard let receivers = info.draggingPasteboard.readObjects(
+            forClasses: [NSFilePromiseReceiver.self], options: nil
+        ) as? [NSFilePromiseReceiver], !receivers.isEmpty else { return }
+
+        let staging = StagingLocation.stagingDirectory(prefix: "drop")
+        let queue = OperationQueue()
+        queue.qualityOfService = .userInitiated
+        nonisolated(unsafe) let onDrop = self.onDrop
+        let countdown = PromiseCountdown(receivers.count)
+        // `@Sendable` for the same reason as the local panel's receiver: it
+        // runs on `queue`, and a main-actor closure called there is stopped
+        // by the runtime. The URLs are collected on the main queue.
+        let reader: @Sendable (URL, (any Error)?) -> Void = { url, error in
+            DispatchQueue.main.async {
+                if error == nil { countdown.staged.append(url) }
+                countdown.remaining -= 1
+                guard countdown.remaining == 0 else { return }
+                if countdown.staged.isEmpty {
+                    try? FileManager.default.removeItem(at: staging)
+                } else {
+                    onDrop?(countdown.staged, targetFolder)
+                }
+            }
+        }
+        for receiver in receivers {
+            receiver.receivePromisedFiles(
+                atDestination: staging, options: [:], operationQueue: queue, reader: reader
+            )
+        }
     }
 
     // MARK: - Cell Factories

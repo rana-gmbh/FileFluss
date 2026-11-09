@@ -47,6 +47,11 @@ struct SyncEntry: Hashable, Sendable {
         self.modificationDate = modificationDate
         self.creationDate = creationDate
     }
+
+    /// Whether this entry or a folder above it is a dotfile.
+    var isHidden: Bool {
+        relativePath.split(separator: "/").contains { $0.hasPrefix(".") }
+    }
 }
 
 /// A single operation the planner will perform to sync one side into the other.
@@ -82,4 +87,34 @@ struct SyncPlan: Sendable {
     /// project remaining quota / free space in the planner. Can be negative
     /// when a mirror sync removes more than it adds.
     let netDestinationDelta: Int64
+    /// What each side held when the plan was made, hidden files aside.
+    let sourceEntryCount: Int
+    let destinationEntryCount: Int
+    /// Each source file's modification date, stamped onto its copy. Without
+    /// that a copy carries the time it was made, looks changed on the next
+    /// run, and every Mirror replaces everything again.
+    var sourceModificationDates: [String: Date] = [:]
+    /// Files left alone because a folder of the same name is at the
+    /// destination, in a mode that promises never to delete.
+    var typeClashes: Int = 0
+
+    /// Whether this is the plan for what's selected now. A plan calculated
+    /// for one direction or mode must not run under another.
+    func matches(mode: SyncMode, direction: PlanDirection) -> Bool {
+        self.mode == mode && self.direction == direction
+    }
+
+    /// Mirroring nothing over something. This is what a scan gone wrong looks
+    /// like far more often than a real wish to wipe the destination, so it
+    /// isn't offered.
+    var wouldEmptyDestination: Bool {
+        mode == .mirror && sourceEntryCount == 0 && destinationEntryCount > 0
+    }
+
+    /// Deletes at least half of a destination of any real size, which needs
+    /// a confirmation of its own.
+    var deletesMostOfDestination: Bool {
+        let deletions = filesToDelete + foldersToDelete
+        return deletions >= 10 && deletions * 2 >= destinationEntryCount
+    }
 }

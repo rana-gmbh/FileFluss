@@ -8,9 +8,9 @@ enum SearchScope: Hashable, CaseIterable, Sendable {
 
     var label: String {
         switch self {
-        case .currentFolder: return "Current Folder"
-        case .currentSource: return "This Source"
-        case .allSources: return "All Sources"
+        case .currentFolder: return L10n.text("Current Folder")
+        case .currentSource: return L10n.text("This Source")
+        case .allSources: return L10n.text("All Sources")
         }
     }
 }
@@ -117,10 +117,10 @@ enum SearchResultItem: Identifiable, Hashable, Sendable {
             return parent
         case .cloud(let item, _, let accountName):
             let parent = (item.path as NSString).deletingLastPathComponent
-            return "\(accountName): \(parent)"
+            return L10n.format("%@: %@", accountName, parent)
         case .offline(_, let path, _, _, _, _, let sourceName, _):
             let parent = (path as NSString).deletingLastPathComponent
-            return "\(sourceName) (offline): \(parent)"
+            return L10n.format("%@ (offline): %@", sourceName, parent)
         }
     }
 

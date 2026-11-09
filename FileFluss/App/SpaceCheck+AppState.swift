@@ -121,7 +121,16 @@ extension AppState {
             return nil
         }
 
-        guard available != nil else { return nil }  // nothing to warn about
+        // The staging requirement stands on its own: a destination with an
+        // unknown quota still can't excuse filling the Mac's disk.
+        let staging = stagingRequirement(
+            cloudSources: cloudSources,
+            sizes: items,
+            destLocalDir: destLocalDir,
+            destIsCloud: destAccountId != nil
+        )
+
+        guard available != nil || staging != nil else { return nil }
 
         // Net = gross − size of top-level items being overwritten.
         var overwritten: Int64 = 0
@@ -130,7 +139,55 @@ extension AppState {
         }
         let net = max(0, gross - overwritten)
 
-        return SpaceImpact(destinationName: destinationName, isCloud: isCloud, available: available, addedBytes: net)
+        return SpaceImpact(
+            destinationName: destinationName,
+            isCloud: isCloud,
+            available: available,
+            addedBytes: net,
+            staging: staging
+        )
+    }
+
+    /// What the transfer needs on this Mac while it runs.
+    ///
+    /// Three shapes, and they need different numbers:
+    ///
+    /// - **Cloud to cloud** downloads *everything* into the staging folder
+    ///   and only then starts uploading, so the peak is the whole transfer.
+    /// - **Cloud to local** stages one file at a time and moves each into
+    ///   place, so the peak is the largest single item — and nothing at all
+    ///   when the staging folder and the destination share a volume, since
+    ///   the move is then a rename.
+    /// - **Local to cloud** streams from the file on disk. Nothing staged.
+    func stagingRequirement(
+        cloudSources: [(accountId: UUID, item: CloudFileItem)],
+        sizes: [TransferItemSize],
+        destLocalDir: URL?,
+        destIsCloud: Bool
+    ) -> SpaceImpact.Staging? {
+        guard !cloudSources.isEmpty else { return nil }
+
+        // Only the cloud items pass through; anything local is already here.
+        let cloudNames = Set(cloudSources.map(\.item.name))
+        let cloudSizes = sizes.filter { cloudNames.contains($0.name) }.map(\.bytes)
+        guard !cloudSizes.isEmpty else { return nil }
+
+        let needed: Int64
+        if destIsCloud {
+            needed = cloudSizes.reduce(0, +)
+        } else {
+            guard let destLocalDir else { return nil }
+            if SpaceCheck.sameVolume(StagingLocation.base(), destLocalDir) { return nil }
+            needed = cloudSizes.max() ?? 0
+        }
+        guard needed > 0 else { return nil }
+
+        let staging = StagingLocation.base()
+        return SpaceImpact.Staging(
+            volumeName: SpaceCheck.volumeName(at: staging),
+            needed: needed,
+            free: SpaceCheck.localVolumeFreeBytes(at: staging)
+        )
     }
 
     // MARK: - Size helpers

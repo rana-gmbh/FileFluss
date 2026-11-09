@@ -35,10 +35,15 @@ Connect once in Settings → Cloud Accounts and the account appears in both pane
 - Filen (filen.io)
 - Internxt (internxt.com — end-to-end encrypted)
 - Jottacloud (jottacloud.com)
+- Drime (drime.cloud — French cloud storage)
 - NextCloud
 - Seafile
 - Synology Drive
 - Synology C2
+- QNAP (File Station, with 2-step verification)
+- UGREEN NAS (via its WebDAV service)
+- ASUSTOR NAS (via its WebDAV service)
+- GitHub (read-only — browse repositories and back them up as ZIP snapshots)
 - WordPress (Media Library)
 - GMX Cloud (MediaCenter)
 - AWS S3
@@ -52,6 +57,32 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
 
+### Archives, right in the panel
+
+![Browsing an archive](Screenshots/FileFluss%20archives.webp)
+
+- Double-click a **ZIP, RAR, 7z or TAR** archive and it opens in the panel like a folder — locally and on any cloud account.
+- **Preview** files inside with Quick Look, open them, or **drag single files and folders out** to the other panel or to Finder. Nothing is unpacked until you ask for it.
+- **Extract Here** or **Extract to the other panel** from the right-click menu, following Finder's rule for one item versus several.
+- **Compress** to ZIP, 7-Zip, TAR.GZ, TAR.BZ2 or TAR.XZ. On a cloud account the archive is downloaded, packed or unpacked, and the result uploaded beside it.
+
+### Back up your GitHub repositories
+
+![GitHub repositories](Screenshots/FileFluss%20GitHub%20integration.webp)
+
+- Connect GitHub with a personal access token: the panel lists owners, then repositories, with private ones marked.
+- Each repository is available as browsable files and as a **snapshot ZIP** of its default branch.
+- Drag the snapshots onto Dropbox, a NAS or any other account, and your repositories are backed up — an ordinary panel-to-panel copy.
+- Read-only by design: nothing can be deleted on GitHub from FileFluss.
+
+### Open With
+
+![Open With submenu](Screenshots/FileFluss%20Open%20with%20dialogue.webp)
+
+- Right-click → **Open With**, like Finder: the default app first, every other app that can open the selection, and *Other…* to pick any app.
+- Works on cloud drives too — open a cloud file directly in the app of your choice. Mounted accounts open the file in place; otherwise it's downloaded first.
+- Works inside archives as well: the entry is unpacked first.
+
 ### Share files with a link
 
 ![Share files](Screenshots/FileFluss%20Share%20Files.webp)
@@ -61,7 +92,7 @@ Right-click a file on a supported cloud account → **Share Link**. FileFluss as
 - Optional **password** and **expiry date**, offered only where that account can actually honour them.
 - Every link is fetched anonymously before you hand it out, so you find out here — not from the recipient — if it only works while signed in.
 - Copy an existing link again, change its password or expiry, or stop sharing entirely.
-- Dropbox, Google Drive, OneDrive, Box, pCloud, kDrive, Koofr, Jottacloud, NextCloud, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
+- Dropbox, Google Drive, OneDrive, Box, Drime, pCloud, kDrive, Koofr, Jottacloud, NextCloud, QNAP, Seafile, Synology C2, Synology Drive, WordPress, AWS S3 and S3-compatible storage.
 
 ### Storage Analysis
 
@@ -128,7 +159,7 @@ Settings → Keyboard lets you remap every common file-manager command. Pick one
 
 Settings → Storage shows a live cache size and offers a one-click *Clear*. Optional auto-management on launch prunes entries older than N days, then enforces a size cap. Slider + numeric field for the max size, and a separate slider for auto-delete age.
 
-**Choose where the cache lives.** Downloads are staged through this folder. If you're copying large files from a cloud account to an external drive on a Mac with limited internal storage, point the cache at a folder on that external drive — big transfers then stay off your internal disk. Defaults to the system temporary folder, and falls back to it automatically if the chosen folder isn't available.
+**Choose where the cache lives.** Downloads are staged through this folder. If you're copying large files from a cloud account to an external drive on a Mac with limited internal storage, point the cache at a folder on that external drive — big transfers then stay off your internal disk. Defaults to the system temporary folder, and falls back to it automatically if the chosen folder isn't available. Cloud-to-cloud transfers are staged here too, and are measured against this volume's free space before they begin.
 
 ### Drag & drop, with shortcuts
 
@@ -159,6 +190,10 @@ Make one folder match another — local↔local, local↔cloud, or cloud↔cloud
 - **Additive** — only copy files that are missing; never overwrite.
 
 A pre-flight plan shows file counts, total bytes, and direction before a single byte moves. Byte-weighted progress so a single large file doesn't stall the bar. Cancel any transfer with confirmation.
+
+**Both ends of the space question.** The plan shows what the destination has free and, when the files have to cross this Mac on the way, how much room they need *here* — a cloud-to-cloud transfer is downloaded in full before anything is uploaded, so a healthy cloud quota says nothing about a nearly full SSD. The figure depends on the shape of the transfer: cloud to cloud needs the whole thing at once, cloud to local needs only the largest single item (and nothing at all when it lands on the volume it staged on), local to cloud streams from the file and needs nothing. When space is short, the warning names which disk is short, because freeing space on your Mac and freeing space in an account are not the same errand.
+
+For copy and move, the check is opt-in — *Check available space before copy or move* in Settings → General, off by default because measuring sizes costs a moment. One case is always checked, switch or no switch: a cloud-to-cloud transfer that cannot fit in the staging folder stops before it starts and names the disk, rather than failing half way with a disk-full error.
 
 ### Compare Folders
 
@@ -203,6 +238,12 @@ Search the active local folder and every connected cloud account at once.
 - Customisable toolbar (right-click → Customize Toolbar…).
 - Light/Dark app icon variants — the dock icon swaps live when macOS toggles appearance.
 - Built-in **FileFluss Help** under the Help menu (⌘?).
+
+## Privacy
+
+FileFluss has no servers: no account, no analytics, no telemetry, no crash reporting. Your files stay on your Mac and on the services you connect. The only request FileFluss makes on its own is the update check against GitHub, which you can switch off.
+
+See [PRIVACY.md](PRIVACY.md) for what is stored where, and what leaves your Mac.
 
 ## Requirements
 
@@ -252,6 +293,10 @@ xcodebuild build -project FileFluss.xcodeproj -scheme FileFluss -destination 'pl
 ## Support
 
 If you want to support the FileFluss project, please consider [buying me a coffee](https://buymeacoffee.com/robertrudolph).
+
+## Contributors
+
+FileFluss is written by Robert Rudolph at Rana GmbH, with help from the people in [CONTRIBUTORS.md](CONTRIBUTORS.md). Pull requests are welcome — that file says what makes one easy to accept.
 
 ## License
 

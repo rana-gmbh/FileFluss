@@ -49,12 +49,12 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
     public func authenticate() async throws {
         guard FileManager.default.ubiquityIdentityToken != nil else {
             throw CloudProviderError.commandFailed(
-                "You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on."
+                L10n.text("You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on.")
             )
         }
         guard FileManager.default.fileExists(atPath: Self.rootURL.path) else {
             throw CloudProviderError.commandFailed(
-                "iCloud Drive is enabled, but the CloudDocs folder isn't available yet. Wait a moment for the system to set it up and try again."
+                L10n.text("iCloud Drive is enabled, but the CloudDocs folder isn't available yet. Wait a moment for the system to set it up and try again.")
             )
         }
         iCloudLog.info("[iCloud] Authenticated, root=\(Self.rootURL.path)")
@@ -220,10 +220,11 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
     /// Builds an absolute file URL beneath the CloudDocs root from a
     /// provider-style remote path (`/foo/bar.txt`).
     public func url(forRemotePath remotePath: String) -> URL {
-        var trimmed = remotePath
-        while trimmed.hasPrefix("/") { trimmed.removeFirst() }
-        if trimmed.isEmpty { return Self.rootURL }
-        return Self.rootURL.appendingPathComponent(trimmed)
+        // `.` and `..` are dropped, because this is the one provider whose
+        // paths are real paths: climbing out of CloudDocs reaches the disk.
+        let components = remotePath.split(separator: "/").filter { $0 != "." && $0 != ".." }
+        if components.isEmpty { return Self.rootURL }
+        return Self.rootURL.appendingPathComponent(components.joined(separator: "/"))
     }
 
     private func joinedRemotePath(parent: String, name: String) -> String {
@@ -318,7 +319,7 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
             try await Task.sleep(nanoseconds: UInt64(Self.downloadPollInterval * 1_000_000_000))
         }
         throw CloudProviderError.commandFailed(
-            "Timed out waiting for iCloud to download \(url.lastPathComponent)."
+            L10n.format("Timed out waiting for iCloud to download %@.", url.lastPathComponent)
         )
     }
 

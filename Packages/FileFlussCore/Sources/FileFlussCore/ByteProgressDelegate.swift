@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Delegate for URLSession tasks that reports byte-level transfer progress.
 ///
@@ -66,13 +67,34 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
     private var handle: FileHandle?
     private var response: URLResponse?
     private var failure: Error?
+    private var bytesWritten: Int64 = 0
     var ownedSession: URLSession?
+    /// The delegate of the session the caller asked to download with. This
+    /// handler runs on a session of its own, so without it a session that
+    /// trusts a NAS's self-signed certificate would lose that trust for
+    /// downloads — and every download from such a NAS would fail.
+    var trustDelegate: URLSessionDelegate?
 
     init(onBytes: (@Sendable (Int64) -> Void)?,
          completion: @escaping (Result<(URL, URLResponse), Error>) -> Void) {
         self.onBytes = onBytes
         self.completion = completion
         self.destURL = StagingLocation.downloadStagingFile()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trustDelegate,
+              trustDelegate.responds(to: #selector(URLSessionDelegate.urlSession(_:didReceive:completionHandler:)))
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        trustDelegate.urlSession?(session, didReceive: challenge, completionHandler: completionHandler)
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
@@ -93,11 +115,23 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
         guard failure == nil, let handle else { return }
         do {
             try handle.write(contentsOf: data)
+            bytesWritten += Int64(data.count)
             onBytes?(Int64(data.count))
         } catch {
             failure = error
             dataTask.cancel()
         }
+    }
+
+    /// Whether fewer bytes arrived than the server promised. Skipped for a
+    /// compressed response, whose promise is about the bytes on the wire, and
+    /// for a failed one, whose body isn't the file anyway.
+    static func isTruncated(_ response: URLResponse, bytesWritten: Int64) -> Bool {
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              http.expectedContentLength > 0,
+              http.value(forHTTPHeaderField: "Content-Encoding") == nil else { return false }
+        return bytesWritten < http.expectedContentLength
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -117,6 +151,11 @@ private final class DownloadProgressHandler: NSObject, URLSessionDataDelegate, @
             completion(.failure(URLError(.cannotLoadFromNetwork)))
             return
         }
+        if Self.isTruncated(response, bytesWritten: bytesWritten) {
+            try? FileManager.default.removeItem(at: destURL)
+            completion(.failure(URLError(.networkConnectionLost)))
+            return
+        }
         completion(.success((destURL, response)))
     }
 }
@@ -125,24 +164,60 @@ extension URLSession {
     /// Download the request to a temp URL; reports byte progress if `onBytes` is non-nil.
     /// Returns (tempFileURL, URLResponse) like `session.download(for:)`.
     public func downloadReportingProgress(for request: URLRequest, onBytes: ByteProgressHandler?) async throws -> (URL, URLResponse) {
-        return try await withCheckedThrowingContinuation { continuation in
-            let handler = DownloadProgressHandler(onBytes: onBytes) { result in
-                switch result {
-                case .success(let value): continuation.resume(returning: value)
-                case .failure(let error): continuation.resume(throwing: error)
+        // The continuation knows nothing of task cancellation by itself, which
+        // left Cancel waiting for the current file to finish on its own.
+        let running = OSAllocatedUnfairLock<(task: URLSessionDataTask?, cancelled: Bool)>(initialState: (nil, false))
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let handler = DownloadProgressHandler(onBytes: onBytes) { result in
+                    switch result {
+                    case .success(let value): continuation.resume(returning: value)
+                    case .failure(let error): continuation.resume(throwing: error)
+                    }
                 }
+                // Dedicated session so the delegate is strongly retained and reliably
+                // receives the streaming `didReceive` callbacks (a per-task delegate
+                // on the async `data(for:delegate:)` doesn't always deliver them).
+                handler.trustDelegate = delegate
+                let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
+                handler.ownedSession = session
+                let task = session.dataTask(with: request)
+                let alreadyCancelled = running.withLock { state in
+                    state.task = task
+                    return state.cancelled
+                }
+                task.resume()
+                if alreadyCancelled { task.cancel() }
             }
-            // Dedicated session so the delegate is strongly retained and reliably
-            // receives the streaming `didReceive` callbacks (a per-task delegate
-            // on the async `data(for:delegate:)` doesn't always deliver them).
-            let session = URLSession(configuration: configuration, delegate: handler, delegateQueue: nil)
-            handler.ownedSession = session
-            let task = session.dataTask(with: request)
-            task.resume()
+        } onCancel: {
+            let task = running.withLock { state in
+                state.cancelled = true
+                return state.task
+            }
+            task?.cancel()
         }
     }
 
+    /// Upload the contents of `fileURL` and return (responseData,
+    /// URLResponse), reporting byte progress if `onBytes` is non-nil.
+    ///
+    /// Streams from disk: URLSession reads the file as it sends it, so a
+    /// 10 GB upload costs no more memory than a 10 KB one. The `body: Data`
+    /// variant below reads the whole file first, which for a 1.5 GB video
+    /// means a 1.5 GB allocation before a single byte goes out — and
+    /// URLSession may hold its own copy on top of that.
+    public func uploadReportingProgress(for request: URLRequest, fromFile fileURL: URL, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
+        if let onBytes {
+            let delegate = ByteProgressDelegate(onBytes: onBytes)
+            return try await upload(for: request, fromFile: fileURL, delegate: delegate)
+        }
+        return try await upload(for: request, fromFile: fileURL)
+    }
+
     /// Upload `body` and return (responseData, URLResponse). Reports byte progress if `onBytes` is non-nil.
+    ///
+    /// Prefer `uploadReportingProgress(for:fromFile:onBytes:)` when the body
+    /// is a file on disk — this one holds all of it in memory.
     public func uploadReportingProgress(for request: URLRequest, body: Data, onBytes: ByteProgressHandler?) async throws -> (Data, URLResponse) {
         if let onBytes {
             let delegate = ByteProgressDelegate(onBytes: onBytes)

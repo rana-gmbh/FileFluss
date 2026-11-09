@@ -12,11 +12,11 @@ enum CloudQuotaFormatter {
     static func summary(_ quota: CloudStorageQuota, accountDisplayName: String) -> String {
         let used = ByteCountFormatter.string(fromByteCount: quota.usedBytes, countStyle: .file)
         guard let total = quota.totalBytes, total > 0 else {
-            return "\(accountDisplayName): \(used) used"
+            return L10n.format("%@: %@ used", accountDisplayName, used)
         }
         let totalStr = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
         let percent = percentString(used: quota.usedBytes, total: total)
-        return "\(accountDisplayName): \(used) of \(totalStr) used (\(percent))"
+        return L10n.format("%@: %@ of %@ used (%@)", accountDisplayName, used, totalStr, percent)
     }
 
     /// "28%" with 0–100 clamping. Quotas can briefly report > 100% when

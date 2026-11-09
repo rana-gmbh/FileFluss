@@ -21,6 +21,32 @@ public final class LoopbackMountService {
         public let port: UInt16
         nonisolated public static func == (lhs: ActiveMount, rhs: ActiveMount) -> Bool { lhs.id == rhs.id }
         nonisolated public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+        /// Where an account's remote path is to be found inside this mount.
+        nonisolated public func url(forRemotePath remotePath: String) -> URL {
+            LoopbackMountService.mountedURL(
+                forRemotePath: remotePath, mountPoint: mountPoint, providerRoot: providerRoot
+            )
+        }
+    }
+
+    /// Where a remote path is to be found inside a mounted volume.
+    ///
+    /// The mount serves `providerRoot` at the volume's root, so that prefix
+    /// comes off first: a mount rooted at `/Backups` makes `/Backups/2026`
+    /// into `<volume>/2026`, not `<volume>/Backups/2026`.
+    nonisolated public static func mountedURL(
+        forRemotePath remotePath: String,
+        mountPoint: URL,
+        providerRoot: String
+    ) -> URL {
+        var relative = remotePath
+        if providerRoot != "/", relative.hasPrefix(providerRoot) {
+            relative = String(relative.dropFirst(providerRoot.count))
+        }
+        while relative.hasPrefix("/") { relative.removeFirst() }
+        guard !relative.isEmpty else { return mountPoint }
+        return mountPoint.appendingPathComponent(relative)
     }
 
     public private(set) var mounts: [ActiveMount] = []
@@ -209,7 +235,7 @@ public final class LoopbackMountService {
         let urlString = "http://\(host).localhost:\(port)/"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "FileFluss.Mount", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Couldn't build the loopback URL."])
+                          userInfo: [NSLocalizedDescriptionKey: L10n.text("Couldn't build the loopback URL.")])
         }
         // `kNetFSUseGuestKey=true` short-circuits the auth prompt.
         // `AllowLoopback=true` allows the loopback mount at all. We
@@ -253,7 +279,7 @@ public final class LoopbackMountService {
             try? FileManager.default.removeItem(at: mountPoint)
             throw NSError(
                 domain: "FileFluss.Mount", code: Int(status),
-                userInfo: [NSLocalizedDescriptionKey: "Could not mount in Finder: \(message)"]
+                userInfo: [NSLocalizedDescriptionKey: L10n.format("Could not mount in Finder: %@", message)]
             )
         }
 
@@ -297,11 +323,11 @@ public final class LoopbackMountService {
         // on screen explaining it.
         switch status {
         case EAUTH:
-            return "the mount needed credentials (errno \(EAUTH)). The internal server asks for none, so this shouldn't happen — please report it."
+            return L10n.format("the mount needed credentials (errno %d). The internal server asks for none, so this shouldn't happen — please report it.", Int(EAUTH))
         case ENETFSNOAUTHMECHSUPP:
-            return "macOS and the internal server couldn't agree on an authentication method (NetFS status \(ENETFSNOAUTHMECHSUPP)). Please report it."
+            return L10n.format("macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it.", Int(ENETFSNOAUTHMECHSUPP))
         case ENETFSNOSHARESAVAIL:
-            return "macOS found nothing to mount at the internal server (NetFS status \(ENETFSNOSHARESAVAIL))."
+            return L10n.format("macOS found nothing to mount at the internal server (NetFS status %d).", Int(ENETFSNOSHARESAVAIL))
         default:
             break
         }
@@ -329,11 +355,11 @@ public final class LoopbackMountService {
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 throw NSError(domain: "FileFluss.Mount", code: -1,
-                              userInfo: [NSLocalizedDescriptionKey: "The internal WebDAV server didn't respond with 200 OK to OPTIONS."])
+                              userInfo: [NSLocalizedDescriptionKey: L10n.text("The internal WebDAV server didn't respond with 200 OK to OPTIONS.")])
             }
         } catch {
             throw NSError(domain: "FileFluss.Mount", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "Could not reach the internal WebDAV server on 127.0.0.1:\(port): \(error.localizedDescription)"])
+                          userInfo: [NSLocalizedDescriptionKey: L10n.format("Could not reach the internal WebDAV server on 127.0.0.1:%@: %@", String(port), error.localizedDescription)])
         }
     }
 

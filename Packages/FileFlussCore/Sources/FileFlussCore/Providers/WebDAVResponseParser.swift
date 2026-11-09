@@ -7,12 +7,45 @@ import Foundation
 // FileFlussCore module.
 
 public enum WebDAVResponseParser {
-    public static func parse(data: Data, basePath: String, requestPath: String) -> [CloudFileItem] {
+    /// Throws when the XML doesn't parse to the end. Whatever was read before
+    /// the error is only part of the folder, and must not pass for all of it.
+    public static func parse(data: Data, basePath: String, requestPath: String) throws -> [CloudFileItem] {
         let parser = WebDAVXMLParser(basePath: basePath, requestPath: requestPath)
         let xmlParser = XMLParser(data: data)
         xmlParser.delegate = parser
-        xmlParser.parse()
+        guard xmlParser.parse() else { throw CloudProviderError.unreadableListing }
         return parser.items
+    }
+
+    /// The contents of a folder: everything a `Depth: 1` PROPFIND returned
+    /// except the folder itself.
+    ///
+    /// Identified by path rather than by position. The callers used to drop
+    /// the first entry, on the assumption that a server lists the folder
+    /// before its children — but the parser also drops an entry whose name
+    /// works out empty, which is what the root's own entry does when the
+    /// server sends no `displayname` for it. Then the positional drop took
+    /// a real folder instead, and a Hetzner Storage Box with two folders
+    /// showed one (issue #64). Nothing in the spec fixes the ordering
+    /// either, so position was never a safe way to find it.
+    public static func children(data: Data, basePath: String, requestPath: String) throws -> [CloudFileItem] {
+        let all = try parse(data: data, basePath: basePath, requestPath: requestPath)
+        let target = normalisedPath(requestPath)
+        let children = all.filter { normalisedPath($0.path) != target }
+        // A server that didn't list the folder itself leaves nothing to
+        // remove. Returning everything is right; removing something anyway
+        // is how this bug worked.
+        return children.count == all.count ? all : children
+    }
+
+    /// Percent-decoded, no trailing slash, empty means the root — so the
+    /// several spellings of one path compare equal.
+    static func normalisedPath(_ path: String) -> String {
+        var value = path.removingPercentEncoding ?? path
+        while value.count > 1 && value.hasSuffix("/") { value.removeLast() }
+        if value.isEmpty { value = "/" }
+        if !value.hasPrefix("/") { value = "/" + value }
+        return value
     }
 }
 

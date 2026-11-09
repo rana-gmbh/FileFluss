@@ -40,6 +40,11 @@ private enum DevCredentialStore {
         try FileManager.default.removeItem(at: url)
     }
 
+    static func allKeys() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.filter { $0.hasSuffix(".bin") }.map { String($0.dropLast(4)) }
+    }
+
     private static func file(for key: String) -> URL {
         // Keep keys filesystem-safe — providers use UUID-style strings so
         // this is mostly defensive.
@@ -67,6 +72,14 @@ public enum KeychainService {
             kSecAttrAccount as String: key,
         ]
     }
+
+    #if DEBUG
+    /// Every key in the debug credential folder. Used to save and restore a
+    /// developer's test accounts; there's no equivalent for the Keychain.
+    public static func devCredentialKeys() -> [String] {
+        DevCredentialStore.allKeys()
+    }
+    #endif
 
     public static func save(key: String, data: Data) throws {
         #if DEBUG
@@ -149,9 +162,9 @@ public enum KeychainError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .saveFailed(let status):
-            return "Keychain save failed (OSStatus \(status))"
+            return L10n.format("Keychain save failed (OSStatus %d)", Int(status))
         case .deleteFailed(let status):
-            return "Keychain delete failed (OSStatus \(status))"
+            return L10n.format("Keychain delete failed (OSStatus %d)", Int(status))
         }
     }
 }

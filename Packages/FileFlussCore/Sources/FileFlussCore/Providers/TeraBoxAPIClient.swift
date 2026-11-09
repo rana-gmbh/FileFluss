@@ -45,15 +45,17 @@ public struct TeraBoxDeviceCode: Sendable {
 }
 
 public actor TeraBoxAPIClient {
+    /// Whether this build carries the Open Platform keys sign-in needs.
+    /// Without them every login fails, so the account isn't offered.
+    public static var isAvailable: Bool { TeraBoxAppCredentials.isConfigured }
+
     private let authHost = "https://www.terabox.com"
     public private(set) var credentials: TeraBoxCredentials
     private let session: URLSession
 
     public init(credentials: TeraBoxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 600
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 
@@ -92,7 +94,7 @@ public actor TeraBoxAPIClient {
             }
             try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
         }
-        throw CloudProviderError.commandFailed("Authorization timed out — the QR code expired before it was scanned.")
+        throw CloudProviderError.commandFailed(L10n.text("Authorization timed out — the QR code expired before it was scanned."))
     }
 
     /// Authorization-code variant (kept for completeness if a redirect flow is added later).
@@ -239,8 +241,7 @@ public actor TeraBoxAPIClient {
         guard (resp as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) == true else {
             throw CloudProviderError.serverError((resp as? HTTPURLResponse)?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     // MARK: - Upload (precreate → superfile2 → create)
@@ -440,9 +441,9 @@ public actor TeraBoxAPIClient {
         guard env.errno == 0 else {
             teraboxLog.error("[TeraBox] API errno \(env.errno)")
             switch env.errno {
-            case -8: throw CloudProviderError.commandFailed("A file with that name already exists.")
-            case -9: throw CloudProviderError.notFound("Item not found.")
-            case -7: throw CloudProviderError.commandFailed("Invalid file name.")
+            case -8: throw CloudProviderError.commandFailed(L10n.text("A file with that name already exists."))
+            case -9: throw CloudProviderError.notFound(L10n.text("Item not found."))
+            case -7: throw CloudProviderError.commandFailed(L10n.text("Invalid file name."))
             default: throw CloudProviderError.serverError(env.errno)
             }
         }
@@ -450,9 +451,9 @@ public actor TeraBoxAPIClient {
 
     private static func mapAuthError(_ errno: Int) -> CloudProviderError {
         switch errno {
-        case 400001: return .commandFailed("Waiting for authorization in the TeraBox app.")
+        case 400001: return .commandFailed(L10n.text("Waiting for authorization in the TeraBox app."))
         case 100001: return .invalidCredentials
-        case 100002: return .commandFailed("Authorization code invalid or expired.")
+        case 100002: return .commandFailed(L10n.text("Authorization code invalid or expired."))
         case 200002, 200003: return .notAuthenticated
         case 200004, 200005: return .notAuthenticated
         default: return .serverError(errno)

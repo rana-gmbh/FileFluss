@@ -141,7 +141,7 @@ public actor SFTPAPIClient {
         let client = SFTPAPIClient(credentials: creds)
         // Verify by listing the chosen remote path (or "/" if it's empty).
         let probePath = remotePath.isEmpty ? "/" : remotePath
-        _ = try await client.runBatch(commands: ["ls \(client.shellEscape(probePath))"])
+        _ = try await client.runBatch(commands: ["ls \(SFTPAPIClient.shellEscape(probePath))"])
         sftpLog.info("[SFTP] Authenticated as \(username)@\(host):\(port) via \(authMethod.rawValue)")
         return creds
     }
@@ -154,7 +154,7 @@ public actor SFTPAPIClient {
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
         let output = try await runListing(path: path)
-        return parseListing(output: output, basePath: path)
+        return try parseListing(output: output, basePath: path)
     }
 
     /// Runs `ls -la <path>` and returns the raw output.
@@ -169,7 +169,7 @@ public actor SFTPAPIClient {
     /// zero items, no error was thrown, and nothing reached the support
     /// log. Sending plain `-la` is what Forklift/FileZilla effectively do.
     private func runListing(path: String) async throws -> String {
-        try await runBatch(commands: ["ls -la \(shellEscape(path))"])
+        try await runBatch(commands: ["ls -la \(Self.shellEscape(path))"])
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -177,7 +177,17 @@ public actor SFTPAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        _ = try await runBatch(commands: ["get \(shellEscape(remotePath)) \(shellEscape(localURL.path))"])
+        // `get` writes as it goes, so it gets a name of its own: a drop part
+        // way must not leave a short file, or cost the file already there.
+        let partial = localURL.deletingLastPathComponent()
+            .appendingPathComponent(FileSystemService.temporaryReplacementName(for: localURL.lastPathComponent))
+        do {
+            _ = try await runBatch(commands: ["get \(Self.shellEscape(remotePath)) \(Self.shellEscape(partial.path))"])
+            try FileSystemService.placeDownload(from: partial, at: localURL)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            throw error
+        }
         if let onBytes,
            let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path),
            let size = attrs[.size] as? Int64 {
@@ -193,7 +203,7 @@ public actor SFTPAPIClient {
         let fileSize: Int64 = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64) ?? 0
         // `put -p` preserves the source file's modification time and perms so
         // sync diffs stay stable across re-uploads.
-        _ = try await runBatch(commands: ["put -p \(shellEscape(localURL.path)) \(shellEscape(remotePath))"])
+        _ = try await runBatch(commands: ["put -p \(Self.shellEscape(localURL.path)) \(Self.shellEscape(remotePath))"])
         onBytes?(fileSize)
     }
 
@@ -204,15 +214,15 @@ public actor SFTPAPIClient {
             for item in items {
                 try await deleteItem(at: item.path, isDirectory: item.isDirectory)
             }
-            _ = try await runBatch(commands: ["rmdir \(shellEscape(path))"])
+            _ = try await runBatch(commands: ["rmdir \(Self.shellEscape(path))"])
         } else {
-            _ = try await runBatch(commands: ["rm \(shellEscape(path))"])
+            _ = try await runBatch(commands: ["rm \(Self.shellEscape(path))"])
         }
     }
 
     public func createFolder(at path: String) async throws {
         if (try? await getFileInfo(at: path)) != nil { return }
-        _ = try await runBatch(commands: ["mkdir \(shellEscape(path))"])
+        _ = try await runBatch(commands: ["mkdir \(Self.shellEscape(path))"])
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
@@ -223,14 +233,99 @@ public actor SFTPAPIClient {
         } else {
             destinationPath = "\(parentPath)/\(newName)"
         }
-        _ = try await runBatch(commands: ["rename \(shellEscape(path)) \(shellEscape(destinationPath))"])
+        _ = try await runBatch(commands: ["rename \(Self.shellEscape(path)) \(Self.shellEscape(destinationPath))"])
+    }
+
+    // MARK: - Server-side move and copy
+
+    /// Moves an item on the server. A rename, so it costs the same whether
+    /// the file is a kilobyte or a terabyte — which is what the operation
+    /// looked like to the user until now, when it downloaded the file and
+    /// uploaded it again (issue #62).
+    ///
+    /// The sftp client issues `posix-rename@openssh.com` where the server
+    /// offers it, so an overwrite is atomic.
+    public func moveItem(at path: String, toPath newPath: String) async throws {
+        do {
+            _ = try await runBatch(commands: [Self.renameCommand(from: path, to: newPath)])
+        } catch {
+            // A rename the server won't do — across filesystems, most
+            // often — is not a failure to report but a reason to fall back
+            // to copying the bytes through. `.notImplemented` is how a
+            // provider says that.
+            throw Self.isRefusedServerSideOperation(error) ? CloudProviderError.notImplemented : error
+        }
+    }
+
+    /// Copies an item on the server, where the server can.
+    ///
+    /// `cp` needs the `copy-data` extension, which OpenSSH's sftp-server
+    /// has had since 9.0 — and plenty of servers in use are older, or
+    /// aren't OpenSSH at all. The first attempt against an account settles
+    /// it; after that the answer is remembered, so a folder of a thousand
+    /// files doesn't pay a failed round trip a thousand times.
+    ///
+    /// Files only: `cp` does not recurse, so a directory is declined here
+    /// and the caller falls back to its own copy.
+    public func copyItem(at path: String, toPath newPath: String) async throws {
+        if serverRefusesCopyData { throw CloudProviderError.notImplemented }
+
+        let info = try? await getFileInfo(at: path)
+        if info?.isDirectory == true {
+            // Nothing to do server-side with one command; let the caller
+            // walk it instead.
+            throw CloudProviderError.notImplemented
+        }
+
+        do {
+            _ = try await runBatch(commands: [Self.copyCommand(from: path, to: newPath)])
+        } catch {
+            if Self.isUnsupportedCopy(error) {
+                serverRefusesCopyData = true
+                throw CloudProviderError.notImplemented
+            }
+            throw Self.isRefusedServerSideOperation(error) ? CloudProviderError.notImplemented : error
+        }
+    }
+
+    /// True once this server has shown it has no `copy-data` extension.
+    private var serverRefusesCopyData = false
+
+    /// The server having no server-side copy at all, as opposed to this
+    /// particular copy failing. OpenSSH says so in the client, before it
+    /// ever reaches the server.
+    static func isUnsupportedCopy(_ error: Error) -> Bool {
+        let text = message(from: error).lowercased()
+        return text.contains("copy-data")
+            || text.contains("does not support")
+            || text.contains("unknown command")
+            || text.contains("invalid command")
+    }
+
+    /// A server-side operation the server declined, where copying the bytes
+    /// through the client would still work: a rename across filesystems is
+    /// the usual one, and the reason the fallback has to stay.
+    static func isRefusedServerSideOperation(_ error: Error) -> Bool {
+        if case CloudProviderError.notImplemented = error { return true }
+        let text = message(from: error).lowercased()
+        return text.contains("cross-device")
+            || text.contains("invalid cross-device link")
+            || text.contains("operation unsupported")
+            || text.contains("op unsupported")
+            || isUnsupportedCopy(error)
+    }
+
+    private static func message(from error: Error) -> String {
+        if case CloudProviderError.commandFailed(let text) = error { return text }
+        if case CloudProviderError.notFound(let text) = error { return text }
+        return error.localizedDescription
     }
 
     public func getFileInfo(at path: String) async throws -> CloudFileItem {
         let parentPath = (path as NSString).deletingLastPathComponent
         let fileName = (path as NSString).lastPathComponent
         let output = try await runListing(path: parentPath)
-        let items = parseListing(output: output, basePath: parentPath)
+        let items = try parseListing(output: output, basePath: parentPath)
         guard let item = items.first(where: { $0.name == fileName }) else {
             throw CloudProviderError.notFound(path)
         }
@@ -278,101 +373,118 @@ public actor SFTPAPIClient {
             throw CloudProviderError.invalidResponse
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+        let cancellation = ProcessCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
 
-            var args: [String] = [
-                "-oBatchMode=no",
-                "-oStrictHostKeyChecking=accept-new",
-                "-oControlMaster=auto",
-                "-oControlPath=\(controlPath)",
-                "-oControlPersist=600",
-                "-oConnectTimeout=10",
-                "-P", "\(credentials.port)"
-            ]
+                var args: [String] = [
+                    "-oBatchMode=no",
+                    "-oStrictHostKeyChecking=accept-new",
+                    "-oControlMaster=auto",
+                    "-oControlPath=\(controlPath)",
+                    "-oControlPersist=600",
+                    "-oConnectTimeout=10",
+                    // ConnectTimeout only covers the handshake. These end a
+                    // connection that goes silent later, about a minute on.
+                    "-oServerAliveInterval=15",
+                    "-oServerAliveCountMax=4",
+                    "-P", "\(credentials.port)"
+                ]
 
-            // Auth-method-specific flags: tell sftp exactly which method
-            // to use so it doesn't fall back and prompt the user
-            // interactively when the chosen method fails.
-            switch credentials.authMethod {
-            case .password:
-                args.append(contentsOf: [
-                    "-oPubkeyAuthentication=no",
-                    "-oPreferredAuthentications=password,keyboard-interactive"
-                ])
-            case .privateKey:
-                if let keyPath = privateKeyPath {
-                    args.append(contentsOf: ["-i", keyPath])
+                // Auth-method-specific flags: tell sftp exactly which method
+                // to use so it doesn't fall back and prompt the user
+                // interactively when the chosen method fails.
+                switch credentials.authMethod {
+                case .password:
+                    args.append(contentsOf: [
+                        "-oPubkeyAuthentication=no",
+                        "-oPreferredAuthentications=password,keyboard-interactive"
+                    ])
+                case .privateKey:
+                    if let keyPath = privateKeyPath {
+                        args.append(contentsOf: ["-i", keyPath])
+                    }
+                    args.append(contentsOf: [
+                        "-oPasswordAuthentication=no",
+                        "-oPreferredAuthentications=publickey",
+                        "-oIdentitiesOnly=yes"
+                    ])
                 }
-                args.append(contentsOf: [
-                    "-oPasswordAuthentication=no",
-                    "-oPreferredAuthentications=publickey",
-                    "-oIdentitiesOnly=yes"
-                ])
-            }
 
-            args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
-            process.arguments = args
+                args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
+                process.arguments = args
 
-            var env: [String: String] = [
-                "DISPLAY": ":0",
-                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "HOME": NSHomeDirectory()
-            ]
-            if let askPass = askPassScriptPath {
-                env["SSH_ASKPASS"] = askPass
-                env["SSH_ASKPASS_REQUIRE"] = "force"
-            }
-            process.environment = env
-
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
-            process.standardInput = FileHandle.nullDevice
-
-            process.terminationHandler = { proc in
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                let stderr = String(data: stderrData, encoding: .utf8) ?? ""
-
-                // Diagnostic capture for the recurring "SFTP folder appears
-                // empty" reports (issue #31). Routed through SupportLogger so
-                // it lands in the user-exportable Support Log on notarized
-                // builds — the os.Logger output never reached that export,
-                // which is why earlier support logs came back empty. No secret
-                // is logged: the password / key passphrase travels via the
-                // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
-                // is the raw `ls` listing whose exact longname format is what
-                // we need to parse the affected (newer) servers correctly.
-                SupportLogger.shared.log(
-                    "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
-                        + "exit=\(proc.terminationStatus)\n"
-                        + "stdout (\(stdoutData.count) bytes):\n\(stdout.prefix(1800))\n"
-                        + "stderr:\n\(stderr.prefix(600))",
-                    category: "sftp",
-                    level: proc.terminationStatus == 0 ? .info : .error
-                )
-
-                if proc.terminationStatus != 0 {
-                    let exit = Int(proc.terminationStatus)
-                    let stderrTrim = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let combined = (stderrTrim + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
-                    let authMethod = self.credentials.authMethod
-                    let error = Self.mapSFTPFailure(exit: exit, stderr: stderrTrim, combined: combined, authMethod: authMethod)
-                    continuation.resume(throwing: error)
-                    return
+                var env: [String: String] = [
+                    "DISPLAY": ":0",
+                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                    "HOME": NSHomeDirectory()
+                ]
+                if let askPass = askPassScriptPath {
+                    env["SSH_ASKPASS"] = askPass
+                    env["SSH_ASKPASS_REQUIRE"] = "force"
                 }
-                continuation.resume(returning: stdout)
-            }
+                process.environment = env
 
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: CloudProviderError.networkError(error))
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+                process.standardInput = FileHandle.nullDevice
+
+                let stdoutDrain = PipeDrain(stdoutPipe)
+                let stderrDrain = PipeDrain(stderrPipe)
+
+                process.terminationHandler = { proc in
+                    let stdoutData = stdoutDrain.collected()
+                    let stderrData = stderrDrain.collected()
+                    let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+
+                    // Diagnostic capture for the recurring "SFTP folder appears
+                    // empty" reports (issue #31). Routed through SupportLogger so
+                    // it lands in the user-exportable Support Log on notarized
+                    // builds — the os.Logger output never reached that export,
+                    // which is why earlier support logs came back empty. No secret
+                    // is logged: the password / key passphrase travels via the
+                    // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
+                    // is the raw `ls` listing whose exact longname format is what
+                    // we need to parse the affected (newer) servers correctly.
+                    SupportLogger.shared.log(
+                        "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
+                            + "exit=\(proc.terminationStatus)\n"
+                            + "stdout (\(stdoutData.count) bytes):\n\(stdout.prefix(1800))\n"
+                            + "stderr:\n\(stderr.prefix(600))",
+                        category: "sftp",
+                        level: proc.terminationStatus == 0 ? .info : .error
+                    )
+
+                    if proc.terminationStatus != 0 {
+                        let exit = Int(proc.terminationStatus)
+                        let stderrTrim = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let combined = (stderrTrim + " " + stdout).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let authMethod = self.credentials.authMethod
+                        let error = Self.mapSFTPFailure(exit: exit, stderr: stderrTrim, combined: combined, authMethod: authMethod)
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    continuation.resume(returning: stdout)
+                }
+
+                do {
+                    try process.run()
+                    cancellation.started(process)
+                } catch {
+                    // Never started, so nothing will close these; the drains
+                    // would otherwise wait on them forever.
+                    try? stdoutPipe.fileHandleForWriting.close()
+                    try? stderrPipe.fileHandleForWriting.close()
+                    continuation.resume(throwing: CloudProviderError.networkError(error))
+                }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -386,45 +498,45 @@ public actor SFTPAPIClient {
         // Auth failures — distinguish password vs key vs passphrase so
         // the user knows which thing to fix.
         if lower.contains("permission denied (publickey)") {
-            return .commandFailed("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box).")
+            return .commandFailed(L10n.text("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)."))
         }
         if lower.contains("permission denied") || lower.contains("authentication failed") {
             switch authMethod {
             case .password:
-                return .commandFailed("SSH authentication failed. Check the username and password.")
+                return .commandFailed(L10n.text("SSH authentication failed. Check the username and password."))
             case .privateKey:
-                return .commandFailed("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong.")
+                return .commandFailed(L10n.text("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong."))
             }
         }
 
         // Key-loading problems on the client side.
         if lower.contains("invalid format") || lower.contains("error in libcrypto") {
-            return .commandFailed("Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).")
+            return .commandFailed(L10n.text("Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)."))
         }
         if lower.contains("are too open") || lower.contains("bad permissions") {
-            return .commandFailed("Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again.")
+            return .commandFailed(L10n.text("Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again."))
         }
         if lower.contains("incorrect passphrase") || lower.contains("bad passphrase") || lower.contains("could not decrypt") {
-            return .commandFailed("Wrong passphrase for the private key.")
+            return .commandFailed(L10n.text("Wrong passphrase for the private key."))
         }
 
         // Host-key problems.
         if lower.contains("host key verification failed") {
-            return .commandFailed("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry.")
+            return .commandFailed(L10n.text("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry."))
         }
 
         // Connection-level issues.
         if lower.contains("connection refused") {
-            return .commandFailed("Connection refused — is the SSH daemon running on this host and port?")
+            return .commandFailed(L10n.text("Connection refused — is the SSH daemon running on this host and port?"))
         }
         if lower.contains("connection timed out") || lower.contains("operation timed out") {
-            return .commandFailed("Connection timed out. Check the hostname, port, and your network.")
+            return .commandFailed(L10n.text("Connection timed out. Check the hostname, port, and your network."))
         }
         if lower.contains("no route to host") || lower.contains("network is unreachable") {
-            return .commandFailed("Network is unreachable from this Mac.")
+            return .commandFailed(L10n.text("Network is unreachable from this Mac."))
         }
         if lower.contains("could not resolve hostname") || lower.contains("name or service not known") {
-            return .commandFailed("Could not resolve hostname. Check spelling or DNS.")
+            return .commandFailed(L10n.text("Could not resolve hostname. Check spelling or DNS."))
         }
 
         // SFTP-level errors during a command (mkdir/put/get) — surface the
@@ -434,21 +546,21 @@ public actor SFTPAPIClient {
         }
         if lower.contains("couldn't") || lower.contains("failure") {
             // e.g. "Couldn't create directory: Permission denied"
-            return .commandFailed(combined.isEmpty ? "SFTP command failed (exit \(exit))." : combined)
+            return .commandFailed(combined.isEmpty ? L10n.format("SFTP command failed (exit %d).", exit) : combined)
         }
 
         // Fall-through: surface the raw stderr if we have it, otherwise
         // the exit code. Truncate aggressively — SFTP can spew banners.
         if !stderr.isEmpty {
             let snippet = stderr.split(separator: "\n").prefix(3).joined(separator: " — ")
-            return .commandFailed("SFTP failed (exit \(exit)): \(snippet)")
+            return .commandFailed(L10n.format("SFTP failed (exit %d): %@", exit, snippet))
         }
-        return .commandFailed("SFTP failed with exit code \(exit). Check the server is reachable and the credentials are correct.")
+        return .commandFailed(L10n.format("SFTP failed with exit code %d. Check the server is reachable and the credentials are correct.", exit))
     }
 
     // MARK: - Parsing
 
-    private func parseListing(output: String, basePath: String) -> [CloudFileItem] {
+    private func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
         var items: [CloudFileItem] = []
         for line in output.components(separatedBy: "\n") {
             guard let parsed = Self.parseListingLine(line) else { continue }
@@ -492,6 +604,7 @@ public actor SFTPAPIClient {
             )
         }
 
+        try Self.validateListing(output: output, itemCount: items.count, everyLineIsARow: false)
         return items
     }
 
@@ -499,19 +612,45 @@ public actor SFTPAPIClient {
     /// like a long-form `ls -la` row" — used to distinguish a genuinely
     /// empty directory (no listing lines) from a parser miss.
     public static func outputLooksLikeListing(_ output: String) -> Bool {
+        output.components(separatedBy: "\n").contains {
+            isListingRow($0.trimmingCharacters(in: .whitespaces))
+        }
+    }
+
+    /// Cheap structural check: leading filetype char + at least a few perms
+    /// chars. Avoids false positives on prompt lines.
+    private static func isListingRow(_ line: String) -> Bool {
+        guard let first = line.first, "-dlcbps".contains(first), line.count >= 10 else { return false }
+        return line.prefix(10).dropFirst().allSatisfy { "rwxsStT@+.\\*-".contains($0) }
+    }
+
+    /// Throws when a listing holds rows that weren't understood, so that a
+    /// folder is never reported as emptier than it is.
+    ///
+    /// Only files, folders and links count. Device rows put `major, minor`
+    /// where the size goes and don't parse, but nothing here can copy them.
+    ///
+    /// `everyLineIsARow` is for FTP, where the output is the listing and
+    /// nothing else: a Windows-style server's rows don't look like `ls -l` at
+    /// all, so with no parsed rows, any line left over means an unknown format.
+    /// `sftp` also prints its own prompt lines, so it can't make that claim.
+    public static func validateListing(output: String, itemCount: Int, everyLineIsARow: Bool) throws {
+        var unexplainedLine = false
         for raw in output.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            guard let first = line.first, "-dlcbps".contains(first) else { continue }
-            // Cheap structural check: leading filetype char + at least
-            // a few perms chars. Avoids false positives on prompt lines.
-            if line.count >= 10 {
-                let prefix = line.prefix(10)
-                if prefix.dropFirst().allSatisfy({ "rwxsStT@+.\\*-".contains($0) }) {
-                    return true
-                }
+            guard !line.isEmpty, parseListingLine(line) == nil else { continue }
+            let isSelfOrParent = line.hasSuffix(" .") || line.hasSuffix(" ..")
+                || line.hasSuffix("/.") || line.hasSuffix("/..")
+            if isListingRow(line), "-dl".contains(line.first ?? " "), !isSelfOrParent {
+                throw CloudProviderError.unreadableListing
+            }
+            if !isListingRow(line), !line.lowercased().hasPrefix("total ") {
+                unexplainedLine = true
             }
         }
-        return false
+        if everyLineIsARow, itemCount == 0, unexplainedLine {
+            throw CloudProviderError.unreadableListing
+        }
     }
 
     /// Parsed shape returned by `parseListingLine` — kept narrow so the
@@ -667,7 +806,14 @@ public actor SFTPAPIClient {
             components.year = Int(timeOrYear) ?? currentYear
         }
 
-        return calendar.date(from: components) ?? .distantPast
+        guard let date = calendar.date(from: components) else { return .distantPast }
+        // `ls` omits the year for the last six months, so a December file
+        // listed in January comes out in the future until it's moved back.
+        if timeOrYear.contains(":"), date.timeIntervalSinceNow > 86_400,
+           let lastYear = calendar.date(byAdding: .year, value: -1, to: date) {
+            return lastYear
+        }
+        return date
     }
 
     /// ISO 8601-ish `YYYY-MM-DD [HH:MM[:SS]]` form used by ProFTPD
@@ -717,7 +863,19 @@ public actor SFTPAPIClient {
 
     // MARK: - Helpers
 
-    private func shellEscape(_ path: String) -> String {
+    /// The command sent for a server-side move. Pure, so the quoting can
+    /// be tested: these strings are handed to another program, and a path
+    /// with a quote or a `$` in it is the case nobody tries by hand.
+    static func renameCommand(from path: String, to newPath: String) -> String {
+        "rename \(Self.shellEscape(path)) \(Self.shellEscape(newPath))"
+    }
+
+    /// The command sent for a server-side copy.
+    static func copyCommand(from path: String, to newPath: String) -> String {
+        "cp \(Self.shellEscape(path)) \(Self.shellEscape(newPath))"
+    }
+
+    static func shellEscape(_ path: String) -> String {
         // Wrap in double quotes and escape special chars
         let escaped = path
             .replacingOccurrences(of: "\\", with: "\\\\")

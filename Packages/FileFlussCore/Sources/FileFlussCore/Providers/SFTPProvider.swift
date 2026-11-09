@@ -104,6 +104,29 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
         try await client.renameItem(at: path, to: newName)
     }
 
+    /// Server-side move: a rename, so moving a folder of videos within the
+    /// account costs nothing. Without these two, SFTP fell through to the
+    /// download-and-upload path for every intra-account move and copy
+    /// (issue #62).
+    public func moveItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.moveItem(at: path, toPath: newPath)
+    }
+
+    /// Server-side copy, where the server has the `copy-data` extension.
+    /// Declines otherwise, and for directories, so the caller falls back.
+    public func copyItem(at path: String, toPath newPath: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.copyItem(at: path, toPath: newPath)
+    }
+
+    /// `cp` copies one file; it has no recursive form. A folder copy is
+    /// better served by the caller's own walk than by us emitting one
+    /// command per file and getting the conflict handling wrong.
+    public var canCopyDirectoriesServerSide: Bool {
+        get async { false }
+    }
+
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.getFileInfo(at: path)

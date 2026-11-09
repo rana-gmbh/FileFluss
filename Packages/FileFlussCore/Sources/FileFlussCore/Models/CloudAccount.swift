@@ -27,6 +27,11 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     case jottacloud
     case googleDrivePicker
     case gopro
+    case github
+    case drime
+    case qnap
+    case ugreen
+    case asustor
 
     public var id: String { rawValue }
 
@@ -49,15 +54,20 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .s3: return "AWS S3"
         case .synologyDrive: return "Synology Drive"
         case .synologyC2: return "Synology C2 Storage"
-        case .s3Compatible: return "S3-Compatible Storage"
+        case .s3Compatible: return L10n.text("S3-Compatible Storage")
         case .box: return "Box"
         case .seafile: return "Seafile"
         case .filen: return "Filen"
         case .internxt: return "Internxt"
         case .terabox: return "TeraBox"
         case .jottacloud: return "Jottacloud"
-        case .googleDrivePicker: return "Google Drive (Selected Folders)"
-        case .gopro: return "GoPro Camera"
+        case .googleDrivePicker: return L10n.text("Google Drive (Selected Folders)")
+        case .gopro: return L10n.text("GoPro Camera")
+        case .github: return "GitHub"
+        case .drime: return "Drime"
+        case .qnap: return "QNAP"
+        case .ugreen: return "UGREEN NAS"
+        case .asustor: return "ASUSTOR"
         }
     }
 
@@ -89,6 +99,9 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         case .jottacloud: return "cloud.fill"
         case .googleDrivePicker: return "externaldrive.connected.to.line.below"
         case .gopro: return "camera.fill"
+        case .github: return "chevron.left.forwardslash.chevron.right"
+        case .drime: return "cloud.fill"
+        case .qnap, .ugreen, .asustor: return "externaldrive.fill"
         }
     }
 
@@ -98,8 +111,22 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
     /// GoPro camera whose HTTP API has no write path.
     public var isReadOnly: Bool {
         switch self {
-        case .gopro: return true
+        case .gopro, .github: return true
         default: return false
+        }
+    }
+
+    /// Whether items on this provider may be deleted from FileFluss.
+    ///
+    /// `isReadOnly` deliberately still allows deletion — a GoPro is an
+    /// import source you clear down after copying the footage off it. A
+    /// GitHub account is not: the only thing a delete could mean there is
+    /// deleting a repository or rewriting a branch, so the affordance is
+    /// withheld rather than offered and then refused.
+    public var allowsDeletion: Bool {
+        switch self {
+        case .github: return false
+        default: return true
         }
     }
 
@@ -133,6 +160,11 @@ public enum CloudProviderType: String, Codable, CaseIterable, Identifiable, Send
         // Shares the Google Drive logo — it's the same service, different access model.
         case .googleDrivePicker: return "GoogleDriveLogo"
         case .gopro: return "GoProLogo"
+        case .github: return "GitHubLogo"
+        case .drime: return "DrimeLogo"
+        case .qnap: return "QNAPLogo"
+        case .ugreen: return "UGREENLogo"
+        case .asustor: return "ASUSTORLogo"
         }
     }
 }

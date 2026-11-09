@@ -90,12 +90,21 @@ public actor FTPAPIClient {
         // A trailing slash tells curl to LIST the directory (full `ls -l`
         // style output) rather than retrieve a file of that name.
         let output = try await runCurl([directoryURL(for: path)])
-        return parseListing(output: output, basePath: normalized(path))
+        return try parseListing(output: output, basePath: normalized(path))
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        try? FileManager.default.removeItem(at: localURL)
-        _ = try await runCurl(["--output", localURL.path, fileURL(for: remotePath)])
+        // curl writes as it goes, so it gets a name of its own: a drop part
+        // way must not leave a short file, or cost the file already there.
+        let partial = localURL.deletingLastPathComponent()
+            .appendingPathComponent(FileSystemService.temporaryReplacementName(for: localURL.lastPathComponent))
+        do {
+            _ = try await runCurl(["--output", partial.path, fileURL(for: remotePath)])
+            try FileSystemService.placeDownload(from: partial, at: localURL)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            throw error
+        }
         if let onBytes,
            let size = try? FileManager.default.attributesOfItem(atPath: localURL.path)[.size] as? Int64 {
             onBytes(size)
@@ -243,7 +252,10 @@ public actor FTPAPIClient {
             "--config", cfgPath,
             "--silent", "--show-error",
             "--connect-timeout", "15",
-            "--max-time", "600",
+            // Give up on a stalled connection, not a slow one: a time limit
+            // on the whole command would kill any transfer over ten minutes.
+            "--speed-limit", "1",
+            "--speed-time", "120",
         ]
         if credentials.useTLS {
             args.append("--ssl-reqd")
@@ -251,32 +263,45 @@ public actor FTPAPIClient {
         }
         args.append(contentsOf: extraArgs)
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            process.arguments = args
+        let cancellation = ProcessCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+                process.arguments = args
 
-            let stdoutPipe = Pipe()
-            let stderrPipe = Pipe()
-            process.standardOutput = stdoutPipe
-            process.standardError = stderrPipe
-            process.standardInput = FileHandle.nullDevice
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+                process.standardInput = FileHandle.nullDevice
 
-            process.terminationHandler = { proc in
-                let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                if proc.terminationStatus != 0 {
-                    continuation.resume(throwing: Self.mapCurlError(exit: Int(proc.terminationStatus), stderr: stderr))
-                    return
+                let stdoutDrain = PipeDrain(stdoutPipe)
+                let stderrDrain = PipeDrain(stderrPipe)
+
+                process.terminationHandler = { proc in
+                    let stdout = String(data: stdoutDrain.collected(), encoding: .utf8) ?? ""
+                    let stderr = String(data: stderrDrain.collected(), encoding: .utf8) ?? ""
+                    if proc.terminationStatus != 0 {
+                        continuation.resume(throwing: Self.mapCurlError(exit: Int(proc.terminationStatus), stderr: stderr))
+                        return
+                    }
+                    continuation.resume(returning: stdout)
                 }
-                continuation.resume(returning: stdout)
-            }
 
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: CloudProviderError.networkError(error))
+                do {
+                    try process.run()
+                    cancellation.started(process)
+                } catch {
+                    // Never started, so nothing will close these; the drains
+                    // would otherwise wait on them forever.
+                    try? stdoutPipe.fileHandleForWriting.close()
+                    try? stderrPipe.fileHandleForWriting.close()
+                    continuation.resume(throwing: CloudProviderError.networkError(error))
+                }
             }
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -291,15 +316,15 @@ public actor FTPAPIClient {
         let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         switch exit {
         case 67: return .invalidCredentials // login denied
-        case 6: return .commandFailed("Could not resolve host. Check the server address.")
-        case 7: return .commandFailed("Could not connect — check the host, port, and that FTP is reachable.")
-        case 28: return .commandFailed("Connection timed out.")
-        case 9: return .commandFailed(trimmed.isEmpty ? "Access denied to that path on the server." : trimmed)
-        case 19, 78: return .notFound(trimmed.isEmpty ? "File or directory not found." : trimmed)
+        case 6: return .commandFailed(L10n.text("Could not resolve host. Check the server address."))
+        case 7: return .commandFailed(L10n.text("Could not connect — check the host, port, and that FTP is reachable."))
+        case 28: return .commandFailed(L10n.text("Connection timed out."))
+        case 9: return .commandFailed(trimmed.isEmpty ? L10n.text("Access denied to that path on the server.") : trimmed)
+        case 19, 78: return .notFound(trimmed.isEmpty ? L10n.text("File or directory not found.") : trimmed)
         case 60, 35, 58, 59, 64, 77: // TLS/cert errors
-            return .commandFailed("TLS/SSL error: \(trimmed.isEmpty ? "the server's certificate could not be verified." : trimmed)")
+            return .commandFailed(L10n.format("TLS/SSL error: %@", trimmed.isEmpty ? L10n.text("the server's certificate could not be verified.") : trimmed))
         default:
-            return .commandFailed(trimmed.isEmpty ? "FTP command failed (curl exit \(exit))." : trimmed)
+            return .commandFailed(trimmed.isEmpty ? L10n.format("FTP command failed (curl exit %d).", exit) : trimmed)
         }
     }
 
@@ -307,7 +332,7 @@ public actor FTPAPIClient {
 
     /// FTP `LIST` output is the server's directory listing — almost always
     /// Unix `ls -l` style, which the SFTP client already parses robustly.
-    private func parseListing(output: String, basePath: String) -> [CloudFileItem] {
+    private func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
         var items: [CloudFileItem] = []
         for line in output.components(separatedBy: "\n") {
             guard let parsed = SFTPAPIClient.parseListingLine(line) else { continue }
@@ -325,6 +350,7 @@ public actor FTPAPIClient {
         if items.isEmpty, SFTPAPIClient.outputLooksLikeListing(output) {
             ftpLog.error("[FTP] Folder \(basePath, privacy: .public) parsed 0 items from listing-shaped output; unrecognised format. Sample: \(output.prefix(500), privacy: .public)")
         }
+        try SFTPAPIClient.validateListing(output: output, itemCount: items.count, everyLineIsARow: true)
         return items
     }
 }

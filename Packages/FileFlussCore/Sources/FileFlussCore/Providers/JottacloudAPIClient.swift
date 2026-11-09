@@ -192,7 +192,7 @@ public actor JottacloudAPIClient {
     private func listFolderRaw(path: String) async throws -> [CloudFileItem] {
         let url = jfsURL(forPath: path)
         let data = try await jfsRequest(url, method: "GET")
-        return JottacloudXMLParser.parseListing(data: data, basePath: normalizedDir(path))
+        return try JottacloudXMLParser.parseListing(data: data, basePath: normalizedDir(path))
     }
 
     private func enrichFolderDates(_ items: [CloudFileItem]) async -> [CloudFileItem] {
@@ -274,8 +274,7 @@ public actor JottacloudAPIClient {
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw Self.mapError((response as? HTTPURLResponse)?.statusCode ?? 0, path: remotePath)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {

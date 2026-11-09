@@ -32,6 +32,7 @@ extension Notification.Name {
     static let requestShowStorageWindow = Notification.Name("FileFluss.requestShowStorageWindow")
     /// A cloud panel found its credentials no longer work.
     static let cloudAccountNeedsReAuthentication = Notification.Name("FileFluss.cloudAccountNeedsReAuthentication")
+    static let cloudAccountSignInWorks = Notification.Name("FileFluss.cloudAccountSignInWorks")
 }
 
 @Observable @MainActor
@@ -202,21 +203,21 @@ final class AppState {
     var hasSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return !cloudFileManager(for: cloudId, side: activePanel).selectedItems.isEmpty
+                return !cloudFileManager(for: cloudId, side: activePanel).selectedItemIDs.isEmpty
             }
             return false
         }
-        return !activeFileManager.selectedItems.isEmpty
+        return !activeFileManager.selectedItemIDs.isEmpty
     }
 
     var hasSingleSelection: Bool {
         if isActivePanelCloud {
             if let cloudId = cloudAccountId(for: activePanel) {
-                return cloudFileManager(for: cloudId, side: activePanel).selectedItems.count == 1
+                return cloudFileManager(for: cloudId, side: activePanel).selectedItemIDs.count == 1
             }
             return false
         }
-        return activeFileManager.selectedItems.count == 1
+        return activeFileManager.selectedItemIDs.count == 1
     }
 
     func fileManager(for panel: PanelSide) -> FileManagerViewModel {
@@ -304,6 +305,50 @@ final class AppState {
         await rightFileManager.refresh()
     }
 
+    /// What's really at these paths. The clipboard and a sidebar drag carry
+    /// nothing but a path, and treating every one as a file sent folders down
+    /// the single-file path, which can't handle them. Listing the parent tells
+    /// the two apart on any provider, where a metadata call on a folder
+    /// doesn't always. Nil, with the transfer ended, when it can't be found out.
+    func resolvedCloudItems(_ items: [CloudFileItem], accountId: UUID, transfer: TransferProgress) async -> [CloudFileItem]? {
+        guard let provider = await SyncEngine.shared.provider(for: accountId) else {
+            transfer.failAll(items.map(\.name), error: L10n.text("Cloud account not connected"))
+            return nil
+        }
+        var listings: [String: [CloudFileItem]] = [:]
+        var resolved: [CloudFileItem] = []
+        for item in items {
+            var parent = (item.path as NSString).deletingLastPathComponent
+            if parent.isEmpty { parent = "/" }
+            do {
+                if listings[parent] == nil {
+                    listings[parent] = try await provider.listDirectory(at: parent)
+                }
+            } catch {
+                transfer.failAll(items.map(\.name), error: error.localizedDescription)
+                return nil
+            }
+            guard let found = listings[parent]?.first(where: { $0.name == item.name }) else {
+                transfer.recordFailure(item.name, error: CloudProviderError.notFound(item.path).localizedDescription)
+                continue
+            }
+            resolved.append(found)
+        }
+        return resolved
+    }
+
+    /// Reloads what both panels are showing, cloud folders included. For an
+    /// explicit Refresh: `refreshAllPanels` skips the network, which is what
+    /// the local operations that call it want.
+    func refreshVisiblePanels() async {
+        await refreshAllPanels()
+        for side in [PanelSide.left, .right] where !isPanelOffline(side) {
+            if let accountId = cloudAccountId(for: side) {
+                await cloudFileManager(for: accountId, side: side).refresh()
+            }
+        }
+    }
+
     // Per-panel favorites — fully customizable, persisted across launches.
     // Each panel keeps its own ordered list, mixing local-folder and
     // cloud-folder entries. System defaults (Home / Desktop / etc.) are
@@ -338,7 +383,7 @@ final class AppState {
             $0.kind == .cloudFolder && $0.accountId == accountId && $0.cloudPath == path
         }) else { return }
         let account = syncManager.accountFor(id: accountId)
-        let providerSuffix = account?.providerType.displayName ?? "Cloud"
+        let providerSuffix = account?.providerType.displayName ?? L10n.text("Cloud")
         let displayName = "\(name) (\(providerSuffix))"
         let entry = SidebarFavorite.cloud(
             name: displayName,
@@ -393,6 +438,9 @@ final class AppState {
     /// would destroy it — the same failure that once wiped the cloud
     /// accounts (see `SyncViewModel.accountsLoadFailed`).
     private var favoritesLoadFailed = false
+    /// Favourites this version can't read, written back as they were.
+    private var unreadableLeftFavorites: [Data] = []
+    private var unreadableRightFavorites: [Data] = []
 
     private func saveFavorites() {
         if favoritesLoadFailed && leftFavorites.isEmpty && rightFavorites.isEmpty {
@@ -400,11 +448,10 @@ final class AppState {
             return
         }
         let defaults = UserDefaults.standard
-        let encoder = JSONEncoder()
-        if let leftData = try? encoder.encode(leftFavorites) {
+        if let leftData = try? StoredList.encode(leftFavorites, unreadable: unreadableLeftFavorites) {
             defaults.set(leftData, forKey: Self.leftFavoritesKey)
         }
-        if let rightData = try? encoder.encode(rightFavorites) {
+        if let rightData = try? StoredList.encode(rightFavorites, unreadable: unreadableRightFavorites) {
             defaults.set(rightData, forKey: Self.rightFavoritesKey)
         }
     }
@@ -415,15 +462,17 @@ final class AppState {
 
         if defaults.bool(forKey: Self.favoritesInitializedKey) {
             if let data = defaults.data(forKey: Self.leftFavoritesKey) {
-                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                    leftFavorites = decoded
+                if let decoded = StoredList.decode(data, as: SidebarFavorite.self) {
+                    leftFavorites = decoded.items
+                    unreadableLeftFavorites = decoded.unreadable
                 } else {
                     favoritesLoadFailed = true
                 }
             }
             if let data = defaults.data(forKey: Self.rightFavoritesKey) {
-                if let decoded = try? decoder.decode([SidebarFavorite].self, from: data) {
-                    rightFavorites = decoded
+                if let decoded = StoredList.decode(data, as: SidebarFavorite.self) {
+                    rightFavorites = decoded.items
+                    unreadableRightFavorites = decoded.unreadable
                 } else {
                     favoritesLoadFailed = true
                 }
@@ -689,6 +738,9 @@ final class AppState {
         on(.toggleActivePanel) { [weak self] in
             guard let self else { return }
             activePanel = (activePanel == .left) ? .right : .left
+            // The keyboard has to follow, or arrow keys drive one panel while
+            // F5 and ⌘C act on the other.
+            requestActivePanelFocus()
         }
 
         // --- Selection
@@ -1004,8 +1056,10 @@ final class AppState {
 
     private func duplicateActiveSelection() async {
         // Only meaningful for the local panel — cloud providers don't have
-        // a generic in-place copy primitive yet.
-        guard cloudAccountId(for: activePanel) == nil else { return }
+        // a generic in-place copy primitive yet — and not inside an archive,
+        // which FileFluss reads but never rewrites.
+        guard cloudAccountId(for: activePanel) == nil,
+              !activeFileManager.isBrowsingArchive else { return }
         let fm = activeFileManager
         for item in fm.selectedItems {
             let dir = item.url.deletingLastPathComponent()
@@ -1027,6 +1081,12 @@ final class AppState {
     private func revealActiveSelectionInFinder() {
         // For local files only; cloud items don't have a Finder path.
         guard cloudAccountId(for: activePanel) == nil else { return }
+        // Nothing inside an archive has a path Finder knows, so the archive
+        // file itself is what gets revealed.
+        if let archive = activeFileManager.archiveSession?.archiveURL {
+            NSWorkspace.shared.activateFileViewerSelecting([archive])
+            return
+        }
         let urls = activeFileManager.selectedItems.map(\.url)
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
@@ -1052,6 +1112,12 @@ final class AppState {
         NSLog("[FileFluss] captureFileClipboard op=\(operation.rawValue) activePanel=\(activePanel) isCloud=\(isActivePanelCloud)")
         // Local panel — selection has real file URLs.
         if cloudAccountId(for: activePanel) == nil {
+            // Except inside an archive, where the rows are entries with no
+            // files behind them yet. Putting those paths on the system
+            // pasteboard would hand Finder somewhere that doesn't exist;
+            // "Extract to … Panel" and dragging are the ways out of an
+            // archive.
+            guard !activeFileManager.isBrowsingArchive else { return }
             let urls = activeFileManager.selectedItems.map(\.url)
             guard !urls.isEmpty else { return }
             fileClipboard = FileClipboardSnapshot(urls: urls, operation: operation)
@@ -1064,7 +1130,9 @@ final class AppState {
         // pasteboard would have no useful URL representation.
         guard let accountId = cloudAccountId(for: activePanel) else { return }
         let vm = cloudFileManager(for: accountId, side: activePanel)
-        guard !vm.selectedItems.isEmpty else { return }
+        // Entries inside an archive aren't paths the provider knows, so a
+        // paste would try to download something that doesn't exist.
+        guard !vm.isBrowsingArchive, !vm.selectedItems.isEmpty else { return }
         // Wrap paths in URLs with a custom scheme so paste can decode them.
         let urls: [URL] = vm.selectedItems.compactMap { item in
             var components = URLComponents()
@@ -1095,6 +1163,12 @@ final class AppState {
         guard !isPasteInProgress else {
             NSLog("[FileFluss] pasteFileClipboard ignored: paste already in flight")
             return
+        }
+        // An archive is read-only: there is nowhere in it to paste into.
+        if let accountId = cloudAccountId(for: activePanel) {
+            guard !cloudFileManager(for: accountId, side: activePanel).isBrowsingArchive else { return }
+        } else {
+            guard !activeFileManager.isBrowsingArchive else { return }
         }
         isPasteInProgress = true
         defer { isPasteInProgress = false }
@@ -1227,6 +1301,7 @@ final class AppState {
                     addTransfer(transfer, panel: activePanel)
                     let destDir = destFM.currentDirectory
                     transfer.task = Task { [sourceVM, destFM] in
+                        guard let items = await self.resolvedCloudItems(items, accountId: accountId, transfer: transfer) else { return }
                         await sourceVM.downloadItems(items, to: destDir, progress: transfer)
                         if isCut {
                             // Delete only what actually downloaded. A batch
@@ -1303,21 +1378,23 @@ final class AppState {
         // Fetch metadata for proper sizes (so the pre-flight dialog has
         // real numbers to display, and the progress bar can show
         // meaningful percentages).
-        var cloudItems: [CloudFileItem] = []
-        for src in sourceItems {
-            if let meta = try? await sourceProvider.getFileMetadata(at: src.remotePath) {
-                cloudItems.append(meta)
-            } else {
-                cloudItems.append(CloudFileItem(
-                    id: src.remotePath,
-                    name: src.name,
-                    path: src.remotePath,
-                    isDirectory: false,
-                    size: 0,
-                    modificationDate: Date(),
-                    checksum: nil
-                ))
+        let clipboardItems = sourceItems.map { src in
+            CloudFileItem(id: src.remotePath, name: src.name, path: src.remotePath, isDirectory: false,
+                          size: 0, modificationDate: Date(), checksum: nil)
+        }
+        guard let cloudItems = await resolvedCloudItems(clipboardItems, accountId: sourceAccountId, transfer: transfer) else { return }
+
+        // The raw transfer below handles single files. A folder needs its
+        // contents walked, which the panel-to-panel path already does.
+        if cloudItems.contains(where: \.isDirectory) {
+            transfer.task = Task {
+                await CloudFileListView.cloudToCloudTransfer(
+                    items: cloudItems, from: sourceVM, to: destVM,
+                    targetSubfolderPath: destPath, progress: transfer, deleteFromSource: isCut
+                )
+                await destVM.refresh()
             }
+            return
         }
 
         // List the destination directory if it differs from the VM's
@@ -1327,7 +1404,14 @@ final class AppState {
         if destPath == destVM.currentPath {
             targetExistingItems = destVM.items
         } else {
-            targetExistingItems = (try? await destProvider.listDirectory(at: destPath)) ?? []
+            do {
+                targetExistingItems = try await destProvider.listDirectory(at: destPath)
+            } catch {
+                // Not knowing what's there isn't the same as nothing being
+                // there: going on would overwrite without asking.
+                transfer.failAll(cloudItems.map(\.name), error: L10n.format("Couldn't check the destination for items with the same name: %@", error.localizedDescription))
+                return
+            }
         }
 
         // Show the "already exists" dialog for any colliding names. This
@@ -1377,20 +1461,12 @@ final class AppState {
 
                 guard let tempURL = try? SafeLocalPath.destination(for: item.name, in: tempDir) else {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Unsafe file name from the server — transfer refused.")
+                        transfer.recordFailure(item.name, error: L10n.text("Unsafe file name from the server — transfer refused."))
                         transfer.completedItems += 1
                     }
                     continue
                 }
                 try? FileManager.default.removeItem(at: tempURL)
-
-                // --- Apply .replace: delete the existing item at the
-                // destination before uploading. Done up-front so an
-                // upload error doesn't leave a half-replaced state.
-                if resolutionByName[item.name] == .replace,
-                   let existing = targetExistingItems.first(where: { $0.name == item.name }) {
-                    try? await destProvider.deleteItem(at: existing.path)
-                }
 
                 // --- Download phase
                 let bytesBeforeDownload = await MainActor.run { transfer.downloadBytes }
@@ -1413,7 +1489,7 @@ final class AppState {
                     )
                 } catch {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Download failed: \(error.localizedDescription)")
+                        transfer.recordFailure(item.name, error: L10n.format("Download failed: %@", error.localizedDescription))
                         transfer.completedItems += 1
                     }
                     continue
@@ -1449,23 +1525,35 @@ final class AppState {
                     return root + "/" + destName
                 }()
                 let bytesBeforeUpload = await MainActor.run { transfer.uploadBytes }
+                // .replace goes through `replacingItem`, so the existing item
+                // stays until this upload has finished.
+                let existingToReplace = resolutionByName[item.name] == .replace
+                    ? targetExistingItems.first(where: { $0.name == item.name })
+                    : nil
                 do {
-                    try await destProvider.uploadFile(
-                        from: tempURL,
-                        to: dstPath,
-                        onBytes: { bytes in
-                            Task { @MainActor in transfer.addUploadBytes(bytes) }
-                        }
-                    )
-                    // Preserve the source's modification date on the
-                    // destination so Finder-style mtime semantics hold:
-                    // a copy/move shouldn't change "Date Modified" — only
-                    // a content edit should. Best-effort; unsupported
-                    // providers no-op via the protocol default.
-                    try? await destProvider.setModificationDate(
-                        at: dstPath,
-                        to: item.modificationDate
-                    )
+                    let upload: (String) async throws -> Void = { path in
+                        try await destProvider.uploadFile(
+                            from: tempURL,
+                            to: path,
+                            onBytes: { bytes in
+                                Task { @MainActor in transfer.addUploadBytes(bytes) }
+                            }
+                        )
+                        // Preserve the source's modification date on the
+                        // destination so Finder-style mtime semantics hold:
+                        // a copy/move shouldn't change "Date Modified" — only
+                        // a content edit should. Best-effort; unsupported
+                        // providers no-op via the protocol default.
+                        try? await destProvider.setModificationDate(
+                            at: path,
+                            to: item.modificationDate
+                        )
+                    }
+                    if let existingToReplace {
+                        try await destProvider.replacingItem(at: existingToReplace.path, using: upload)
+                    } else {
+                        try await upload(dstPath)
+                    }
                     await MainActor.run {
                         let streamed = transfer.uploadBytes - bytesBeforeUpload
                         if streamed < item.size {
@@ -1478,7 +1566,7 @@ final class AppState {
                     successfulSources.append((item.path, item.name))
                 } catch {
                     await MainActor.run {
-                        transfer.recordFailure(item.name, error: "Upload failed: \(error.localizedDescription)")
+                        transfer.recordFailure(item.name, error: L10n.format("Upload failed: %@", error.localizedDescription))
                         transfer.completedItems += 1
                     }
                 }
@@ -1622,7 +1710,15 @@ final class AppState {
         }
         switch sidebarSelection(for: side) {
         case .location, .home, .drive, .none:
-            return .local(path: fileManager(for: side).currentDirectory.path)
+            let panel = fileManager(for: side)
+            // A panel inside an archive is recorded as the folder the
+            // archive sits in: the path it is showing is a virtual one, and
+            // `PanelStartupState` would reject it at launch for not being a
+            // directory and send the panel home instead.
+            if let archive = panel.archiveSession?.archiveURL {
+                return .local(path: archive.deletingLastPathComponent().path)
+            }
+            return .local(path: panel.currentDirectory.path)
         default:
             return nil
         }
@@ -1683,6 +1779,16 @@ final class AppState {
             MainActor.assumeIsolated {
                 guard let self, let accountId else { return }
                 self.syncManager.markNeedsReAuthentication(accountId: accountId)
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .cloudAccountSignInWorks, object: nil, queue: .main
+        ) { [weak self] note in
+            let accountId = note.userInfo?["accountId"] as? UUID
+            MainActor.assumeIsolated {
+                guard let self, let accountId else { return }
+                self.syncManager.markSignInWorks(accountId: accountId)
             }
         }
 
@@ -1806,13 +1912,19 @@ struct SidebarFavorite: Identifiable, Hashable, Codable {
     static func defaultLocalFavorites() -> [SidebarFavorite] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return [
-            .local(name: "Home", icon: "house", url: home),
-            .local(name: "Desktop", icon: "menubar.dock.rectangle", url: home.appendingPathComponent("Desktop")),
-            .local(name: "Documents", icon: "doc", url: home.appendingPathComponent("Documents")),
-            .local(name: "Downloads", icon: "arrow.down.circle", url: home.appendingPathComponent("Downloads")),
-            .local(name: "Pictures", icon: "photo", url: home.appendingPathComponent("Pictures")),
-            .local(name: "Music", icon: "music.note", url: home.appendingPathComponent("Music")),
+            .local(name: L10n.text("Home"), icon: "house", url: home),
+            // macOS names these folders in the user's language itself
+            // ("Schreibtisch", "文稿"), so ask it rather than translating.
+            .local(name: systemName(home.appendingPathComponent("Desktop")), icon: "menubar.dock.rectangle", url: home.appendingPathComponent("Desktop")),
+            .local(name: systemName(home.appendingPathComponent("Documents")), icon: "doc", url: home.appendingPathComponent("Documents")),
+            .local(name: systemName(home.appendingPathComponent("Downloads")), icon: "arrow.down.circle", url: home.appendingPathComponent("Downloads")),
+            .local(name: systemName(home.appendingPathComponent("Pictures")), icon: "photo", url: home.appendingPathComponent("Pictures")),
+            .local(name: systemName(home.appendingPathComponent("Music")), icon: "music.note", url: home.appendingPathComponent("Music")),
         ]
+    }
+
+    private static func systemName(_ url: URL) -> String {
+        FileManager.default.displayName(atPath: url.path)
     }
 }
 
@@ -1839,7 +1951,7 @@ struct FolderSizeEntry: Identifiable {
 
     private var _name: String?
 
-    var name: String { _name ?? url?.lastPathComponent ?? "Unknown" }
+    var name: String { _name ?? url?.lastPathComponent ?? L10n.text("Unknown") }
 
     var formattedSize: String {
         guard let size else { return "Calculating…" }
@@ -1867,6 +1979,8 @@ final class TransferByteInbox: @unchecked Sendable {
     private let lock = NSLock()
     private var download: Int64 = 0
     private var upload: Int64 = 0
+    private var files = 0
+    private var lastFileName = ""
 
     func addDownload(_ bytes: Int64) {
         guard bytes > 0 else { return }
@@ -1882,6 +1996,20 @@ final class TransferByteInbox: @unchecked Sendable {
         lock.lock()
         defer { download = 0; upload = 0; lock.unlock() }
         return (download, upload)
+    }
+
+    /// A file a helper tool has just finished with. `zip` reports one line
+    /// per file, which is the same problem as the byte deltas above: it
+    /// arrives off the main actor, and far more often than the display can
+    /// use.
+    func addFile(named name: String) {
+        lock.lock(); files += 1; lastFileName = name; lock.unlock()
+    }
+
+    func drainFiles() -> (count: Int, lastName: String?) {
+        lock.lock()
+        defer { files = 0; lastFileName = ""; lock.unlock() }
+        return (files, lastFileName.isEmpty ? nil : lastFileName)
     }
 }
 
@@ -1912,7 +2040,17 @@ final class TransferProgress: Identifiable {
     var completedItems: Int = 0
     var totalFiles: Int = 0 // actual file count discovered during recursive traversal
     var currentFileName: String = ""
-    var isComplete: Bool = false
+    var isComplete: Bool = false {
+        didSet {
+            if isComplete, let activity {
+                ProcessInfo.processInfo.endActivity(activity)
+                self.activity = nil
+            }
+        }
+    }
+    /// Keeps the Mac from idling to sleep while this runs, and macOS from
+    /// throttling the app in the background.
+    private var activity: NSObjectProtocol?
     /// Set when the entire transfer fails before any per-item work could be
     /// done (e.g. provider unavailable). For per-item failures during the
     /// loop, use `itemResults` instead.
@@ -1950,7 +2088,25 @@ final class TransferProgress: Identifiable {
     /// failures, skips *or* a cancellation, and in each case some sources
     /// were never transferred.
     var succeededNames: Set<String> {
-        Set(itemResults.lazy.filter { $0.status == .succeeded }.map(\.name))
+        var succeeded: Set<String> = []
+        var incomplete: Set<String> = []
+        for result in itemResults {
+            if result.status == .succeeded {
+                succeeded.insert(result.name)
+            } else {
+                incomplete.insert(result.name)
+            }
+        }
+        // An item can be recorded twice, once per phase of a transfer between
+        // two accounts. One that failed anywhere didn't make it.
+        return succeeded.subtracting(incomplete)
+    }
+
+    /// Ends a batch that couldn't start at all.
+    func failAll(_ names: [String], error: String) {
+        for name in names { recordFailure(name, error: error) }
+        endTime = Date()
+        isComplete = true
     }
 
     /// True only when every attempted item succeeded and nothing was
@@ -2001,6 +2157,10 @@ final class TransferProgress: Identifiable {
     init(operation: String, totalItems: Int) {
         self.operation = operation
         self.totalItems = totalItems
+        self.activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled],
+            reason: "File transfer"
+        )
         startBytePump()
     }
 
@@ -2177,22 +2337,29 @@ final class TransferProgress: Identifiable {
         if batch.download > 0 { addDownloadBytes(batch.download) }
         if batch.upload > 0 { addUploadBytes(batch.upload) }
 
+        let fileBatch = byteInbox.drainFiles()
+        if fileBatch.count > 0 {
+            completedItems += fileBatch.count
+            if let name = fileBatch.lastName { currentFileName = name }
+        }
+        let didMove = batch.download + batch.upload > 0 || fileBatch.count > 0
+
         let now = Date()
         samples.append(ByteSample(time: now, bytes: movedBytes))
         samples.removeAll { now.timeIntervalSince($0.time) > Self.speedWindow }
 
         guard let first = samples.first, let last = samples.last else {
             liveBytesPerSecond = nil
-            return batch.download + batch.upload > 0
+            return didMove
         }
         let seconds = last.time.timeIntervalSince(first.time)
         let moved = last.bytes - first.bytes
         guard seconds >= 0.5, moved > 0 else {
             liveBytesPerSecond = nil
-            return batch.download + batch.upload > 0
+            return didMove
         }
         liveBytesPerSecond = Double(moved) / seconds
-        return batch.download + batch.upload > 0
+        return didMove
     }
 
     // MARK: - Live figures, as text
@@ -2212,22 +2379,22 @@ final class TransferProgress: Identifiable {
         guard expected > 0, hasByteReporting else { return nil }
         let moved = ByteCountFormatter.string(fromByteCount: min(movedBytes, expected), countStyle: .file)
         let total = ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)
-        return "\(moved) of \(total)"
+        return L10n.format("%@ of %@", moved, total)
     }
 
     var etaText: String? {
         guard let seconds = secondsRemaining else { return nil }
-        return "~\(Self.durationText(seconds)) left"
+        return L10n.format("~%@ left", Self.durationText(seconds))
     }
 
     /// Rounded the way someone reads a countdown: seconds below a minute,
     /// whole minutes below an hour, hours and minutes above.
     static func durationText(_ seconds: TimeInterval) -> String {
-        if seconds < 60 { return "\(max(1, Int(seconds.rounded()))) s" }
-        if seconds < 3600 { return "\(Int((seconds / 60).rounded())) min" }
+        if seconds < 60 { return L10n.format("%d s", max(1, Int(seconds.rounded()))) }
+        if seconds < 3600 { return L10n.format("%d min", Int((seconds / 60).rounded())) }
         let hours = Int(seconds / 3600)
         let minutes = Int((seconds - Double(hours) * 3600) / 60)
-        return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
+        return minutes == 0 ? L10n.format("%d h", hours) : L10n.format("%d h %d min", hours, minutes)
     }
 
     /// The one-line summary under the progress bar: speed, how much of how
@@ -2244,18 +2411,19 @@ final class TransferProgress: Identifiable {
 
     var statusText: String {
         if isComplete { return completionSummary }
-        if isCancelled { return "Cancelling…" }
+        if isCancelled { return L10n.text("Cancelling…") }
         if isCloudToCloud {
             let names = transferredFileNames
-            let label = names.count == 1 ? names[0] : "\(names.count) items"
+            let label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
             switch currentPhase {
             case .downloading:
-                return "Downloading \(label)"
+                return L10n.format("Downloading %@", label)
             case .uploading:
-                return "Uploading \(label)"
+                return L10n.format("Uploading %@", label)
             }
         }
-        return "\(operation) \(itemSummary) — \(completedItems) of \(totalFiles > 0 ? totalFiles : totalItems) files"
+        return L10n.format("%@ %@ — %d of %d files", L10n.text(operation), itemSummary,
+                           completedItems, totalFiles > 0 ? totalFiles : totalItems)
     }
 
     private var itemSummary: String {
@@ -2267,10 +2435,10 @@ final class TransferProgress: Identifiable {
         let files = names.filter { !transferredFolderNames.contains($0) }
         var parts: [String] = []
         if !folders.isEmpty {
-            parts.append("\(folders.count) \(folders.count == 1 ? "folder" : "folders")")
+            parts.append(folders.count == 1 ? L10n.text("1 folder") : L10n.format("%d folders", folders.count))
         }
         if !files.isEmpty {
-            parts.append("\(files.count) \(files.count == 1 ? "file" : "files")")
+            parts.append(files.count == 1 ? L10n.text("1 file") : L10n.format("%d files", files.count))
         }
         return parts.joined(separator: ", ")
     }
@@ -2278,14 +2446,18 @@ final class TransferProgress: Identifiable {
     /// Names of top-level items that are directories (set by the caller)
     var transferredFolderNames: Set<String> = []
 
+    /// `operation` is also the key the details view translates, so it
+    /// stays English; this is only ever shown.
     private var pastTenseOperation: String {
         switch operation {
-        case "Copying": return "Copied"
-        case "Moving": return "Moved"
-        case "Downloading": return "Downloaded"
-        case "Uploading": return "Uploaded"
-        case "Opening": return "Opened"
-        default: return operation
+        case "Copying": return L10n.text("Copied")
+        case "Moving": return L10n.text("Moved")
+        case "Downloading": return L10n.text("Downloaded")
+        case "Uploading": return L10n.text("Uploaded")
+        case "Opening": return L10n.text("Opened")
+        case "Compressing": return L10n.text("Compressed")
+        case "Extracting": return L10n.text("Extracted")
+        default: return L10n.text(operation)
         }
     }
 
@@ -2294,15 +2466,15 @@ final class TransferProgress: Identifiable {
         let pastTense = pastTenseOperation
 
         if isCancelled {
-            let label = names.count == 1 ? names[0] : "\(names.count) items"
-            return "Cancelled: \(operation) \(label)"
+            let label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
+            return L10n.format("Cancelled: %@ %@", L10n.text(operation), label)
         }
 
         // Partial success: some items succeeded, some failed. Surface a
         // mixed summary so the user knows to check the details popover.
         if failureCount > 0 && successCount > 0 {
             let total = successCount + failureCount + skippedCount
-            return "\(pastTense) \(successCount) of \(total) — \(failureCount) failed"
+            return L10n.format("%@ %d of %d — %d failed", pastTense, successCount, total, failureCount)
         }
 
         // Whole-transfer failure (either a fatal errorMessage with no
@@ -2310,32 +2482,33 @@ final class TransferProgress: Identifiable {
         if errorMessage != nil || (failureCount > 0 && successCount == 0) {
             let label: String
             if failureCount > 0 {
-                label = failureCount == 1 ? itemResults.first(where: { $0.status == .failed })?.name ?? "1 item" : "\(failureCount) items"
+                label = failureCount == 1
+                    ? itemResults.first(where: { $0.status == .failed })?.name ?? L10n.text("1 item")
+                    : L10n.format("%d items", failureCount)
             } else {
-                label = names.count == 1 ? names[0] : "\(names.count) items"
+                label = names.count == 1 ? names[0] : L10n.format("%d items", names.count)
             }
-            let detail = errorMessage ?? itemResults.first(where: { $0.status == .failed })?.errorMessage ?? "Unknown error"
-            return "Failed: \(operation) \(label) — \(detail)"
+            let detail = errorMessage ?? itemResults.first(where: { $0.status == .failed })?.errorMessage ?? L10n.text("Unknown error")
+            return L10n.format("Failed: %@ %@ — %@", L10n.text(operation), label, detail)
         }
 
-        if names.isEmpty { return "Done" }
+        if names.isEmpty { return L10n.text("Done") }
 
         let maxInline = 3
-        let header = "Done: \(pastTense) "
+        let done: String
         if names.count == 1 {
             let fileCount = totalFiles > 0 ? totalFiles : totalItems
             if !transferredFolderNames.isEmpty && fileCount > 1 {
-                return "\(header)\(names[0]) (\(fileCount) files)"
+                done = L10n.format("%@ (%d files)", names[0], fileCount)
+            } else {
+                done = names[0]
             }
-            return "\(header)\(names[0])"
+        } else {
+            let shown = names.prefix(maxInline).joined(separator: ", ")
+            let remaining = names.count - maxInline
+            done = remaining > 0 ? L10n.format("%@ +%d more", shown, remaining) : shown
         }
-
-        let shown = names.prefix(maxInline).joined(separator: ", ")
-        let remaining = names.count - maxInline
-        if remaining > 0 {
-            return "\(header)\(shown) +\(remaining) more"
-        }
-        return "\(header)\(shown)"
+        return L10n.format("Done: %@ %@", pastTense, done)
     }
 
     /// Full item list for tooltip display when the summary is truncated.

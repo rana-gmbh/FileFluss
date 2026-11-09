@@ -12,9 +12,7 @@ public actor PCloudAPIClient {
 
     public init(credentials: PCloudCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 
@@ -127,7 +125,7 @@ public actor PCloudAPIClient {
                 deletedOnce = true
             } catch CloudProviderError.notFound {
                 if !deletedOnce && attempt == 0 {
-                    throw CloudProviderError.notFound("File not found: \(path)")
+                    throw CloudProviderError.notFound(L10n.format("File not found: %@", path))
                 }
                 return
             } catch CloudProviderError.serverError(let code) where code == 2055 {
@@ -176,8 +174,7 @@ public actor PCloudAPIClient {
               (200...299).contains(httpResponse.statusCode) else {
             throw CloudProviderError.invalidResponse
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
@@ -606,8 +603,8 @@ public actor PCloudAPIClient {
         case 1000: return .notAuthenticated
         case 2000: return .unauthorized
         case 2003: return .unauthorized
-        case 2005: return .notFound("Directory not found")
-        case 2009: return .notFound("File not found")
+        case 2005: return .notFound(L10n.text("Directory not found"))
+        case 2009: return .notFound(L10n.text("File not found"))
         case 2008: return .quotaExceeded
         case 4000: return .rateLimited
         default: return .serverError(code)

@@ -28,9 +28,16 @@ public final class CacheManager {
 
     private init() {}
 
-    /// Cache directory roots managed by FileFluss. Currently the per-account
-    /// preview/download caches; other transient temp files (sync staging,
-    /// drag-out copies) clean themselves up in scope and aren't included.
+    /// Directory name prefixes FileFluss manages here: the per-account
+    /// preview/download caches, and the folders an archive unpacks entries
+    /// into when one is opened in another application (those outlive the
+    /// browsing session on purpose — see `ArchiveBrowseSession`), and the
+    /// folders a dropped file promise is written to before being uploaded.
+    /// Other
+    /// transient temp files (sync staging, drag-out copies) clean themselves
+    /// up in scope and aren't included.
+    private static let managedPrefixes = ["FileFluss-cloud-", "archive-", "drop-"]
+
     private func cacheDirectoryURLs() -> [URL] {
         let fm = FileManager.default
         var result: [URL] = []
@@ -39,7 +46,7 @@ public final class CacheManager {
         // written before a custom cache folder was chosen are still found.
         for root in StagingLocation.cacheScanRoots() {
             guard let contents = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { continue }
-            for url in contents where url.lastPathComponent.hasPrefix("FileFluss-cloud-") {
+            for url in contents where Self.managedPrefixes.contains(where: url.lastPathComponent.hasPrefix) {
                 if seen.insert(url.standardizedFileURL.path).inserted { result.append(url) }
             }
         }

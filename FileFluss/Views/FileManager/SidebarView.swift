@@ -87,6 +87,10 @@ struct SidebarView: View {
             get: { appState.sidebarSelection(for: panelSide) },
             set: { newValue in
                 let previous = appState.sidebarSelection(for: panelSide)
+                // A click here means this panel. Only clicks come through
+                // this binding, so opening something in the other panel
+                // doesn't move the active panel with it.
+                appState.activePanel = panelSide
                 appState.setSidebarSelection(newValue, for: panelSide)
                 // Selecting a cloud account in the sidebar should always land
                 // at the account root. Without this, re-clicking the account
@@ -150,7 +154,7 @@ struct SidebarView: View {
               let cap = SpaceCheck.localVolumeCapacity(at: mount) else {
             return drive.displayName
         }
-        return "\(drive.displayName): \(LocalVolumeFormatter.summary(free: cap.free, total: cap.total))"
+        return L10n.format("%@: %@", drive.displayName, LocalVolumeFormatter.summary(free: cap.free, total: cap.total))
     }
 
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
@@ -181,7 +185,7 @@ struct SidebarView: View {
                 Button {
                     appState.setFavoriteIcon(id: fav.id, to: item.symbol, in: panelSide)
                 } label: {
-                    Label(item.name, systemImage: item.symbol)
+                    Label(L10n.text(item.name), systemImage: item.symbol)
                 }
             }
         } label: {
@@ -420,7 +424,7 @@ struct SidebarView: View {
                                         .foregroundStyle(.secondary)
                                 } else {
                                     Circle()
-                                        .fill(account.isConnected ? .green : .gray)
+                                        .fill(appState.syncManager.isSignedIn(account) ? .green : .gray)
                                         .frame(width: 8, height: 8)
                                 }
                             }
@@ -458,6 +462,16 @@ struct SidebarView: View {
                         }
                         .help(cloudAccountTooltip(for: account))
                         .contextMenu {
+                            if appState.syncManager.accountsNeedingSignIn.contains(account.id),
+                               appState.syncManager.providerSupportsInlineReauth(account.providerType) {
+                                Button(L10n.text("Sign In Again")) {
+                                    Task {
+                                        await appState.syncManager.reauthenticate(accountId: account.id)
+                                        await appState.cloudFileManager(for: account.id, side: panelSide).refresh()
+                                    }
+                                }
+                                Divider()
+                            }
                             Button(L10n.text("Rename...")) {
                                 renamingAccountId = account.id
                                 renameAccountText = account.displayName
@@ -691,7 +705,7 @@ struct SidebarView: View {
             LText("Enter a new name for this cloud account.")
         }
         .confirmationDialog(
-            pendingRemoveAccount.map { "Remove \($0.displayName)?" } ?? "Remove Cloud Account?",
+            pendingRemoveAccount.map { L10n.format("Remove %@?", $0.displayName) } ?? L10n.text("Remove Cloud Account?"),
             isPresented: Binding(
                 get: { pendingRemoveAccount != nil },
                 set: { if !$0 { pendingRemoveAccount = nil } }
@@ -789,18 +803,18 @@ struct SidebarView: View {
     private var transfersTooltip: String {
         let count = appState.transfers(for: panelSide).count
         switch count {
-        case 0: return "No transfers"
-        case 1: return "1 transfer — click for details"
-        default: return "\(count) transfers — click for details"
+        case 0: return L10n.text("No transfers")
+        case 1: return L10n.text("1 transfer — click for details")
+        default: return L10n.format("%d transfers — click for details", count)
         }
     }
 
     private var folderSizesTooltip: String {
         let count = appState.folderSizes(for: panelSide).count
         switch count {
-        case 0: return "No folder sizes"
-        case 1: return "1 folder size — click for details"
-        default: return "\(count) folder sizes — click for details"
+        case 0: return L10n.text("No folder sizes")
+        case 1: return L10n.text("1 folder size — click for details")
+        default: return L10n.format("%d folder sizes — click for details", count)
         }
     }
 
@@ -834,7 +848,7 @@ struct SidebarView: View {
         }
         if isOnline, let mount = appState.driveMonitor.mountURL(for: drive.id) {
             if activeJob == nil {
-                Button(drive.lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                Button(L10n.text(drive.lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…")) {
                     appState.indexingService.indexDrive(drive, mountURL: mount)
                 }
             } else {
@@ -879,13 +893,13 @@ struct SidebarView: View {
             Button(L10n.text("Reveal in Finder")) {
                 NSWorkspace.shared.activateFileViewerSelecting([mount.mountPoint])
             }
-            Button(isBusy ? "Unmounting…" : "Unmount from Finder") {
+            Button(L10n.text(isBusy ? "Unmounting…" : "Unmount from Finder")) {
                 let target = mount
                 Task { await performUnmount(target, accountId: account.id) }
             }
             .disabled(isBusy)
         } else {
-            Button(isBusy ? "Mounting…" : "Mount in Finder") {
+            Button(L10n.text(isBusy ? "Mounting…" : "Mount in Finder")) {
                 Task { await performMount(account: account) }
             }
             .disabled(isBusy)
@@ -897,7 +911,7 @@ struct SidebarView: View {
         mountingAccountIds.insert(account.id)
         defer { mountingAccountIds.remove(account.id) }
         guard let provider = await appState.syncManager.providerFor(accountId: account.id) else {
-            mountErrorMessage = "“\(account.displayName)” isn't connected — sign in first."
+            mountErrorMessage = L10n.format("“%@” isn't connected — sign in first.", account.displayName)
             showMountError = true
             return
         }
@@ -908,7 +922,7 @@ struct SidebarView: View {
                 displayName: account.displayName
             )
         } catch {
-            mountErrorMessage = "Could not mount “\(account.displayName)”: \(error.localizedDescription)"
+            mountErrorMessage = L10n.format("Could not mount “%@”: %@", account.displayName, error.localizedDescription)
             showMountError = true
         }
     }
@@ -961,7 +975,7 @@ struct SidebarView: View {
         }
         if account.isConnected {
             if activeJob == nil {
-                Button(lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…") {
+                Button(L10n.text(lastIndexed == nil ? "Index for Offline Search…" : "Re-index for Offline Search…")) {
                     appState.indexingService.indexCloudAccount(account)
                 }
             } else {

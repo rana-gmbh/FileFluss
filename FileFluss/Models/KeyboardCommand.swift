@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import FileFlussCore
 
 /// Every user-bindable command in FileFluss. Each command lives in one
 /// `Section` and has both a Finder-style and a Commander-style default
@@ -191,7 +192,7 @@ struct ShortcutBinding: Codable, Hashable {
         switch key {
         case "return":    return "↩"
         case "tab":       return "⇥"
-        case "space":     return "Space"
+        case "space":     return L10n.text("Space")
         case "delete":    return "⌫"
         case "fwdDelete": return "⌦"
         case "up":        return "↑"

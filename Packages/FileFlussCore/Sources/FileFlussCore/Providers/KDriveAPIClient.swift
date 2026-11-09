@@ -18,9 +18,7 @@ public actor KDriveAPIClient {
 
     public init(credentials: KDriveCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
         // Root folder ID is typically the drive's root
         pathToId["/"] = credentials.driveId > 0 ? 0 : 0
@@ -142,8 +140,7 @@ public actor KDriveAPIClient {
             let http = response as? HTTPURLResponse
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -699,7 +696,7 @@ public actor KDriveAPIClient {
         switch statusCode {
         case 401: return .notAuthenticated
         case 403: return .unauthorized
-        case 404: return .notFound("Resource not found")
+        case 404: return .notFound(L10n.text("Resource not found"))
         case 429: return .rateLimited
         case 507: return .quotaExceeded
         default: return .serverError(statusCode)

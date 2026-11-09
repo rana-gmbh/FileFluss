@@ -55,6 +55,14 @@ public protocol CloudProvider: Sendable {
     /// Server-side copy on the same account. Same conventions as `moveItem`.
     func copyItem(at path: String, toPath newPath: String) async throws
 
+    /// Whether `copyItem` can copy a folder, not just a file.
+    ///
+    /// SFTP's server-side copy is one file per command and doesn't
+    /// recurse. A batch containing a folder therefore has to fall back
+    /// *before* anything is copied: deciding half way through would mean
+    /// the fallback redoing the items that already succeeded.
+    var canCopyDirectoriesServerSide: Bool { get async }
+
     func getFileMetadata(at path: String) async throws -> CloudFileItem
     func folderSize(at path: String) async throws -> Int64
 
@@ -102,6 +110,43 @@ public protocol CloudProvider: Sendable {
 }
 
 extension CloudProvider {
+    /// Replaces the item at `path` with one `write` creates, without ever
+    /// leaving neither.
+    ///
+    /// `write` gets a temporary path beside the old item. Only when it has
+    /// finished does the old item go and the new one take its place, so a
+    /// failed upload, a full account or a cancel leaves things as they were.
+    /// `finalName` is for a replacement with a different name, as when a
+    /// Google Doc arrives as a `.docx`.
+    public func replacingItem(
+        at path: String,
+        finalName: String? = nil,
+        isolation: isolated (any Actor)? = #isolation,
+        using write: (_ temporaryPath: String) async throws -> Void
+    ) async throws {
+        let ns = path as NSString
+        let name = finalName ?? ns.lastPathComponent
+        let temporaryName = FileSystemService.temporaryReplacementName(for: name)
+        let temporaryPath = ns.deletingLastPathComponent == "/"
+            ? "/\(temporaryName)"
+            : "\(ns.deletingLastPathComponent)/\(temporaryName)"
+        do {
+            try await write(temporaryPath)
+            try await deleteItem(at: path)
+        } catch {
+            // Whichever step failed, the old item is still there.
+            try? await deleteItem(at: temporaryPath)
+            throw error
+        }
+        do {
+            try await renameItem(at: temporaryPath, to: name)
+        } catch {
+            throw CloudProviderError.commandFailed(
+                L10n.format("The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”.", name, temporaryName)
+            )
+        }
+    }
+
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         nil
     }
@@ -124,6 +169,12 @@ extension CloudProvider {
 
     public func copyItem(at path: String, toPath newPath: String) async throws {
         throw CloudProviderError.notImplemented
+    }
+
+    /// True by default: a provider whose copy is a server-side API call
+    /// copies a folder as readily as a file.
+    public var canCopyDirectoriesServerSide: Bool {
+        get async { true }
     }
 
     /// Default no-op — providers without an API to set mtime simply skip

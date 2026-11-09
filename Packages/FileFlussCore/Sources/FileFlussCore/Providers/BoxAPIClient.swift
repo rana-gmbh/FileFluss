@@ -87,9 +87,7 @@ public actor BoxAPIClient {
 
     public init(credentials: BoxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 
@@ -168,7 +166,7 @@ public actor BoxAPIClient {
             // actual cause (typically "redirect_uri does not match" or
             // "invalid_client") instead of a misleading generic message.
             let detail = parseOAuthError(from: data) ?? bodyStr.prefix(200).description
-            throw CloudProviderError.commandFailed("Box authentication failed: \(detail)")
+            throw CloudProviderError.commandFailed(L10n.format("Box authentication failed: %@", detail))
         }
 
         let tokenResponse = try JSONDecoder().decode(BoxTokenResponse.self, from: data)
@@ -192,7 +190,7 @@ public actor BoxAPIClient {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            return BoxUser(id: "", name: "Box user", login: "")
+            return BoxUser(id: "", name: L10n.text("Box user"), login: "")
         }
         return try JSONDecoder().decode(BoxUser.self, from: data)
     }
@@ -589,8 +587,7 @@ public actor BoxAPIClient {
             boxLog.error("[Box] Download failed: HTTP \(http?.statusCode ?? 0)")
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: errorData)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
@@ -1302,7 +1299,7 @@ public actor BoxAPIClient {
         switch statusCode {
         case 401: return .notAuthenticated
         case 403: return .unauthorized
-        case 404: return .notFound(parsedMessage ?? "Resource not found")
+        case 404: return .notFound(parsedMessage ?? L10n.text("Resource not found"))
         case 409: return .serverError(409)
         case 429: return .rateLimited
         case 507: return .quotaExceeded

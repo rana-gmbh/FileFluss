@@ -59,9 +59,7 @@ public actor DropboxAPIClient {
 
     public init(credentials: DropboxCredentials) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        let config = URLSessionConfiguration.fileTransfer()
         self.session = URLSession(configuration: config)
     }
 
@@ -377,8 +375,7 @@ public actor DropboxAPIClient {
             dropboxLog.error("[Dropbox] Download failed: HTTP \(http?.statusCode ?? 0): \(bodyStr.prefix(500))")
             throw Self.mapHTTPError(statusCode: http?.statusCode ?? 0, responseBody: errorData)
         }
-        try? FileManager.default.removeItem(at: localURL)
-        try FileManager.default.moveItem(at: tempURL, to: localURL)
+        try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
@@ -387,13 +384,14 @@ public actor DropboxAPIClient {
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let dbPath = dropboxPath(remotePath)
-        let fileData = try Data(contentsOf: localURL)
+        let fileSize = try FileChunkReader.size(of: localURL)
         let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date
 
-        if fileData.count <= 150_000_000 {
+        if fileSize <= 150_000_000 {
+            let fileData = try Data(contentsOf: localURL)
             try await simpleUpload(data: fileData, path: dbPath, clientModified: modDate, onBytes: onBytes)
         } else {
-            try await sessionUpload(from: localURL, fileSize: fileData.count, path: dbPath, clientModified: modDate, onBytes: onBytes)
+            try await sessionUpload(from: localURL, fileSize: fileSize, path: dbPath, clientModified: modDate, onBytes: onBytes)
         }
     }
 
@@ -448,7 +446,7 @@ public actor DropboxAPIClient {
 
     private func sessionUpload(from localURL: URL, fileSize: Int, path: String, clientModified: Date?, onBytes: ByteProgressHandler? = nil) async throws {
         let chunkSize = 150_000_000 // 150MB
-        let fileData = try Data(contentsOf: localURL)
+        let reader = try FileChunkReader(url: localURL)
 
         // Step 1: Start session
         struct StartArg: Encodable {
@@ -483,7 +481,7 @@ public actor DropboxAPIClient {
         var offset = 0
         while offset < fileSize {
             let end = min(offset + chunkSize, fileSize)
-            let chunk = fileData[offset..<end]
+            let chunk = try reader.read(offset: offset, length: end - offset)
             let isLast = end >= fileSize
 
             if isLast {
@@ -1175,7 +1173,7 @@ public actor DropboxAPIClient {
             if let data = responseBody,
                let bodyStr = String(data: data, encoding: .utf8),
                bodyStr.contains("not_found") {
-                return .notFound("Path not found")
+                return .notFound(L10n.text("Path not found"))
             }
             return .serverError(409)
         case 429: return .rateLimited

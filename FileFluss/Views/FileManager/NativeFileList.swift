@@ -26,7 +26,9 @@ struct NativeFileList: NSViewRepresentable {
     var onAddToFavorites: ((FileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
-    var onReceivePromises: ((URL) -> Void)?
+    /// Offers a promise drop to the cloud-panel flow; returns false when
+    /// that flow isn't the source, and the generic receiver takes it instead.
+    var onReceivePromises: ((URL) -> Bool)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
@@ -40,6 +42,22 @@ struct NativeFileList: NSViewRepresentable {
     /// Hides the "Copy/Move to other Panel" context-menu items when only one
     /// pane is shown.
     var singlePaneMode: Bool = false
+    /// True while the panel shows the inside of an archive. The listing is
+    /// then read-only, and the rows have no files behind them until an entry
+    /// is unpacked — so every write action is withheld and a drag hands over
+    /// file promises instead of URLs.
+    var archiveMode: Bool = false
+    /// What a drag out of an archive needs in order to unpack an entry,
+    /// snapshot so the promise can be fulfilled off the main actor.
+    var archiveDragPlan: ArchiveDragPlan?
+    var onCompress: (([FileItem], ArchiveCreationFormat) -> Void)?
+    var onExtractHere: ((FileItem) -> Void)?
+    var onExtractToOtherPanel: (([FileItem]) -> Void)?
+    /// Called when a dropped file promise has been written. Returns the
+    /// panel to a fresh listing and reports a failure.
+    var onPromisedFilesReceived: ((Error?) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([FileItem], URL) -> Void)?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -189,6 +207,13 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onOpenInTerminal = onOpenInTerminal
         coordinator.onSpringLoadFolder = onSpringLoadFolder
         coordinator.singlePaneMode = singlePaneMode
+        coordinator.archiveMode = archiveMode
+        coordinator.archiveDragPlan = archiveDragPlan
+        coordinator.onCompress = onCompress
+        coordinator.onExtractHere = onExtractHere
+        coordinator.onExtractToOtherPanel = onExtractToOtherPanel
+        coordinator.onPromisedFilesReceived = onPromisedFilesReceived
+        coordinator.onOpenWith = onOpenWith
         coordinator.selectedIDs = _selectedIDs
 
         // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
@@ -235,6 +260,15 @@ struct NativeFileList: NSViewRepresentable {
             coordinator.suppressSelectionUpdate = false
         }
 
+        // The table outlives a navigation, so it has to be moved by hand: to
+        // the selected row when going up, otherwise to the top.
+        if coordinator.lastDirectory != currentDirectory {
+            coordinator.lastDirectory = currentDirectory
+            if tableView.numberOfRows > 0 {
+                tableView.scrollRowToVisible(tableView.selectedRowIndexes.first ?? 0)
+            }
+        }
+
         // A navigation asked this panel to keep keyboard focus. The token
         // changes once per request; whichever table is current (even one just
         // rebuilt by the navigation) re-takes real first responder here.
@@ -259,7 +293,7 @@ class FileTableView: NSTableView {
     var quickLookController: QuickLookController?
 
     override func keyDown(with event: NSEvent) {
-        if event.charactersIgnoringModifiers == " " {
+        if KeyboardShortcutManager.shared.isQuickLook(event) {
             onSpaceKey?()
         } else if event.keyCode == 51 && event.modifierFlags.contains(.command) {
             // Cmd+Delete
@@ -276,7 +310,11 @@ class FileTableView: NSTableView {
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
         onDragLeft?()
-        super.draggingEnded(sender)
+        // No `super` call. `draggingEnded(_:)` is an optional
+        // NSDraggingDestination method that NSTableView doesn't implement,
+        // so passing it on raised "unrecognized selector" and aborted the
+        // app the moment AppKit delivered it — which dragging an entry out
+        // of an archive to the other panel reliably did.
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -396,11 +434,20 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onAddToFavorites: ((FileItem) -> Void)?
     var onSortChanged: ((String, Bool) -> Void)?
     var onBecameActive: (() -> Void)?
-    var onReceivePromises: ((URL) -> Void)?
+    var onReceivePromises: ((URL) -> Bool)?
     var onCreateFolder: (() -> Void)?
     var onRename: ((FileItem) -> Void)?
     var onOpenInFinder: (([FileItem]) -> Void)?
     var onOpenInTerminal: (([FileItem]) -> Void)?
+    var onCompress: (([FileItem], ArchiveCreationFormat) -> Void)?
+    var onExtractHere: ((FileItem) -> Void)?
+    var onExtractToOtherPanel: (([FileItem]) -> Void)?
+    var onPromisedFilesReceived: ((Error?) -> Void)?
+    /// Right-click → Open With: the selection and the application chosen.
+    var onOpenWith: (([FileItem], URL) -> Void)?
+    var archiveMode = false
+    var archiveDragPlan: ArchiveDragPlan?
+    let archivePromiseDelegate = ArchiveFilePromiseDelegate()
     var onSpringLoadFolder: ((FileItem) -> Void)?
     var singlePaneMode = false
     weak var tableView: FileTableView?
@@ -448,6 +495,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// The last navigation focus token we acted on, so `updateNSView` only
     /// re-takes focus once per request (not on every unrelated update).
     var lastFocusToken: UUID?
+    var lastDirectory: URL?
 
     @MainActor
     func focusTableViewSoon() {
@@ -677,7 +725,9 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         let clickedRow = tableView.clickedRow
 
         // Right-click on empty area — Paste (if clipboard has items) + New Folder.
+        // Neither applies inside an archive, which can't be written to.
         if clickedRow < 0 || clickedRow >= items.count {
+            guard !archiveMode else { return }
             let pasteItem = NSMenuItem(title: L10n.text("Paste"), action: #selector(handlePaste(_:)), keyEquivalent: "v")
             pasteItem.keyEquivalentModifierMask = [.command]
             pasteItem.target = self
@@ -702,6 +752,38 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         guard !contextItems.isEmpty else { return }
 
         let otherPanelName = panelSide == .left ? L10n.text("Right") : L10n.text("Left")
+
+        // First, where Finder keeps it.
+        if let openWith = openWithItem(for: contextItems) {
+            menu.addItem(openWith)
+            menu.addItem(.separator())
+        }
+
+        // Inside an archive there is nothing to cut, paste, rename or trash,
+        // and the rows have no files behind them. Beyond opening an entry,
+        // all the menu offers is unpacking what was clicked.
+        if archiveMode {
+            if !singlePaneMode {
+                let extractItem = NSMenuItem(
+                    title: L10n.format("Extract to %@ Panel", otherPanelName),
+                    action: #selector(handleExtractToOtherPanel(_:)), keyEquivalent: ""
+                )
+                extractItem.target = self
+                extractItem.representedObject = contextItems
+                menu.addItem(extractItem)
+                menu.addItem(.separator())
+            }
+            let revealItem = NSMenuItem(
+                title: L10n.text("Show Archive in Finder"),
+                action: #selector(handleOpenInFinder(_:)), keyEquivalent: ""
+            )
+            revealItem.target = self
+            // The archive itself, not the entry: the entry has no path in
+            // Finder to reveal.
+            revealItem.representedObject = [FileItem]()
+            menu.addItem(revealItem)
+            return
+        }
 
         // Reveal in Finder — top of the menu, matching where Finder keeps
         // its own "Open" entry.
@@ -751,6 +833,37 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
             menu.addItem(.separator())
         }
+
+        menu.addItem(CompressMenu.item(
+            itemCount: contextItems.count, payload: contextItems,
+            target: self, action: #selector(handleCompress(_:))
+        ))
+
+        // Unpacking is offered for one archive at a time: a multi-selection
+        // of archives would each want its own destination folder, and the
+        // choice of where the contents land is the whole question.
+        if contextItems.count == 1, let archive = contextItems.first,
+           !archive.isDirectory, ArchiveFormat.detect(archive.url) != nil {
+            let extractHereItem = NSMenuItem(
+                title: L10n.text("Extract Here"),
+                action: #selector(handleExtractHere(_:)), keyEquivalent: ""
+            )
+            extractHereItem.target = self
+            extractHereItem.representedObject = archive
+            menu.addItem(extractHereItem)
+
+            if !singlePaneMode {
+                let extractThereItem = NSMenuItem(
+                    title: L10n.format("Extract to %@ Panel", otherPanelName),
+                    action: #selector(handleExtractToOtherPanel(_:)), keyEquivalent: ""
+                )
+                extractThereItem.target = self
+                extractThereItem.representedObject = contextItems
+                menu.addItem(extractThereItem)
+            }
+        }
+
+        menu.addItem(.separator())
 
         // Rename — only for single selection
         if contextItems.count == 1 {
@@ -810,6 +923,38 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     @objc func handleOpenInTerminal(_ sender: NSMenuItem) {
         let contextItems = sender.representedObject as? [FileItem] ?? []
         onOpenInTerminal?(contextItems)
+    }
+
+    /// "Open With", for a selection of files. Folders are left out, as most
+    /// apps that claim to open one only mean "reveal it", and Finder's own
+    /// folder handling is a row's double-click away.
+    private func openWithItem(for contextItems: [FileItem]) -> NSMenuItem? {
+        guard onOpenWith != nil, !contextItems.isEmpty,
+              contextItems.allSatisfy({ !$0.isDirectory }) else { return nil }
+        // Inside an archive nothing exists on disk yet, so the apps are
+        // looked up by type, from the entry names.
+        let source: OpenWithCandidates.Source = archiveMode
+            ? .types(contextItems.map { $0.contentType ?? .data })
+            : .files(contextItems.map(\.url))
+        return OpenWithMenu.item(for: source) { [weak self] app in
+            self?.onOpenWith?(contextItems, app)
+        }
+    }
+
+    @objc func handleCompress(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? CompressRequest,
+              let contextItems = request.items as? [FileItem] else { return }
+        onCompress?(contextItems, request.format)
+    }
+
+    @objc func handleExtractHere(_ sender: NSMenuItem) {
+        guard let archive = sender.representedObject as? FileItem else { return }
+        onExtractHere?(archive)
+    }
+
+    @objc func handleExtractToOtherPanel(_ sender: NSMenuItem) {
+        guard let contextItems = sender.representedObject as? [FileItem] else { return }
+        onExtractToOtherPanel?(contextItems)
     }
 
     @objc func handleCalculateFolderSize(_ sender: NSMenuItem) {
@@ -896,7 +1041,23 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
         guard row < items.count else { return nil }
-        return items[row].url as NSURL
+        let item = items[row]
+        guard archiveMode, let plan = archiveDragPlan else { return item.url as NSURL }
+
+        // Inside an archive there is no file to hand over yet. A file promise
+        // lets the drop decide where the entry should land and unpacks it
+        // there — so one mechanism covers the other panel, Finder, and any
+        // app that takes files, with nothing extracted unless the drag is
+        // actually completed.
+        archivePromiseDelegate.plan = plan
+        let fileType = item.isDirectory
+            ? UTType.folder.identifier
+            : (item.contentType?.identifier ?? UTType.data.identifier)
+        let provider = NSFilePromiseProvider(fileType: fileType, delegate: archivePromiseDelegate)
+        provider.userInfo = ArchiveEntryPromise(
+            entryPath: plan.entryPath(forName: item.name), name: item.name
+        )
+        return provider
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
@@ -920,7 +1081,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// from is excluded — opening that would pull the ground out from under
     /// the drag.
     private func armSpringLoad(row: Int?) {
-        guard onSpringLoadFolder != nil else { return }
+        guard onSpringLoadFolder != nil, !archiveMode else { return }
         guard let row, row >= 0, row < items.count else {
             springLoad.disarm()
             return
@@ -950,6 +1111,9 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         // carried into a subfolder without dropping first.
         armSpringLoad(row: dropOperation == .on ? row : nil)
 
+        // An archive listing is read-only; there is nowhere for a drop to go.
+        if archiveMode { return [] }
+
         let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
         if hasPromises {
             // Allow drop onto a specific subfolder row; otherwise target the current directory.
@@ -964,7 +1128,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             // Dropping ON a specific row — must be a directory
             guard row >= 0, row < items.count else { return [] }
             let target = items[row]
-            guard target.isDirectory else { return [] }
+            // A file isn't a place to drop, so the row means the folder it's
+            // in. Refusing made a folder full of files nearly impossible to
+            // drop into.
+            guard target.isDirectory else {
+                guard currentDirectory != nil else { return [] }
+                tableView.setDropRow(-1, dropOperation: .on)
+                return .generic
+            }
             // Don't drop onto a dragged item itself
             if currentDragItemIDs.contains(target.id) {
                 return []
@@ -981,6 +1152,7 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
         cancelSpringLoad()
+        if archiveMode { return false }
 
         // Determine target directory
         let targetURL: URL
@@ -994,9 +1166,16 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             targetURL = dir
         }
 
-        // Handle file promises from cloud panels — call immediately before drag session ends
+        // Handle file promises — call immediately before the drag session
+        // ends. A cloud panel's promises are a marker only: that flow does
+        // its own download from the receiving side, and says so by returning
+        // true. Anything else — today, entries dragged out of an archive —
+        // carries a promise that really does write the file, so it goes to
+        // the standard receiver.
         if info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) {
-            onReceivePromises?(targetURL)
+            if onReceivePromises?(targetURL) != true {
+                receivePromisedFiles(info, to: targetURL)
+            }
             return true
         }
 
@@ -1039,6 +1218,38 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         onDrop?(droppedItems, targetURL)
         return true
+    }
+
+    /// Asks each promise on the pasteboard to write itself into
+    /// `destination`, then refreshes the panel.
+    private func receivePromisedFiles(_ info: any NSDraggingInfo, to destination: URL) {
+        guard let receivers = info.draggingPasteboard.readObjects(
+            forClasses: [NSFilePromiseReceiver.self], options: nil
+        ) as? [NSFilePromiseReceiver], !receivers.isEmpty else { return }
+
+        let queue = OperationQueue()
+        queue.qualityOfService = .userInitiated
+        nonisolated(unsafe) let onReceived = onPromisedFilesReceived
+        // One completion per promise, each on `queue`. Counted down on the
+        // main queue so the panel reloads once at the end rather than once
+        // per file — a ten-file drag would otherwise reload ten times.
+        let countdown = PromiseCountdown(receivers.count)
+        // `@Sendable` so the closure isn't taken to belong to the main
+        // actor, as everything else in this class does: it runs on `queue`,
+        // and a main-actor closure called there is stopped by the runtime.
+        let reader: @Sendable (URL, (any Error)?) -> Void = { _, error in
+            DispatchQueue.main.async {
+                countdown.remaining -= 1
+                if error != nil || countdown.remaining == 0 {
+                    onReceived?(error)
+                }
+            }
+        }
+        for receiver in receivers {
+            receiver.receivePromisedFiles(
+                atDestination: destination, options: [:], operationQueue: queue, reader: reader
+            )
+        }
     }
 
     // MARK: - Cell Factories

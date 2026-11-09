@@ -25,6 +25,14 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
         }
     }
 
+    /// Whether the shared panel is on screen. The archive panel checks this
+    /// before unpacking anything for a preview: a selection change arrives on
+    /// every arrow-key press, and unpacking a file nobody is looking at would
+    /// turn holding the down arrow into a stream of extractions.
+    var isPanelVisible: Bool {
+        QLPreviewPanel.shared()?.isVisible ?? false
+    }
+
     func updateAndReload(urls: [URL]) {
         self.urls = urls
         guard let panel = QLPreviewPanel.shared(), panel.isVisible else { return }

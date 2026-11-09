@@ -91,7 +91,7 @@ public final class KDriveProvider: CloudProvider, @unchecked Sendable {
         } else if let first = drives.first {
             chosen = first
         } else {
-            throw CloudProviderError.notFound("No kDrive found for this account")
+            throw CloudProviderError.notFound(L10n.text("No kDrive found for this account"))
         }
         KDriveProvider.log("[kDrive] Using drive: id=\(chosen.id) name=\(chosen.name)")
 

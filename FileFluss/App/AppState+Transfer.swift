@@ -198,7 +198,12 @@ extension AppState {
                     } else {
                         await destFM.performCopy(items: items, to: destDir, progress: transfer)
                     }
+                    // Both panels, not just the destination: a move empties
+                    // the folder it came from, and the panel showing that
+                    // folder went on listing files that were no longer
+                    // there until the user refreshed it by hand.
                     await destFM.refresh()
+                    await self.refreshAllPanels()
                 }
             }
         }
@@ -228,6 +233,7 @@ extension AppState {
                 )
                 self.addTransfer(transfer, panel: panel)
                 transfer.task = Task { [sourceVM, destFM] in
+                    guard let items = await self.resolvedCloudItems(items, accountId: sourceAccountId, transfer: transfer) else { return }
                     await sourceVM.downloadItems(items, to: destDir, progress: transfer)
                     if isMove {
                         // Same rule as everywhere else: only what arrived.
