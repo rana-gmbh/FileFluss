@@ -59,7 +59,7 @@ public static class TerminalLauncher
         }
 
         var terminal = Resolve(configured) ?? throw CloudProviderException.CommandFailed(L("No terminal application could be found."));
-        Process.Start(StartInfo(terminal, directory));
+        Process.Start(StartInfo(terminal, directory))?.Dispose();
     }
 
     /// <summary>

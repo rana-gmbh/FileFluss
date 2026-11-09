@@ -228,6 +228,16 @@ public static class KeyboardCommandInfo
         _ => command.ToString(),
     };
 
+    /// <summary>
+    /// Whether holding the shortcut down (key repeat) may run the command again and again.
+    /// Moving through folders and between panels may; anything that copies, moves, deletes,
+    /// opens, creates or asks must run once per press — a held F5 would otherwise start the
+    /// same copy over and over.
+    /// </summary>
+    public static bool RepeatsWhenHeld(this KeyboardCommand command) => command is
+        KeyboardCommand.ToggleActivePanel or KeyboardCommand.ParentDirectory or
+        KeyboardCommand.HistoryBack or KeyboardCommand.HistoryForward;
+
     public static KeyboardSection Section(this KeyboardCommand command) => command switch
     {
         KeyboardCommand.ToggleActivePanel or KeyboardCommand.ParentDirectory or KeyboardCommand.OpenDirectory or

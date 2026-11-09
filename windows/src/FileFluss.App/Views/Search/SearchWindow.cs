@@ -261,8 +261,15 @@ public sealed class SearchWindow : Window
         var panel = main.Panel(side);
         main.ActiveSide = side;
         var select = target.SelectPath is null ? null : item.Name;
-        await panel.NavigateAsync(location, select);
-        main.Shell.FocusPanel(side);
+        try
+        {
+            await panel.NavigateAsync(location, select);
+            main.Shell.FocusPanel(side);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            TaskFailures.ShowFailure(e, L("Search"), main.Shell.Window);
+        }
     }
 
     // MARK: - Updating

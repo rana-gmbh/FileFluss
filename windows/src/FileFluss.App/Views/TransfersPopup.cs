@@ -64,26 +64,51 @@ public static class TransfersPopup
             StaysOpen = false,
             AllowsTransparency = true,
         };
-        popup.Closed += (_, _) => anchor.IsChecked = false;
+        // Each row listens to its transfer; the rows of a rebuild (and of a closed popup) stop
+        // listening, or every transfer would collect a handler per rebuild for as long as it
+        // stays in the list, each redrawing a row nobody sees several times a second.
+        var subscriptions = new List<Action>();
+        void Unsubscribe()
+        {
+            foreach (var unsubscribe in subscriptions)
+            {
+                unsubscribe();
+            }
+
+            subscriptions.Clear();
+        }
 
         void Rebuild()
         {
+            Unsubscribe();
             list.Children.Clear();
             foreach (var transfer in transfers.All)
             {
-                list.Children.Add(Row(owner, transfers, transfer));
+                list.Children.Add(Row(owner, transfers, transfer, subscriptions));
             }
 
             empty.Visibility = transfers.All.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             clear.Visibility = transfers.HasFinished ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        transfers.All.CollectionChanged += (_, _) => Rebuild();
+        transfers.All.CollectionChanged += (_, _) =>
+        {
+            if (popup.IsOpen)
+            {
+                Rebuild();
+            }
+        };
         popup.Opened += (_, _) => Rebuild();
+        popup.Closed += (_, _) =>
+        {
+            anchor.IsChecked = false;
+            Unsubscribe();
+            list.Children.Clear();
+        };
         return popup;
     }
 
-    private static FrameworkElement Row(Window owner, TransferCenter transfers, TransferProgress transfer)
+    private static FrameworkElement Row(Window owner, TransferCenter transfers, TransferProgress transfer, List<Action> subscriptions)
     {
         var status = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, FontWeight = FontWeights.SemiBold };
         var bar = new ProgressBar { Height = 6, Maximum = 1, Margin = new Thickness(0, 6, 0, 4) };
@@ -134,7 +159,22 @@ public static class TransfersPopup
             action.Content = transfer.IsRunning ? L("Cancel") : L("Remove");
         }
 
-        transfer.PropertyChanged += (_, _) => row.Dispatcher.BeginInvoke(Update);
+        // Raised on the transfer's thread too (it completes there): updates are queued, and one
+        // already queued covers the rest.
+        var queued = 0;
+        System.ComponentModel.PropertyChangedEventHandler changed = (_, _) =>
+        {
+            if (Interlocked.Exchange(ref queued, 1) == 0)
+            {
+                row.Dispatcher.BeginInvoke(() =>
+                {
+                    Interlocked.Exchange(ref queued, 0);
+                    Update();
+                });
+            }
+        };
+        transfer.PropertyChanged += changed;
+        subscriptions.Add(() => transfer.PropertyChanged -= changed);
         Update();
         return row;
     }

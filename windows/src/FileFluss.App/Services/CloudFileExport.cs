@@ -60,7 +60,8 @@ public sealed class CloudFileExport
             }
         }
 
-        data.TreeUnavailable += failure => Application.Current.Dispatcher.BeginInvoke(() => Report(failure));
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        data.TreeUnavailable += failure => dispatcher.BeginInvoke(() => Report(failure));
         var source = data.Source;
         OleDragResult result;
         DragPayload.Outgoing = payload;
@@ -105,7 +106,8 @@ public sealed class CloudFileExport
     {
         ReleaseClipboard(clear: false);
         var data = Create(panel, items, forDrag: false);
-        data.TreeUnavailable += failure => Application.Current.Dispatcher.BeginInvoke(() => ShowUnavailable(owner, failure));
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        data.TreeUnavailable += failure => dispatcher.BeginInvoke(() => ShowUnavailable(owner, failure));
         _ = data.Source.TreeAsync();
         if (OleDragDrop.SetClipboard(data))
         {

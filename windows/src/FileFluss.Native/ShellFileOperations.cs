@@ -67,29 +67,46 @@ public static class ShellFileOperations
             var partial = destination + ".fileflusspart";
             long last = 0;
             var cancel = 0;
+            Exception? callbackFailure = null;
             using var registration = cancellationToken.Register(() => Volatile.Write(ref cancel, 1));
             CopyProgressRoutine callback = (total, transferred, _, _, _, _, _, _, _) =>
             {
-                var delta = transferred - last;
-                last = transferred;
-                if (delta > 0)
+                // Called from inside CopyFileEx: an exception escaping here would cross native
+                // frames, which ends the process on the spot. Stop the copy and rethrow after.
+                try
                 {
-                    onBytes?.Invoke(delta);
+                    var delta = transferred - last;
+                    last = transferred;
+                    if (delta > 0)
+                    {
+                        onBytes?.Invoke(delta);
+                    }
+                }
+                catch (Exception e)
+                {
+                    callbackFailure = e;
+                    return ProgressCancel;
                 }
 
                 return Volatile.Read(ref cancel) == 1 ? ProgressCancel : ProgressContinue;
             };
 
             var cancelFlag = 0;
-            if (!CopyFileEx(source, partial, callback, 0, ref cancelFlag, 0))
+            var copied = CopyFileEx(source, partial, callback, 0, ref cancelFlag, 0);
+            var error = Marshal.GetLastPInvokeError();
+            GC.KeepAlive(callback);
+            if (!copied)
             {
-                var error = Marshal.GetLastPInvokeError();
                 TryDelete(partial);
+                if (callbackFailure is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(callbackFailure).Throw();
+                }
+
                 cancellationToken.ThrowIfCancellationRequested();
                 throw CloudProviderException.CommandFailed(new System.ComponentModel.Win32Exception(error).Message);
             }
 
-            GC.KeepAlive(callback);
             File.Move(partial, destination, overwrite: true);
         }, cancellationToken);
 
@@ -108,7 +125,7 @@ public static class ShellFileOperations
 
     /// <summary>Opens with the default app, like a double-click in Explorer.</summary>
     public static void Open(string path)
-        => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty });
+        => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty })?.Dispose();
 
     /// <summary>The system "Open with" chooser.</summary>
     public static void OpenWith(string path, nint owner)
@@ -143,7 +160,7 @@ public static class ShellFileOperations
         var folder = Path.GetDirectoryName(paths[0]);
         if (folder is null)
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{paths[0]}\"") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{paths[0]}\"") { UseShellExecute = true })?.Dispose();
             return;
         }
 
@@ -154,7 +171,7 @@ public static class ShellFileOperations
         {
             if (parent == 0 || SHOpenFolderAndSelectItems(parent, (uint)children.Length, children, 0) != 0)
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{paths[0]}\"") { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{paths[0]}\"") { UseShellExecute = true })?.Dispose();
             }
         }
         finally

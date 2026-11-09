@@ -48,14 +48,18 @@ public sealed class AccountStore
                 {
                     File.Copy(_path, $"{_path}.unreadable-{DateTime.Now:yyyyMMdd-HHmmss}.json", overwrite: true);
                 }
-                catch (IOException)
+                catch (Exception copyFailure) when (copyFailure is IOException or UnauthorizedAccessException)
                 {
                 }
 
                 return [];
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
+                // Locked or unreadable right now: it may well hold accounts, so it must not
+                // be replaced by whatever this session saves.
+                _loadFailed = true;
+                SupportLogger.Shared.Log($"accounts.json could not be read ({e.Message}) — it will not be overwritten", "Accounts", LogLevel.Error);
                 return [];
             }
         }

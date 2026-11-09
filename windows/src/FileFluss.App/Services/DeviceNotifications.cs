@@ -22,7 +22,15 @@ public static class DeviceNotifications
         debounce.Tick += (_, _) =>
         {
             debounce.Stop();
-            onChange();
+            try
+            {
+                onChange();
+            }
+            catch (Exception e)
+            {
+                // A drive that vanished mid-survey; the next arrival or removal tries again.
+                CrashLog.Write("device change", e);
+            }
         };
 
         var source = HwndSource.FromHwnd(new WindowInteropHelper(window).Handle);

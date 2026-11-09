@@ -49,6 +49,7 @@ public sealed class QuickLookWindow : Window
     private readonly TextBlock _caption = new() { Margin = new Thickness(14, 8, 14, 10), TextTrimming = TextTrimming.CharacterEllipsis };
     private CancellationTokenSource? _loading;
     private PreviewHandlerHost? _handlerHost;
+    private bool _closed;
 
     private QuickLookWindow(MainViewModel main, PanelViewModel panel)
     {
@@ -69,9 +70,24 @@ public sealed class QuickLookWindow : Window
         panel.PropertyChanged += OnPanelChanged;
         Closed += (_, _) =>
         {
+            _closed = true;
             panel.PropertyChanged -= OnPanelChanged;
             _loading?.Cancel();
+            if (_content.Content is MediaElement media)
+            {
+                media.Close();
+            }
+
+            _content.Content = null;
             _current = null;
+        };
+
+        // While its window still exists: a preview handler is unloaded and released (and its
+        // file let go) instead of being parked with the hosted window until a finalizer runs.
+        Closing += (_, _) =>
+        {
+            _handlerHost?.Dispose();
+            _handlerHost = null;
         };
         PreviewKeyDown += (_, e) =>
         {
@@ -109,13 +125,30 @@ public sealed class QuickLookWindow : Window
         }
     }
 
+    /// <summary>Previews never take FileFluss down: whatever a file or its handler does wrong ends in the facts view.</summary>
     private async void ShowSelection()
     {
-        if (_panel.Selection.FirstOrDefault() is not { } row || row.IsDirectory)
+        if (_closed || _panel.Selection.FirstOrDefault() is not { } row || row.IsDirectory)
         {
             return;
         }
 
+        try
+        {
+            await ShowAsync(row);
+        }
+        catch (Exception e)
+        {
+            Core.Diagnostics.SupportLogger.Shared.Log($"Quick Look of {row.Name} failed: {e.GetType().Name}: {e.Message}", "QuickLook", Core.Diagnostics.LogLevel.Notice);
+            if (!_closed)
+            {
+                ShowFacts(row, null);
+            }
+        }
+    }
+
+    private async Task ShowAsync(FileRowViewModel row)
+    {
         _loading?.Cancel();
         var cts = _loading = new CancellationTokenSource();
         var item = row.Item;
@@ -126,7 +159,7 @@ public sealed class QuickLookWindow : Window
         {
             ShowFacts(row, L("Loading preview…"));
             path = await _main.OpenCloudFileAsync(_panel, item, launch: false);
-            if (cts.IsCancellationRequested)
+            if (cts.IsCancellationRequested || _closed)
             {
                 return;
             }
@@ -164,8 +197,10 @@ public sealed class QuickLookWindow : Window
                 ShowFacts(row, null);
             }
         }
-        catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or FileFormatException)
+        catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or FileFormatException or
+                                       ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or OverflowException)
         {
+            // Decoders and players reject damaged or exotic files in all of these ways.
             ShowFacts(row, null);
         }
     }

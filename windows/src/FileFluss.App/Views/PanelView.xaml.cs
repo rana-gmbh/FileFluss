@@ -484,17 +484,25 @@ public partial class PanelView : UserControl
             expanded = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + expanded[1..];
         }
 
-        if (!Path.IsPathRooted(expanded) && vm.CurrentPath.Length > 0)
+        try
         {
-            expanded = Path.GetFullPath(Path.Combine(vm.CurrentPath, expanded));
+            if (!Path.IsPathRooted(expanded) && vm.CurrentPath.Length > 0)
+            {
+                expanded = Path.GetFullPath(Path.Combine(vm.CurrentPath, expanded));
+            }
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // Typed characters no path can hold ("a:b:c", "<x>"): there is no such folder.
+            expanded = string.Empty;
         }
 
-        if (Directory.Exists(expanded))
+        if (expanded.Length > 0 && Directory.Exists(expanded))
         {
             await vm.NavigateAsync(PanelLocation.Local(expanded));
             FocusList();
         }
-        else if (File.Exists(expanded))
+        else if (expanded.Length > 0 && File.Exists(expanded))
         {
             await vm.NavigateAsync(PanelLocation.Local(Path.GetDirectoryName(expanded)!), Path.GetFileName(expanded));
         }
@@ -523,7 +531,15 @@ public partial class PanelView : UserControl
     {
         if (Vm is { } vm)
         {
-            await Reauthentication.RunAsync(Window.GetWindow(this), Main.Services, vm);
+            var owner = Window.GetWindow(this);
+            try
+            {
+                await Reauthentication.RunAsync(owner, Main.Services, vm);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                TaskFailures.ShowFailure(failure, L("Sign In Again"), owner);
+            }
         }
     }
 
@@ -817,8 +833,21 @@ public partial class PanelView : UserControl
         await DropOntoAsync(e, destination.Location, destination.Name, vm.Side);
     }
 
-    /// <summary>Shared by rows, the list background and breadcrumbs.</summary>
+    /// <summary>Shared by rows, the list background and breadcrumbs. A drop that fails says so instead of vanishing.</summary>
     private async Task DropOntoAsync(DragEventArgs e, PanelLocation destination, string destinationName, PanelSide side)
+    {
+        try
+        {
+            await DropCoreAsync(e, destination, destinationName, side);
+        }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            // Another app's drag data that can't be read, a source that went away mid-drop.
+            TaskFailures.ShowFailure(failure, L("Transfer"), Window.GetWindow(this));
+        }
+    }
+
+    private async Task DropCoreAsync(DragEventArgs e, PanelLocation destination, string destinationName, PanelSide side)
     {
         var forced = ForcedVerb(e);
         if (DragData(e) is { } payload)
@@ -846,7 +875,7 @@ public partial class PanelView : UserControl
                 {
                     items.Add(await LocalFileProvider.Shared.GetFileMetadataAsync(path));
                 }
-                catch (CloudProviderException)
+                catch (Exception failure) when (failure is CloudProviderException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
                 }
             }

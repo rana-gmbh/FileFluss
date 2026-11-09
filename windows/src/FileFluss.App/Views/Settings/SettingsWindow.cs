@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,6 +11,7 @@ using FileFluss.App.Views.Accounts;
 using FileFluss.App.Views.Dialogs;
 using FileFluss.Core;
 using FileFluss.Core.Commands;
+using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Formatting;
 using FileFluss.Core.IO;
 using FileFluss.Core.Models;
@@ -96,20 +98,25 @@ public sealed class SettingsWindow : Window
             }
         };
         services.Accounts.Accounts.CollectionChanged += OnAccountsChanged;
+        Localization.LanguageChanged += OnLanguageChanged;
         Closed += (_, _) =>
         {
+            // Both sources outlive the window: left subscribed, they would keep every closed
+            // Settings window (and its pages) alive and rebuilding.
             services.Accounts.Accounts.CollectionChanged -= OnAccountsChanged;
+            Localization.LanguageChanged -= OnLanguageChanged;
             _open = null;
         };
-        Localization.LanguageChanged += (_, _) =>
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        if (IsLoaded)
         {
-            if (IsLoaded)
-            {
-                Title = L("FileFluss Settings");
-                BuildNav();
-                ShowPage(_current);
-            }
-        };
+            Title = L("FileFluss Settings");
+            BuildNav();
+            ShowPage(_current);
+        }
     }
 
     private void BuildNav()
@@ -383,7 +390,16 @@ public sealed class SettingsWindow : Window
 
             clear.IsEnabled = false;
             size.Text = L("Calculating…");
-            await CacheManager.ClearAsync();
+            try
+            {
+                await CacheManager.ClearAsync();
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Files in use stay; the size below shows what is left.
+                TaskFailures.ShowFailure(e, L("Clear Cache"), this);
+            }
+
             await RefreshSizeAsync();
         });
         clear.IsEnabled = false;
@@ -391,7 +407,20 @@ public sealed class SettingsWindow : Window
 
         async Task RefreshSizeAsync()
         {
-            var bytes = await CacheManager.SizeAsync();
+            long bytes;
+            try
+            {
+                bytes = await CacheManager.SizeAsync();
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Never leave "Calculating…" and a disabled button behind.
+                SupportLogger.Shared.Log($"Measuring the cache failed: {e.Message}", "Settings", LogLevel.Notice);
+                size.Text = string.Empty;
+                clear.IsEnabled = true;
+                return;
+            }
+
             size.Text = ByteFormatter.Format(bytes);
 
             // Nothing to clear, nothing to confirm (macOS disables the button at zero).
@@ -437,7 +466,15 @@ public sealed class SettingsWindow : Window
 
         async Task EnforceAsync(int mb)
         {
-            await CacheManager.EnforceMaxSizeAsync(mb);
+            try
+            {
+                await CacheManager.EnforceMaxSizeAsync(mb);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                SupportLogger.Shared.Log($"Trimming the cache failed: {e.Message}", "Settings", LogLevel.Notice);
+            }
+
             await RefreshSizeAsync();
         }
 
@@ -490,7 +527,19 @@ public sealed class SettingsWindow : Window
         page.Children.Add(Card(location,
             L("Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn't available, the system temporary folder is used."),
             locationButtons));
-        page.Children.Add(Card(L("Open Cache Folder"), null, Button(L("Open"), () => Process.Start(new ProcessStartInfo(StagingLocation.Base()) { UseShellExecute = true }))));
+        page.Children.Add(Card(L("Open Cache Folder"), null, Button(L("Open"), () =>
+        {
+            try
+            {
+                var folder = StagingLocation.Base();
+                Directory.CreateDirectory(folder);
+                Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true })?.Dispose();
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                MessageDialog.Error(this, L("Open Cache Folder"), e.Message);
+            }
+        })));
         return page;
     }
 }

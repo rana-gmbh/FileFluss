@@ -39,8 +39,25 @@ public static class IconCache
 
     public static ImageSource? Folder(double dips = 16) => FromIndex(ShellIcons.IconIndex("folder", true, exists: false), SizeFor(dips));
 
+    /// <summary>
+    /// Programs, shortcuts and .ico files each bring their own icon (and index), so browsing
+    /// folders full of them would grow the cache without end; past this many it starts over.
+    /// </summary>
+    private const int MaxIcons = 2048;
+
     private static ImageSource? FromIndex(int index, ShellIconSize size)
-        => index < 0 ? null : ByIndex.GetOrAdd((index, size), key =>
+    {
+        if (index < 0)
+        {
+            return null;
+        }
+
+        if (ByIndex.Count > MaxIcons && !ByIndex.ContainsKey((index, size)))
+        {
+            ByIndex.Clear();
+        }
+
+        return ByIndex.GetOrAdd((index, size), key =>
         {
             var handle = ShellIcons.IconFromIndex(key.Index, key.Size);
             if (handle == 0)
@@ -54,11 +71,17 @@ public static class IconCache
                 source.Freeze();
                 return source;
             }
+            catch (Exception e) when (e is COMException or ArgumentException)
+            {
+                // A damaged icon: the row goes without one rather than failing to draw.
+                return null;
+            }
             finally
             {
                 ShellIcons.DestroyIcon(handle);
             }
         });
+    }
 
     /// <summary>A provider logo from Assets/ProviderLogos/&lt;Name&gt;.png, or null.</summary>
     public static ImageSource? Logo(CloudProviderType type) => Logo(type.LogoAssetName());
@@ -72,13 +95,21 @@ public static class IconCache
                 return null;
             }
 
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.UriSource = new Uri(path);
-            image.EndInit();
-            image.Freeze();
-            return TrimTransparentMargins(image);
+            try
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.UriSource = new Uri(path);
+                image.EndInit();
+                image.Freeze();
+                return TrimTransparentMargins(image);
+            }
+            catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or ArgumentException or COMException or FileFormatException)
+            {
+                // A damaged install: the glyph stands in, as for a provider without a logo.
+                return null;
+            }
         });
 
     /// <summary>

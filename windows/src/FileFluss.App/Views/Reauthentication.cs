@@ -33,6 +33,12 @@ public static class Reauthentication
             MessageDialog.Error(owner, L("Sign In Again"), L("This account type isn't available in this version."));
             return;
         }
+        catch (Exception e)
+        {
+            // Its stored settings couldn't be read back.
+            MessageDialog.Error(owner, L("Sign In Again"), e.Message);
+            return;
+        }
 
         if (!provider.ConnectSpec.SupportsInlineReauthentication)
         {
@@ -48,7 +54,13 @@ public static class Reauthentication
         try
         {
             var result = await provider.ConnectAsync(ConnectValues.Empty(provider.ConnectSpec.Modes[0].Id), SilentConnectPrompt.Instance);
-            services.Accounts.Update(account.Id, provider, result);
+            if (!services.Accounts.Update(account.Id, provider, result))
+            {
+                // The account was removed while signing in.
+                provider.Dispose();
+                return;
+            }
+
             await panel.ReloadAfterReauthenticationAsync();
         }
         catch (Exception e) when (e is not OperationCanceledException)

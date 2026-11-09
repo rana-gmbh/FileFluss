@@ -53,7 +53,15 @@ public sealed class SearchServices
     /// <summary>False when the database could not be opened at launch.</summary>
     public bool IsAvailable { get; private set; } = true;
 
-    /// <summary>Launch: open the index, drop accounts that no longer exist, learn which drives are plugged in.</summary>
+    /// <summary>How long launch waits for the drive survey before restoring panels without it.</summary>
+    private static readonly TimeSpan StartupDriveWait = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Launch: open the index, drop accounts that no longer exist, learn which drives are
+    /// plugged in. The drive survey asks every volume for its serial, and a mapped network
+    /// drive whose server is gone can take tens of seconds to answer — so launch waits for it
+    /// only briefly; it finishes in the background and the sidebars follow.
+    /// </summary>
     public async Task StartAsync(IReadOnlySet<Guid> accountIds)
     {
         await Task.Run(() =>
@@ -69,7 +77,16 @@ public sealed class SearchServices
                 SupportLogger.Shared.Log($"Opening the search index failed: {e.Message}", "Indexing", LogLevel.Error);
             }
         });
-        await RefreshDrivesAsync();
+
+        var drives = RefreshDrivesAsync();
+        if (await Task.WhenAny(drives, Task.Delay(StartupDriveWait)) != drives)
+        {
+            SupportLogger.Shared.Log("The drive survey is slow (an unreachable network drive?); continuing without waiting", "Indexing", LogLevel.Notice);
+            drives.Forget("drive survey");
+            return;
+        }
+
+        await drives;
     }
 
     /// <summary>A drive came or went (or the user asked for a refresh).</summary>

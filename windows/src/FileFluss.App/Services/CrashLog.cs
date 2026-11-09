@@ -26,6 +26,16 @@ internal static class CrashLog
         {
             Write("UI", e.Exception);
             e.Handled = true;
+
+            // Whatever was interrupted can't put the pointer back: never leave the window
+            // showing a wait cursor over an operation that has already died.
+            try
+            {
+                System.Windows.Input.Mouse.OverrideCursor = null;
+            }
+            catch (InvalidOperationException)
+            {
+            }
         };
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -43,9 +53,18 @@ internal static class CrashLog
         };
     }
 
+    /// <summary>Records an error. Never throws: it runs inside the last-resort handlers, where a throw ends the process.</summary>
     internal static void Write(string context, Exception exception)
     {
-        SupportLogger.Shared.Log($"[{context}] {exception.GetType().Name}: {exception.Message}", "Crash", LogLevel.Error);
+        try
+        {
+            SupportLogger.Shared.Log($"[{context}] {exception.GetType().Name}: {exception.Message}", "Crash", LogLevel.Error);
+        }
+        catch (Exception)
+        {
+            // The support log's own listeners failed; the file below still gets the entry.
+        }
+
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
@@ -61,8 +80,9 @@ internal static class CrashLog
                 .AppendLine();
             File.AppendAllText(LogPath, entry.ToString());
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception)
         {
+            // Nowhere left to report to.
         }
     }
 }
