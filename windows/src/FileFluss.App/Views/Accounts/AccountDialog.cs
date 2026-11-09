@@ -36,7 +36,6 @@ public sealed class AccountDialog : Window, IConnectPrompt
     private ConnectMode? _mode;
     private TextBlock? _status;
     private TextBlock? _error;
-    private TextBlock? _plainHttpWarning;
     private Button? _connect;
     private Button? _back;
     private ProgressBar? _busy;
@@ -278,19 +277,6 @@ public sealed class AccountDialog : Window, IConnectPrompt
             root.Children.Add(BuildField(field, prefill));
         }
 
-        // Shown while a server address would send the password over plain HTTP to a host
-        // beyond the local network (macOS 1.6); kept current by UpdateConnectEnabled.
-        _plainHttpWarning = new TextBlock
-        {
-            Text = L("This address uses plain HTTP, so your password would cross the network unencrypted. Use https:// unless you trust every network in between."),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10),
-            Foreground = new SolidColorBrush(Color.FromRgb(0xD0, 0x7A, 0x00)),
-            Visibility = Visibility.Collapsed,
-        };
-        System.Windows.Automation.AutomationProperties.SetLiveSetting(_plainHttpWarning, System.Windows.Automation.AutomationLiveSetting.Polite);
-        root.Children.Add(_plainHttpWarning);
-
         _status = new TextBlock { Style = (Style)FindResource("Caption"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
         _error = new TextBlock { TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
         _error.SetResourceReference(TextBlock.ForegroundProperty, "DangerBrush");
@@ -501,12 +487,6 @@ public sealed class AccountDialog : Window, IConnectPrompt
         var missing = _mode.Fields.Any(f => f.Required && f.HasValue && f.Kind != ConnectFieldKind.Checkbox &&
                                             string.IsNullOrWhiteSpace(values.Get(f.Key)));
         _connect.IsEnabled = !missing && _connecting is null;
-
-        if (_plainHttpWarning is not null)
-        {
-            var exposed = _mode.Fields.Any(f => f.Kind == ConnectFieldKind.Url && ServerAddress.ExposesPassword(values.Get(f.Key)));
-            _plainHttpWarning.Visibility = exposed ? Visibility.Visible : Visibility.Collapsed;
-        }
     }
 
     private async Task ConnectAsync()

@@ -9,6 +9,8 @@ using FileFluss.Core.Transfers;
 namespace FileFluss.Core.Tests;
 
 /// <summary>The ways a transfer can lose data that the happy-path tests don't reach.</summary>
+// Asserts English messages: kept out of parallel runs with tests that switch the language.
+[Collection("Localization")]
 public sealed class TransferEngineRobustnessTests : IDisposable
 {
     private static readonly string Nfc = "Café.txt";
