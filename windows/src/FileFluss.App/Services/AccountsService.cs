@@ -59,34 +59,48 @@ public sealed class AccountsService : Observable
     /// <summary>Restores every stored account's provider from its credentials (no network for most).</summary>
     public async Task ReconnectSavedAccountsAsync()
     {
-        foreach (var account in Accounts.ToList())
+        // Making a provider reads and decrypts its stored credentials (DPAPI, files): on the
+        // thread pool, so a dozen accounts don't hold up the UI thread at startup.
+        var saved = Accounts.Where(a => CloudProviderRegistry.IsAvailable(a.ProviderType)).ToList();
+        var restored = await Task.Run(() =>
         {
-            if (!CloudProviderRegistry.IsAvailable(account.ProviderType))
+            var providers = new List<(CloudAccount Account, CloudProvider Provider)>();
+            foreach (var account in saved)
             {
+                try
+                {
+                    var provider = CreateProvider(account.ProviderType, account.Id);
+                    if (provider.IsAuthenticated)
+                    {
+                        providers.Add((account, provider));
+                    }
+                    else
+                    {
+                        provider.Dispose();
+                    }
+                }
+                catch (Exception e)
+                {
+                    SupportLogger.Shared.Log($"Restoring {account.DisplayName} failed: {e.Message}", "Accounts", LogLevel.Error);
+                }
+            }
+
+            return providers;
+        });
+
+        foreach (var (account, provider) in restored)
+        {
+            // Removed while its provider was being made: nothing to reconnect.
+            if (Find(account.Id) is not { } current)
+            {
+                provider.Dispose();
                 continue;
             }
 
-            try
-            {
-                var provider = CreateProvider(account.ProviderType, account.Id);
-                if (provider.IsAuthenticated)
-                {
-                    _hub.Register(account.Id, provider);
-                    Replace(account with { IsConnected = true });
-                    _ = RefreshLabelAsync(account.Id, provider);
-                }
-                else
-                {
-                    provider.Dispose();
-                }
-            }
-            catch (Exception e)
-            {
-                SupportLogger.Shared.Log($"Restoring {account.DisplayName} failed: {e.Message}", "Accounts", LogLevel.Error);
-            }
+            _hub.Register(account.Id, provider);
+            Replace(current with { IsConnected = true });
+            _ = RefreshLabelAsync(account.Id, provider);
         }
-
-        await Task.CompletedTask;
     }
 
     /// <summary>Dropbox heals a stuck "Unknown" name this way; a failed lookup never replaces a good name.</summary>
@@ -317,7 +331,8 @@ public sealed class AccountsService : Observable
     {
         try
         {
-            if (_hub.Get(id) is { } provider && await provider.StorageQuotaAsync() is { } fresh)
+            // Started on the thread pool: a provider's synchronous first steps must not hold up the UI.
+            if (_hub.Get(id) is { } provider && await Task.Run(() => provider.StorageQuotaAsync()) is { } fresh)
             {
                 _quotaCache[id] = fresh;
                 _staleQuotas.Remove(id);

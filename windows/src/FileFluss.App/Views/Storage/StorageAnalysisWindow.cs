@@ -507,6 +507,13 @@ public sealed partial class StorageAnalysisWindow : Window
 
     private static List<string> LocalDrives()
     {
+        // What the sidebar's background probe found: asking each drive here would wait on a
+        // sleeping disk on the UI thread. The probe runs at startup and on every device change.
+        if (LocalDriveProbe.Latest is { } probed)
+        {
+            return probed.Where(d => d.Type is DriveType.Fixed or DriveType.Removable).Select(d => d.Root).ToList();
+        }
+
         try
         {
             return DriveInfo.GetDrives()

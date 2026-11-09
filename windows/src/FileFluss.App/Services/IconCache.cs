@@ -27,15 +27,162 @@ public static class IconCache
     /// <summary>The 32-px list renders 16-DIP rows crisply up to 200% scaling; larger rows use 48 px.</summary>
     public static ShellIconSize SizeFor(double dips) => dips > 24 ? ShellIconSize.ExtraLarge : ShellIconSize.Large;
 
+    /// <summary>
+    /// The item's icon, synchronously. Local folders, programs and shortcuts make the shell read
+    /// the item itself (about a millisecond on an SSD, seconds on a sleeping network share):
+    /// lists use <see cref="ForRow"/> instead, which never waits for that.
+    /// </summary>
     public static ImageSource? For(CloudFileItem item, bool isLocal, double dips = 16)
     {
-        var exists = isLocal && (item.IsDirectory || ShellIcons.NeedsPerFileIcon(item.Name)) && item.Path.Length > 0;
+        var exists = NeedsPathLookup(item, isLocal);
         var index = ShellIcons.IconIndex(exists ? item.Path : item.Name, item.IsDirectory, exists);
         return FromIndex(index, SizeFor(dips));
     }
 
     public static ImageSource? ForPath(string path, bool isDirectory, double dips = 16)
         => FromIndex(ShellIcons.IconIndex(path, isDirectory, exists: true), SizeFor(dips));
+
+    /// <summary>
+    /// The icon for a list row without blocking: an icon that depends on the item itself (a
+    /// local folder's desktop.ini, a program, a shortcut, a drive) is looked up on a background
+    /// thread. Until then the generic type icon is returned (<c>IsFinal</c> false) and
+    /// <paramref name="loaded"/> is called on the UI thread once the real one is known. A row
+    /// that is asked again while not final asks again — a lookup dropped because the user
+    /// scrolled far past it is then requested anew.
+    /// </summary>
+    public static (ImageSource? Icon, bool IsFinal) ForRow(CloudFileItem item, bool isLocal, bool isDrive, double dips, Action<ImageSource> loaded)
+    {
+        var size = SizeFor(dips);
+        ImageSource? Generic() => isDrive ? null : FromIndex(ShellIcons.IconIndex(item.Name, item.IsDirectory, exists: false), size);
+        if (!isDrive && !NeedsPathLookup(item, isLocal))
+        {
+            return (Generic(), true);
+        }
+
+        var key = new PathKey(item.Path, item.IsDirectory, isDrive ? 0 : item.ModificationDate.UtcTicks, size);
+        if (PathLookups.TryGet(key, out var known))
+        {
+            return (known ?? Generic(), true);
+        }
+
+        PathLookups.Request(key, loaded);
+        return (Generic(), false);
+    }
+
+    private static bool NeedsPathLookup(CloudFileItem item, bool isLocal)
+        => isLocal && (item.IsDirectory || ShellIcons.NeedsPerFileIcon(item.Name)) && item.Path.Length > 0;
+
+    /// <summary>A per-item icon request: the path, and its modification time so an edited shortcut or desktop.ini is asked again.</summary>
+    private readonly record struct PathKey(string Path, bool IsDirectory, long Stamp, ShellIconSize Size);
+
+    /// <summary>
+    /// Per-item icon lookups on one STA thread (SHGetFileInfo wants COM), newest request first
+    /// and only the most recent ones kept — after a fast scroll the rows on screen come first.
+    /// Results are remembered, so coming back to a folder is instant.
+    /// </summary>
+    private static class PathLookups
+    {
+        private const int MaxPending = 256;
+        private const int MaxRemembered = 20_000;
+
+        private static readonly object Gate = new();
+        private static readonly Dictionary<PathKey, ImageSource?> Known = [];
+        private static readonly Dictionary<PathKey, List<Action<ImageSource>>> Waiting = [];
+        private static readonly LinkedList<PathKey> Pending = new();
+        private static readonly SemaphoreSlim Signal = new(0);
+        private static bool _started;
+
+        public static bool TryGet(PathKey key, out ImageSource? icon)
+        {
+            lock (Gate)
+            {
+                return Known.TryGetValue(key, out icon);
+            }
+        }
+
+        public static void Request(PathKey key, Action<ImageSource> loaded)
+        {
+            lock (Gate)
+            {
+                if (Waiting.TryGetValue(key, out var callbacks))
+                {
+                    callbacks.Add(loaded);
+                    return;
+                }
+
+                Waiting[key] = [loaded];
+                Pending.AddFirst(key);
+                while (Pending.Count > MaxPending)
+                {
+                    Waiting.Remove(Pending.Last!.Value);
+                    Pending.RemoveLast();
+                }
+
+                if (!_started)
+                {
+                    _started = true;
+                    var thread = new Thread(Work) { IsBackground = true, Name = "Icons", Priority = ThreadPriority.BelowNormal };
+                    thread.SetApartmentState(ApartmentState.STA);
+                    thread.Start();
+                }
+            }
+
+            Signal.Release();
+        }
+
+        private static void Work()
+        {
+            while (true)
+            {
+                Signal.Wait();
+                PathKey key;
+                lock (Gate)
+                {
+                    if (Pending.First is not { } first)
+                    {
+                        continue;
+                    }
+
+                    key = first.Value;
+                    Pending.RemoveFirst();
+                }
+
+                ImageSource? icon = null;
+                try
+                {
+                    // The bitmap is made (and frozen) here too, so the UI thread only swaps it in.
+                    icon = FromIndex(ShellIcons.IconIndex(key.Path, key.IsDirectory, exists: true), key.Size);
+                }
+                catch (Exception)
+                {
+                    // A broken shell extension must not take the worker down; the generic icon stays.
+                }
+
+                List<Action<ImageSource>>? callbacks;
+                lock (Gate)
+                {
+                    Waiting.Remove(key, out callbacks);
+                    if (Known.Count >= MaxRemembered)
+                    {
+                        Known.Clear();
+                    }
+
+                    Known[key] = icon;
+                }
+
+                if (icon is not null && callbacks is { Count: > 0 } && Application.Current?.Dispatcher is { } dispatcher)
+                {
+                    dispatcher.BeginInvoke(() =>
+                    {
+                        foreach (var callback in callbacks)
+                        {
+                            callback(icon);
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                }
+            }
+        }
+    }
 
     public static ImageSource? Folder(double dips = 16) => FromIndex(ShellIcons.IconIndex("folder", true, exists: false), SizeFor(dips));
 
@@ -82,6 +229,49 @@ public static class IconCache
             }
         });
     }
+
+    /// <summary>
+    /// Startup: decodes the given logos and makes the shell's first icons on background threads
+    /// while the window is being built, so the sidebar and the first listing find them ready.
+    /// </summary>
+    public static void Prewarm(IEnumerable<string> logoAssets)
+    {
+        var assets = logoAssets.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _ = Task.Run(() =>
+        {
+            foreach (var asset in assets)
+            {
+                Logo(asset);
+            }
+        });
+
+        var shell = new Thread(() =>
+        {
+            try
+            {
+                // The first SHGetFileInfo initialises the shell's image lists (~40 ms cold).
+                foreach (var size in new[] { ShellIconSize.Large, ShellIconSize.ExtraLarge })
+                {
+                    FromIndex(ShellIcons.IconIndex("folder", true, exists: false), size);
+                    FromIndex(ShellIcons.IconIndex("file.txt", false, exists: false), size);
+                }
+            }
+            catch (Exception)
+            {
+                // Only a head start; the UI thread makes them itself if this failed.
+            }
+        })
+        { IsBackground = true, Name = "Icon prewarm" };
+        shell.SetApartmentState(ApartmentState.STA);
+        shell.Start();
+    }
+
+    /// <summary>The logo if it has been decoded already (never blocks).</summary>
+    public static bool TryGetLogo(string assetName, out ImageSource? logo) => Logos.TryGetValue(assetName, out logo);
+
+    /// <summary>The logo, decoded on the thread pool the first time.</summary>
+    public static Task<ImageSource?> LogoAsync(string assetName)
+        => TryGetLogo(assetName, out var logo) ? Task.FromResult(logo) : Task.Run(() => Logo(assetName));
 
     /// <summary>A provider logo from Assets/ProviderLogos/&lt;Name&gt;.png, or null.</summary>
     public static ImageSource? Logo(CloudProviderType type) => Logo(type.LogoAssetName());

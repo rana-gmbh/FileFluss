@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StringsToResx", "tools\Stri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileFluss.Native.Tests", "src\FileFluss.Native.Tests\FileFluss.Native.Tests.csproj", "{2342BDB7-09DF-4C0E-A1D1-A48F7AA6D4F8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileFluss.App.Tests", "src\FileFluss.App.Tests\FileFluss.App.Tests.csproj", "{5567C481-C30A-4117-AC4C-B1D6FB549A21}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +103,18 @@ Global
 		{2342BDB7-09DF-4C0E-A1D1-A48F7AA6D4F8}.Release|x64.Build.0 = Release|Any CPU
 		{2342BDB7-09DF-4C0E-A1D1-A48F7AA6D4F8}.Release|x86.ActiveCfg = Release|Any CPU
 		{2342BDB7-09DF-4C0E-A1D1-A48F7AA6D4F8}.Release|x86.Build.0 = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|x64.Build.0 = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Debug|x86.Build.0 = Debug|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|x64.ActiveCfg = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|x64.Build.0 = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|x86.ActiveCfg = Release|Any CPU
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -112,5 +126,6 @@ Global
 		{031120BC-E8BD-48E6-AE0D-86E847B889BF} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{0F2F14BB-C211-4E51-BF42-13223D213679} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{2342BDB7-09DF-4C0E-A1D1-A48F7AA6D4F8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{5567C481-C30A-4117-AC4C-B1D6FB549A21} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

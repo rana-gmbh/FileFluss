@@ -19,23 +19,41 @@ public sealed class DriveRegistry
     private readonly SearchIndex _index;
     private readonly string? _systemRoot;
     private readonly Lock _gate = new();
-    private readonly List<KnownDrive> _drives;
+    private List<KnownDrive>? _loaded;
 
     /// <summary>Drive id → its current root, for mounted drives. Absent ⇒ offline.</summary>
     private Dictionary<string, string> _liveRoots = new(StringComparer.Ordinal);
 
     /// <param name="systemRoot">The Windows volume, excluded from the list; defaults to the running system's.</param>
+    /// <remarks>
+    /// Cheap: the persisted drives are read on first use, not here — opening the database
+    /// (SQLite's first load, the schema check) costs ~80 ms the app's startup shouldn't pay
+    /// on the UI thread before the window appears.
+    /// </remarks>
     public DriveRegistry(SearchIndex index, string? systemRoot = null)
     {
         _index = index;
         _systemRoot = systemRoot;
-        _drives = index.LoadKnownDrives().ToList();
+    }
 
-        // On a fresh launch nothing is mounted yet as far as we know: drop every entry that
-        // was never indexed, so yesterday's one-off stick doesn't linger in today's sidebar.
-        if (PruneUnindexedOffline())
+    /// <summary>The persisted drives, read on first use. Callers hold <see cref="_gate"/>.</summary>
+    private List<KnownDrive> Known
+    {
+        get
         {
-            Save();
+            if (_loaded is null)
+            {
+                _loaded = _index.LoadKnownDrives().ToList();
+
+                // On a fresh launch nothing is mounted yet as far as we know: drop every entry that
+                // was never indexed, so yesterday's one-off stick doesn't linger in today's sidebar.
+                if (PruneUnindexedOffline())
+                {
+                    Save();
+                }
+            }
+
+            return _loaded;
         }
     }
 
@@ -48,7 +66,7 @@ public sealed class DriveRegistry
         {
             lock (_gate)
             {
-                return _drives.Select(WithLiveState).ToList();
+                return Known.Select(WithLiveState).ToList();
             }
         }
     }
@@ -62,7 +80,7 @@ public sealed class DriveRegistry
     {
         lock (_gate)
         {
-            var drive = _drives.FirstOrDefault(d => d.Id == driveId);
+            var drive = Known.FirstOrDefault(d => d.Id == driveId);
             return drive is null ? null : WithLiveState(drive);
         }
     }
@@ -103,14 +121,14 @@ public sealed class DriveRegistry
 
                 var id = identity.SourceId;
                 live[id] = identity.RootPath;
-                var index = _drives.FindIndex(d => d.Id == id);
+                var index = Known.FindIndex(d => d.Id == id);
                 if (index >= 0)
                 {
-                    _drives[index] = _drives[index] with { Label = identity.Label, Kind = kind, LastRootPath = identity.RootPath };
+                    Known[index] = Known[index] with { Label = identity.Label, Kind = kind, LastRootPath = identity.RootPath };
                 }
                 else
                 {
-                    _drives.Add(new KnownDrive { Id = id, VolumeId = identity.Id, Label = identity.Label, Kind = kind, LastRootPath = identity.RootPath });
+                    Known.Add(new KnownDrive { Id = id, VolumeId = identity.Id, Label = identity.Label, Kind = kind, LastRootPath = identity.RootPath });
                 }
             }
 
@@ -130,14 +148,14 @@ public sealed class DriveRegistry
         lock (_gate)
         {
             var stored = drive with { IsOnline = false, RootPath = null };
-            var index = _drives.FindIndex(d => d.Id == drive.Id);
+            var index = Known.FindIndex(d => d.Id == drive.Id);
             if (index >= 0)
             {
-                _drives[index] = stored;
+                Known[index] = stored;
             }
             else
             {
-                _drives.Add(stored);
+                Known.Add(stored);
             }
 
             Save();
@@ -151,13 +169,13 @@ public sealed class DriveRegistry
     {
         lock (_gate)
         {
-            var index = _drives.FindIndex(d => d.Id == driveId);
+            var index = Known.FindIndex(d => d.Id == driveId);
             if (index < 0)
             {
                 return;
             }
 
-            _drives[index] = _drives[index] with { LastIndexed = when, TotalFiles = totalFiles, TotalBytes = totalBytes };
+            Known[index] = Known[index] with { LastIndexed = when, TotalFiles = totalFiles, TotalBytes = totalBytes };
             Save();
         }
 
@@ -169,7 +187,7 @@ public sealed class DriveRegistry
     {
         lock (_gate)
         {
-            if (_drives.RemoveAll(d => d.Id == driveId) == 0)
+            if (Known.RemoveAll(d => d.Id == driveId) == 0)
             {
                 return;
             }
@@ -189,7 +207,7 @@ public sealed class DriveRegistry
         _index.DropSource(driveId);
         lock (_gate)
         {
-            var index = _drives.FindIndex(d => d.Id == driveId);
+            var index = Known.FindIndex(d => d.Id == driveId);
             if (index < 0)
             {
                 return;
@@ -197,11 +215,11 @@ public sealed class DriveRegistry
 
             if (_liveRoots.ContainsKey(driveId))
             {
-                _drives[index] = _drives[index] with { LastIndexed = null, TotalFiles = 0, TotalBytes = 0 };
+                Known[index] = Known[index] with { LastIndexed = null, TotalFiles = 0, TotalBytes = 0 };
             }
             else
             {
-                _drives.RemoveAt(index);
+                Known.RemoveAt(index);
             }
 
             Save();
@@ -218,9 +236,9 @@ public sealed class DriveRegistry
     {
         lock (_gate)
         {
-            for (var i = 0; i < _drives.Count; i++)
+            for (var i = 0; i < Known.Count; i++)
             {
-                _drives[i] = _drives[i] with { LastIndexed = null, TotalFiles = 0, TotalBytes = 0 };
+                Known[i] = Known[i] with { LastIndexed = null, TotalFiles = 0, TotalBytes = 0 };
             }
 
             PruneUnindexedOffline();
@@ -232,12 +250,12 @@ public sealed class DriveRegistry
 
     /// <summary>Drops every drive that is neither mounted nor indexed. Indexed offline drives stay: their index is still searchable.</summary>
     private bool PruneUnindexedOffline()
-        => _drives.RemoveAll(d => d.LastIndexed is null && !_liveRoots.ContainsKey(d.Id)) > 0;
+        => Known.RemoveAll(d => d.LastIndexed is null && !_liveRoots.ContainsKey(d.Id)) > 0;
 
     private KnownDrive WithLiveState(KnownDrive drive)
         => _liveRoots.TryGetValue(drive.Id, out var root)
             ? drive with { IsOnline = true, RootPath = root }
             : drive with { IsOnline = false, RootPath = null };
 
-    private void Save() => _index.SaveKnownDrives(_drives);
+    private void Save() => _index.SaveKnownDrives(Known);
 }

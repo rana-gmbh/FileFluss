@@ -191,8 +191,13 @@ public sealed class MainViewModel : Observable
 
     // MARK: - Startup
 
-    /// <summary>Opens each panel where the startup setting says (issue #49): local folders now, cloud folders once accounts are back.</summary>
-    public async Task RestoreStartupLocationsAsync(bool cloudOnly)
+    /// <summary>
+    /// Opens each panel where the startup setting says (issue #49): local folders now, cloud
+    /// folders once accounts are back. Both panels list at the same time; whether a remembered
+    /// folder still exists is asked off the UI thread (a network share may be slow to answer),
+    /// and only an unplugged drive's offline view waits for <paramref name="indexReady"/>.
+    /// </summary>
+    public async Task RestoreStartupLocationsAsync(bool cloudOnly, Task? indexReady = null)
     {
         var settings = _services.Settings;
         var (left, right) = settings.PanelStartupMode switch
@@ -203,21 +208,18 @@ public sealed class MainViewModel : Observable
         };
 
         var home = PanelLocation.Local(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        await Task.WhenAll(RestoreAsync(Left, left), RestoreAsync(Right, right));
 
-        // Both panels at once: each takes its location straight away (so whatever navigates a
-        // panel next — a folder from the command line — wins), and a slow listing on one side
-        // doesn't hold up the other.
-        var loads = new List<Task>();
-        foreach (var (panel, target) in new[] { (Left, left), (Right, right) })
+        async Task RestoreAsync(PanelViewModel panel, PanelLocation? target)
         {
             if (target is null)
             {
                 if (!cloudOnly)
                 {
-                    loads.Add(panel.NavigateAsync(home));
+                    await panel.NavigateAsync(home);
                 }
 
-                continue;
+                return;
             }
 
             if (target.IsCloud != cloudOnly)
@@ -225,20 +227,34 @@ public sealed class MainViewModel : Observable
                 if (!cloudOnly)
                 {
                     // Show home while the account reconnects rather than an empty panel.
-                    loads.Add(panel.NavigateAsync(home));
+                    await panel.NavigateAsync(home);
                 }
 
-                continue;
+                return;
             }
 
-            var usable = target.IsOfflineDrive ? _services.Search.Drives.Find(target.DriveId!) is not null
-                : target.IsCloud
-                ? _services.Hub.Get(target.AccountId!.Value) is not null
-                : target.Path.Length == 0 || Directory.Exists(target.Path);
-            loads.Add(panel.NavigateAsync(usable ? target : home));
-        }
+            bool usable;
+            if (target.IsOfflineDrive)
+            {
+                if (indexReady is not null)
+                {
+                    await indexReady;
+                }
 
-        await Task.WhenAll(loads);
+                var drives = _services.Search.Drives;
+                usable = await Task.Run(() => drives.Find(target.DriveId!) is not null);
+            }
+            else if (target.IsCloud)
+            {
+                usable = _services.Hub.Get(target.AccountId!.Value) is not null;
+            }
+            else
+            {
+                usable = target.Path.Length == 0 || await Task.Run(() => Directory.Exists(target.Path));
+            }
+
+            await panel.NavigateAsync(usable ? target : home);
+        }
     }
 
     /// <summary>Called as the app closes; written once per session, only read at launch.</summary>
@@ -1041,7 +1057,9 @@ public sealed class MainViewModel : Observable
         }
 
         var label = rows.Count == 1 ? $"\"{rows[0].Name}\"" : L("{0} items", rows.Count);
-        var permanent = !panel.IsLocal || rows.Any(r => !ShellFileOperations.HasRecycleBin(r.Path));
+        // Once per volume, not per row: 20,000 selected files share one or two roots.
+        var permanent = !panel.IsLocal || rows.Select(r => Path.GetPathRoot(r.Path) ?? r.Path).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Any(root => !ShellFileOperations.HasRecycleBin(root));
         if (permanent)
         {
             // Cloud deletions and volumes without a Recycle Bin can't be undone; always ask.

@@ -15,6 +15,21 @@
     <ApplicationIcon>Assets\FileFluss.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!--
+    Release publishes (always for a runtime) precompile FileFluss's own code and the libraries
+    it starts with, so startup runs native code instead of waiting for the JIT; the .NET and
+    WPF assemblies come precompiled already. The Windows SDK projection and BouncyCastle are
+    left to the JIT: precompiled they would add 37 MB for code that startup never touches
+    (the rest adds about 7 MB).
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PublishReadyToRunExclude Include="Microsoft.Windows.SDK.NET.dll;BouncyCastle.Cryptography.dll;WinRT.Runtime.dll" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Assets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

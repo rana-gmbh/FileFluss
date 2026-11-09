@@ -80,8 +80,10 @@ public sealed class PersistenceRobustnessTests : IDisposable
         var path = Path.Combine(_root, "settings.json");
         var store = new SettingsStore(path);
         store.Settings.ShowHiddenFiles = !store.Settings.ShowHiddenFiles;
+        store.Flush(); // Saves are debounced; each Flush is one write.
         var wanted = store.Settings.ShowHiddenFiles;
         store.Settings.ConfirmDelete = !store.Settings.ConfirmDelete;
+        store.Flush();
         File.WriteAllText(path, "\0\0\0\0");
 
         var reloaded = new SettingsStore(path);
@@ -102,6 +104,7 @@ public sealed class PersistenceRobustnessTests : IDisposable
         }
 
         store.Settings.ConfirmDelete = !store.Settings.ConfirmDelete;
+        store.Flush();
 
         var aside = Assert.Single(Directory.GetFiles(_root), f => f.Contains(".unreadable-", StringComparison.Ordinal));
         Assert.Contains("ShowHiddenFiles", File.ReadAllText(aside), StringComparison.Ordinal);

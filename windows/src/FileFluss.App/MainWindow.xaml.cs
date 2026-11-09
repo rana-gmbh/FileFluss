@@ -509,7 +509,11 @@ public partial class MainWindow : Window, IShell
 
     private void OnPanelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender == _vm.ActivePanel)
+        // Only what the toolbar shows: selection and status-line changes fire many times a second.
+        if (sender == _vm.ActivePanel && e.PropertyName is null or "" or nameof(PanelViewModel.Title) or nameof(PanelViewModel.Location)
+                or nameof(PanelViewModel.Provider) or nameof(PanelViewModel.CanGoBack) or nameof(PanelViewModel.CanGoForward)
+                or nameof(PanelViewModel.CanGoUp) or nameof(PanelViewModel.ShowHiddenFiles) or nameof(PanelViewModel.IsReadOnly)
+                or nameof(PanelViewModel.Account) or nameof(PanelViewModel.IsOffline))
         {
             UpdateToolbar();
         }

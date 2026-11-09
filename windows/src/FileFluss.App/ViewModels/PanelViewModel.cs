@@ -33,8 +33,27 @@ public sealed class PanelViewModel : Observable
     private readonly AppServices _services;
     private readonly List<PanelLocation> _history = [];
     private readonly DispatcherTimer _watchDebounce;
+    /// <summary>Lists this long are sorted on the thread pool; shorter ones at once, so small folders never flicker.</summary>
+    private const int SortOffThreadThreshold = 2_000;
+
+    /// <summary>While a folder keeps changing (a big copy into it), it is still re-listed at least this often.</summary>
+    private const long MaxWatchDelayMs = 2_000;
+
     private int _historyIndex = -1;
     private List<FileRowViewModel> _allRows = [];
+
+    // _allRows in ascending order of _sortedField, folders first; the direction, the hidden-files
+    // switch and the quick filter are applied on top without sorting again.
+    private List<FileRowViewModel> _sortedRows = [];
+    private SortField? _sortedField;
+    private int _sortedFolderCount;
+    private int _viewGeneration;
+    private int _listingFiles;
+    private int _listingFolders;
+    private long _listingBytes;
+    private int _watchSignalled;
+    private long _watchBurstStart;
+    private int _watchGeneration;
     private IReadOnlyList<FileRowViewModel> _rows = [];
     private IReadOnlyList<FileRowViewModel> _selection = [];
     private PanelLocation _location = PanelLocation.Local(string.Empty);
@@ -153,6 +172,24 @@ public sealed class PanelViewModel : Observable
         private set
         {
             _rows = value;
+
+            // Counted once per list, not on every read of the status line (each selection change reads it).
+            int files = 0, folders = 0;
+            long bytes = 0;
+            foreach (var row in value)
+            {
+                if (row.IsDirectory)
+                {
+                    folders++;
+                }
+                else
+                {
+                    files++;
+                    bytes += row.Item.Size;
+                }
+            }
+
+            (_listingFiles, _listingFolders, _listingBytes) = (files, folders, bytes);
             OnPropertyChanged();
             OnPropertyChanged(nameof(ListingText));
             OnPropertyChanged(nameof(StatusText));
@@ -299,16 +336,7 @@ public sealed class PanelViewModel : Observable
     public string StatusText => StatusBarText.Join(ListingText, SelectionText, QuotaText);
 
     /// <summary>"3 files, 2 folders — 1.2 MB" for what the list shows.</summary>
-    public string ListingText
-    {
-        get
-        {
-            var files = _rows.Count(r => !r.IsDirectory);
-            var folders = _rows.Count - files;
-            var bytes = _rows.Where(r => !r.IsDirectory).Sum(r => r.Item.Size);
-            return StatusBarText.Listing(files, folders, bytes);
-        }
-    }
+    public string ListingText => StatusBarText.Listing(_listingFiles, _listingFolders, _listingBytes);
 
     /// <summary>"Selected: 2 items, 800 KB", "… calculating…" while folder sizes are summed, or empty.</summary>
     public string SelectionText => StatusBarText.Selection(_selection.Count, _selectionSize, _isCalculatingSelectionSize);
@@ -442,6 +470,9 @@ public sealed class PanelViewModel : Observable
     /// <summary>Raised after a load so the view can restore focus/selection (names to select).</summary>
     public event EventHandler<IReadOnlyCollection<string>>? Loaded;
 
+    /// <summary>The last load listed the folder that was already on screen (a refresh), so the view keeps its scroll position.</summary>
+    public bool IsRefreshLoad { get; private set; }
+
     /// <summary>Raised when the location changes (sidebar highlight, window title).</summary>
     public event EventHandler? LocationChanged;
 
@@ -470,8 +501,7 @@ public sealed class PanelViewModel : Observable
             // Flip to the destination immediately: path bar, rows and selection reset
             // before the (possibly slow) listing, so the panel never shows one folder's
             // contents under another folder's path.
-            _allRows = [];
-            Rows = [];
+            ClearRows();
             Selection = [];
             FilterText = string.Empty;
             NeedsReauthentication = false;
@@ -581,7 +611,7 @@ public sealed class PanelViewModel : Observable
         {
             Error = IsCloud ? L("Cloud account not connected") : null;
             NeedsReauthentication = IsCloud && Account is { IsConnected: false } && !(Account?.IsOfflineMode ?? false);
-            Rows = [];
+            ClearRows();
             return;
         }
 
@@ -592,21 +622,38 @@ public sealed class PanelViewModel : Observable
 
         try
         {
-            var items = await provider.ListDirectoryAsync(location.Path, ct);
+            // Started on the thread pool: a provider's synchronous first steps (reading its
+            // credentials, a token refresh, an SSH handshake) must not run on the UI thread.
+            var items = await Task.Run(() => provider.ListDirectoryAsync(location.Path, ct), ct);
             if (generation != _loadGeneration)
             {
                 return;
             }
 
+            // Rows are made and sorted on the thread pool: a 30,000-item folder costs the UI
+            // thread only the swap. Unchanged items keep their row (icon, thumbnail, folder size).
             var hide = _services.Settings.HideFileExtensions;
             var local = provider.IsLocal;
-            var previous = _allRows.ToDictionary(r => r.Name, r => r.FolderSize, StringComparer.Ordinal);
-            _allRows = items.Select(i => new FileRowViewModel(i, local, hide)
+            var previous = _allRows;
+            var field = _sortField;
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            var (rows, sorted, folderCount) = await Task.Run(() =>
             {
-                FolderSize = previous.GetValueOrDefault(i.Name),
-            }).ToList();
+                var built = BuildRows(items, previous, local, hide);
+                var (ordered, folders) = SortRows(built, field, culture);
+                return (built, ordered, folders);
+            }, ct);
+            if (generation != _loadGeneration)
+            {
+                return;
+            }
+
+            _viewGeneration++;
+            _allRows = rows;
+            (_sortedRows, _sortedField, _sortedFolderCount) = (sorted, field, folderCount);
             Error = null;
             NeedsReauthentication = false;
+            IsRefreshLoad = _listedLocation == location;
             ApplyView();
             ItemsListed?.Invoke(this, items);
             Loaded?.Invoke(this, select);
@@ -636,8 +683,7 @@ public sealed class PanelViewModel : Observable
             }
 
             SupportLogger.Shared.Log($"Listing {location.Path} failed: {e.Message}", "Panel", LogLevel.Error);
-            _allRows = [];
-            Rows = [];
+            ClearRows();
             Error = e.Message;
             if (e is CloudProviderException { NeedsReauthentication: true } && location.AccountId is { } id)
             {
@@ -657,53 +703,174 @@ public sealed class PanelViewModel : Observable
     /// <summary>Every successful listing, so the search index can learn from browsing.</summary>
     public event EventHandler<IReadOnlyList<CloudFileItem>>? ItemsListed;
 
-    private void ApplyView()
+    /// <summary>A folder's size became known ("Calculate Folder Size"): a list sorted by size moves it into place.</summary>
+    public void OnFolderSizeKnown()
     {
-        IEnumerable<FileRowViewModel> rows = _allRows;
-        if (!_showHiddenFiles)
+        if (_sortField == SortField.Size)
         {
-            rows = rows.Where(r => !(r.Item.IsHidden || (IsCloud && CloudFileItem.IsDotHidden(r.Name))));
+            _sortedField = null;
+            ApplyView();
         }
-
-        if (!string.IsNullOrWhiteSpace(_filterText))
-        {
-            var needle = _filterText.Trim();
-            rows = rows.Where(r => r.Name.Contains(needle, StringComparison.CurrentCultureIgnoreCase));
-        }
-
-        Rows = Sort(rows).ToList();
     }
 
-    private IEnumerable<FileRowViewModel> Sort(IEnumerable<FileRowViewModel> rows)
+    private void ClearRows()
+    {
+        _viewGeneration++;
+        _allRows = [];
+        (_sortedRows, _sortedField, _sortedFolderCount) = ([], _sortField, 0);
+        Rows = [];
+    }
+
+    /// <summary>
+    /// Shows <see cref="_allRows"/> as the view options say. Only a different sort column
+    /// sorts again (off the UI thread for big folders); the direction, hidden files and the
+    /// quick filter work on the sorted order in one pass.
+    /// </summary>
+    private void ApplyView()
+    {
+        if (_sortedField == _sortField)
+        {
+            Rows = VisibleRows();
+            return;
+        }
+
+        var generation = ++_viewGeneration;
+        var rows = _allRows;
+        var field = _sortField;
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        if (rows.Count < SortOffThreadThreshold)
+        {
+            Apply(SortRows(rows, field, culture));
+            return;
+        }
+
+        _ = SortInBackgroundAsync();
+
+        async Task SortInBackgroundAsync()
+        {
+            try
+            {
+                var sorted = await Task.Run(() => SortRows(rows, field, culture));
+                if (generation == _viewGeneration && ReferenceEquals(rows, _allRows))
+                {
+                    Apply(sorted);
+                }
+            }
+            catch (Exception e)
+            {
+                SupportLogger.Shared.Log($"Sorting failed: {e.Message}", "Panel", LogLevel.Error);
+            }
+        }
+
+        void Apply((List<FileRowViewModel> Rows, int FolderCount) sorted)
+        {
+            (_sortedRows, _sortedField, _sortedFolderCount) = (sorted.Rows, field, sorted.FolderCount);
+            Rows = VisibleRows();
+        }
+    }
+
+    /// <summary>The sorted rows in the chosen direction (folders stay first), without hidden or filtered-out ones.</summary>
+    private List<FileRowViewModel> VisibleRows()
+    {
+        var hideHidden = !_showHiddenFiles;
+        var isCloud = IsCloud;
+        var needle = string.IsNullOrWhiteSpace(_filterText) ? null : _filterText.Trim();
+        var sorted = _sortedRows;
+        var visible = new List<FileRowViewModel>(sorted.Count);
+
+        void Add(FileRowViewModel row)
+        {
+            if (hideHidden && (row.Item.IsHidden || (isCloud && CloudFileItem.IsDotHidden(row.Name))))
+            {
+                return;
+            }
+
+            if (needle is not null && !row.Name.Contains(needle, StringComparison.CurrentCultureIgnoreCase))
+            {
+                return;
+            }
+
+            visible.Add(row);
+        }
+
+        if (_sortAscending)
+        {
+            foreach (var row in sorted)
+            {
+                Add(row);
+            }
+        }
+        else
+        {
+            // Descending reverses folders and files separately: folders first, as in Explorer.
+            for (var i = _sortedFolderCount - 1; i >= 0; i--)
+            {
+                Add(sorted[i]);
+            }
+
+            for (var i = sorted.Count - 1; i >= _sortedFolderCount; i--)
+            {
+                Add(sorted[i]);
+            }
+        }
+
+        return visible;
+    }
+
+    /// <summary>The listing as rows, keeping the row of every item that did not change (thread-safe: no UI state is touched).</summary>
+    internal static List<FileRowViewModel> BuildRows(IReadOnlyList<CloudFileItem> items, IReadOnlyList<FileRowViewModel> previous, bool isLocal, bool hideExtension)
+    {
+        var byName = new Dictionary<string, FileRowViewModel>(previous.Count, StringComparer.Ordinal);
+        foreach (var row in previous)
+        {
+            byName.TryAdd(row.Name, row);
+        }
+
+        var rows = new List<FileRowViewModel>(items.Count);
+        foreach (var item in items)
+        {
+            if (byName.TryGetValue(item.Name, out var old) && old.CanReuseFor(item, isLocal, hideExtension))
+            {
+                rows.Add(old);
+            }
+            else
+            {
+                rows.Add(new FileRowViewModel(item, isLocal, hideExtension) { FolderSize = old?.FolderSize });
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// <paramref name="rows"/> in ascending order of <paramref name="field"/>, folders first
+    /// (Explorer's rule), ties broken by name; and how many folders lead. Thread-safe.
+    /// </summary>
+    internal static (List<FileRowViewModel> Rows, int FolderCount) SortRows(IReadOnlyList<FileRowViewModel> rows, SortField field, System.Globalization.CultureInfo culture)
     {
         var names = NaturalStringComparer.Instance;
-        Comparison<FileRowViewModel> byField = _sortField switch
+        var kinds = culture.CompareInfo;
+        Comparison<FileRowViewModel> byField = field switch
         {
             SortField.Date => (a, b) => a.Item.ModificationDate.CompareTo(b.Item.ModificationDate),
             SortField.DateCreated => (a, b) => a.Item.CreationDate.CompareTo(b.Item.CreationDate),
             SortField.Size => (a, b) => a.SortSize.CompareTo(b.SortSize),
-            SortField.Kind => (a, b) => string.Compare(a.KindText, b.KindText, StringComparison.CurrentCultureIgnoreCase),
+            SortField.Kind => (a, b) => kinds.Compare(a.KindText, b.KindText, System.Globalization.CompareOptions.IgnoreCase),
             _ => (a, b) => names.Compare(a.Name, b.Name),
         };
 
         var list = rows.ToList();
         list.Sort((a, b) =>
         {
-            // Folders first, whichever way the column is sorted — Explorer's rule.
             if (a.IsDirectory != b.IsDirectory)
             {
                 return a.IsDirectory ? -1 : 1;
             }
 
             var result = byField(a, b);
-            if (result == 0 && _sortField != SortField.Name)
-            {
-                result = names.Compare(a.Name, b.Name);
-            }
-
-            return _sortAscending ? result : -result;
+            return result == 0 && field != SortField.Name ? names.Compare(a.Name, b.Name) : result;
         });
-        return list;
+        return (list, list.Count(r => r.IsDirectory));
     }
 
     /// <summary>
@@ -770,39 +937,104 @@ public sealed class PanelViewModel : Observable
 
     // MARK: - Live updates of local folders
 
+    /// <summary>
+    /// Watches the local folder on screen. The watcher is set up on the thread pool — on a
+    /// network share or a sleeping disk, opening the folder can take seconds.
+    /// </summary>
     private void Watch()
     {
-        _watcher?.Dispose();
+        var generation = ++_watchGeneration;
+        if (_watcher is { } previous)
+        {
+            // Closing a watch on an unreachable share can wait for the server too.
+            _ = Task.Run(previous.Dispose);
+        }
+
         _watcher = null;
-        if (!IsLocal || CurrentPath.Length == 0 || !Directory.Exists(CurrentPath))
+        if (!IsLocal || CurrentPath.Length == 0)
         {
             return;
         }
 
+        var path = CurrentPath;
+        _ = WatchAsync();
+
+        async Task WatchAsync()
+        {
+            var watcher = await Task.Run(() => CreateWatcher(path));
+            if (generation == _watchGeneration)
+            {
+                _watcher = watcher;
+            }
+            else
+            {
+                watcher?.Dispose();
+            }
+        }
+    }
+
+    private FileSystemWatcher? CreateWatcher(string path)
+    {
         try
         {
-            _watcher = new FileSystemWatcher(CurrentPath)
+            if (!Directory.Exists(path))
+            {
+                return null;
+            }
+
+            var watcher = new FileSystemWatcher(path)
             {
                 IncludeSubdirectories = false,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size | NotifyFilters.LastWrite | NotifyFilters.Attributes,
             };
-            FileSystemEventHandler changed = (_, _) => Application.Current?.Dispatcher.BeginInvoke(Restart);
-            _watcher.Created += changed;
-            _watcher.Deleted += changed;
-            _watcher.Changed += changed;
-            _watcher.Renamed += (_, _) => Application.Current?.Dispatcher.BeginInvoke(Restart);
-            _watcher.EnableRaisingEvents = true;
+            FileSystemEventHandler changed = (_, _) => OnWatcherEvent();
+            watcher.Created += changed;
+            watcher.Deleted += changed;
+            watcher.Changed += changed;
+            watcher.Renamed += (_, _) => OnWatcherEvent();
+            watcher.EnableRaisingEvents = true;
+            return watcher;
         }
         catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException)
         {
-            _watcher = null;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A copy into the folder raises thousands of events: only one hop to the UI thread is in
+    /// flight at a time, however many arrive meanwhile.
+    /// </summary>
+    private void OnWatcherEvent()
+    {
+        if (Interlocked.Exchange(ref _watchSignalled, 1) == 0)
+        {
+            Application.Current?.Dispatcher.BeginInvoke(OnFolderChanged, DispatcherPriority.Background);
+        }
+    }
+
+    /// <summary>
+    /// Re-lists once the folder has been quiet for a moment — and, while it keeps changing,
+    /// at least every <see cref="MaxWatchDelayMs"/>, so a long copy shows its progress.
+    /// </summary>
+    private void OnFolderChanged()
+    {
+        Volatile.Write(ref _watchSignalled, 0);
+        var now = Environment.TickCount64;
+        if (!_watchDebounce.IsEnabled)
+        {
+            _watchBurstStart = now;
         }
 
-        void Restart()
+        _watchDebounce.Stop();
+        if (now - _watchBurstStart >= MaxWatchDelayMs)
         {
-            _watchDebounce.Stop();
-            _watchDebounce.Start();
+            _watchBurstStart = now;
+            _ = RefreshAsync(quiet: true);
+            return;
         }
+
+        _watchDebounce.Start();
     }
 
     // MARK: - Breadcrumbs
@@ -898,6 +1130,13 @@ public sealed class PanelViewModel : Observable
         foreach (var row in _allRows)
         {
             row.OnLanguageChanged();
+        }
+
+        if (_sortField == SortField.Kind)
+        {
+            // Type names are in the new language now, and may order differently.
+            _sortedField = null;
+            ApplyView();
         }
 
         OnAllPropertiesChanged();

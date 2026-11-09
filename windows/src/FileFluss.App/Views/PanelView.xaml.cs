@@ -101,8 +101,15 @@ public partial class PanelView : UserControl
                 }
 
                 break;
+            case nameof(PanelViewModel.Rows):
+                // Layout hasn't run yet: this is still where the previous list was scrolled to.
+                _offsetBeforeRows = (_scroller ??= FindChild<ScrollViewer>(List))?.VerticalOffset;
+                break;
         }
     }
+
+    private ScrollViewer? _scroller;
+    private double? _offsetBeforeRows;
 
     public void SetActive(bool active) => ActiveLine.Opacity = active ? 1 : 0;
 
@@ -110,6 +117,9 @@ public partial class PanelView : UserControl
 
     private void OnVmLoaded(object? sender, IReadOnlyCollection<string> names)
     {
+        // A refresh of the folder on screen (a copy landing in it, F5) keeps the scroll position
+        // and doesn't select or scroll to anything: the user may be reading further down.
+        var keepOffset = Vm is { IsRefreshLoad: true } ? _offsetBeforeRows : null;
         Dispatcher.BeginInvoke(() =>
         {
             if (Vm is not { } vm)
@@ -117,11 +127,26 @@ public partial class PanelView : UserControl
                 return;
             }
 
-            var rows = names.Count == 0 ? [] : vm.Rows.Where(r => names.Contains(r.Name, StringComparer.OrdinalIgnoreCase)).ToList();
-            List.SelectedItems.Clear();
-            foreach (var row in rows)
+            var wanted = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var rows = wanted.Count == 0 ? [] : vm.Rows.Where(r => wanted.Contains(r.Name)).ToList();
+            SelectRows(rows);
+            if (keepOffset is { } offset)
             {
-                List.SelectedItems.Add(row);
+                _scroller?.ScrollToVerticalOffset(offset);
+                if (Keyboard.FocusedElement is not TextBoxBase && (IsKeyboardFocusWithin || Main.ActiveSide == vm.Side))
+                {
+                    List.UpdateLayout();
+                    if (rows.FirstOrDefault() is { } first && List.ItemContainerGenerator.ContainerFromItem(first) is ListViewItem container)
+                    {
+                        container.Focus();
+                    }
+                    else if (!IsKeyboardFocusWithin)
+                    {
+                        List.Focus();
+                    }
+                }
+
+                return;
             }
 
             var anchor = rows.FirstOrDefault() ?? (IsKeyboardFocusWithin ? vm.Rows.FirstOrDefault() : null);
@@ -225,16 +250,30 @@ public partial class PanelView : UserControl
                 break;
             case SelectionAction.Invert:
                 var selected = List.SelectedItems.Cast<object>().ToHashSet();
-                List.SelectedItems.Clear();
-                foreach (var row in List.Items)
-                {
-                    if (!selected.Contains(row))
-                    {
-                        List.SelectedItems.Add(row);
-                    }
-                }
-
+                SelectRows(List.Items.Cast<object>().Where(row => !selected.Contains(row)).ToList());
                 break;
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo? SetSelectedItems =
+        typeof(ListBox).GetMethod("SetSelectedItems", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    /// <summary>
+    /// Replaces the selection in one change — one SelectionChanged, one status-line update —
+    /// instead of one per row: restoring 20,000 selected rows after a refresh was quadratic.
+    /// </summary>
+    private void SelectRows(System.Collections.IList rows)
+    {
+        if (SetSelectedItems is not null && rows.Count > 1)
+        {
+            SetSelectedItems.Invoke(List, [rows]);
+            return;
+        }
+
+        List.SelectedItems.Clear();
+        foreach (var row in rows)
+        {
+            List.SelectedItems.Add(row);
         }
     }
 

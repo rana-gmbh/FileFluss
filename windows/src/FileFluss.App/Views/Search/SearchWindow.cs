@@ -297,7 +297,7 @@ public sealed class SearchWindow : Window
     {
         Title = L("Search");
         _placeholder.Text = L("Search files across all sources...");
-        Rebuild();
+        Rebuild(force: true);
         UpdateHeader();
     }
 
@@ -314,8 +314,20 @@ public sealed class SearchWindow : Window
         }
     }
 
-    private void Rebuild()
+    /// <summary>What the list last showed; the 150 ms refresh skips a rebuild when nothing it depends on changed.</summary>
+    private (Task Run, int Count, SearchSourceFilter Filter, SearchStatus Status, bool HasQuery)? _shown;
+
+    private void Rebuild() => Rebuild(force: false);
+
+    private void Rebuild(bool force)
     {
+        var shown = (_search.Completion, _search.ResultCount, _search.SourceFilter, _search.Status, _search.SearchText.Length > 0);
+        if (!force && _shown == shown)
+        {
+            return;
+        }
+
+        _shown = shown;
         RebuildChips();
 
         var selected = (_results.SelectedItem as ResultRow)?.Item.Id;
@@ -590,13 +602,14 @@ public sealed class SearchWindow : Window
 
             var icon = new Image
             {
-                Source = IconCache.For(item.Item, item.Kind == SearchResultKind.Local, 20),
                 Width = 20,
                 Height = 20,
                 Opacity = item.IsOffline ? 0.55 : 1,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
             };
+            // Local folders' own icons are read off the UI thread; the generic one shows meanwhile.
+            icon.Source = IconCache.ForRow(item.Item, item.Kind == SearchResultKind.Local, isDrive: false, 20, loaded => icon.Source = loaded).Icon;
             RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
             grid.Children.Add(icon);
 

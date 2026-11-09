@@ -79,8 +79,36 @@ public sealed class LocalFileProvider : FileProvider
 
     public override bool IsRoot(string path) => path.Length == 0;
 
-    /// <summary>"Local Disk (C:)", the way Explorer names a drive.</summary>
+    /// <summary>How long a drive's name is reused before the volume is asked again.</summary>
+    private const long DriveLabelLifetimeMs = 10_000;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Label, long At)> DriveLabels = new(StringComparer.OrdinalIgnoreCase);
+
+    static LocalFileProvider()
+    {
+        // "Local Disk" and friends are translated.
+        Localization.LanguageChanged += (_, _) => DriveLabels.Clear();
+    }
+
+    /// <summary>
+    /// "Local Disk (C:)", the way Explorer names a drive. Remembered for a few seconds: the
+    /// window title and path bar ask for it on every change of a panel showing a drive's root,
+    /// and each answer waits for the volume (a sleeping disk or network share: seconds).
+    /// </summary>
     public static string DriveLabel(string rootPath)
+    {
+        var now = Environment.TickCount64;
+        if (DriveLabels.TryGetValue(rootPath, out var known) && now - known.At < DriveLabelLifetimeMs)
+        {
+            return known.Label;
+        }
+
+        var label = ReadDriveLabel(rootPath);
+        DriveLabels[rootPath] = (label, now);
+        return label;
+    }
+
+    private static string ReadDriveLabel(string rootPath)
     {
         var letter = rootPath.TrimEnd('\\', '/');
         try

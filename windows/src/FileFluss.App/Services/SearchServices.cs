@@ -92,16 +92,21 @@ public sealed class SearchServices
     /// <summary>A drive came or went (or the user asked for a refresh).</summary>
     public async Task RefreshDrivesAsync()
     {
-        // Volume serials of network drives can take a moment; keep it off the UI thread.
-        var mounted = await Task.Run(VolumeIdentity.Mounted);
-        try
+        // Volume serials of network drives can take a moment, and recording them writes to the
+        // index (behind any indexing run's write): both stay off the UI thread. The registry's
+        // Changed event is raised there; its listeners hop to the UI thread themselves.
+        await Task.Run(() =>
         {
-            Drives.UpdateMounted(mounted);
-        }
-        catch (SearchIndexException e)
-        {
-            SupportLogger.Shared.Log($"Recording drives failed: {e.Message}", "Indexing", LogLevel.Error);
-        }
+            var mounted = VolumeIdentity.Mounted();
+            try
+            {
+                Drives.UpdateMounted(mounted);
+            }
+            catch (SearchIndexException e)
+            {
+                SupportLogger.Shared.Log($"Recording drives failed: {e.Message}", "Indexing", LogLevel.Error);
+            }
+        });
     }
 
     /// <summary>The known drive mounted at <paramref name="root"/> (<c>E:\</c>), if the registry tracks it.</summary>

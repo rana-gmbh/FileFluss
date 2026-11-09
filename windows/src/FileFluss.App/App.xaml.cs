@@ -6,6 +6,7 @@ using FileFluss.App.ViewModels;
 using FileFluss.Core;
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.IO;
+using FileFluss.Core.Models;
 using FileFluss.Core.Providers.ICloud;
 using FileFluss.Core.Settings;
 using FileFluss.Native;
@@ -40,6 +41,7 @@ public partial class App : Application
             return;
         }
 
+        StartupTrace.Mark("OnStartup");
         MainWindow window;
         MainViewModel vm;
         AppServices services;
@@ -47,6 +49,9 @@ public partial class App : Application
         {
             services = new AppServices(SettingsStore.DataDirectory);
             AppServices.Current = Services = services;
+
+            // Logos and the shell's first icons are decoded on other threads while the window is built.
+            IconCache.Prewarm(services.Accounts.Accounts.Select(a => a.ProviderType.LogoAssetName()));
             Localization.Use(services.Settings.Language);
             ThemeBrushes.Install(this);
 
@@ -83,7 +88,11 @@ public partial class App : Application
             window = new MainWindow(vm, services);
             MainWindow = window;
             ShutdownMode = ShutdownMode.OnMainWindowClose;
+#if DEBUG
+            window.ContentRendered += (_, _) => StartupTrace.Mark("first window rendered");
+#endif
             window.Show();
+            StartupTrace.Mark("window shown");
         }
         catch (Exception failure)
         {
@@ -101,11 +110,16 @@ public partial class App : Application
 
         // Everything below is best-effort: one step failing must not keep the others (or the
         // window) from working. Startup never waits on the network.
-        await Step("search index", () => services.Search.StartAsync(services.Accounts.Accounts.Select(a => a.Id).ToHashSet()));
+
+        // The index opens on the thread pool meanwhile; only a panel restoring an unplugged
+        // drive waits for it (the index knows those drives).
+        var indexStarted = Step("search index", () => services.Search.StartAsync(services.Accounts.Accounts.Select(a => a.Id).ToHashSet()));
 
         // Local folders first, before any network work: with a dozen accounts reconnecting,
         // a panel shouldn't wait on all of them to show the home folder.
-        await Step("local panels", () => vm.RestoreStartupLocationsAsync(cloudOnly: false));
+        await Step("local panels", () => vm.RestoreStartupLocationsAsync(cloudOnly: false, indexStarted));
+        StartupTrace.Mark("local panels listed");
+        await indexStarted;
         await Step("accounts", services.Accounts.ReconnectSavedAccountsAsync);
 
         // Cloud panels list in the background: a slow or hanging server must not hold back
@@ -167,6 +181,9 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SupportLogger.Shared.Log($"FileFluss for Windows exiting (code {e.ApplicationExitCode})", "App");
+
+        // Settings are written shortly after they change; the last ones (window frame, session folders) now.
+        ExitStep("settings", () => Services?.SettingsStore.Flush());
 
         // A launch from now on waits for this process to finish instead of handing over to it.
         ExitStep("stop listening", SingleInstance.StopListening);
