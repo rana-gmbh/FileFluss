@@ -128,8 +128,37 @@ public class UpdateLookupTests
     [InlineData("0.9.9", "1.0.0", false)]
     [InlineData("2.0.0-beta", "1.9.9", true)]
     [InlineData("1.0.0", "1.0.0", false)]
+    [InlineData("1.6.0", "1.6.0-beta.1", true)]
+    [InlineData("1.6.0-beta.2", "1.6.0-beta.1", true)]
+    [InlineData("1.6.0-beta.10", "1.6.0-beta.9", true)]
+    [InlineData("1.6.0-beta.1", "1.6.0", false)]
+    [InlineData("1.6.0-rc.1", "1.6.0-beta.3", true)]
+    [InlineData("1.6.0-beta.1+abc", "1.6.0-beta.1", false)]
     public void Versions_CompareNumerically(string latest, string current, bool newer)
         => Assert.Equal(newer, UpdateLookup.IsNewer(latest, current));
+
+    [Fact]
+    public void ABetaBuildIsOfferedTheNextBetaAndThenTheRelease()
+    {
+        const string json = """
+        [
+          { "tag_name": "win-v1.6.0-beta.2", "draft": false, "prerelease": true, "body": "b2", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.2", "assets": [] },
+          { "tag_name": "win-v1.6.0-beta.1", "draft": false, "prerelease": true, "body": "b1", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.1", "assets": [] }
+        ]
+        """;
+        Assert.Equal("1.6.0-beta.2", UpdateLookup.Newest(json, "1.6.0-beta.1", "x64")?.Version);
+
+        // A final-release build never sees betas.
+        Assert.Null(UpdateLookup.Newest(json, "1.5.0", "x64"));
+
+        const string withRelease = """
+        [
+          { "tag_name": "win-v1.6.0", "draft": false, "prerelease": false, "body": "final", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0", "assets": [] },
+          { "tag_name": "win-v1.6.0-beta.2", "draft": false, "prerelease": true, "body": "b2", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.2", "assets": [] }
+        ]
+        """;
+        Assert.Equal("1.6.0", UpdateLookup.Newest(withRelease, "1.6.0-beta.1", "x64")?.Version);
+    }
 
     [Fact]
     public void ChecksumsAreReadInSha256sumFormat()

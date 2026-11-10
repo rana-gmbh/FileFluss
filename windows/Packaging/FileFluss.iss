@@ -1,7 +1,8 @@
 ; FileFluss for Windows — installer.
 ;
 ; Built by windows/Packaging/build-release.ps1, which passes:
-;   /DAppVersion=1.2.3      the version (from the win-vX.Y.Z tag)
+;   /DAppVersion=1.2.3      the version (from the win-vX.Y.Z tag; may be 1.2.3-beta.1)
+;   /DNumericVersion=1.2.3  the same without a pre-release suffix (file-version fields are numbers only)
 ;   /DArch=x64|arm64        the architecture of the published files
 ;   /DSource=<folder>       the self-contained publish output
 ;
@@ -13,6 +14,9 @@
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+#ifndef NumericVersion
+  #define NumericVersion AppVersion
 #endif
 #ifndef Arch
   #define Arch "x64"
@@ -48,7 +52,10 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 ChangesAssociations=no
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#NumericVersion}
+VersionInfoTextVersion={#AppVersion}
+VersionInfoProductVersion={#NumericVersion}
+VersionInfoProductTextVersion={#AppVersion}
 VersionInfoCompany=Rana GmbH
 VersionInfoProductName=FileFluss
 #if Arch == "arm64"

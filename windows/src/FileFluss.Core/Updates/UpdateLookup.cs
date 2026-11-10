@@ -131,7 +131,11 @@ public static class UpdateLookup
         return Newest(json, currentVersion, architecture);
     }
 
-    /// <summary>The newest non-draft, non-prerelease Windows release newer than <paramref name="currentVersion"/>.</summary>
+    /// <summary>
+    /// The newest non-draft Windows release newer than <paramref name="currentVersion"/>. Pre-releases
+    /// (betas) are offered only to a build that is itself a pre-release: a beta tester gets the next
+    /// beta and then the final release, everyone else only final releases.
+    /// </summary>
     public static AvailableUpdate? Newest(string releasesJson, string currentVersion, string? architecture = null)
     {
         architecture ??= CurrentArchitecture;
@@ -141,10 +145,11 @@ public static class UpdateLookup
             return null;
         }
 
+        var includePrereleases = IsPrerelease(currentVersion);
         AvailableUpdate? best = null;
         foreach (var release in document.RootElement.EnumerateArray())
         {
-            if (release.ValueKind != JsonValueKind.Object || Bool(release, "draft") || Bool(release, "prerelease"))
+            if (release.ValueKind != JsonValueKind.Object || Bool(release, "draft") || (Bool(release, "prerelease") && !includePrereleases))
             {
                 continue;
             }
@@ -181,29 +186,75 @@ public static class UpdateLookup
         return best;
     }
 
-    /// <summary>Numeric, component-wise; missing components count as zero, as on macOS.</summary>
-    public static bool IsNewer(string latest, string current)
+    /// <summary>A version with a pre-release part ("1.6.0-beta.1"); build metadata ("+commit") doesn't count.</summary>
+    public static bool IsPrerelease(string version)
     {
-        static int[] Parts(string version) =>
-        [
-            .. version.Split('.', '-', '+')
-                .TakeWhile(part => int.TryParse(part, out _))
-                .Select(int.Parse),
-        ];
+        var metadata = version.IndexOf('+', StringComparison.Ordinal);
+        return (metadata >= 0 ? version[..metadata] : version).Contains('-', StringComparison.Ordinal);
+    }
 
-        var a = Parts(latest);
-        var b = Parts(current);
-        for (var i = 0; i < Math.Max(a.Length, b.Length); i++)
+    /// <summary>
+    /// Semantic-version order: numeric, component-wise, missing components counting as zero
+    /// as on macOS; then a pre-release sorts below its release, so 1.6.0-beta.1 &lt;
+    /// 1.6.0-beta.2 &lt; 1.6.0. Build metadata ("+commit") is ignored.
+    /// </summary>
+    public static bool IsNewer(string latest, string current) => Compare(latest, current) > 0;
+
+    private static int Compare(string a, string b)
+    {
+        static (int[] Core, string[]? Pre) Parse(string version)
         {
-            var x = i < a.Length ? a[i] : 0;
-            var y = i < b.Length ? b[i] : 0;
+            var metadata = version.IndexOf('+', StringComparison.Ordinal);
+            if (metadata >= 0)
+            {
+                version = version[..metadata];
+            }
+
+            var dash = version.IndexOf('-', StringComparison.Ordinal);
+            var core = dash >= 0 ? version[..dash] : version;
+            int[] numbers = [.. core.Split('.').TakeWhile(part => int.TryParse(part, out _)).Select(int.Parse)];
+            return (numbers, dash >= 0 ? version[(dash + 1)..].Split('.') : null);
+        }
+
+        var (coreA, preA) = Parse(a);
+        var (coreB, preB) = Parse(b);
+        for (var i = 0; i < Math.Max(coreA.Length, coreB.Length); i++)
+        {
+            var x = i < coreA.Length ? coreA[i] : 0;
+            var y = i < coreB.Length ? coreB[i] : 0;
             if (x != y)
             {
-                return x > y;
+                return x.CompareTo(y);
             }
         }
 
-        return false;
+        // Same release: a pre-release is older than the release itself.
+        if (preA is null || preB is null)
+        {
+            return (preA is null ? 1 : 0) - (preB is null ? 1 : 0);
+        }
+
+        // Identifier by identifier: numbers numerically and below words, words by ordinal;
+        // a longer list wins when the shared part is equal (beta < beta.1).
+        for (var i = 0; i < Math.Min(preA.Length, preB.Length); i++)
+        {
+            var numericA = int.TryParse(preA[i], out var na);
+            var numericB = int.TryParse(preB[i], out var nb);
+            var order = (numericA, numericB) switch
+            {
+                (true, true) => na.CompareTo(nb),
+                (true, false) => -1,
+                (false, true) => 1,
+                _ => string.CompareOrdinal(preA[i], preB[i]),
+            };
+
+            if (order != 0)
+            {
+                return Math.Sign(order);
+            }
+        }
+
+        return preA.Length.CompareTo(preB.Length);
     }
 
     /// <summary>

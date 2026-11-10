@@ -5,6 +5,8 @@ name: Windows Release
 #
 #   gh release create win-v1.0.0 --title "FileFluss for Windows 1.0.0" --latest=false --notes "..."
 #
+# A beta is tagged win-vX.Y.Z-beta.N and created with --prerelease as well.
+#
 # or just push the tag; the upload step below creates the release with --latest=false.
 #
 # --latest=false matters: the macOS app's Sparkle feed is
@@ -43,8 +45,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           $version = $env:TAG.Substring("win-v".Length)
-          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must be win-vX.Y.Z, got $env:TAG" }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?$') { throw "Tag must be win-vX.Y.Z or win-vX.Y.Z-beta.N, got $env:TAG" }
           "version=$version" >> $env:GITHUB_OUTPUT
+          # A beta, alpha or rc is a GitHub pre-release: only pre-release builds are offered it.
+          "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
       - name: Verify generated resources are current
         run: dotnet run --project windows/tools/StringsToResx --configuration Release -- --check
@@ -80,11 +84,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
           $tag = $env:TAG
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title "FileFluss for Windows $env:VERSION" --latest=false --notes "FileFluss for Windows $env:VERSION"
+            $pre = if ($env:PRERELEASE -eq 'true') { '--prerelease' } else { $null }
+            gh release create $tag --title "FileFluss for Windows $env:VERSION" --latest=false $pre --notes "FileFluss for Windows $env:VERSION"
           }
           gh release upload $tag (Get-ChildItem windows/artifacts/release -File).FullName --clobber
 

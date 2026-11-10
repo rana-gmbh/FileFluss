@@ -1,6 +1,6 @@
 # Builds the FileFluss for Windows release files.
 #
-#   powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0 [-Architectures x64,arm64] [-SkipInstaller] [-RequireInstaller]
+#   powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0|1.0.0-beta.1 [-Architectures x64,arm64] [-SkipInstaller] [-RequireInstaller]
 #
 # For each architecture: a self-contained publish (no .NET install needed on the target), a
 # portable .zip, and — when Inno Setup's iscc.exe is available — the per-user installer.
@@ -17,7 +17,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [ValidatePattern('^\d+\.\d+\.\d+$')] [string] $Version,
+    [Parameter(Mandatory)] [ValidatePattern('^\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?$')] [string] $Version,
     [string[]] $Architectures = @('x64', 'arm64'),
     [switch] $SkipInstaller,
     [switch] $RequireInstaller
@@ -128,7 +128,8 @@ foreach ($arch in $Architectures) {
     New-Zip $publish (Join-Path $release "FileFluss-$Version-$arch-portable.zip")
 
     if (-not $buildInstaller) { continue }
-    Invoke-Checked $iscc @('/Q', "/DAppVersion=$Version", "/DArch=$arch", "/DSource=$publish", (Join-Path $PSScriptRoot 'FileFluss.iss'))
+    # Windows' file-version field is numbers only; a beta's suffix stays in AppVersion.
+    Invoke-Checked $iscc @('/Q', "/DAppVersion=$Version", "/DNumericVersion=$($Version -replace '-.*', '')", "/DArch=$arch", "/DSource=$publish", (Join-Path $PSScriptRoot 'FileFluss.iss'))
     Sign @(Join-Path $release "FileFluss-Setup-$Version-$arch.exe")
 }
 
