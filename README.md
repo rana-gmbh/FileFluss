@@ -2,6 +2,8 @@
 
 A dual-panel file manager for macOS that lets you conveniently handle files across cloud storage providers.
 
+> **New: FileFluss for Windows — public beta.** A native Windows 10 and 11 app with the feature set of FileFluss 1.6 for Mac, for Intel/AMD (x64) and ARM PCs, as an installer or a portable version. **[Download FileFluss 1.6 Beta for Windows](https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.1)** — the beta isn't code-signed yet, so SmartScreen asks you to confirm the first start (**More info → Run anyway**). Feedback is very welcome: [open an issue](https://github.com/rana-gmbh/FileFluss/issues/new) and mention Windows.
+
 ![FileFluss main window](Screenshots/FileFluss%20main.webp)
 
 ## What FileFluss does
