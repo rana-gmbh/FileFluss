@@ -21,13 +21,24 @@ on:
 
 permissions:
   contents: write
+  # Signing logs in to Azure with GitHub's OIDC token: no Azure secret is stored here.
+  id-token: write
 
 jobs:
   release:
     runs-on: windows-latest
+    # The Azure app registration trusts this environment, not individual tags, so its
+    # federated credential never has to change. Restrict the environment to win-v* tags
+    # (Settings → Environments → windows-release) so no branch can sign with it.
+    environment: windows-release
     env:
-      # Secrets cannot appear in an if: condition; a flag derived from one can.
-      HAS_SIGNING: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 != '' }}
+      # Code signing with Azure Artifact Signing, as Rana GmbH, once the variables
+      # AZURE_CLIENT_ID and AZURE_TENANT_ID are set (identifiers, not secrets). Without them,
+      # releases are built unsigned.
+      HAS_AZURE_SIGNING: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' }}
+      SIGNING_ENDPOINT: https://neu.codesigning.azure.net/
+      SIGNING_ACCOUNT: ranagmbh
+      SIGNING_PROFILE: rana-public
 
     steps:
       - uses: actions/checkout@v4
@@ -59,24 +70,95 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Prepare signing certificate
-        if: env.HAS_SIGNING == 'true'
-        shell: pwsh
-        env:
-          SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
-        run: |
-          $path = Join-Path $env:RUNNER_TEMP 'signing.pfx'
-          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
-          "FILEFLUSS_SIGN_PFX=$path" >> $env:GITHUB_ENV
-
-      - name: Build release files
-        # Windows PowerShell 5.1, the shell the script is verified with locally.
-        # -RequireInstaller: a release must never ship without its installers, which the
-        # in-app updater depends on.
+      # Code signing in two rounds, because an installer has to be built from executables that
+      # are already signed: first FileFluss's own exe and DLLs, then the installers. Each round
+      # signs the files gathered under windows/artifacts/sign in place and hands them on through
+      # windows/artifacts/signed, where build-release.ps1 checks that each one carries a valid
+      # signature before using it. Windows PowerShell 5.1, the shell the script is verified with.
+      - name: Publish
         shell: powershell
         env:
-          FILEFLUSS_SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
-        run: ./windows/Packaging/build-release.ps1 -Version ${{ steps.version.outputs.version }} -RequireInstaller
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Publish
+
+      # A login per round: the GitHub token behind it is short-lived, and packaging takes minutes.
+      - name: Azure login for the executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          # The app may only sign: it has a role on the signing account, none on the subscription.
+          allow-no-subscriptions: true
+
+      - name: Sign the executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\windows\artifacts\sign\binaries
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FileFluss
+          description-url: https://github.com/rana-gmbh/FileFluss
+          exclude-environment-credential: true
+          exclude-azure-cli-credential: false
+
+      - name: Hand on the signed executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force windows/artifacts/signed | Out-Null
+          Copy-Item windows/artifacts/sign/binaries windows/artifacts/signed/binaries -Recurse -Force
+
+      # -RequireInstaller: a release must never ship without its installers, which the in-app
+      # updater depends on.
+      - name: Package
+        shell: powershell
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Package -RequireInstaller
+
+      - name: Azure login for the installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign the installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\windows\artifacts\sign\installers
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FileFluss Setup
+          description-url: https://github.com/rana-gmbh/FileFluss
+          exclude-environment-credential: true
+          exclude-azure-cli-credential: false
+
+      - name: Hand on the signed installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: Copy-Item windows/artifacts/sign/installers windows/artifacts/signed/installers -Recurse -Force
+
+      - name: Checksums
+        shell: powershell
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Checksums
 
       - name: Upload to the release
         shell: pwsh

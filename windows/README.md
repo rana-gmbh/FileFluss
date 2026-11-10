@@ -106,17 +106,29 @@ installer (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php); without it t
 warns and builds the rest), a portable zip per architecture, and `SHA256SUMS.txt`, which the
 in-app updater requires — it installs nothing it cannot match against that file. The script
 checks each publish for the parts that are easy to lose: `Assets\`, the de / zh-Hans / zh-Hant
-satellite assemblies, SQLite's native `e_sqlite3.dll` and the stamped version. Set
-`FILEFLUSS_SIGN_PFX` and `FILEFLUSS_SIGN_PASSWORD` to Authenticode-sign the executable and
-installers; unsigned builds work, but SmartScreen warns on first run.
+satellite assemblies, SQLite's native `e_sqlite3.dll` and the stamped version. For a local
+signed build, set `FILEFLUSS_SIGN_PFX` and `FILEFLUSS_SIGN_PASSWORD` to Authenticode-sign
+with a .pfx; unsigned builds work, but SmartScreen warns on first run.
 
 Releases are cut by tag; `.github/workflows/windows-release.yml` does the rest (tests, Inno
-Setup, optional signing from the `WINDOWS_SIGNING_PFX_BASE64` / `WINDOWS_SIGNING_PASSWORD`
-secrets, upload):
+Setup, signing, upload). A beta is tagged `win-vX.Y.Z-beta.N` and becomes a GitHub pre-release:
 
 ```
 git tag win-v1.0.0 && git push origin win-v1.0.0
 ```
+
+**Code signing** uses Azure Artifact Signing (account `ranagmbh`, certificate profile
+`rana-public`, North Europe — the same as NetFluss), so every file is signed as Rana GmbH. The
+script runs in three stages so the workflow can sign in between: `-Stage Publish` gathers
+FileFluss's own `FileFluss.exe`, `FileFluss.dll`, `FileFluss.Core.dll` and `FileFluss.Native.dll`
+into `artifacts\sign\binaries`, the workflow signs them and copies them to `artifacts\signed`,
+`-Stage Package` builds the zips and installers from the signed files (refusing any whose
+signature isn't valid), the workflow signs the installers, and `-Stage Checksums` writes
+`SHA256SUMS.txt` over the signed files. The workflow logs in to Azure with GitHub's OIDC
+token, so no Azure secret is stored: it needs the repository variables `AZURE_CLIENT_ID` and
+`AZURE_TENANT_ID`, and runs in the `windows-release` environment, whose federated credential
+the Azure app registration trusts; restrict that environment to `win-v*` tags. Without the
+variables, releases are built unsigned.
 
 or create the release first:
 

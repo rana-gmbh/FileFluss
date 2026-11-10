@@ -1,11 +1,27 @@
 # Builds the FileFluss for Windows release files.
 #
-#   powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0|1.0.0-beta.1 [-Architectures x64,arm64] [-SkipInstaller] [-RequireInstaller]
+#   powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0|1.0.0-beta.1 [-Stage All|Publish|Package|Checksums]
+#                    [-Architectures x64,arm64] [-SkipInstaller] [-RequireInstaller]
 #
 # For each architecture: a self-contained publish (no .NET install needed on the target), a
 # portable .zip, and — when Inno Setup's iscc.exe is available — the per-user installer.
 # SHA256SUMS.txt covers every file; the in-app updater refuses an installer it cannot match
 # against it.
+#
+# Code signing happens between stages, because an installer has to be built from executables
+# that are already signed — files inside an Inno Setup installer can't be signed afterwards:
+#
+#   Publish    builds every architecture and gathers FileFluss's own executable and DLLs into
+#              artifacts\sign\binaries\<arch>\
+#   Package    takes back the signed copies from artifacts\signed\binaries\<arch>\ when they
+#              exist (each must carry a valid signature), then builds the zips and installers
+#              and gathers the installers into artifacts\sign\installers\
+#   Checksums  takes back the signed installers from artifacts\signed\installers\ when they
+#              exist, then writes SHA256SUMS.txt
+#
+# The release workflow signs artifacts\sign\* with Azure Artifact Signing and copies the result
+# to artifacts\signed\*. -Stage All (the default) runs the three back to back, unsigned — or
+# signed with a .pfx: set FILEFLUSS_SIGN_PFX and FILEFLUSS_SIGN_PASSWORD for a local signed build.
 #
 # Without Inno Setup the zips and SHA256SUMS.txt are still built and the installer is
 # skipped with a warning. -RequireInstaller (the release workflow passes it) turns that
@@ -18,6 +34,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [ValidatePattern('^\d+\.\d+\.\d+(-(alpha|beta|rc)\.\d+)?$')] [string] $Version,
+    [ValidateSet('All', 'Publish', 'Package', 'Checksums')] [string] $Stage = 'All',
     [string[]] $Architectures = @('x64', 'arm64'),
     [switch] $SkipInstaller,
     [switch] $RequireInstaller
@@ -27,15 +44,20 @@ $ErrorActionPreference = 'Stop'
 $windows = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $windows 'artifacts'
 $release = Join-Path $artifacts 'release'
+$toSign = Join-Path $artifacts 'sign'
+$signed = Join-Path $artifacts 'signed'
 $project = Join-Path $windows 'src\FileFluss.App\FileFluss.App.csproj'
+
+# FileFluss's own code in a publish: what gets signed. The rest (the .NET runtime, WPF,
+# SQLite, SSH.NET, …) comes already signed by its publishers.
+$ownBinaries = @('FileFluss.exe', 'FileFluss.dll', 'FileFluss.Core.dll', 'FileFluss.Native.dll')
 
 function Invoke-Checked([string] $File, [string[]] $Arguments) {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$File exited with $LASTEXITCODE" }
 }
 
-# Optional Authenticode signing: set FILEFLUSS_SIGN_PFX (path to a .pfx) and
-# FILEFLUSS_SIGN_PASSWORD. Unsigned builds work, but SmartScreen warns on first run.
+# Optional local Authenticode signing with a .pfx; CI signs with Azure Artifact Signing instead.
 $signtool = if ($env:FILEFLUSS_SIGN_PFX) {
     Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
         Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -48,25 +70,17 @@ function Sign([string[]] $Files) {
         '/f', $env:FILEFLUSS_SIGN_PFX, '/p', $env:FILEFLUSS_SIGN_PASSWORD) + $Files)
 }
 
-$iscc = @(
-    (Get-Command iscc.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source),
-    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
-) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+# A file signed elsewhere replaces the unsigned one — but only with a valid signature, so a
+# signing step that quietly did nothing can't ship as "signed".
+function Use-Signed([string] $From, [string] $To) {
+    $signature = Get-AuthenticodeSignature $From
+    if ($signature.Status -ne 'Valid') {
+        throw "$From is not validly signed ($($signature.Status): $($signature.StatusMessage))."
+    }
 
-$buildInstaller = -not $SkipInstaller
-if ($buildInstaller -and -not $iscc) {
-    if ($RequireInstaller) { throw 'Inno Setup 6 (iscc.exe) was not found. Install it, or drop -RequireInstaller.' }
-    Write-Warning 'Inno Setup 6 (iscc.exe) was not found: building the portable zips only, no installer.'
-    $buildInstaller = $false
+    Copy-Item $From $To -Force
+    Write-Host "signed: $To ($($signature.SignerCertificate.Subject))"
 }
-
-# Only now, once nothing can stop the build for a missing tool, clear the previous output.
-foreach ($folder in @((Join-Path $artifacts 'publish'), $release)) {
-    if (Test-Path $folder) { Remove-Item $folder -Recurse -Force }
-}
-New-Item -ItemType Directory -Force $release | Out-Null
 
 # The parts of a publish that are easy to lose to a packaging change and that the app
 # cannot run properly without. Each one has gone missing from some .NET app's release before.
@@ -114,28 +128,91 @@ function New-Zip([string] $Folder, [string] $Zip) {
     }
 }
 
-foreach ($arch in $Architectures) {
-    $rid = "win-$arch"
-    $publish = Join-Path $artifacts "publish\$arch"
-    Write-Host "== $rid =="
+function Publish {
+    # A fresh start: nothing left over from an earlier build may end up signed or released.
+    foreach ($folder in @((Join-Path $artifacts 'publish'), $release, $toSign, $signed)) {
+        if (Test-Path $folder) { Remove-Item $folder -Recurse -Force }
+    }
+    New-Item -ItemType Directory -Force $release | Out-Null
 
-    Invoke-Checked dotnet @('publish', $project, '-o', $publish, '-c', 'Release', '-r', $rid, '--self-contained', 'true',
-        "-p:Version=$Version", '-p:DebugType=none', '-nologo')
+    foreach ($arch in $Architectures) {
+        $rid = "win-$arch"
+        $publish = Join-Path $artifacts "publish\$arch"
+        Write-Host "== publish $rid =="
 
-    Assert-Publish $publish $arch
-    Sign @(Join-Path $publish 'FileFluss.exe')
+        Invoke-Checked dotnet @('publish', $project, '-o', $publish, '-c', 'Release', '-r', $rid, '--self-contained', 'true',
+            "-p:Version=$Version", '-p:DebugType=none', '-nologo')
 
-    New-Zip $publish (Join-Path $release "FileFluss-$Version-$arch-portable.zip")
+        Assert-Publish $publish $arch
+        $own = $ownBinaries | ForEach-Object { Join-Path $publish $_ }
+        Sign $own
 
-    if (-not $buildInstaller) { continue }
-    # Windows' file-version field is numbers only; a beta's suffix stays in AppVersion.
-    Invoke-Checked $iscc @('/Q', "/DAppVersion=$Version", "/DNumericVersion=$($Version -replace '-.*', '')", "/DArch=$arch", "/DSource=$publish", (Join-Path $PSScriptRoot 'FileFluss.iss'))
-    Sign @(Join-Path $release "FileFluss-Setup-$Version-$arch.exe")
+        # Flat per architecture, for the CI signing step.
+        $batch = Join-Path $toSign "binaries\$arch"
+        New-Item -ItemType Directory -Force $batch | Out-Null
+        Copy-Item $own $batch
+    }
 }
 
-# "<sha256>  <name>" — the format sha256sum -c and the in-app updater both read.
-$sums = Get-ChildItem $release -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
-    '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+function Package {
+    $iscc = @(
+        (Get-Command iscc.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source),
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+
+    $buildInstaller = -not $SkipInstaller
+    if ($buildInstaller -and -not $iscc) {
+        if ($RequireInstaller) { throw 'Inno Setup 6 (iscc.exe) was not found. Install it, or drop -RequireInstaller.' }
+        Write-Warning 'Inno Setup 6 (iscc.exe) was not found: building the portable zips only, no installer.'
+        $buildInstaller = $false
+    }
+
+    foreach ($arch in $Architectures) {
+        $publish = Join-Path $artifacts "publish\$arch"
+        if (-not (Test-Path (Join-Path $publish 'FileFluss.exe'))) { throw "No $arch publish: run -Stage Publish first." }
+        Write-Host "== package win-$arch =="
+
+        $signedBatch = Join-Path $signed "binaries\$arch"
+        if (Test-Path $signedBatch) {
+            foreach ($name in $ownBinaries) { Use-Signed (Join-Path $signedBatch $name) (Join-Path $publish $name) }
+        }
+
+        New-Zip $publish (Join-Path $release "FileFluss-$Version-$arch-portable.zip")
+
+        if (-not $buildInstaller) { continue }
+        # Windows' file-version field is numbers only; a beta's suffix stays in AppVersion.
+        Invoke-Checked $iscc @('/Q', "/DAppVersion=$Version", "/DNumericVersion=$($Version -replace '-.*', '')", "/DArch=$arch", "/DSource=$publish", (Join-Path $PSScriptRoot 'FileFluss.iss'))
+        $setup = Join-Path $release "FileFluss-Setup-$Version-$arch.exe"
+        Sign @($setup)
+
+        # Gathered for the CI signing step.
+        $batch = Join-Path $toSign 'installers'
+        New-Item -ItemType Directory -Force $batch | Out-Null
+        Copy-Item $setup $batch
+    }
 }
-Set-Content -Path (Join-Path $release 'SHA256SUMS.txt') -Value $sums -Encoding ascii
-Get-ChildItem $release | Format-Table Name, Length
+
+function Checksums {
+    $signedInstallers = Join-Path $signed 'installers'
+    if (Test-Path $signedInstallers) {
+        foreach ($setup in Get-ChildItem $signedInstallers -Filter '*.exe') {
+            Use-Signed $setup.FullName (Join-Path $release $setup.Name)
+        }
+    }
+
+    # "<sha256>  <name>" — the format sha256sum -c and the in-app updater both read.
+    $sums = Get-ChildItem $release -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
+        '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+    }
+    Set-Content -Path (Join-Path $release 'SHA256SUMS.txt') -Value $sums -Encoding ascii
+    Get-ChildItem $release | Format-Table Name, Length
+}
+
+switch ($Stage) {
+    'Publish' { Publish }
+    'Package' { Package }
+    'Checksums' { Checksums }
+    default { Publish; Package; Checksums }
+}
