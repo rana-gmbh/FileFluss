@@ -44,7 +44,16 @@ struct LoopbackOAuthAuthenticator: OAuthAuthenticator {
         loopback: OAuthLoopbackRedirect,
         authURLBuilder: @escaping @Sendable (_ redirectURI: String) -> URL
     ) async throws -> OAuthCallback {
-        let listener = try NWListener(using: .tcp, on: .any)
+        let listener: NWListener
+        if case .fixedLocalhost(let ports) = loopback {
+            guard let port = ports.first(where: Self.isPortFree),
+                  let endpointPort = NWEndpoint.Port(rawValue: port) else {
+                throw CloudProviderError.commandFailed(L10n.text("The sign-in needs a free local port, and all of them are in use by other apps."))
+            }
+            listener = try NWListener(using: .tcp, on: endpointPort)
+        } else {
+            listener = try NWListener(using: .tcp, on: .any)
+        }
         let guard_ = ContinuationGuard<OAuthCallback>()
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -142,7 +151,41 @@ extension LoopbackOAuthAuthenticator {
         switch loopback {
         case .localhost: return "http://localhost:\(port)"
         case .ipLiteralCallback: return "http://127.0.0.1:\(port)/callback"
+        case .fixedLocalhost: return port == 80 ? "http://localhost" : "http://localhost:\(port)"
         }
+    }
+
+    /// Whether nothing is listening on `port`, over IPv4 or IPv6. A quick
+    /// bind-and-release; the real listener is created right after.
+    static func isPortFree(_ port: UInt16) -> Bool {
+        func canBind(ipv6: Bool) -> Bool {
+            let fd = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0)
+            guard fd >= 0 else { return false }
+            defer { close(fd) }
+            if ipv6 {
+                var address = sockaddr_in6()
+                address.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
+                address.sin6_family = sa_family_t(AF_INET6)
+                address.sin6_port = port.bigEndian
+                address.sin6_addr = in6addr_any
+                return withUnsafePointer(to: &address) {
+                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                        bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in6>.size)) == 0
+                    }
+                }
+            }
+            var address = sockaddr_in()
+            address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+            address.sin_family = sa_family_t(AF_INET)
+            address.sin_port = port.bigEndian
+            address.sin_addr = in_addr(s_addr: INADDR_ANY)
+            return withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0
+                }
+            }
+        }
+        return canBind(ipv6: false) && canBind(ipv6: true)
     }
 }
 

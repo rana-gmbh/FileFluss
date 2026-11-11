@@ -126,4 +126,36 @@ struct DrimeProviderTests {
         #expect(LoopbackOAuthAuthenticator.redirectURI(port: 53682, loopback: .ipLiteralCallback) == "http://127.0.0.1:53682/callback")
         #expect(LoopbackOAuthAuthenticator.redirectURI(port: 53682, loopback: .localhost) == "http://localhost:53682")
     }
+
+    /// pCloud matches the redirect exactly, port included; port 80 has to
+    /// read as plain http://localhost to match what is registered.
+    @Test("pCloud's fixed redirect writes port 80 without a port")
+    func fixedRedirectURI() {
+        let fixed = OAuthLoopbackRedirect.fixedLocalhost(ports: [80, 53682])
+        #expect(LoopbackOAuthAuthenticator.redirectURI(port: 80, loopback: fixed) == "http://localhost")
+        #expect(LoopbackOAuthAuthenticator.redirectURI(port: 53682, loopback: fixed) == "http://localhost:53682")
+    }
+
+    @Test("A port that is already listened on is not free")
+    func busyPort() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        defer { close(fd) }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0
+        address.sin_addr = in_addr(s_addr: INADDR_ANY)
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        try #require(bound == 0 && listen(fd, 1) == 0)
+        var actual = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &actual) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
+        }
+        let port = UInt16(bigEndian: actual.sin_port)
+
+        #expect(!LoopbackOAuthAuthenticator.isPortFree(port))
+    }
 }

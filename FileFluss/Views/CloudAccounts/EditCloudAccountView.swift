@@ -109,7 +109,7 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var form: some View {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud:
             oauthForm
         case .nextCloud:
             nextCloudFields
@@ -145,8 +145,6 @@ struct EditCloudAccountView: View {
             s3CompatibleFields
         case .synologyC2:
             synologyC2Fields
-        case .pCloud:
-            pCloudFields
         case .kDrive:
             kDriveFields
         case .iCloud:
@@ -205,6 +203,7 @@ struct EditCloudAccountView: View {
                 || appState.syncManager.isAuthenticatingDropbox
                 || appState.syncManager.isAuthenticatingOneDrive
                 || appState.syncManager.isAuthenticatingBox
+                || appState.syncManager.isAuthenticatingPCloud
 
             if isPendingBrowserAuth {
                 HStack(spacing: 8) {
@@ -613,27 +612,6 @@ struct EditCloudAccountView: View {
         }
     }
 
-    private var pCloudFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SecureField(L10n.text("Access Token (pcauth cookie value)"), text: $apiToken)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isAuthenticating)
-            Divider().padding(.vertical, 4)
-            LText("Or sign in with email and password (pCloud may refuse to issue a new token to third-party apps — paste a pcauth cookie above if that happens).")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            TextField(L10n.text("Email"), text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .disabled(isAuthenticating)
-            SecureField(L10n.text("Password"), text: $password)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isAuthenticating)
-                .onSubmit { save() }
-        }
-    }
-
     private var kDriveFields: some View {
         VStack(spacing: 12) {
             SecureField(L10n.text("API Token"), text: $apiToken)
@@ -722,11 +700,12 @@ struct EditCloudAccountView: View {
         switch account.providerType {
         case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             EmptyView()
-        case .dropbox, .googleDrive, .oneDrive, .box:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud:
             let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
                 || appState.syncManager.isAuthenticatingDropbox
                 || appState.syncManager.isAuthenticatingOneDrive
                 || appState.syncManager.isAuthenticatingBox
+                || appState.syncManager.isAuthenticatingPCloud
             if isPendingBrowserAuth {
                 Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                     saveTask?.cancel()
@@ -766,7 +745,7 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             return false  // these use Re-authorize / no-op buttons
         case .nextCloud:
             switch nextCloudMode {
@@ -844,8 +823,6 @@ struct EditCloudAccountView: View {
             return s3AccessKeyId != initial.s3AccessKeyId
                 || s3SecretAccessKey != initial.s3SecretAccessKey
                 || s3Region != initial.s3Region
-        case .pCloud:
-            return !apiToken.isEmpty || !email.isEmpty || !password.isEmpty
         case .kDrive:
             return !apiToken.isEmpty
         }
@@ -886,11 +863,9 @@ struct EditCloudAccountView: View {
             return !s3AccessKeyId.isEmpty && !s3SecretAccessKey.isEmpty && !s3Endpoint.isEmpty
         case .synologyC2:
             return !s3AccessKeyId.isEmpty && !s3SecretAccessKey.isEmpty && !s3Region.isEmpty
-        case .pCloud:
-            return !apiToken.isEmpty || (!email.isEmpty && !password.isEmpty)
         case .kDrive:
             return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
             return true
         }
     }
@@ -938,6 +913,7 @@ struct EditCloudAccountView: View {
             case .googleDrive: await appState.syncManager.updateGoogleDriveAccount(accountId: id)
             case .oneDrive: await appState.syncManager.updateOneDriveAccount(accountId: id)
             case .box: await appState.syncManager.updateBoxAccount(accountId: id)
+            case .pCloud: await appState.syncManager.updatePCloudAccount(accountId: id)
             case .nextCloud:
                 switch nextCloudMode {
                 case .browser:
@@ -1054,13 +1030,6 @@ struct EditCloudAccountView: View {
                     secretAccessKey: s3SecretAccessKey,
                     region: s3Region.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
-            case .pCloud:
-                let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedToken.isEmpty {
-                    await appState.syncManager.updatePCloudAccount(accountId: id, accessToken: trimmedToken)
-                } else {
-                    await appState.syncManager.updatePCloudAccount(accountId: id, email: email, password: password)
-                }
             case .kDrive:
                 await appState.syncManager.updateKDriveAccount(accountId: id, apiToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines))
             case .ftp:
