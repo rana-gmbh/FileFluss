@@ -24,6 +24,9 @@ final class SyncViewModel {
     // Box OAuth state
     var isAuthenticatingBox: Bool = false
 
+    // pCloud OAuth state
+    var isAuthenticatingPCloud: Bool = false
+
     // Drime OAuth state
     var isAuthenticatingDrime: Bool = false
 
@@ -118,41 +121,27 @@ final class SyncViewModel {
         isAuthenticatingNextCloud = false
         isAuthenticatingBox = false
         isAuthenticatingDrime = false
+        isAuthenticatingPCloud = false
         authError = nil
     }
 
-    func addPCloudAccount(email: String, password: String) async {
-        await connectPCloud { provider in
-            try await provider.authenticate(email: email, password: password)
-        }
-    }
-
-    func addPCloudAccount(accessToken: String) async {
-        await connectPCloud { provider in
-            try await provider.authenticate(accessToken: accessToken)
-        }
-    }
-
-    private func connectPCloud(_ authenticate: (PCloudProvider) async throws -> Void) async {
+    func addPCloudAccount() async {
         let account = CloudAccount(providerType: .pCloud)
         let provider = PCloudProvider(accountId: account.id)
         authError = nil
+        isAuthenticatingPCloud = true
+        defer { isAuthenticatingPCloud = false }
 
         do {
-            try await authenticate(provider)
+            try await provider.startOAuthFlow()
             var connectedAccount = account
-
-            let userName = try? await provider.userDisplayName()
-            if let userName, !userName.isEmpty {
+            if let userName = try? await provider.userDisplayName(), !userName.isEmpty {
                 connectedAccount.displayName = "\(connectedAccount.providerType.displayName) (\(userName))"
             }
-
             connectedAccount.isConnected = true
             accounts.append(connectedAccount)
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
-        } catch CloudProviderError.serverError(1022) {
-            authError = L10n.text("pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.")
         } catch {
             authError = error.localizedDescription
         }
@@ -1574,22 +1563,13 @@ final class SyncViewModel {
         }
     }
 
-    func updatePCloudAccount(accountId: UUID, accessToken: String) async {
+    func updatePCloudAccount(accountId: UUID) async {
         authError = nil
+        isAuthenticatingPCloud = true
+        defer { isAuthenticatingPCloud = false }
         do {
             let provider = PCloudProvider(accountId: accountId)
-            try await provider.authenticate(accessToken: accessToken)
-            await finalizeUpdate(accountId: accountId, provider: provider)
-        } catch {
-            authError = error.localizedDescription
-        }
-    }
-
-    func updatePCloudAccount(accountId: UUID, email: String, password: String) async {
-        authError = nil
-        do {
-            let provider = PCloudProvider(accountId: accountId)
-            try await provider.authenticate(email: email, password: password)
+            try await provider.startOAuthFlow()
             await finalizeUpdate(accountId: accountId, provider: provider)
         } catch {
             authError = error.localizedDescription

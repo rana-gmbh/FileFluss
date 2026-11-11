@@ -85,6 +85,11 @@ public enum OAuthLoopbackRedirect: Sendable {
     /// (Drime) honour that only for the IP form, keeping the port of
     /// `localhost` — so a random port works only this way.
     case ipLiteralCallback
+    /// `http://localhost:<port>` on the first of these ports that is free,
+    /// with port 80 written as plain `http://localhost`. For servers that
+    /// match the redirect exactly, port included (pCloud), so each port
+    /// has to be registered there.
+    case fixedLocalhost(ports: [UInt16])
 }
 
 extension OAuthAuthenticator {

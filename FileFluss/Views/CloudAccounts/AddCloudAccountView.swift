@@ -151,6 +151,7 @@ struct AddCloudAccountView: View {
         case .oneDrive: return appState.syncManager.isAuthenticatingOneDrive
         case .nextCloud: return appState.syncManager.isAuthenticatingNextCloud
         case .box: return appState.syncManager.isAuthenticatingBox
+        case .pCloud: return appState.syncManager.isAuthenticatingPCloud
         case .drime: return appState.syncManager.isAuthenticatingDrime
         default: return false
         }
@@ -452,55 +453,22 @@ struct AddCloudAccountView: View {
     }
 
     private var pCloudFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LText("pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            TextField(L10n.text("Email"), text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .disabled(isAuthenticating)
-
-            SecureField(L10n.text("Password"), text: $password)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.password)
-                .disabled(isAuthenticating)
-                .onSubmit { login() }
-
-            Divider().padding(.vertical, 4)
-
-            LText("Or paste a pCloud access token")
-                .font(.caption.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 4) {
-                LText("How to get your token:")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                LText("1. Sign in at my.pcloud.com in your browser")
-                LText("2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)")
-                LText("3. Chrome/Edge: Application tab → Storage → Cookies → https://my.pcloud.com")
-                LText("   Firefox: Storage tab → Cookies → https://my.pcloud.com")
-                LText("   Safari: Storage tab → Cookies → my.pcloud.com (enable Develop menu first)")
-                LText("4. Copy the Value of the cookie named \"pcauth\" and paste it below")
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Link(destination: URL(string: "https://my.pcloud.com")!) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.right.square")
-                    LText("Open my.pcloud.com")
+        VStack(spacing: 12) {
+            if appState.syncManager.isAuthenticatingPCloud {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    LText("Waiting for sign-in in browser…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption)
+            } else {
+                LText("Click Connect to sign in with your pCloud account. Your browser will open for authentication.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            SecureField(L10n.text("Access Token (pcauth cookie value)"), text: $apiToken)
-                .textFieldStyle(.roundedBorder)
-                .disabled(isAuthenticating)
-                .onSubmit { login() }
         }
     }
 
@@ -1532,7 +1500,7 @@ struct AddCloudAccountView: View {
     private var isLoginDisabled: Bool {
         if isAuthenticating { return true }
         switch selectedProvider {
-        case .pCloud: return apiToken.isEmpty && (email.isEmpty || password.isEmpty)
+        case .pCloud: return false
         case .kDrive: return apiToken.isEmpty
         case .oneDrive: return false
         case .googleDrive: return false
@@ -1811,12 +1779,7 @@ struct AddCloudAccountView: View {
                     appState.syncManager.authError = error.localizedDescription
                 }
             case .pCloud:
-                let trimmedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedToken.isEmpty {
-                    await appState.syncManager.addPCloudAccount(accessToken: trimmedToken)
-                } else {
-                    await appState.syncManager.addPCloudAccount(email: email, password: password)
-                }
+                await appState.syncManager.addPCloudAccount()
             case .gopro:
                 switch goProMode {
                 case .scan:

@@ -1250,3 +1250,6 @@
 "Search index error: %@" = "Fehler im Suchindex: %@";
 "S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "Die S3-Endpunkt-URL ist ungültig (Host: \"%@\"). Prüfe das Feld „Endpunkt-URL“.";
 "Filen API error" = "Fehler der Filen-API";
+"Click Connect to sign in with your pCloud account. Your browser will open for authentication." = "Klicke auf „Verbinden“, um dich mit deinem pCloud-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.";
+"pCloud didn't issue a token." = "pCloud hat kein Token ausgestellt.";
+"The sign-in needs a free local port, and all of them are in use by other apps." = "Die Anmeldung braucht einen freien lokalen Port, aber alle sind von anderen Apps belegt.";

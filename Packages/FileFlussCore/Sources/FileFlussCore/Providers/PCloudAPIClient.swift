@@ -4,6 +4,34 @@ public struct PCloudCredentials: Codable, Sendable {
     let accessToken: String
     let hostname: String
     let userId: UInt64
+    /// True for a token from the browser sign-in (OAuth), which pCloud
+    /// expects as `access_token`. Accounts added before, with a password
+    /// login or a pasted `pcauth` cookie, hold an `auth` token instead and
+    /// keep sending it that way.
+    var isOAuth: Bool? = nil
+
+    var authQueryItem: URLQueryItem {
+        URLQueryItem(name: isOAuth == true ? "access_token" : "auth", value: accessToken)
+    }
+}
+
+/// The app FileFluss is registered as with pCloud. Ships in the binary, as
+/// it must for a desktop app; pCloud's code flow needs the secret for the
+/// token exchange.
+enum PCloudAppCredentials {
+    static let clientId = "vKBvKTqCvbF"
+    static let clientSecret = "YsF6bz4dFjHz4hdGxVkf7L4PAHEk"
+    static let authorizeURL = "https://my.pcloud.com/oauth2/authorize"
+    /// Where an account's data lives decides which host serves it. The
+    /// browser sign-in names it, and only these two are accepted.
+    static let apiHosts: Set<String> = ["api.pcloud.com", "eapi.pcloud.com"]
+    /// pCloud matches the redirect address exactly, port included, so each
+    /// of these is registered in the app's settings at docs.pcloud.com:
+    /// `http://localhost`, `http://localhost:53682`, `http://localhost:53683`.
+    /// Port 80 comes first because it needs no port in the address, and
+    /// macOS lets any app listen on it; the others cover a Mac where a
+    /// local web server already has it.
+    static let redirectPorts: [UInt16] = [80, 53682, 53683]
 }
 
 public actor PCloudAPIClient {
@@ -17,6 +45,93 @@ public actor PCloudAPIClient {
     }
 
     private var baseURL: String { "https://\(credentials.hostname)" }
+
+    // MARK: - Browser sign-in
+
+    /// pCloud's OAuth 2.0 code flow: the user signs in and approves
+    /// FileFluss on pCloud's page, which redirects back with a code and the
+    /// API host of the account's region; the code is then exchanged on that
+    /// host for a token. pCloud's tokens don't expire, so there is no
+    /// refresh step.
+    public static func startOAuthFlow() async throws -> PCloudCredentials {
+        let state = UUID().uuidString
+        let result = try await OAuthSession.authenticate(
+            callbackURLScheme: "filefluss-oauth",
+            loopback: .fixedLocalhost(ports: PCloudAppCredentials.redirectPorts)
+        ) { redirectURI in
+            var components = URLComponents(string: PCloudAppCredentials.authorizeURL)!
+            components.queryItems = [
+                URLQueryItem(name: "client_id", value: PCloudAppCredentials.clientId),
+                URLQueryItem(name: "response_type", value: "code"),
+                URLQueryItem(name: "redirect_uri", value: redirectURI),
+                URLQueryItem(name: "state", value: state),
+            ]
+            return components.url!
+        }
+
+        let params = URLComponents(url: result.callbackURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? { params.first { $0.name == name }?.value }
+        guard value("state") == state else { throw CloudProviderError.unauthorized }
+        guard let code = value("code"), !code.isEmpty else { throw CloudProviderError.unauthorized }
+        let hostname = try oauthHost(from: value("hostname"))
+
+        var components = URLComponents(string: "https://\(hostname)/oauth2_token")!
+        components.queryItems = [
+            URLQueryItem(name: "client_id", value: PCloudAppCredentials.clientId),
+            URLQueryItem(name: "client_secret", value: PCloudAppCredentials.clientSecret),
+            URLQueryItem(name: "code", value: code),
+        ]
+        guard let url = components.url else { throw CloudProviderError.invalidResponse }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let response = try parseTokenResponse(data)
+        let accessToken = response.accessToken
+        let userId: UInt64
+        if let uid = response.userId {
+            userId = uid
+        } else {
+            // Not every answer names the user; userinfo always does.
+            let probe = PCloudAPIClient(credentials: PCloudCredentials(
+                accessToken: accessToken, hostname: hostname, userId: 0, isOAuth: true))
+            userId = try await probe.userInfo().userId
+        }
+        return PCloudCredentials(accessToken: accessToken, hostname: hostname, userId: userId, isOAuth: true)
+    }
+
+    /// Reads oauth2_token's answer. The documentation promises
+    /// `access_token` and `uid`, but pCloud actually sends `userid` (seen
+    /// 2026-11: access_token, locationid, result, token_type, userid), so
+    /// both spellings are read, and `auth` too. The support log records
+    /// which fields came back, never their values.
+    static func parseTokenResponse(_ data: Data) throws -> (accessToken: String, userId: UInt64?) {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CloudProviderError.invalidResponse
+        }
+        let result = (object["result"] as? NSNumber)?.intValue ?? -1
+        SupportLogger.shared.log(
+            "pCloud oauth2_token: result \(result), fields \(object.keys.sorted().joined(separator: ", "))",
+            category: "pcloud")
+        if result != 0 {
+            throw CloudProviderError.commandFailed((object["error"] as? String) ?? L10n.text("pCloud didn't issue a token."))
+        }
+        guard let token = (object["access_token"] ?? object["auth"]) as? String, !token.isEmpty else {
+            throw CloudProviderError.commandFailed(L10n.text("pCloud didn't issue a token."))
+        }
+        func number(_ key: String) -> UInt64? {
+            if let n = object[key] as? NSNumber { return n.uint64Value }
+            if let s = object[key] as? String { return UInt64(s) }
+            return nil
+        }
+        return (token, number("uid") ?? number("userid"))
+    }
+
+    /// The API host named in the redirect, if it is one of pCloud's own.
+    /// Anything else is refused: the app secret and the code go there next.
+    static func oauthHost(from hostname: String?) throws -> String {
+        guard let hostname = hostname?.lowercased(), PCloudAppCredentials.apiHosts.contains(hostname) else {
+            throw CloudProviderError.invalidResponse
+        }
+        return hostname
+    }
 
     // MARK: - Folder Operations
 
@@ -182,7 +297,8 @@ public actor PCloudAPIClient {
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
-        var urlString = "\(baseURL)/uploadfile?auth=\(credentials.accessToken)&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
+        let auth = credentials.authQueryItem
+        var urlString = "\(baseURL)/uploadfile?\(auth.name)=\(auth.value ?? "")&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
 
         if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
             urlString += "&mtime=\(Int64(modDate.timeIntervalSince1970))"
@@ -575,7 +691,7 @@ public actor PCloudAPIClient {
     /// `credentials.hostname` records which one logged in).
     private func fetch(_ method: String, params: [String: String]) async throws -> Data {
         var components = URLComponents(string: "\(baseURL)/\(method)")!
-        var queryItems = [URLQueryItem(name: "auth", value: credentials.accessToken)]
+        var queryItems = [credentials.authQueryItem]
         for (key, value) in params {
             queryItems.append(URLQueryItem(name: key, value: value))
         }
