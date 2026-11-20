@@ -496,6 +496,15 @@ struct CloudFileListView: View {
     }
 
     private var cloudPathBar: some View {
+        HStack(spacing: 0) {
+            cloudBreadcrumbs
+            PanelViewModeSwitch(panelSide: panelSide)
+                .padding(.horizontal, 8)
+        }
+        .background(.bar)
+    }
+
+    private var cloudBreadcrumbs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 if let providerType = appState.syncManager.accountFor(id: accountId)?.providerType {
@@ -530,7 +539,6 @@ struct CloudFileListView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .background(.bar)
     }
 
     /// Build a synthetic `CloudFileItem` for a breadcrumb component. The
@@ -1338,8 +1346,13 @@ struct CloudFileListView: View {
                     openCloudFiles(items, withApplication: app)
                 },
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
-                singlePaneMode: appState.singlePaneMode
+                singlePaneMode: appState.singlePaneMode,
+                viewMode: appState.viewMode(for: panelSide),
+                currentPath: vm.currentPath
             )
+            // A list and a gallery are different AppKit views; a new
+            // identity builds the other one when the mode changes.
+            .id(appState.viewMode(for: panelSide))
             .onChange(of: vm.selectedItemIDs) {
                 vm.updateQuickLookSelection()
                 vm.recalculateSelectionSize()

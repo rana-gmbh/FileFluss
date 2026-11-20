@@ -194,6 +194,18 @@ struct FileCommands: Commands {
 
             Divider()
 
+            // Act on the active panel; each panel keeps its own choice.
+            applyShortcut(.viewAsList, to: Toggle(L10n.text("as List"), isOn: Binding(
+                get: { appState.viewMode(for: appState.activePanel) == .list },
+                set: { if $0 { appState.setViewMode(.list, for: appState.activePanel) } }
+            )))
+            applyShortcut(.viewAsGallery, to: Toggle(L10n.text("as Gallery"), isOn: Binding(
+                get: { appState.viewMode(for: appState.activePanel) == .gallery },
+                set: { if $0 { appState.setViewMode(.gallery, for: appState.activePanel) } }
+            )))
+
+            Divider()
+
             applyShortcut(.sortByName, to: Button(L10n.text("Sort by Name")) {
                 NotificationCenter.default.post(name: KeyboardCommand.sortByName.notification, object: nil)
             })

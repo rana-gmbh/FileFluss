@@ -1259,3 +1259,18 @@
 "Click Connect to sign in with your pCloud account. Your browser will open for authentication." = "Click Connect to sign in with your pCloud account. Your browser will open for authentication.";
 "pCloud didn't issue a token." = "pCloud didn't issue a token.";
 "The sign-in needs a free local port, and all of them are in use by other apps." = "The sign-in needs a free local port, and all of them are in use by other apps.";
+
+/* Gallery view */
+"as List" = "as List";
+"as Gallery" = "as Gallery";
+"View as List" = "View as List";
+"View as Gallery" = "View as Gallery";
+"List" = "List";
+"Gallery" = "Gallery";
+"View" = "View";
+"Show this panel as a list or as a gallery" = "Show this panel as a list or as a gallery";
+"List or gallery" = "List or gallery";
+"The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice." = "The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice.";
+"**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." = "**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard.";
+"In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type.";
+"**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.";

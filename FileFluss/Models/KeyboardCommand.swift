@@ -52,6 +52,8 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
     case sortBySize
     case sortByKind
     case toggleHiddenFiles
+    case viewAsList
+    case viewAsGallery
 
     // Cross-panel & sync
     case swapPanels
@@ -103,6 +105,8 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
         case .sortBySize: return "Sort by Size"
         case .sortByKind: return "Sort by Kind"
         case .toggleHiddenFiles: return "Show Hidden Files"
+        case .viewAsList: return "View as List"
+        case .viewAsGallery: return "View as Gallery"
         case .swapPanels: return "Swap Panels"
         case .syncPanels: return "Sync Left and Right Panels"
         case .compareFolders: return "Compare Folders"
@@ -139,7 +143,8 @@ enum KeyboardCommand: String, CaseIterable, Codable, Identifiable, Hashable {
             return .clipboard
         case .selectAll, .deselectAll, .invertSelection, .getInfo:
             return .selection
-        case .sortByName, .sortByDate, .sortBySize, .sortByKind, .toggleHiddenFiles:
+        case .sortByName, .sortByDate, .sortBySize, .sortByKind, .toggleHiddenFiles,
+             .viewAsList, .viewAsGallery:
             return .viewSort
         case .swapPanels, .syncPanels, .compareFolders, .refreshActive, .refreshAll:
             return .crossPanelTools

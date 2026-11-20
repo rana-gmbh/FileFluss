@@ -19,38 +19,40 @@ enum FileTypeIcon {
 
     /// Point size the icons are rasterized at. Big enough for the 18pt
     /// list cells and the search popup, with @1x and @2x reps.
-    private static let rasterPointSize: CGFloat = 32
+    static let rasterPointSize: CGFloat = 32
 
-    static func folderIcon() -> NSImage {
-        cached(key: "__folder") { NSWorkspace.shared.icon(for: .folder) }
+    /// `pointSize` is only worth raising where the icon is drawn large —
+    /// the gallery's tiles. Each size is rasterized and cached on its own.
+    static func folderIcon(pointSize: CGFloat = rasterPointSize) -> NSImage {
+        cached(key: "__folder", pointSize: pointSize) { NSWorkspace.shared.icon(for: .folder) }
     }
 
-    static func icon(for type: UTType?) -> NSImage {
+    static func icon(for type: UTType?, pointSize: CGFloat = rasterPointSize) -> NSImage {
         let utType = type ?? .data
-        return cached(key: utType.identifier) {
+        return cached(key: utType.identifier, pointSize: pointSize) {
             NSWorkspace.shared.icon(for: utType)
         }
     }
 
     /// For items that only know their filename (cloud listings), resolve
     /// the extension to a UTType and cache the resulting icon.
-    static func icon(forFilename name: String) -> NSImage {
+    static func icon(forFilename name: String, pointSize: CGFloat = rasterPointSize) -> NSImage {
         let ext = (name as NSString).pathExtension.lowercased()
-        guard !ext.isEmpty else { return icon(for: nil) }
-        return cached(key: "ext:\(ext)") {
+        guard !ext.isEmpty else { return icon(for: nil, pointSize: pointSize) }
+        return cached(key: "ext:\(ext)", pointSize: pointSize) {
             let utType = UTType(filenameExtension: ext) ?? .data
             return NSWorkspace.shared.icon(for: utType)
         }
     }
 
-    private static func cached(key: String, build: () -> NSImage) -> NSImage {
+    private static func cached(key: String, pointSize: CGFloat, build: () -> NSImage) -> NSImage {
         let appearance = NSApp.effectiveAppearance
         let appearanceKey = appearance.bestMatch(from: [.darkAqua, .aqua])?.rawValue ?? "aqua"
-        let fullKey = "\(appearanceKey)|\(key)"
+        let fullKey = "\(appearanceKey)|\(Int(pointSize))|\(key)"
         if let cached = cache[fullKey] { return cached }
         var img = build()
         appearance.performAsCurrentDrawingAppearance {
-            img = rasterized(img)
+            img = rasterized(img, pointSize: pointSize)
         }
         cache[fullKey] = img
         return img
@@ -58,11 +60,11 @@ enum FileTypeIcon {
 
     /// Renders `source` into static bitmap reps at @1x and @2x. Falls back
     /// to the original image if rendering fails.
-    private static func rasterized(_ source: NSImage) -> NSImage {
-        let size = NSSize(width: rasterPointSize, height: rasterPointSize)
+    private static func rasterized(_ source: NSImage, pointSize: CGFloat) -> NSImage {
+        let size = NSSize(width: pointSize, height: pointSize)
         let result = NSImage(size: size)
         for scale in [1, 2] {
-            let px = Int(rasterPointSize) * scale
+            let px = Int(pointSize) * scale
             guard let rep = NSBitmapImageRep(
                 bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px,
                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,

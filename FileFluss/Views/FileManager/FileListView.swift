@@ -350,6 +350,15 @@ struct FileListView: View {
     }
 
     private var pathBar: some View {
+        HStack(spacing: 0) {
+            breadcrumbs
+            PanelViewModeSwitch(panelSide: panelSide)
+                .padding(.horizontal, 8)
+        }
+        .background(.bar)
+    }
+
+    private var breadcrumbs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(pathComponents, id: \.url) { component in
@@ -376,7 +385,6 @@ struct FileListView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .background(.bar)
     }
 
     /// Map a drop of file URLs onto a breadcrumb component into the existing
@@ -821,8 +829,12 @@ struct FileListView: View {
                     },
                     onOpenWith: { items, app in
                         Task { await fm.open(items, withApplication: app) }
-                    }
+                    },
+                    viewMode: appState.viewMode(for: panelSide)
                 )
+                // A list and a gallery are different AppKit views; a new
+                // identity builds the other one when the mode changes.
+                .id(appState.viewMode(for: panelSide))
                 .onChange(of: fm.selectedItemIDs) {
                     fm.updateQuickLookSelection()
                     fm.recalculateSelectionSize()

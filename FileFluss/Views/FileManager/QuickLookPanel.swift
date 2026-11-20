@@ -7,7 +7,9 @@ import QuickLookUI
 @MainActor
 final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     var urls: [URL] = []
-    weak var sourceTableView: NSTableView?
+    /// The panel's list or gallery: the view Quick Look hands its arrow
+    /// keys back to.
+    weak var sourceView: NSView?
 
     func toggle() {
         guard let panel = QLPreviewPanel.shared() else { return }
@@ -16,10 +18,10 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
             panel.orderOut(nil)
         } else {
             guard !urls.isEmpty else { return }
-            // Ensure the table view is first responder so QLPreviewPanel
-            // finds it via the responder chain.
-            if let tv = sourceTableView {
-                tv.window?.makeFirstResponder(tv)
+            // Ensure the list or gallery is first responder so
+            // QLPreviewPanel finds it via the responder chain.
+            if let view = sourceView {
+                view.window?.makeFirstResponder(view)
             }
             panel.makeKeyAndOrderFront(nil)
         }
@@ -56,8 +58,9 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
 
     // MARK: - QLPreviewPanelDelegate
 
-    /// Forward arrow key events back to the source table view so the user
-    /// can navigate files while Quick Look is open. Space closes the panel.
+    /// Forward arrow key events back to the source list or gallery so the
+    /// user can navigate files while Quick Look is open. Space closes the
+    /// panel.
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
         guard let event, event.type == .keyDown else { return false }
 
@@ -67,10 +70,13 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
             return true
         }
 
-        // Arrow keys → forward to table view to change selection
-        let arrowKeyCodes: Set<UInt16> = [125, 126] // down, up
-        if arrowKeyCodes.contains(event.keyCode), let tableView = sourceTableView {
-            tableView.keyDown(with: event)
+        // Arrow keys → forward to the list or gallery to change selection.
+        // A gallery is a grid, so left and right move through it as well.
+        guard let view = sourceView else { return false }
+        var arrowKeyCodes: Set<UInt16> = [125, 126] // down, up
+        if view is NSCollectionView { arrowKeyCodes.formUnion([123, 124]) } // left, right
+        if arrowKeyCodes.contains(event.keyCode) {
+            view.keyDown(with: event)
             return true
         }
 

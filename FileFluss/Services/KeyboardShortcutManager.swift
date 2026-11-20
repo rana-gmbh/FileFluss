@@ -179,6 +179,10 @@ final class KeyboardShortcutManager {
         .sortBySize:         .cmd("3"),
         .sortByKind:         .cmd("4"),
         .toggleHiddenFiles:  .cmdShift("period"),
+        // ⌘1–⌘4 already sort, so the view modes take the same digits with
+        // Control added.
+        .viewAsList:         .cmdControl("1"),
+        .viewAsGallery:      .cmdControl("2"),
 
         // Cross-panel & sync
         .swapPanels:         .cmd("u"),
@@ -241,6 +245,8 @@ final class KeyboardShortcutManager {
         .sortBySize:         .init(key: "f6", modifiers: .control),
         .sortByKind:         .init(key: "f4", modifiers: .control),
         .toggleHiddenFiles:  .cmdShift("period"),
+        .viewAsList:         .cmdControl("1"),
+        .viewAsGallery:      .cmdControl("2"),
 
         // Cross-panel & sync
         .swapPanels:         .cmd("u"),

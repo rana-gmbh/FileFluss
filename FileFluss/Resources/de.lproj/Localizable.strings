@@ -1259,3 +1259,18 @@
 "Click Connect to sign in with your pCloud account. Your browser will open for authentication." = "Klicke auf „Verbinden“, um dich mit deinem pCloud-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.";
 "pCloud didn't issue a token." = "pCloud hat kein Token ausgestellt.";
 "The sign-in needs a free local port, and all of them are in use by other apps." = "Die Anmeldung braucht einen freien lokalen Port, aber alle sind von anderen Apps belegt.";
+
+/* Gallery view */
+"as List" = "als Liste";
+"as Gallery" = "als Galerie";
+"View as List" = "Als Liste anzeigen";
+"View as Gallery" = "Als Galerie anzeigen";
+"List" = "Liste";
+"Gallery" = "Galerie";
+"View" = "Darstellung";
+"Show this panel as a list or as a gallery" = "Diesen Bereich als Liste oder als Galerie anzeigen";
+"List or gallery" = "Liste oder Galerie";
+"The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice." = "Der Schalter am rechten Ende jeder Pfadleiste zeigt einen Bereich als **Liste** oder als **Galerie** mit Miniaturbildern. Jeder Bereich merkt sich seine Wahl.";
+"**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." = "**Darstellung → als Liste** und **Darstellung → als Galerie** schalten den aktiven Bereich über das Menü oder die Tastatur um.";
+"In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "In der Galerie zeigen lokale Bilder, Videos, PDFs und Dokumente eine Vorschau; Cloud-Dateien zeigen das Symbol ihres Dateityps.";
+"**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** und **⌘-** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste.";

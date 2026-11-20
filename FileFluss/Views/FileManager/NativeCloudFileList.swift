@@ -79,6 +79,12 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// Hides the "Copy/Move to other Panel" context-menu items when only one
     /// pane is shown.
     var singlePaneMode: Bool = false
+    /// Rows or tiles. Fixed for the life of the view: the panel gives the
+    /// list an `.id` of the mode, so switching builds the other kind afresh.
+    var viewMode: FileViewMode = .list
+    /// The folder on screen. The gallery scrolls back to the top when it
+    /// changes, as a fresh listing should.
+    var currentPath: String = ""
 
     func makeCoordinator() -> CloudTableCoordinator {
         CloudTableCoordinator()
@@ -86,6 +92,9 @@ struct NativeCloudFileList: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let coordinator = context.coordinator
+        if viewMode == .gallery {
+            return makeGallery(coordinator: coordinator)
+        }
 
         let tableView = CloudTableView()
         tableView.style = .inset
@@ -159,7 +168,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         // Quick Look controller
         if let qlController = quickLookController {
             tableView.quickLookController = qlController
-            qlController.sourceTableView = tableView
+            qlController.sourceView = tableView
         }
 
         let menu = NSMenu()
@@ -180,7 +189,6 @@ struct NativeCloudFileList: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         let coordinator = context.coordinator
-        let tableView = coordinator.tableView!
 
         coordinator.panelSide = panelSide
         coordinator.onDoubleClick = onDoubleClick
@@ -236,6 +244,18 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.hideFileExtensions = hideFileExtensions
 
         coordinator.items = items
+
+        if let galleryView = coordinator.galleryView {
+            coordinator.updateGallery(
+                galleryView,
+                itemsChanged: itemsChanged || extensionPrefChanged,
+                selectedIDs: selectedIDs,
+                location: currentPath,
+                focusToken: focusToken
+            )
+            return
+        }
+        guard let tableView = coordinator.tableView else { return }
 
         if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
@@ -428,6 +448,13 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var sharedPaths: Set<String> = []
     var singlePaneMode = false
     weak var tableView: CloudTableView?
+    /// Set instead of `tableView` when the panel shows a gallery. Exactly
+    /// one of the two exists for a coordinator's lifetime.
+    weak var galleryView: FileGalleryView?
+    /// Tile size the gallery is currently drawn at.
+    var galleryMetrics: FileGalleryMetrics?
+    /// The folder the gallery last scrolled for.
+    var lastGalleryLocation: String?
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
     nonisolated(unsafe) private var columnsObserver: NSObjectProtocol?
@@ -489,6 +516,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             if window.firstResponder !== tableView {
                 window.makeFirstResponder(tableView)
             }
+        } else if let galleryView, let window = galleryView.window {
+            if galleryView.selectionIndexPaths.isEmpty && !items.isEmpty {
+                let first = IndexPath(item: 0, section: 0)
+                galleryView.selectionIndexPaths = [first]
+                gallerySelectionDidChange()
+                galleryView.scrollToItems(at: [first], scrollPosition: .nearestHorizontalEdge)
+            }
+            if window.firstResponder !== galleryView {
+                window.makeFirstResponder(galleryView)
+            }
         }
         guard attemptsLeft > 1 else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
@@ -498,6 +535,12 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     @MainActor
     private func applyRowSize() {
+        if let galleryView {
+            let metrics = FileGalleryMetrics()
+            galleryMetrics = metrics
+            galleryView.apply(metrics)
+            return
+        }
         guard let tableView else { return }
         tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
         // reloadData re-routes through `viewFor:row:` so each cell's
@@ -679,9 +722,9 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             return
         }
         menu.removeAllItems()
-        guard let tableView else { return }
+        guard tableView != nil || galleryView != nil else { return }
 
-        let clickedRow = tableView.clickedRow
+        let clickedRow = contextClickedIndex
 
         // The synthetic "Shared drives" container only ever lists shared-drive
         // roots. When that's what we're viewing, the current directory isn't a
@@ -704,11 +747,11 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             return
         }
 
-        if !tableView.selectedRowIndexes.contains(clickedRow) {
-            tableView.selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
+        if !displayedSelection.contains(clickedRow) {
+            selectOnly(clickedRow)
         }
 
-        let selectedRows = tableView.selectedRowIndexes
+        let selectedRows = displayedSelection
         let contextItems = selectedRows.compactMap { index -> CloudFileItem? in
             guard index < items.count else { return nil }
             return items[index]
@@ -957,6 +1000,31 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         }
     }
 
+    /// The item a context menu was opened on, or -1 for the background,
+    /// from whichever of the list and the gallery is showing.
+    private var contextClickedIndex: Int {
+        if let tableView { return tableView.clickedRow }
+        return galleryView?.clickedIndex ?? -1
+    }
+
+    /// The selection as the view on screen has it.
+    var displayedSelection: IndexSet {
+        if let tableView { return tableView.selectedRowIndexes }
+        guard let galleryView else { return [] }
+        return IndexSet(galleryView.selectionIndexPaths.map(\.item))
+    }
+
+    /// Selects just this item, as right-clicking outside the selection does.
+    private func selectOnly(_ index: Int) {
+        if let tableView {
+            tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        } else if let galleryView {
+            galleryView.selectionIndexPaths = [IndexPath(item: index, section: 0)]
+            // A collection view reports only selections the user made.
+            gallerySelectionDidChange()
+        }
+    }
+
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [CloudFileItem] else { return }
         onCopyToOtherPanel?(contextItems)
@@ -1097,8 +1165,14 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     // MARK: - Drag Source
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
-        guard row < items.count else { return nil }
-        let item = items[row]
+        pasteboardWriter(at: row)
+    }
+
+    /// What a drag of the item at `index` puts on the pasteboard — the same
+    /// for a row and a tile.
+    func pasteboardWriter(at index: Int) -> (any NSPasteboardWriting)? {
+        guard index >= 0, index < items.count else { return nil }
+        let item = items[index]
 
         // Inside an archive the drop end gets a promise that unpacks the
         // entry, the same as the local panel's — the cloud flow's promise is
@@ -1122,7 +1196,15 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
-        currentDragItems = rowIndexes.compactMap { index in
+        dragBegan(at: rowIndexes)
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dragEnded()
+    }
+
+    func dragBegan(at indexes: IndexSet) {
+        currentDragItems = indexes.compactMap { index in
             guard index < items.count else { return nil }
             return items[index]
         }
@@ -1131,7 +1213,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
         if !archiveMode { onDragSessionStarted?(currentDragItems) }
     }
 
-    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+    func dragEnded() {
         currentDragItems = []
         onDragSessionEnded?()
     }
@@ -1165,18 +1247,37 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     }
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        switch dropTarget(for: info, onItemAt: dropOperation == .on ? row : nil) {
+        case .refuse:
+            return []
+        case .item(let operation):
+            return operation
+        case .background(let operation):
+            // Fall back to dropping on the background (current directory)
+            tableView.setDropRow(-1, dropOperation: .on)
+            return operation
+        }
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        performDrop(info, onItemAt: dropOperation == .on ? row : nil)
+    }
+
+    /// Where a drag over the item at `index` — nil for the space between
+    /// items — would land, for a row and a tile alike.
+    func dropTarget(for info: any NSDraggingInfo, onItemAt index: Int?) -> FileDropTarget {
         // An archive listing is read-only; there is nowhere for a drop to go.
-        if archiveMode { return [] }
+        if archiveMode { return .refuse }
 
         // Hovering a folder opens it after a moment, so a drag can be carried
         // into a subfolder without dropping first.
-        armSpringLoad(row: dropOperation == .on ? row : nil)
+        armSpringLoad(row: index)
 
         // Internal drag from the same cloud panel: allow drop onto a subfolder row
-        if !currentDragItems.isEmpty, dropOperation == .on, row >= 0, row < items.count {
-            let target = items[row]
+        if !currentDragItems.isEmpty, let index, index >= 0, index < items.count {
+            let target = items[index]
             if target.isDirectory, !currentDragItems.contains(where: { $0.id == target.id }) {
-                return .generic
+                return .item(.generic)
             }
         }
 
@@ -1185,24 +1286,25 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
         if hasPromises || hasURLs {
             // Allow dropping onto a specific subfolder row
-            if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
-                return hasPromises ? .copy : .generic
+            if let index, index >= 0, index < items.count, items[index].isDirectory {
+                return .item(hasPromises ? .copy : .generic)
             }
             // Fall back to dropping on the background (current directory)
-            tableView.setDropRow(-1, dropOperation: .on)
-            return hasPromises ? .copy : .generic
+            return .background(hasPromises ? .copy : .generic)
         }
-        return []
+        return .refuse
     }
 
-    func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+    /// Runs a drop on the item at `index`, or on the folder on screen when
+    /// `index` is nil.
+    func performDrop(_ info: any NSDraggingInfo, onItemAt index: Int?) -> Bool {
         cancelSpringLoad()
         if archiveMode { return false }
 
         // Resolve an optional subfolder target from the drop row
         var targetFolder: CloudFileItem?
-        if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
-            targetFolder = items[row]
+        if let index, index >= 0, index < items.count, items[index].isDirectory {
+            targetFolder = items[index]
         }
 
         // Internal drag: drop onto a subfolder in the same panel

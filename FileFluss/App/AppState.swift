@@ -50,6 +50,31 @@ final class AppState {
         didSet { UserDefaults.standard.set(singlePaneMode, forKey: "singlePaneMode") }
     }
 
+    /// List or gallery, per panel, remembered across launches. Read and
+    /// changed through `viewMode(for:)` / `setViewMode(_:for:)`.
+    private(set) var leftViewMode: FileViewMode = FileViewModePrefs.load(for: .left)
+    private(set) var rightViewMode: FileViewMode = FileViewModePrefs.load(for: .right)
+
+    func viewMode(for side: PanelSide) -> FileViewMode {
+        side == .left ? leftViewMode : rightViewMode
+    }
+
+    /// Switches one panel between list and gallery and keeps the choice for
+    /// the next launch. The panel that was switched becomes the active one
+    /// and gets keyboard focus back: the list or gallery it showed is
+    /// replaced, and the replacement would otherwise leave the arrow keys
+    /// with nowhere to go.
+    func setViewMode(_ mode: FileViewMode, for side: PanelSide) {
+        guard viewMode(for: side) != mode else { return }
+        switch side {
+        case .left: leftViewMode = mode
+        case .right: rightViewMode = mode
+        }
+        FileViewModePrefs.save(mode, for: side)
+        activePanel = side
+        requestActivePanelFocus()
+    }
+
     /// When set, the Settings window selects this tab on open. Lets toolbar
     /// shortcuts (e.g. the cloud button) deep-link straight to a tab. Cleared
     /// by SettingsView once consumed.
@@ -1072,6 +1097,13 @@ final class AppState {
         let rightSnapshot = snapshot(for: .right)
         apply(rightSnapshot, to: .left)
         apply(leftSnapshot, to: .right)
+        // The way a folder is shown travels with it: a photo folder in a
+        // gallery stays a gallery on the other side.
+        let leftMode = leftViewMode
+        leftViewMode = rightViewMode
+        rightViewMode = leftMode
+        FileViewModePrefs.save(leftViewMode, for: .left)
+        FileViewModePrefs.save(rightViewMode, for: .right)
     }
 
     private func copyActivePathToOtherPanel() {

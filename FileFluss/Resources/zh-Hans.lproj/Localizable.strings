@@ -1259,3 +1259,18 @@
 "Click Connect to sign in with your pCloud account. Your browser will open for authentication." = "点按“连接”以登录你的 pCloud 账户。你的浏览器将打开以进行认证。";
 "pCloud didn't issue a token." = "pCloud 未签发令牌。";
 "The sign-in needs a free local port, and all of them are in use by other apps." = "登录需要一个空闲的本地端口，但所有端口都已被其他 App 占用。";
+
+/* Gallery view */
+"as List" = "为列表";
+"as Gallery" = "为画廊";
+"View as List" = "以列表显示";
+"View as Gallery" = "以画廊显示";
+"List" = "列表";
+"Gallery" = "画廊";
+"View" = "显示方式";
+"Show this panel as a list or as a gallery" = "将此面板显示为列表或画廊";
+"List or gallery" = "列表或画廊";
+"The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice." = "每个路径栏右端的切换按钮可将面板显示为**列表**或缩略图**画廊**。每个面板都会记住自己的选择。";
+"**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." = "**显示 → 为列表**和**显示 → 为画廊**可通过菜单或键盘切换活跃面板。";
+"In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "在画廊中，本地图像、视频、PDF 和文稿会显示预览；云端文件显示其文件类型的图标。";
+"**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** 和 **⌘-** 可放大和缩小缩略图，与列表中的行一样。";

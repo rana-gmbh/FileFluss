@@ -58,6 +58,9 @@ struct NativeFileList: NSViewRepresentable {
     var onPromisedFilesReceived: ((Error?) -> Void)?
     /// Right-click → Open With: the selection and the application chosen.
     var onOpenWith: (([FileItem], URL) -> Void)?
+    /// Rows or tiles. Fixed for the life of the view: the panel gives the
+    /// list an `.id` of the mode, so switching builds the other kind afresh.
+    var viewMode: FileViewMode = .list
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -65,6 +68,9 @@ struct NativeFileList: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let coordinator = context.coordinator
+        if viewMode == .gallery {
+            return makeGallery(coordinator: coordinator)
+        }
 
         let tableView = FileTableView()
         tableView.style = .inset
@@ -162,7 +168,7 @@ struct NativeFileList: NSViewRepresentable {
         // Quick Look controller
         if let qlController = quickLookController {
             tableView.quickLookController = qlController
-            qlController.sourceTableView = tableView
+            qlController.sourceView = tableView
         }
 
         // Context menu
@@ -185,7 +191,6 @@ struct NativeFileList: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         let coordinator = context.coordinator
-        let tableView = coordinator.tableView!
 
         // Update callbacks
         coordinator.currentDirectory = currentDirectory
@@ -232,6 +237,18 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.hideFileExtensions = hideFileExtensions
 
         coordinator.items = items
+
+        if let galleryView = coordinator.galleryView {
+            coordinator.updateGallery(
+                galleryView,
+                itemsChanged: itemsChanged || extensionPrefChanged,
+                selectedIDs: selectedIDs,
+                location: currentDirectory.path,
+                focusToken: focusToken
+            )
+            return
+        }
+        guard let tableView = coordinator.tableView else { return }
 
         if itemsChanged || extensionPrefChanged {
             tableView.reloadData()
@@ -451,6 +468,11 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onSpringLoadFolder: ((FileItem) -> Void)?
     var singlePaneMode = false
     weak var tableView: FileTableView?
+    /// Set instead of `tableView` when the panel shows a gallery. Exactly
+    /// one of the two exists for a coordinator's lifetime.
+    weak var galleryView: FileGalleryView?
+    /// Tile size the gallery is currently drawn at.
+    var galleryMetrics: FileGalleryMetrics?
     var suppressSelectionUpdate = false
     weak var headerMenu: NSMenu?
     nonisolated(unsafe) private var columnsObserver: NSObjectProtocol?
@@ -496,6 +518,8 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// re-takes focus once per request (not on every unrelated update).
     var lastFocusToken: UUID?
     var lastDirectory: URL?
+    /// The folder the gallery last scrolled for, by path.
+    var lastGalleryLocation: String?
 
     @MainActor
     func focusTableViewSoon() {
@@ -520,6 +544,16 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             if window.firstResponder !== tableView {
                 window.makeFirstResponder(tableView)
             }
+        } else if let galleryView, let window = galleryView.window {
+            if galleryView.selectionIndexPaths.isEmpty && !items.isEmpty {
+                let first = IndexPath(item: 0, section: 0)
+                galleryView.selectionIndexPaths = [first]
+                gallerySelectionDidChange()
+                galleryView.scrollToItems(at: [first], scrollPosition: .nearestHorizontalEdge)
+            }
+            if window.firstResponder !== galleryView {
+                window.makeFirstResponder(galleryView)
+            }
         }
         guard attemptsLeft > 1 else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
@@ -529,6 +563,12 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     @MainActor
     private func applyRowSize() {
+        if let galleryView {
+            let metrics = FileGalleryMetrics()
+            galleryMetrics = metrics
+            galleryView.apply(metrics)
+            return
+        }
         guard let tableView else { return }
         tableView.rowHeight = FileListRowSizePrefs.current.rowHeight
         // reloadData re-routes through `viewFor:row:` so each cell's
@@ -720,9 +760,9 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             return
         }
         menu.removeAllItems()
-        guard let tableView else { return }
+        guard tableView != nil || galleryView != nil else { return }
 
-        let clickedRow = tableView.clickedRow
+        let clickedRow = contextClickedIndex
 
         // Right-click on empty area — Paste (if clipboard has items) + New Folder.
         // Neither applies inside an archive, which can't be written to.
@@ -740,11 +780,11 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         }
 
         // If the clicked row is not in the current selection, select only that row
-        if !tableView.selectedRowIndexes.contains(clickedRow) {
-            tableView.selectRowIndexes(IndexSet(integer: clickedRow), byExtendingSelection: false)
+        if !displayedSelection.contains(clickedRow) {
+            selectOnly(clickedRow)
         }
 
-        let selectedRows = tableView.selectedRowIndexes
+        let selectedRows = displayedSelection
         let contextItems = selectedRows.compactMap { index -> FileItem? in
             guard index < items.count else { return nil }
             return items[index]
@@ -900,6 +940,32 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         menu.addItem(deleteItem)
     }
 
+    /// The item a context menu was opened on, or -1 for the background,
+    /// from whichever of the list and the gallery is showing.
+    private var contextClickedIndex: Int {
+        if let tableView { return tableView.clickedRow }
+        return galleryView?.clickedIndex ?? -1
+    }
+
+    /// The selection as the view on screen has it.
+    var displayedSelection: IndexSet {
+        if let tableView { return tableView.selectedRowIndexes }
+        guard let galleryView else { return [] }
+        return IndexSet(galleryView.selectionIndexPaths.map(\.item))
+    }
+
+    /// Selects just this item, as right-clicking outside the selection does.
+    private func selectOnly(_ index: Int) {
+        if let tableView {
+            tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        } else if let galleryView {
+            galleryView.selectionIndexPaths = [IndexPath(item: index, section: 0)]
+            // Unlike a table, a collection view reports only selections the
+            // user made, so a change made here is passed on by hand.
+            gallerySelectionDidChange()
+        }
+    }
+
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
         guard let contextItems = sender.representedObject as? [FileItem] else { return }
         onCopyToOtherPanel?(contextItems)
@@ -1040,8 +1106,14 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     // MARK: - Drag Source
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
-        guard row < items.count else { return nil }
-        let item = items[row]
+        pasteboardWriter(at: row)
+    }
+
+    /// What a drag of the item at `index` puts on the pasteboard — the same
+    /// for a row and a tile.
+    func pasteboardWriter(at index: Int) -> (any NSPasteboardWriting)? {
+        guard index >= 0, index < items.count else { return nil }
+        let item = items[index]
         guard archiveMode, let plan = archiveDragPlan else { return item.url as NSURL }
 
         // Inside an archive there is no file to hand over yet. A file promise
@@ -1061,15 +1133,23 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 
     func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+        dragBegan(at: rowIndexes)
+    }
+
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dragEnded()
+    }
+
+    func dragBegan(at indexes: IndexSet) {
         // Collect all dragged items
-        currentDragItems = rowIndexes.compactMap { index in
+        currentDragItems = indexes.compactMap { index in
             guard index < items.count else { return nil }
             return items[index]
         }
         currentDragItemIDs = Set(currentDragItems.map(\.id))
     }
 
-    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+    func dragEnded() {
         currentDragItems = []
         currentDragItemIDs = []
     }
@@ -1106,58 +1186,75 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     // MARK: - Drop Destination
 
     func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        // Accept file promises from cloud panels
-        // Hovering a folder opens it after a moment, so a drag can be
-        // carried into a subfolder without dropping first.
-        armSpringLoad(row: dropOperation == .on ? row : nil)
-
-        // An archive listing is read-only; there is nowhere for a drop to go.
-        if archiveMode { return [] }
-
-        let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
-        if hasPromises {
-            // Allow drop onto a specific subfolder row; otherwise target the current directory.
-            if dropOperation == .on, row >= 0, row < items.count, items[row].isDirectory {
-                return .copy
-            }
-            tableView.setDropRow(-1, dropOperation: .on)
-            return .copy
-        }
-
-        if dropOperation == .on {
-            // Dropping ON a specific row — must be a directory
-            guard row >= 0, row < items.count else { return [] }
-            let target = items[row]
-            // A file isn't a place to drop, so the row means the folder it's
-            // in. Refusing made a folder full of files nearly impossible to
-            // drop into.
-            guard target.isDirectory else {
-                guard currentDirectory != nil else { return [] }
-                tableView.setDropRow(-1, dropOperation: .on)
-                return .generic
-            }
-            // Don't drop onto a dragged item itself
-            if currentDragItemIDs.contains(target.id) {
-                return []
-            }
-            return .generic
-        } else {
-            // Dropping between rows or on table background — target is current directory
-            guard currentDirectory != nil else { return [] }
+        switch dropTarget(for: info, onItemAt: dropOperation == .on ? row : nil) {
+        case .refuse:
+            return []
+        case .item(let operation):
+            return operation
+        case .background(let operation):
             // Retarget to the whole table (drop on background)
             tableView.setDropRow(-1, dropOperation: .on)
-            return .generic
+            return operation
         }
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        performDrop(info, onItemAt: dropOperation == .on ? row : nil)
+    }
+
+    /// Where a drag over the item at `index` — nil for the space between
+    /// items — would land, for a row and a tile alike.
+    func dropTarget(for info: any NSDraggingInfo, onItemAt index: Int?) -> FileDropTarget {
+        // Hovering a folder opens it after a moment, so a drag can be
+        // carried into a subfolder without dropping first.
+        armSpringLoad(row: index)
+
+        // An archive listing is read-only; there is nowhere for a drop to go.
+        if archiveMode { return .refuse }
+
+        // Accept file promises from cloud panels
+        let hasPromises = info.draggingPasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
+        if hasPromises {
+            // Allow drop onto a specific subfolder row; otherwise target the current directory.
+            if let index, index >= 0, index < items.count, items[index].isDirectory {
+                return .item(.copy)
+            }
+            return .background(.copy)
+        }
+
+        if let index {
+            // Dropping ON a specific row — must be a directory
+            guard index >= 0, index < items.count else { return .refuse }
+            let target = items[index]
+            // A file isn't a place to drop, so the row means the folder it's
+            // in. Refusing made a folder full of files nearly impossible to
+            // drop into.
+            guard target.isDirectory else {
+                guard currentDirectory != nil else { return .refuse }
+                return .background(.generic)
+            }
+            // Don't drop onto a dragged item itself
+            if currentDragItemIDs.contains(target.id) {
+                return .refuse
+            }
+            return .item(.generic)
+        } else {
+            // Dropping between rows or on table background — target is current directory
+            guard currentDirectory != nil else { return .refuse }
+            return .background(.generic)
+        }
+    }
+
+    /// Runs a drop on the item at `index`, or on the folder on screen when
+    /// `index` is nil.
+    func performDrop(_ info: any NSDraggingInfo, onItemAt index: Int?) -> Bool {
         cancelSpringLoad()
         if archiveMode { return false }
 
         // Determine target directory
         let targetURL: URL
-        if row >= 0, row < items.count, dropOperation == .on {
-            let target = items[row]
+        if let index, index >= 0, index < items.count {
+            let target = items[index]
             guard target.isDirectory else { return false }
             targetURL = target.url
         } else {
@@ -1365,6 +1462,19 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         return cell
     }
+}
+
+// MARK: - Drop target
+
+/// Where a drag would land, as decided by a panel's coordinator for both its
+/// list and its gallery. Each view then shows it its own way — the table by
+/// retargeting to its whole area, the gallery by outlining itself.
+enum FileDropTarget {
+    case refuse
+    /// Into the folder the hovered item is.
+    case item(NSDragOperation)
+    /// Into the folder on screen.
+    case background(NSDragOperation)
 }
 
 // MARK: - Column Identifiers
