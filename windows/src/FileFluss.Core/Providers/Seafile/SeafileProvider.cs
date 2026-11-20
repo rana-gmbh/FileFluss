@@ -833,8 +833,11 @@ public sealed class SeafileProvider : CloudProvider
 
         var query = ThumbnailQuery(target.Inner, ThumbnailSize(maxPixelSize));
         using var request = Request(session, HttpMethod.Get, $"/api2/repos/{target.Library.Id}/thumbnail/?{query}");
+        // JSON too, at lower priority: Seahub's REST framework answers a refusal ("videos have
+        // no thumbnail") with 406 when it may not send its JSON error.
         request.Headers.Accept.Clear();
         request.Headers.Accept.ParseAdd("image/*");
+        request.Headers.Accept.ParseAdd("application/json; q=0.5");
         using var response = await session.Http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
         switch ((int)response.StatusCode)
         {
@@ -847,7 +850,7 @@ public sealed class SeafileProvider : CloudProvider
 
                 var bytes = await ReadBytesAsync(response, cancellationToken).ConfigureAwait(false);
                 return bytes.Length > 0 ? bytes : null;
-            case 400 or 403 or 404:
+            case 400 or 403 or 404 or 406:
                 return null;
             default:
                 var body = await ReadBodyAsync(response, cancellationToken).ConfigureAwait(false);

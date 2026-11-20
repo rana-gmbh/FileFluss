@@ -89,7 +89,8 @@ public sealed class SeafileThumbnailTests
         Assert.Equal("/api2/repos/aaaaaaaa-1111/thumbnail/", request.Uri.AbsolutePath);
         Assert.Equal("?p=/Photos/a%2Bb.jpg&size=512", request.Uri.Query);
         Assert.Equal("Token tok-1", request.Headers["Authorization"]);
-        Assert.Equal("image/*", request.Headers["Accept"]);
+        // JSON at lower priority, so Seahub can send a refusal as its real 400 instead of a 406.
+        Assert.Equal("image/*,application/json; q=0.5", request.Headers["Accept"]);
     }
 
     [Fact]
@@ -107,6 +108,7 @@ public sealed class SeafileThumbnailTests
     [InlineData(HttpStatusCode.BadRequest)]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.NotAcceptable)]
     public async Task NoThumbnailForThisFileIsNull(HttpStatusCode status)
     {
         Serve(_ => FakeHttpHandler.Json("""{"error_msg":"Invalid file type."}""", status));

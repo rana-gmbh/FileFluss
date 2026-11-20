@@ -623,7 +623,11 @@ public actor SeafileAPIClient {
             path: "/api2/repos/\(resolved.repoId)/thumbnail/?\(Self.thumbnailQuery(innerPath: resolved.innerPath, size: size))"
         )
         request.httpMethod = "GET"
-        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        // JSON too, at lower priority: Seahub's REST framework answers a
+        // refusal ("videos have no thumbnail") with 406 when it may not send
+        // its JSON error, which hides the refusal behind a status that looks
+        // like a fault.
+        request.setValue("image/*, application/json;q=0.5", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -633,7 +637,7 @@ public actor SeafileAPIClient {
         case 200:
             guard !data.isEmpty, http.mimeType?.hasPrefix("image/") ?? false else { return nil }
             return data
-        case 400, 403, 404:
+        case 400, 403, 404, 406:
             return nil
         default:
             throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
