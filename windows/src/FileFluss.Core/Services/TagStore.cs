@@ -115,6 +115,21 @@ public sealed class TagStore : IDisposable
     /// gets a new identifier but is to the user the same file.</para>
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<FileTag>> Resolve(TagScope scope, IReadOnlyList<CloudFileItem> items)
+        => ResolveDetailed(scope, items).Tags;
+
+    /// <summary>
+    /// As <see cref="Resolve"/>, and also which of the items had a record without an
+    /// identifier until now: those were written by a transfer, and this listing is the first
+    /// time FileFluss has seen them on the service. A service with labels of its own hasn't
+    /// been told their tags yet (see <see cref="NativeTagSync"/>).
+    /// </summary>
+    public (IReadOnlyDictionary<string, IReadOnlyList<FileTag>> Tags, IReadOnlySet<string> NewlySeen) ResolveDetailed(TagScope scope, IReadOnlyList<CloudFileItem> items)
+    {
+        var newlySeen = new HashSet<string>(PathComparer(scope));
+        return (ResolveCore(scope, items, newlySeen), newlySeen);
+    }
+
+    private Dictionary<string, IReadOnlyList<FileTag>> ResolveCore(TagScope scope, IReadOnlyList<CloudFileItem> items, HashSet<string> newlySeen)
     {
         var result = new Dictionary<string, IReadOnlyList<FileTag>>(PathComparer(scope));
         lock (_gate)
@@ -177,6 +192,11 @@ public sealed class TagStore : IDisposable
                 }
 
                 changed = true;
+                if (entry.ItemId is null)
+                {
+                    newlySeen.Add(item.Path);
+                }
+
                 matched.Add((path, entry with { ItemId = item.Id }));
                 result[item.Path] = entry.Tags;
             }

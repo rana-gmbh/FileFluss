@@ -170,6 +170,23 @@ public abstract class FileProvider
     public virtual ValueTask<string?> ExportExtensionAsync(CloudFileItem item, CancellationToken cancellationToken = default)
         => ValueTask.FromResult<string?>(null);
 
+    // MARK: - Labels of the service's own
+
+    /// <summary>What the service can hold of an item's tags itself. None by default: the tags are then FileFluss's own record only.</summary>
+    public virtual Services.NativeTagSupport NativeTagSupport => Services.NativeTagSupport.None;
+
+    /// <summary>
+    /// The service's own labels for the items of one folder, by item path; items without a
+    /// label are left out. Asked for after the listing, never as part of it, so a slow or
+    /// failing answer costs no rows.
+    /// </summary>
+    public virtual Task<IReadOnlyDictionary<string, IReadOnlyList<FileTag>>> NativeTagsAsync(string folderPath, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<FileTag>>>(new Dictionary<string, IReadOnlyList<FileTag>>());
+
+    /// <summary>Replaces the service's labels on one item with these (already in the form the service can hold, see <see cref="Services.NativeTagSync.NativeForm"/>).</summary>
+    public virtual Task SetNativeTagsAsync(string path, IReadOnlyList<FileTag> tags, CancellationToken cancellationToken = default)
+        => throw CloudProviderException.NotImplemented();
+
     /// <summary>Free space at <paramref name="path"/>, for the pre-flight space check; null when unknown.</summary>
     public virtual Task<long?> AvailableSpaceAsync(string path, CancellationToken cancellationToken = default)
         => Task.FromResult<long?>(null);

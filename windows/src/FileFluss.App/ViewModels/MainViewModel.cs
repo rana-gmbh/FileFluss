@@ -1330,12 +1330,18 @@ public sealed partial class MainViewModel : Observable
     /// <summary>
     /// Right-click → Tags. A panel showing the same folder on the other side follows.
     /// </summary>
-    public void ChangeTags(PanelViewModel panel, IReadOnlyList<FileRowViewModel> rows, TagChange change)
+    public async Task ChangeTagsAsync(PanelViewModel panel, IReadOnlyList<FileRowViewModel> rows, TagChange change)
     {
-        panel.ChangeTags(rows, change);
-        if (OtherPanel.Location == panel.Location && !ReferenceEquals(OtherPanel, panel))
+        var failure = await panel.ChangeTagsAsync(rows, change);
+        var other = Panel(panel.Side.Other());
+        if (other is not null && !ReferenceEquals(other, panel) && other.Location == panel.Location)
         {
-            OtherPanel.ReloadTags();
+            other.ReloadTags();
+        }
+
+        if (failure is { } failed)
+        {
+            MessageDialog.Error(Shell.Window, L("Tags"), L("The tags of “{0}” couldn't be changed: {1}", failed.Name, failed.Message));
         }
     }
 

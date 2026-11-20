@@ -36,6 +36,37 @@ public sealed class MemoryCloudProvider : CloudProvider
 
     public bool SupportsServerSide { get; set; } = true;
 
+    /// <summary>Set to stand in for a service with labels of its own (MEGA, kDrive).</summary>
+    public Services.NativeTagSupport NativeSupport { get; set; } = Services.NativeTagSupport.None;
+
+    /// <summary>The "service's own" labels, by item path.</summary>
+    public Dictionary<string, IReadOnlyList<FileTag>> Labels { get; } = new(StringComparer.Ordinal);
+
+    public override Services.NativeTagSupport NativeTagSupport => NativeSupport;
+
+    public override Task<IReadOnlyDictionary<string, IReadOnlyList<FileTag>>> NativeTagsAsync(string folderPath, CancellationToken cancellationToken = default)
+    {
+        var folder = CloudPath.Normalize(folderPath);
+        IReadOnlyDictionary<string, IReadOnlyList<FileTag>> found = Labels
+            .Where(pair => CloudPath.Parent(pair.Key) == folder)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        return Task.FromResult(found);
+    }
+
+    public override Task SetNativeTagsAsync(string path, IReadOnlyList<FileTag> tags, CancellationToken cancellationToken = default)
+    {
+        if (tags.Count == 0)
+        {
+            Labels.Remove(CloudPath.Normalize(path));
+        }
+        else
+        {
+            Labels[CloudPath.Normalize(path)] = tags;
+        }
+
+        return Task.CompletedTask;
+    }
+
     public int ServerSideCalls { get; private set; }
 
     public HashSet<string> FailingUploads { get; } = new(StringComparer.Ordinal);

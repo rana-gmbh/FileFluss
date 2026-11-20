@@ -303,6 +303,7 @@ public static class TransferEngine
                         continue;
                     }
 
+                    await LearnSourceLabelsAsync(request, plan, ct).ConfigureAwait(false);
                     CarryTags(request, plan, targetPath, outcome.Arrivals);
                     if (request.IsMove)
                     {
@@ -692,6 +693,50 @@ public static class TransferEngine
         catch (Exception e)
         {
             SupportLogger.Shared.Log($"Tags of {plan.Item.Name} did not follow it: {e.Message}", "Tags", LogLevel.Error);
+        }
+    }
+
+    /// <summary>
+    /// A folder from a service with labels of its own (MEGA, kDrive): what is inside it may
+    /// never have been listed in a panel, so the record knows nothing of it yet. The service is
+    /// asked, folder by folder, and the record brought into step before the tags are carried.
+    /// </summary>
+    private static async Task LearnSourceLabelsAsync(TransferRequest request, ItemPlan plan, CancellationToken ct)
+    {
+        var source = request.Source;
+        var support = source.NativeTagSupport;
+        if (support == Services.NativeTagSupport.None || !plan.Item.IsDirectory || plan.Tree is null ||
+            Services.TagScope.For(source) is not { } scope)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = request.Tags ?? Services.TagStore.Shared;
+            var byFolder = plan.Tree.GroupBy(e => source.GetParentPath(e.Item.Path), StringComparer.Ordinal);
+            foreach (var folder in byFolder)
+            {
+                var native = await source.NativeTagsAsync(folder.Key, ct).ConfigureAwait(false);
+                foreach (var entry in folder)
+                {
+                    var stored = store.Tags(scope, entry.Item.Path);
+                    var outcome = Services.NativeTagSync.Reconcile(
+                        stored,
+                        native.TryGetValue(entry.Item.Path, out var labels) ? labels : FileTags.None,
+                        support,
+                        pending: false,
+                        FileTags.Standard);
+                    if (!outcome.Tags.SameAs(stored))
+                    {
+                        store.SetTags(scope, entry.Item.Path, outcome.Tags, entry.Item.Id);
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            SupportLogger.Shared.Log($"Labels inside {plan.Item.Name} could not be read: {e.Message}", "Tags", LogLevel.Error);
         }
     }
 

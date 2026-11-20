@@ -917,15 +917,85 @@ public sealed class PanelViewModel : Observable
             }
 
             var store = _services.Tags;
-            var found = await Task.Run(() => store.Resolve(scope, rows.Select(r => r.Item).ToList()));
-            if (generation != _loadGeneration)
+            var folder = _location.Path;
+            var (found, toSend) = await Task.Run(async () =>
             {
-                return;
+                var items = rows.Select(r => r.Item).ToList();
+                var record = store.ResolveDetailed(scope, items);
+                var tags = new Dictionary<string, IReadOnlyList<FileTag>>(
+                    record.Tags, scope.CaseSensitivePaths ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+                var pending = new List<(string Path, IReadOnlyList<FileTag> Tags)>();
+
+                // A service with labels of its own is asked for them, and the two sides are
+                // brought into step (see NativeTagSync). If it can't be asked, FileFluss's
+                // record is shown as it is.
+                var support = provider.NativeTagSupport;
+                if (support != Core.Services.NativeTagSupport.None)
+                {
+                    try
+                    {
+                        var native = await provider.NativeTagsAsync(folder).ConfigureAwait(false);
+                        foreach (var item in items)
+                        {
+                            if (!item.IsModifiable)
+                            {
+                                continue;
+                            }
+
+                            var stored = tags.TryGetValue(item.Path, out var known) ? known : FileTags.None;
+                            var outcome = Core.Services.NativeTagSync.Reconcile(
+                                stored,
+                                native.TryGetValue(item.Path, out var labels) ? labels : FileTags.None,
+                                support,
+                                record.NewlySeen.Contains(item.Path),
+                                FileTags.Standard);
+                            if (!outcome.Tags.SameAs(stored))
+                            {
+                                store.SetTags(scope, item.Path, outcome.Tags, item.Id);
+                                tags[item.Path] = outcome.Tags;
+                            }
+
+                            if (outcome.Push is { } push)
+                            {
+                                pending.Add((item.Path, push));
+                            }
+                        }
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException)
+                    {
+                        SupportLogger.Shared.Log($"Labels of {folder} could not be read: {e.Message}", "Tags", LogLevel.Error);
+                    }
+                }
+
+                return (tags, pending);
+            });
+
+            if (generation == _loadGeneration)
+            {
+                foreach (var row in rows)
+                {
+                    row.Tags = found.TryGetValue(row.Path, out var tags) ? tags : FileTags.None;
+                }
             }
 
-            foreach (var row in rows)
+            // What a transfer brought and the service hasn't been told. Sent even if the panel
+            // has moved on: next time the item is listed it would no longer count as just written.
+            if (toSend.Count > 0)
             {
-                row.Tags = found.TryGetValue(row.Path, out var tags) ? tags : FileTags.None;
+                await Task.Run(async () =>
+                {
+                    foreach (var (path, tags) in toSend)
+                    {
+                        try
+                        {
+                            await provider.SetNativeTagsAsync(path, tags).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            SupportLogger.Shared.Log($"Labels of {path} could not be written: {e.Message}", "Tags", LogLevel.Error);
+                        }
+                    }
+                });
             }
         }
         catch (Exception e)
@@ -943,15 +1013,20 @@ public sealed class PanelViewModel : Observable
         }
     }
 
-    /// <summary>Adds or removes a tag on the given rows. The dots change at once; the record is written behind them.</summary>
-    public void ChangeTags(IReadOnlyList<FileRowViewModel> rows, TagChange change)
+    /// <summary>
+    /// Adds or removes a tag on the given rows. The dots change at once; the record is written
+    /// behind them, and so are the service's own labels where it has any. Returns the item
+    /// whose labels the service refused and why, or null when all went well.
+    /// </summary>
+    public async Task<(string Name, string Message)?> ChangeTagsAsync(IReadOnlyList<FileRowViewModel> rows, TagChange change)
     {
         if (TagScope is not { } scope)
         {
-            return;
+            return null;
         }
 
         var store = _services.Tags;
+        var changed = new List<(string Path, string Name, IReadOnlyList<FileTag> Tags)>();
         foreach (var row in rows)
         {
             if (!row.Item.IsModifiable)
@@ -962,7 +1037,40 @@ public sealed class PanelViewModel : Observable
             var updated = change.Apply(row.Tags);
             row.Tags = updated;
             store.SetTags(scope, row.Path, updated, row.Item.Id);
+            changed.Add((row.Path, row.Name, updated));
         }
+
+        if (_provider is not { } provider || provider.NativeTagSupport == Core.Services.NativeTagSupport.None)
+        {
+            return null;
+        }
+
+        var support = provider.NativeTagSupport;
+        var failure = await Task.Run(async () =>
+        {
+            (string Name, string Message)? first = null;
+            foreach (var (path, name, tags) in changed)
+            {
+                try
+                {
+                    await provider.SetNativeTagsAsync(path, Core.Services.NativeTagSync.NativeForm(tags, support)).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    first ??= (name, e.Message);
+                }
+            }
+
+            return first;
+        });
+
+        if (failure is not null)
+        {
+            // What the service has is what counts; show that again.
+            ReloadTags();
+        }
+
+        return failure;
     }
 
     /// <summary>Every successful listing, so the search index can learn from browsing.</summary>

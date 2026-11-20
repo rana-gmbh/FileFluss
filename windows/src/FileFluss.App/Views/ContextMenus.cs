@@ -230,14 +230,14 @@ public static class ContextMenus
             }
 
             AutomationProperties.SetName(item, TagVisuals.DisplayName(row.Tag));
-            item.Click += (_, _) => main.ChangeTags(panel, rows, change);
+            item.Click += (_, _) => _ = main.ChangeTagsAsync(panel, rows, change);
             menu.Items.Add(item);
         }
 
         if (TagMenuModel.HasAnyTag(tagSets))
         {
             menu.Items.Add(new Separator());
-            menu.Items.Add(Item(L("Remove All Tags"), null, null, () => main.ChangeTags(panel, rows, new TagChange.RemoveAll())));
+            menu.Items.Add(Item(L("Remove All Tags"), null, null, () => _ = main.ChangeTagsAsync(panel, rows, new TagChange.RemoveAll())));
         }
 
         return menu;
