@@ -59,6 +59,8 @@ Never mention Claude or AI in commit messages or Co-Authored-By lines. All commi
 
 `RELEASE_NOTES.md` is the release body (and what Sparkle shows), so it covers both apps; say which platform a feature is on when they differ. Always three version numbers: the Windows build stamps them into its executables.
 
+Before tagging, the final Windows build is tested on a Windows PC — nothing on the Mac can run it. The release runner builds the Mac app with Xcode 26 (Swift 6.3), which is stricter about concurrency than a newer local Xcode: a weak `self` captured in a `@Sendable` closure and sent to the main actor compiles locally and fails the release archive.
+
 The publish job then computes the DMG's SHA-256 and pushes a cask bump to the **separate tap repo** `rana-gmbh/homebrew-filefluss` (this is the repo Homebrew actually reads when users run `brew tap rana-gmbh/filefluss`). The cask file does **not** live in this repo.
 
 The Windows job signs through the `windows-release` environment, whose tag rules must allow `v*` (and `win-v*` while `windows-release.yml` is still around).
@@ -95,6 +97,8 @@ Speed and snappiness are top priorities. Prefer lazy loading, background process
 ## Windows port
 
 The Windows port lives in `windows/` (C#, .NET 10, WPF) — see `windows/README.md`. The macOS Swift code is its specification, and the macOS `Localizable.strings` files (both locations) are the single source of truth for its strings.
+
+**The two apps stay feature-identical.** The Mac is the main development platform, so a user-facing Mac change needs its Windows counterpart — in the same change where practical, and in any case before the next release. A feature that can't be ported in time is marked as Mac-only in `RELEASE_NOTES.md`. On a Mac the Windows code can be compiled (`dotnet build windows/FileFluss.sln -p:EnableWindowsTargeting=true`) and `FileFluss.Core.Tests` run — a few tests that use Windows paths fail on macOS only — but the WPF app can't be started there: its UI is checked by Windows CI and by testing the final build on a Windows PC before every release.
 
 ```bash
 dotnet build windows/FileFluss.sln                                      # warnings are errors
