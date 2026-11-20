@@ -46,6 +46,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     private string? _customCacheFolder;
     private bool _searchIncludeOffline = true;
     private FileListRowSize _rowSize = FileListRowSize.Medium;
+    private FileListViewMode _leftViewMode = FileListViewMode.List;
+    private FileListViewMode _rightViewMode = FileListViewMode.List;
     private double _leftSidebarWidth = 220;
     private double _rightSidebarWidth = 220;
     private bool _leftSidebarCompact;
@@ -139,6 +141,27 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     [JsonPropertyName("FileList.rowSize")]
     public FileListRowSize RowSize { get => _rowSize; set => Set(ref _rowSize, value); }
+
+    /// <summary>List or gallery, per panel (macOS "FileList.viewMode.left" / ".right").</summary>
+    [JsonPropertyName("FileList.viewMode.left")]
+    public FileListViewMode LeftViewMode { get => _leftViewMode; set => Set(ref _leftViewMode, value); }
+
+    [JsonPropertyName("FileList.viewMode.right")]
+    public FileListViewMode RightViewMode { get => _rightViewMode; set => Set(ref _rightViewMode, value); }
+
+    public FileListViewMode ViewMode(PanelSide side) => side == PanelSide.Left ? LeftViewMode : RightViewMode;
+
+    public void SetViewMode(PanelSide side, FileListViewMode mode)
+    {
+        if (side == PanelSide.Left)
+        {
+            LeftViewMode = mode;
+        }
+        else
+        {
+            RightViewMode = mode;
+        }
+    }
 
     /// <summary>Visible columns in display order (macOS "FileList.local.visibleColumns"); see <see cref="FileListColumns"/>.</summary>
     public List<FileListColumn> LocalColumns { get => _localColumns; set => Set(ref _localColumns, value); }

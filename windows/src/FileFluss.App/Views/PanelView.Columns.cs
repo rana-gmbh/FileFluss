@@ -88,9 +88,14 @@ public partial class PanelView
 
             var dpi = VisualTreeHelper.GetDpi(this);
             ThumbnailCache.PixelSize = Math.Max(32, (int)Math.Ceiling(16 * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY)));
+            ThumbnailCache.GalleryPixelSize = GalleryPixels(dpi);
             ApplyColumns();
         };
     }
+
+    /// <summary>The largest gallery tile image at this screen's scale (see <see cref="ThumbnailCache.GalleryPixelSize"/>).</summary>
+    private static int GalleryPixels(DpiScale dpi)
+        => (int)Math.Ceiling(GalleryTileMetrics.For(FileListRowSize.Large).ImageSize * Math.Max(dpi.DpiScaleX, dpi.DpiScaleY));
 
     private void OnPanelKindChanged(object? sender, PropertyChangedEventArgs e)
     {

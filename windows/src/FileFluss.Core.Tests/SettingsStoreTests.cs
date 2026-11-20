@@ -75,4 +75,20 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(reloaded.Settings.SinglePaneMode);
         Assert.Equal(Models.FileListRowSize.Large, reloaded.Settings.RowSize);
     }
+
+    /// <summary>Each panel keeps list or gallery across launches; a panel nobody switched is a list.</summary>
+    [Fact]
+    public void EachPanelKeepsItsViewMode()
+    {
+        var store = new SettingsStore(SettingsPath);
+        Assert.Equal(Models.FileListViewMode.List, store.Settings.ViewMode(Models.PanelSide.Left));
+        Assert.Equal(Models.FileListViewMode.List, store.Settings.ViewMode(Models.PanelSide.Right));
+
+        store.Settings.SetViewMode(Models.PanelSide.Right, Models.FileListViewMode.Gallery);
+        store.Flush();
+
+        var reloaded = new SettingsStore(SettingsPath);
+        Assert.Equal(Models.FileListViewMode.List, reloaded.Settings.ViewMode(Models.PanelSide.Left));
+        Assert.Equal(Models.FileListViewMode.Gallery, reloaded.Settings.ViewMode(Models.PanelSide.Right));
+    }
 }

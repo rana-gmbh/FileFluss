@@ -326,6 +326,11 @@ public partial class MainWindow : Window, IShell
         view.Items.Add(Cmd(KeyboardCommand.RefreshAll));
         view.Items.Add(Cmd(KeyboardCommand.RefreshActive));
         view.Items.Add(new Separator());
+
+        // For the active panel; each panel keeps its own choice (macOS View → as List / as Gallery).
+        view.Items.Add(Cmd(KeyboardCommand.ViewAsList, "as List"));
+        view.Items.Add(Cmd(KeyboardCommand.ViewAsGallery, "as Gallery"));
+        view.Items.Add(new Separator());
         view.Items.Add(Cmd(KeyboardCommand.SortByName));
         view.Items.Add(Cmd(KeyboardCommand.SortByDate));
         view.Items.Add(Cmd(KeyboardCommand.SortBySize));
@@ -414,6 +419,12 @@ public partial class MainWindow : Window, IShell
                 "row-" => _services.Settings.RowSize > FileListRowSize.Small,
                 _ => true,
             };
+
+            if (item.Tag is KeyboardCommand.ViewAsList or KeyboardCommand.ViewAsGallery)
+            {
+                var shown = _vm.ActivePanel.IsGallery ? KeyboardCommand.ViewAsGallery : KeyboardCommand.ViewAsList;
+                item.IsChecked = Equals(item.Tag, shown);
+            }
         }
     }
 
@@ -488,6 +499,12 @@ public partial class MainWindow : Window, IShell
             FileListRowSize.Large => 34.0,
             _ => 28.0,
         };
+
+        // The gallery's tiles follow the same three steps (macOS: ⌘+ / ⌘- size both).
+        var tiles = GalleryTileMetrics.For(_services.Settings.RowSize);
+        Application.Current.Resources["GalleryImageSize"] = tiles.ImageSize;
+        Application.Current.Resources["GalleryTileWidth"] = tiles.TileWidth;
+        Application.Current.Resources["GalleryTileHeight"] = tiles.TileHeight;
     }
 
     private void StepRowSize(int delta)

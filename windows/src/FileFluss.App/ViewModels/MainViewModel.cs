@@ -426,6 +426,12 @@ public sealed partial class MainViewModel : Observable
                 case KeyboardCommand.ToggleHiddenFiles:
                     panel.ShowHiddenFiles = !panel.ShowHiddenFiles;
                     break;
+                case KeyboardCommand.ViewAsList:
+                    SetViewMode(panel, FileListViewMode.List);
+                    break;
+                case KeyboardCommand.ViewAsGallery:
+                    SetViewMode(panel, FileListViewMode.Gallery);
+                    break;
                 case KeyboardCommand.SwapPanels:
                     await SwapPanelsAsync();
                     break;
@@ -1493,7 +1499,28 @@ public sealed partial class MainViewModel : Observable
     {
         var left = Left.Location;
         var right = Right.Location;
+
+        // The way a folder is shown travels with it, as on macOS: a photo folder in a gallery
+        // stays a gallery on the other side.
+        (Left.ViewMode, Right.ViewMode) = (Right.ViewMode, Left.ViewMode);
         await Task.WhenAll(Left.NavigateAsync(right), Right.NavigateAsync(left));
+    }
+
+    /// <summary>
+    /// Switches a panel between list and gallery. The panel becomes the active one and gets
+    /// keyboard focus back: the list or gallery that had it has just been replaced, and the
+    /// arrow keys would otherwise have nowhere to go.
+    /// </summary>
+    public void SetViewMode(PanelViewModel panel, FileListViewMode mode)
+    {
+        if (panel.ViewMode == mode)
+        {
+            return;
+        }
+
+        panel.ViewMode = mode;
+        ActiveSide = panel.Side;
+        Shell.FocusPanel(panel.Side);
     }
 
     /// <summary>

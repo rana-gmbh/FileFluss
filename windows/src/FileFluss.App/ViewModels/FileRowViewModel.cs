@@ -19,6 +19,9 @@ public sealed class FileRowViewModel : Observable
     private ImageSource? _icon;
     private ImageSource? _thumbnail;
     private bool _iconLoaded;
+    private ImageSource? _tileIcon;
+    private ImageSource? _tileThumbnail;
+    private bool _tileIconLoaded;
     private string? _kind;
     private bool _isRenaming;
     private string _editName = string.Empty;
@@ -103,6 +106,62 @@ public sealed class FileRowViewModel : Observable
             }
 
             return _icon;
+        }
+    }
+
+    /// <summary>The size gallery tiles ask the shell for: its 256-px jumbo icons.</summary>
+    private const double TileIconDips = 256;
+
+    /// <summary>
+    /// The image on the row's gallery tile (macOS gallery view): a content thumbnail for local
+    /// files the shell can draw — images, videos, PDFs, documents — otherwise the large type
+    /// icon. Like <see cref="Icon"/> it is only read while the tile is on screen.
+    /// </summary>
+    public ImageSource? TileImage
+    {
+        get
+        {
+            if (_tileThumbnail is not null)
+            {
+                return _tileThumbnail;
+            }
+
+            if (!_tileIconLoaded)
+            {
+                var (icon, isFinal) = IconCache.ForRow(Item, _isLocal, IsDrive, TileIconDips, OnTileIconLoaded);
+                _tileIcon = icon ?? _tileIcon;
+                _tileIconLoaded = isFinal;
+            }
+
+            if (!IsDrive && ThumbnailCache.ShouldUseGalleryThumbnail(Item, _isLocal))
+            {
+                _tileThumbnail = ThumbnailCache.Get(Item, OnTileThumbnailLoaded, ThumbnailCache.GalleryPixelSize);
+                if (_tileThumbnail is not null)
+                {
+                    return _tileThumbnail;
+                }
+            }
+
+            return _tileIcon;
+        }
+    }
+
+    private void OnTileIconLoaded(ImageSource icon)
+    {
+        _tileIconLoaded = true;
+        if (!ReferenceEquals(icon, _tileIcon))
+        {
+            _tileIcon = icon;
+            OnPropertyChanged(nameof(TileImage));
+        }
+    }
+
+    private void OnTileThumbnailLoaded(ImageSource thumbnail)
+    {
+        if (_tileThumbnail is null)
+        {
+            _tileThumbnail = thumbnail;
+            OnPropertyChanged(nameof(TileImage));
         }
     }
 

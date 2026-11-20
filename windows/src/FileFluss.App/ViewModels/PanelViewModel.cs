@@ -67,6 +67,7 @@ public sealed class PanelViewModel : Observable
     private string _filterText = string.Empty;
     private bool _isFilterVisible;
     private bool _showHiddenFiles;
+    private FileListViewMode _viewMode;
     private string _quotaText = string.Empty;
     private long? _selectionSize;
     private bool _isCalculatingSelectionSize;
@@ -83,6 +84,7 @@ public sealed class PanelViewModel : Observable
         Side = side;
         _services = services;
         _showHiddenFiles = services.Settings.ShowHiddenFiles;
+        _viewMode = services.Settings.ViewMode(side);
         _watchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _watchDebounce.Tick += async (_, _) =>
         {
@@ -333,6 +335,25 @@ public sealed class PanelViewModel : Observable
             }
         }
     }
+
+    /// <summary>
+    /// List or gallery (macOS <c>FileViewMode</c>). Each panel keeps its own choice across
+    /// launches, so a photo folder can be a gallery on one side while the other stays a list.
+    /// </summary>
+    public FileListViewMode ViewMode
+    {
+        get => _viewMode;
+        set
+        {
+            if (Set(ref _viewMode, value))
+            {
+                _services.Settings.SetViewMode(Side, value);
+                OnPropertyChanged(nameof(IsGallery));
+            }
+        }
+    }
+
+    public bool IsGallery => _viewMode == FileListViewMode.Gallery;
 
     // MARK: - Status bar
 

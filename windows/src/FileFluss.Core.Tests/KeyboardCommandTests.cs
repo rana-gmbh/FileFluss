@@ -6,6 +6,24 @@ namespace FileFluss.Core.Tests;
 
 public sealed class KeyboardCommandTests
 {
+    /// <summary>
+    /// List and gallery have shortcuts of their own in both layouts (macOS ⌃⌘1 / ⌃⌘2), on keys
+    /// no other command uses — a clash would silently take one of them away.
+    /// </summary>
+    [Theory]
+    [InlineData(KeyboardPreset.Explorer)]
+    [InlineData(KeyboardPreset.Commander)]
+    public void TheViewModesHaveShortcutsNothingElseUses(KeyboardPreset preset)
+    {
+        var defaults = KeyboardCommandInfo.Defaults(preset);
+        foreach (var command in new[] { KeyboardCommand.ViewAsList, KeyboardCommand.ViewAsGallery })
+        {
+            Assert.True(defaults.TryGetValue(command, out var binding));
+            Assert.DoesNotContain(defaults, pair => pair.Key != command && pair.Value == binding);
+            Assert.Equal(KeyboardSection.ViewSort, command.Section());
+        }
+    }
+
     [Theory]
     [InlineData(KeyboardCommand.ParentDirectory)]
     [InlineData(KeyboardCommand.HistoryBack)]

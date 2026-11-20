@@ -10,6 +10,29 @@ namespace FileFluss.App.Tests;
 /// <summary>The panel's list order: sorted once, then reversed, hidden and filtered without sorting again.</summary>
 public sealed class PanelViewTests
 {
+    /// <summary>List or gallery is a panel's own, kept for the next launch (macOS FileViewMode).</summary>
+    [Fact]
+    public void EachPanelKeepsItsViewModeAcrossLaunches()
+    {
+        var services = new AppServices(Directory.CreateTempSubdirectory("FileFluss-viewmode-").FullName);
+        var left = new PanelViewModel(PanelSide.Left, services);
+        var right = new PanelViewModel(PanelSide.Right, services);
+        Assert.Equal(FileListViewMode.List, left.ViewMode);
+        Assert.False(right.IsGallery);
+
+        var announced = new List<string?>();
+        right.PropertyChanged += (_, e) => announced.Add(e.PropertyName);
+        right.ViewMode = FileListViewMode.Gallery;
+
+        Assert.True(right.IsGallery);
+        Assert.Contains(nameof(PanelViewModel.IsGallery), announced);
+        Assert.Equal(FileListViewMode.Gallery, services.Settings.RightViewMode);
+        Assert.Equal(FileListViewMode.List, services.Settings.LeftViewMode);
+
+        // The next launch's panel for that side starts where this one was left.
+        Assert.True(new PanelViewModel(PanelSide.Right, services).IsGallery);
+    }
+
     private static readonly string[] Stems = ["IMG_", "file", "Report ", "photo (", "Notes", "a", "Z", "_draft", "10", "2"];
     private static readonly string[] Extensions = ["jpg", "pdf", "txt", "zip", "png", ""];
 

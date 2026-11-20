@@ -65,6 +65,13 @@ public partial class PanelView : UserControl
 
     private PanelViewModel? Vm => DataContext as PanelViewModel;
 
+    /// <summary>
+    /// Whichever of the list and the gallery is on screen. ListView is a ListBox, so selection,
+    /// focus, hit testing, scrolling and drag and drop work the same on both; only the column
+    /// code (PanelView.Columns.cs) addresses the list's GridView directly.
+    /// </summary>
+    private ListBox Shown => Vm?.IsGallery == true ? Gallery : List;
+
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.OldValue is PanelViewModel old)
@@ -78,6 +85,8 @@ public partial class PanelView : UserControl
             vm.Loaded += OnVmLoaded;
             vm.PropertyChanged += OnVmPropertyChanged;
         }
+
+        ApplyViewMode();
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -103,9 +112,63 @@ public partial class PanelView : UserControl
                 break;
             case nameof(PanelViewModel.Rows):
                 // Layout hasn't run yet: this is still where the previous list was scrolled to.
-                _offsetBeforeRows = (_scroller ??= FindChild<ScrollViewer>(List))?.VerticalOffset;
+                _offsetBeforeRows = (_scroller ??= FindChild<ScrollViewer>(Shown))?.VerticalOffset;
+                break;
+            case nameof(PanelViewModel.IsGallery):
+                ApplyViewMode();
                 break;
         }
+    }
+
+    // MARK: - List or gallery
+
+    /// <summary>
+    /// Shows the list or the gallery, as the panel's view model says. The one that appears takes
+    /// over the selection, so the menus, Quick Look and the status line keep working on the same
+    /// items, and the first selected item is scrolled into view.
+    /// </summary>
+    private void ApplyViewMode()
+    {
+        var gallery = Vm?.IsGallery == true;
+        ListModeButton.IsChecked = !gallery;
+        GalleryModeButton.IsChecked = gallery;
+        var shown = Shown;
+        var hidden = gallery ? (ListBox)List : Gallery;
+        if (shown.Visibility == Visibility.Visible && hidden.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        hidden.Visibility = Visibility.Collapsed;
+        shown.Visibility = Visibility.Visible;
+        _scroller = null;
+        if (Vm is not { } vm)
+        {
+            return;
+        }
+
+        var selection = vm.Selection.ToList();
+        SelectRows(selection);
+        if (selection.FirstOrDefault() is { } first)
+        {
+            Dispatcher.BeginInvoke(() => shown.ScrollIntoView(first), DispatcherPriority.Loaded);
+        }
+    }
+
+    private void OnListModeClick(object sender, RoutedEventArgs e) => SwitchViewMode(FileListViewMode.List);
+
+    private void OnGalleryModeClick(object sender, RoutedEventArgs e) => SwitchViewMode(FileListViewMode.Gallery);
+
+    private void SwitchViewMode(FileListViewMode mode)
+    {
+        if (Vm is { } vm)
+        {
+            Main.SetViewMode(vm, mode);
+        }
+
+        // A click on the mode already shown toggles the button off; put it back.
+        ListModeButton.IsChecked = Vm?.IsGallery != true;
+        GalleryModeButton.IsChecked = Vm?.IsGallery == true;
     }
 
     private ScrollViewer? _scroller;
@@ -135,14 +198,14 @@ public partial class PanelView : UserControl
                 _scroller?.ScrollToVerticalOffset(offset);
                 if (Keyboard.FocusedElement is not TextBoxBase && (IsKeyboardFocusWithin || Main.ActiveSide == vm.Side))
                 {
-                    List.UpdateLayout();
-                    if (rows.FirstOrDefault() is { } first && List.ItemContainerGenerator.ContainerFromItem(first) is ListViewItem container)
+                    Shown.UpdateLayout();
+                    if (rows.FirstOrDefault() is { } first && Shown.ItemContainerGenerator.ContainerFromItem(first) is ListBoxItem container)
                     {
                         container.Focus();
                     }
                     else if (!IsKeyboardFocusWithin)
                     {
-                        List.Focus();
+                        Shown.Focus();
                     }
                 }
 
@@ -154,10 +217,10 @@ public partial class PanelView : UserControl
             {
                 if (rows.Count == 0)
                 {
-                    List.SelectedItem = anchor;
+                    Shown.SelectedItem = anchor;
                 }
 
-                List.ScrollIntoView(anchor);
+                Shown.ScrollIntoView(anchor);
                 if (IsKeyboardFocusWithin || Main.ActiveSide == vm.Side)
                 {
                     FocusRow(anchor);
@@ -168,9 +231,10 @@ public partial class PanelView : UserControl
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (Vm is { } vm)
+        // The hidden view's selection changes too when the rows are replaced; it speaks for nothing.
+        if (Vm is { } vm && ReferenceEquals(sender, Shown))
         {
-            vm.Selection = List.SelectedItems.Cast<FileRowViewModel>().ToList();
+            vm.Selection = Shown.SelectedItems.Cast<FileRowViewModel>().ToList();
         }
     }
 
@@ -185,16 +249,16 @@ public partial class PanelView : UserControl
     /// <summary>Puts keyboard focus on the selected row (or the list), so arrows work straight away.</summary>
     public void FocusList()
     {
-        var row = List.SelectedItem as FileRowViewModel ?? Vm?.Rows.FirstOrDefault();
+        var row = Shown.SelectedItem as FileRowViewModel ?? Vm?.Rows.FirstOrDefault();
         if (row is null)
         {
-            List.Focus();
+            Shown.Focus();
             return;
         }
 
-        if (List.SelectedItems.Count == 0)
+        if (Shown.SelectedItems.Count == 0)
         {
-            List.SelectedItem = row;
+            Shown.SelectedItem = row;
         }
 
         FocusRow(row);
@@ -202,23 +266,23 @@ public partial class PanelView : UserControl
 
     private void FocusRow(FileRowViewModel row)
     {
-        List.UpdateLayout();
-        if (List.ItemContainerGenerator.ContainerFromItem(row) is ListViewItem container)
+        Shown.UpdateLayout();
+        if (Shown.ItemContainerGenerator.ContainerFromItem(row) is ListBoxItem container)
         {
             container.Focus();
         }
         else
         {
-            List.ScrollIntoView(row);
+            Shown.ScrollIntoView(row);
             Dispatcher.BeginInvoke(() =>
             {
-                if (List.ItemContainerGenerator.ContainerFromItem(row) is ListViewItem later)
+                if (Shown.ItemContainerGenerator.ContainerFromItem(row) is ListBoxItem later)
                 {
                     later.Focus();
                 }
                 else
                 {
-                    List.Focus();
+                    Shown.Focus();
                 }
             }, DispatcherPriority.Loaded);
         }
@@ -230,9 +294,9 @@ public partial class PanelView : UserControl
         {
             if (Vm?.Rows.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) is { } row)
             {
-                List.SelectedItems.Clear();
-                List.SelectedItem = row;
-                List.ScrollIntoView(row);
+                Shown.SelectedItems.Clear();
+                Shown.SelectedItem = row;
+                Shown.ScrollIntoView(row);
                 FocusRow(row);
             }
         }, DispatcherPriority.Loaded);
@@ -243,14 +307,14 @@ public partial class PanelView : UserControl
         switch (action)
         {
             case SelectionAction.SelectAll:
-                List.SelectAll();
+                Shown.SelectAll();
                 break;
             case SelectionAction.DeselectAll:
-                List.UnselectAll();
+                Shown.UnselectAll();
                 break;
             case SelectionAction.Invert:
-                var selected = List.SelectedItems.Cast<object>().ToHashSet();
-                SelectRows(List.Items.Cast<object>().Where(row => !selected.Contains(row)).ToList());
+                var selected = Shown.SelectedItems.Cast<object>().ToHashSet();
+                SelectRows(Shown.Items.Cast<object>().Where(row => !selected.Contains(row)).ToList());
                 break;
         }
     }
@@ -266,14 +330,14 @@ public partial class PanelView : UserControl
     {
         if (SetSelectedItems is not null && rows.Count > 1)
         {
-            SetSelectedItems.Invoke(List, [rows]);
+            SetSelectedItems.Invoke(Shown, [rows]);
             return;
         }
 
-        List.SelectedItems.Clear();
+        Shown.SelectedItems.Clear();
         foreach (var row in rows)
         {
-            List.SelectedItems.Add(row);
+            Shown.SelectedItems.Add(row);
         }
     }
 
@@ -281,7 +345,7 @@ public partial class PanelView : UserControl
 
     private async void OnDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left || RowAt(e.GetPosition(List)) is not { } row || Vm is not { } vm)
+        if (e.ChangedButton != MouseButton.Left || RowAt(e.GetPosition(Shown)) is not { } row || Vm is not { } vm)
         {
             return;
         }
@@ -292,8 +356,8 @@ public partial class PanelView : UserControl
 
     private FileRowViewModel? RowAt(Point point)
     {
-        var hit = List.InputHitTest(point) as DependencyObject;
-        while (hit is not null and not ListViewItem)
+        var hit = Shown.InputHitTest(point) as DependencyObject;
+        while (hit is not null and not ListBoxItem)
         {
             if (hit is GridViewColumnHeader or ScrollBar)
             {
@@ -303,7 +367,7 @@ public partial class PanelView : UserControl
             hit = VisualTreeHelper.GetParent(hit);
         }
 
-        return (hit as ListViewItem)?.DataContext as FileRowViewModel;
+        return (hit as ListBoxItem)?.DataContext as FileRowViewModel;
     }
 
     // MARK: - Sorting
@@ -349,7 +413,7 @@ public partial class PanelView : UserControl
 
     public void BeginRename()
     {
-        if (List.SelectedItem is not FileRowViewModel row || Vm is not { } vm || vm.IsReadOnly)
+        if (Shown.SelectedItem is not FileRowViewModel row || Vm is not { } vm || vm.IsReadOnly)
         {
             return;
         }
@@ -361,7 +425,7 @@ public partial class PanelView : UserControl
 
         row.EditName = row.Name;
         row.IsRenaming = true;
-        List.ScrollIntoView(row);
+        Shown.ScrollIntoView(row);
     }
 
     private void OnRenameVisible(object sender, DependencyPropertyChangedEventArgs e)
@@ -628,15 +692,15 @@ public partial class PanelView : UserControl
             return; // The header has its own menu and leaves the selection alone.
         }
 
-        var row = RowAt(e.GetPosition(List));
+        var row = RowAt(e.GetPosition(Shown));
         if (row is null)
         {
-            List.UnselectAll();
+            Shown.UnselectAll();
         }
-        else if (!List.SelectedItems.Contains(row))
+        else if (!Shown.SelectedItems.Contains(row))
         {
-            List.SelectedItems.Clear();
-            List.SelectedItem = row;
+            Shown.SelectedItems.Clear();
+            Shown.SelectedItem = row;
         }
     }
 
@@ -654,13 +718,14 @@ public partial class PanelView : UserControl
             return;
         }
 
-        RowMenu.Items.Clear();
+        var menu = ReferenceEquals(sender, Gallery) ? GalleryMenu : RowMenu;
+        menu.Items.Clear();
         foreach (var item in ContextMenus.ForPanel(Main, vm, this))
         {
-            RowMenu.Items.Add(item);
+            menu.Items.Add(item);
         }
 
-        if (RowMenu.Items.Count == 0)
+        if (menu.Items.Count == 0)
         {
             e.Handled = true;
         }
@@ -671,16 +736,16 @@ public partial class PanelView : UserControl
     private void OnListMouseDown(object sender, MouseButtonEventArgs e)
     {
         Main.ActiveSide = Vm?.Side ?? Main.ActiveSide;
-        _dragStart = e.GetPosition(List);
+        _dragStart = e.GetPosition(Shown);
         _dragCandidate = RowAt(_dragStart);
         if (_dragCandidate is null)
         {
             // A click on empty space clears the selection, as in Explorer.
-            var hit = List.InputHitTest(_dragStart) as DependencyObject;
+            var hit = Shown.InputHitTest(_dragStart) as DependencyObject;
             if (hit is not null && FindAncestor<ScrollBar>(hit) is null && FindAncestor<GridViewColumnHeader>(hit) is null)
             {
-                List.UnselectAll();
-                List.Focus();
+                Shown.UnselectAll();
+                Shown.Focus();
             }
         }
     }
@@ -692,14 +757,14 @@ public partial class PanelView : UserControl
             return;
         }
 
-        var position = e.GetPosition(List);
+        var position = e.GetPosition(Shown);
         if (Math.Abs(position.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(position.Y - _dragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
         {
             return;
         }
 
-        var rows = List.SelectedItems.Cast<FileRowViewModel>().ToList();
+        var rows = Shown.SelectedItems.Cast<FileRowViewModel>().ToList();
         if (!rows.Contains(_dragCandidate))
         {
             rows = [_dragCandidate];
@@ -730,7 +795,7 @@ public partial class PanelView : UserControl
             data.SetFileDropList(paths);
         }
 
-        DragDrop.DoDragDrop(List, data, DragDropEffects.Copy | DragDropEffects.Move);
+        DragDrop.DoDragDrop(Shown, data, DragDropEffects.Copy | DragDropEffects.Move);
         ClearDropHighlight();
     }
 
@@ -744,7 +809,7 @@ public partial class PanelView : UserControl
             return null;
         }
 
-        var row = RowAt(e.GetPosition(List));
+        var row = RowAt(e.GetPosition(Shown));
         if (row is { AcceptsDrops: true })
         {
             if (DragData(e) is { } payload && payload.Items.Any(i => i.Path == row.Path))
@@ -797,7 +862,7 @@ public partial class PanelView : UserControl
             _springTimer.Stop();
         }
 
-        AutoScroll(e.GetPosition(List));
+        AutoScroll(e.GetPosition(Shown));
     }
 
     private void OnListDragLeave(object sender, DragEventArgs e)
@@ -844,7 +909,7 @@ public partial class PanelView : UserControl
 
     private void AutoScroll(Point position)
     {
-        if (FindChild<ScrollViewer>(List) is not { } scroller)
+        if (FindChild<ScrollViewer>(Shown) is not { } scroller)
         {
             return;
         }
@@ -854,7 +919,7 @@ public partial class PanelView : UserControl
         {
             scroller.ScrollToVerticalOffset(scroller.VerticalOffset - 8);
         }
-        else if (position.Y > List.ActualHeight - edge)
+        else if (position.Y > Shown.ActualHeight - edge)
         {
             scroller.ScrollToVerticalOffset(scroller.VerticalOffset + 8);
         }

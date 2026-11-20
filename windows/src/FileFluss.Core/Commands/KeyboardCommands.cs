@@ -46,6 +46,8 @@ public enum KeyboardCommand
     SortBySize,
     SortByKind,
     ToggleHiddenFiles,
+    ViewAsList,
+    ViewAsGallery,
 
     // Cross-panel & sync
     SwapPanels,
@@ -214,6 +216,8 @@ public static class KeyboardCommandInfo
         KeyboardCommand.SortBySize => "Sort by Size",
         KeyboardCommand.SortByKind => "Sort by Kind",
         KeyboardCommand.ToggleHiddenFiles => "Show Hidden Files",
+        KeyboardCommand.ViewAsList => "View as List",
+        KeyboardCommand.ViewAsGallery => "View as Gallery",
         KeyboardCommand.SwapPanels => "Swap Panels",
         KeyboardCommand.SyncPanels => "Sync Left and Right Panels",
         KeyboardCommand.CompareFolders => "Compare Folders",
@@ -248,7 +252,7 @@ public static class KeyboardCommandInfo
         KeyboardCommand.CopyFiles or KeyboardCommand.CutFiles or KeyboardCommand.PasteFiles or KeyboardCommand.CopyPath => KeyboardSection.Clipboard,
         KeyboardCommand.SelectAll or KeyboardCommand.DeselectAll or KeyboardCommand.InvertSelection or KeyboardCommand.GetInfo => KeyboardSection.Selection,
         KeyboardCommand.SortByName or KeyboardCommand.SortByDate or KeyboardCommand.SortBySize or KeyboardCommand.SortByKind or
-            KeyboardCommand.ToggleHiddenFiles => KeyboardSection.ViewSort,
+            KeyboardCommand.ToggleHiddenFiles or KeyboardCommand.ViewAsList or KeyboardCommand.ViewAsGallery => KeyboardSection.ViewSort,
         KeyboardCommand.SwapPanels or KeyboardCommand.SyncPanels or KeyboardCommand.CompareFolders or
             KeyboardCommand.RefreshActive or KeyboardCommand.RefreshAll => KeyboardSection.CrossPanelTools,
         KeyboardCommand.OpenSearch or KeyboardCommand.QuickFilter => KeyboardSection.Search,
@@ -308,6 +312,9 @@ public static class KeyboardCommandInfo
         [KeyboardCommand.SortBySize] = ShortcutBinding.Ctrl("3"),
         [KeyboardCommand.SortByKind] = ShortcutBinding.Ctrl("4"),
         [KeyboardCommand.ToggleHiddenFiles] = ShortcutBinding.Ctrl("h"),
+        // Ctrl+1–4 sort, so the view modes take the same digits with Shift — the Mac's ⌃⌘1 / ⌃⌘2.
+        [KeyboardCommand.ViewAsList] = ShortcutBinding.CtrlShift("1"),
+        [KeyboardCommand.ViewAsGallery] = ShortcutBinding.CtrlShift("2"),
         [KeyboardCommand.SwapPanels] = ShortcutBinding.Ctrl("u"),
         [KeyboardCommand.SyncPanels] = ShortcutBinding.CtrlShift("s"),
         [KeyboardCommand.CompareFolders] = ShortcutBinding.CtrlAlt("c"),
@@ -352,6 +359,8 @@ public static class KeyboardCommandInfo
         [KeyboardCommand.SortBySize] = ShortcutBinding.Ctrl("f6"),
         [KeyboardCommand.SortByKind] = ShortcutBinding.Ctrl("f4"),
         [KeyboardCommand.ToggleHiddenFiles] = ShortcutBinding.Ctrl("h"),
+        [KeyboardCommand.ViewAsList] = ShortcutBinding.CtrlShift("1"),
+        [KeyboardCommand.ViewAsGallery] = ShortcutBinding.CtrlShift("2"),
         [KeyboardCommand.SwapPanels] = ShortcutBinding.Ctrl("u"),
         [KeyboardCommand.SyncPanels] = ShortcutBinding.CtrlShift("s"),
         [KeyboardCommand.CompareFolders] = ShortcutBinding.Shift("f2"),

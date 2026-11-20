@@ -24,8 +24,11 @@ public static class IconCache
     private static readonly ConcurrentDictionary<(int Index, ShellIconSize Size), ImageSource?> ByIndex = new();
     private static readonly ConcurrentDictionary<string, ImageSource?> Logos = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The 32-px list renders 16-DIP rows crisply up to 200% scaling; larger rows use 48 px.</summary>
-    public static ShellIconSize SizeFor(double dips) => dips > 24 ? ShellIconSize.ExtraLarge : ShellIconSize.Large;
+    /// <summary>
+    /// The 32-px list renders 16-DIP rows crisply up to 200% scaling; larger rows use 48 px, and
+    /// gallery tiles and Quick Look's info view the 256-px jumbo icons.
+    /// </summary>
+    public static ShellIconSize SizeFor(double dips) => dips > 48 ? ShellIconSize.Jumbo : dips > 24 ? ShellIconSize.ExtraLarge : ShellIconSize.Large;
 
     /// <summary>
     /// The item's icon, synchronously. Local folders, programs and shortcuts make the shell read
@@ -488,8 +491,10 @@ public static class IconCache
 }
 
 /// <summary>
-/// Content thumbnails for local images and PDFs in the file list (macOS <c>ThumbnailCache</c>):
-/// keyed by path + modification date + size so an edited file refreshes by itself, with
+/// Content thumbnails for local files (macOS <c>ThumbnailCache</c>): images and PDFs in the
+/// list's rows, anything the shell can draw on a gallery tile. Keyed by path + modification
+/// date + size + pixel size, so an edited file refreshes by itself and a row's small thumbnail
+/// never stands in for a tile, with
 /// failures remembered so scrolling a big folder doesn't re-ask the shell for thumbnails it
 /// already refused. Rows ask only while they are on screen (the list virtualizes), get the
 /// type icon at once, and receive the thumbnail later on the UI thread.
@@ -501,8 +506,15 @@ public static class IconCache
 /// </summary>
 public static class ThumbnailCache
 {
-    private const int MaxEntries = 512;
+    private const int MaxEntries = 2048;
     private const int MaxPending = 160;
+
+    /// <summary>
+    /// Budget in pixels. A row's thumbnail is about a thousand of them, a gallery tile's a
+    /// hundred thousand — counting entries alone would let a gallery of large photos hold
+    /// hundreds of megabytes.
+    /// </summary>
+    private const long MaxCost = 24_000_000;
     private const int WorkerCount = 2;
 
     /// <summary>What Quick Look thumbnails on macOS: images and PDFs (UTType image / pdf).</summary>
@@ -515,18 +527,25 @@ public static class ThumbnailCache
     };
 
     private static readonly object Gate = new();
-    private static readonly Dictionary<Key, ImageSource> Cache = [];
+    private static readonly Dictionary<Key, (ImageSource Image, long Cost)> Cache = [];
     private static readonly Queue<Key> Order = new();
     private static readonly HashSet<Key> Failed = [];
     private static readonly Dictionary<Key, List<Action<ImageSource>>> Waiting = [];
-    private static readonly LinkedList<(Key Key, string Path)> Pending = new();
+    private static readonly LinkedList<Key> Pending = new();
+    private static long _totalCost;
     private static readonly SemaphoreSlim Signal = new(0);
     private static bool _started;
 
     /// <summary>Requested edge in pixels: the 16-DIP row icon at the screen's scale, at least 32.</summary>
     public static int PixelSize { get; set; } = 32;
 
-    private readonly record struct Key(string Path, long ModifiedTicks, long Size);
+    /// <summary>
+    /// Edge for gallery tiles: the largest tile image at the screen's scale. One size for all
+    /// three tile sizes, so Ctrl+Plus and Ctrl+Minus don't send every tile back to the shell.
+    /// </summary>
+    public static int GalleryPixelSize { get; set; } = 320;
+
+    private readonly record struct Key(string Path, long ModifiedTicks, long Size, int Pixels);
 
     /// <summary>True when a content thumbnail beats the type icon for this item (local, not a placeholder).</summary>
     public static bool ShouldUseThumbnail(CloudFileItem item, bool isLocal)
@@ -534,17 +553,25 @@ public static class ThumbnailCache
            Extensions.Contains(item.Extension);
 
     /// <summary>
+    /// A gallery tile has room for a real preview of nearly anything the shell can draw —
+    /// videos, documents, text — not just images and PDFs. A file it can't draw is remembered
+    /// as such, so asking costs one refusal per file.
+    /// </summary>
+    public static bool ShouldUseGalleryThumbnail(CloudFileItem item, bool isLocal)
+        => isLocal && !item.IsDirectory && item.Path.Length > 0 && item.DownloadStatus != CloudDownloadStatus.Evicted;
+
+    /// <summary>
     /// The thumbnail if it is ready; otherwise queues it and calls <paramref name="loaded"/> on
     /// the UI thread once it is. Returns null at once for files the shell couldn't thumbnail.
     /// </summary>
-    public static ImageSource? Get(CloudFileItem item, Action<ImageSource> loaded)
+    public static ImageSource? Get(CloudFileItem item, Action<ImageSource> loaded, int? pixelSize = null)
     {
-        var key = new Key(item.Path, item.ModificationDate.UtcTicks, item.Size);
+        var key = new Key(item.Path, item.ModificationDate.UtcTicks, item.Size, pixelSize ?? PixelSize);
         lock (Gate)
         {
             if (Cache.TryGetValue(key, out var cached))
             {
-                return cached;
+                return cached.Image;
             }
 
             if (Failed.Contains(key))
@@ -559,10 +586,10 @@ public static class ThumbnailCache
             }
 
             Waiting[key] = [loaded];
-            Pending.AddFirst((key, item.Path));
+            Pending.AddFirst(key);
             while (Pending.Count > MaxPending)
             {
-                Waiting.Remove(Pending.Last!.Value.Key);
+                Waiting.Remove(Pending.Last!.Value);
                 Pending.RemoveLast();
             }
 
@@ -595,7 +622,6 @@ public static class ThumbnailCache
         {
             Signal.Wait();
             Key key;
-            string path;
             lock (Gate)
             {
                 if (Pending.First is not { } first)
@@ -603,14 +629,14 @@ public static class ThumbnailCache
                     continue;
                 }
 
-                (key, path) = first.Value;
+                key = first.Value;
                 Pending.RemoveFirst();
             }
 
             ImageSource? image = null;
             try
             {
-                image = IconCache.Thumbnail(path, PixelSize);
+                image = IconCache.Thumbnail(key.Path, key.Pixels);
             }
             catch (Exception)
             {
@@ -632,11 +658,26 @@ public static class ThumbnailCache
                     continue;
                 }
 
-                Cache[key] = image;
-                Order.Enqueue(key);
-                while (Order.Count > MaxEntries)
+                long cost = image is BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } bitmap
+                    ? (long)bitmap.PixelWidth * bitmap.PixelHeight
+                    : (long)key.Pixels * key.Pixels;
+                if (Cache.Remove(key, out var previous))
                 {
-                    Cache.Remove(Order.Dequeue());
+                    _totalCost -= previous.Cost;
+                }
+                else
+                {
+                    Order.Enqueue(key);
+                }
+
+                Cache[key] = (image, cost);
+                _totalCost += cost;
+                while ((Order.Count > MaxEntries || _totalCost > MaxCost) && Order.Count > 0)
+                {
+                    if (Cache.Remove(Order.Dequeue(), out var evicted))
+                    {
+                        _totalCost -= evicted.Cost;
+                    }
                 }
             }
 

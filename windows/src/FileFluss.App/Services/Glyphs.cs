@@ -53,6 +53,8 @@ public static class Glyphs
     public const string Error = "";
     public const string Lock = "";
     public const string TwoPanes = "";
+    public const string List = "";
+    public const string Gallery = "";
     public const string SinglePane = "";
     public const string Pin = "";
     public const string MoveTo = "";

@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:u="clr-namespace:FileFluss.App.Services"
              xmlns:vm="clr-namespace:FileFluss.App.ViewModels"
+             xmlns:local="clr-namespace:FileFluss.App.Views"
              AllowDrop="True">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
@@ -15,6 +16,7 @@
         <Grid DockPanel.Dock="Top" Margin="6,4,6,2" MinHeight="32">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ScrollViewer x:Name="CrumbScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
@@ -48,6 +50,16 @@
                      KeyDown="OnPathEditorKeyDown" LostKeyboardFocus="OnPathEditorLostFocus" />
             <ProgressBar Grid.Column="1" Width="60" Height="3" Margin="6,0" IsIndeterminate="True" VerticalAlignment="Center"
                          Visibility="{Binding IsLoading, Converter={StaticResource Visible}}" />
+
+            <!-- List / gallery switch (macOS: at the right end of each panel's path bar). It belongs
+                 to its panel, so it is obvious which side it changes. -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,0,0"
+                        ToolTip="{u:Loc 'Show this panel as a list or as a gallery'}">
+                <ToggleButton x:Name="ListModeButton" Style="{StaticResource GlyphButton}" Width="28" Height="26" FontSize="13" IsTabStop="False"
+                              Content="{x:Static u:Glyphs.List}" Click="OnListModeClick" AutomationProperties.Name="{u:Loc List}" />
+                <ToggleButton x:Name="GalleryModeButton" Style="{StaticResource GlyphButton}" Width="28" Height="26" FontSize="13" IsTabStop="False"
+                              Content="{x:Static u:Glyphs.Gallery}" Click="OnGalleryModeClick" AutomationProperties.Name="{u:Loc Gallery}" />
+            </StackPanel>
         </Grid>
 
         <!-- Offline view: an offline account or unplugged drive, browsed from the index -->
@@ -209,6 +221,66 @@
                     </GridView>
                 </ListView.View>
             </ListView>
+
+            <!-- Gallery (macOS gallery view): the same rows as tiles, with the same handlers as the
+                 list — selection, opening, the context menu, drag and drop and Quick Look all run
+                 through the code the list uses. Only one of the two is visible. -->
+            <ListBox x:Name="Gallery"
+                     Visibility="Collapsed"
+                     ItemsSource="{Binding Rows}"
+                     ItemContainerStyle="{StaticResource GalleryTileStyle}"
+                     SelectionMode="Extended"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Padding="4"
+                     ScrollViewer.CanContentScroll="True"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     IsTextSearchEnabled="True"
+                     TextSearch.TextPath="Name"
+                     AllowDrop="True"
+                     KeyboardNavigation.TabNavigation="None"
+                     SelectionChanged="OnSelectionChanged"
+                     MouseDoubleClick="OnDoubleClick"
+                     PreviewMouseLeftButtonDown="OnListMouseDown"
+                     PreviewMouseMove="OnListMouseMove"
+                     PreviewMouseRightButtonDown="OnListRightButtonDown"
+                     ContextMenuOpening="OnContextMenuOpening"
+                     GotKeyboardFocus="OnListFocused"
+                     DragEnter="OnListDragOver" DragOver="OnListDragOver" DragLeave="OnListDragLeave" Drop="OnListDrop">
+                <ListBox.ContextMenu>
+                    <ContextMenu x:Name="GalleryMenu" />
+                </ListBox.ContextMenu>
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <local:VirtualizingTilePanel TileWidth="{DynamicResource GalleryTileWidth}" TileHeight="{DynamicResource GalleryTileHeight}" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:FileRowViewModel}">
+                        <Grid Opacity="{Binding Opacity}" ToolTip="{Binding ToolTip}" ToolTipService.InitialShowDelay="900" Margin="6,6,6,4">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Image Source="{Binding TileImage}" Width="{DynamicResource GalleryImageSize}" Height="{DynamicResource GalleryImageSize}"
+                                   Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
+                            <!-- Two lines at most, as in Finder and Explorer; the full name is in the tooltip. -->
+                            <TextBlock Grid.Row="1" x:Name="NameText" Text="{Binding DisplayName}" Margin="0,6,0,0" MaxHeight="34"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Top" />
+                            <TextBox Grid.Row="1" x:Name="RenameBox" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed"
+                                     Margin="0,4,0,0" Padding="2,0" VerticalAlignment="Top" TextWrapping="Wrap" TextAlignment="Center"
+                                     KeyDown="OnRenameKeyDown" LostKeyboardFocus="OnRenameLostFocus" IsVisibleChanged="OnRenameVisible" />
+                        </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                <Setter TargetName="RenameBox" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="NameText" Property="Visibility" Value="Hidden" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
 
             <!-- Empty, error and re-authentication states -->
             <TextBlock Text="{Binding EmptyText}" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Caption}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360"

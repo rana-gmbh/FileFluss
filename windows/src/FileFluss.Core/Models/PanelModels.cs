@@ -163,6 +163,16 @@ public enum FileListRowSize
     Large,
 }
 
+/// <summary>
+/// How a panel lays out its folder: rows with columns, or a grid of thumbnails (macOS
+/// <c>FileViewMode</c>). Each panel keeps its own; List is the default.
+/// </summary>
+public enum FileListViewMode
+{
+    List,
+    Gallery,
+}
+
 public enum FileListColumn
 {
     Name,
