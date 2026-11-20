@@ -640,7 +640,6 @@
 "Save Test Accounts…" = "保存测试帐户…";
 "Restore Test Accounts…" = "恢复测试帐户…";
 
-/* Mac wording from the account reconnecting and the gallery view, which the Windows port
-   doesn't have yet — worded for Windows for when it does. */
+/* The account reconnecting and the gallery view, in Windows wording. */
 "iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud 云盘不可用。请检查 Windows 版 iCloud 是否已登录并已打开 iCloud 云盘。";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**Ctrl+加号** 和 **Ctrl+减号** 可放大和缩小缩略图，与列表中的行一样。";

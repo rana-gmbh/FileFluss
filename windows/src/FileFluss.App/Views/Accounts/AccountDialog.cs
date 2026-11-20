@@ -340,18 +340,17 @@ public sealed class AccountDialog : Window, IConnectPrompt
         DockPanel.SetDock(_back, Dock.Left);
         buttons.Children.Add(_back);
 
-        // Editing a browser sign-in has nothing to save: the button runs the flow again, and
-        // says so, as on macOS.
-        var primary = _editingId is null ? L("Connect") : _mode?.OpensBrowser == true ? L("Re-authorize") : L("Save");
+        // As on macOS: editing a browser sign-in has nothing to save, so the button runs the
+        // flow again and says Re-authorize; a form opened to reconnect an account says Reconnect.
+        var browser = _mode?.OpensBrowser == true;
+        var primary = _editingId is null ? L("Connect")
+            : browser ? L("Re-authorize")
+            : _reconnecting ? L("Reconnect")
+            : L("Save");
         _connect = new Button { Content = primary, MinWidth = 110, IsDefault = true };
         if (TryFindResource("AccentButtonStyle") is Style accent)
         {
             _connect.Style = accent;
-        }
-
-        if (_reconnecting && !_mode.OpensBrowser)
-        {
-            _connect.Content = L("Reconnect");
         }
 
         _connect.Click += async (_, _) => await ConnectAsync();
