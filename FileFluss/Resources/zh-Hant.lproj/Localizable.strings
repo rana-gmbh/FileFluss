@@ -1274,3 +1274,9 @@
 "**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." = "**顯示方式 → 以列表顯示**和**顯示方式 → 以圖庫顯示**可透過選單或鍵盤切換作用中的面板。";
 "In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "在圖庫中，本機影像、影片、PDF 和文件會顯示預覽；雲端檔案顯示其檔案類型的圖示。";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** 和 **⌘-** 可放大和縮小縮覽圖，與列表中的列一樣。";
+
+/* Tags */
+"Tags" = "標籤";
+"Remove All Tags" = "移除所有標籤";
+"Tags couldn't be changed" = "無法更改標籤";
+"The tags of “%@” couldn't be changed: %@" = "無法更改「%@」的標籤：%@";

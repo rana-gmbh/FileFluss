@@ -182,6 +182,7 @@ internal sealed class MegaApiClient
 
             var type = (int)typeValue;
             string name;
+            string? attributeJson = null;
             switch (type)
             {
                 case 2:
@@ -195,9 +196,11 @@ internal sealed class MegaApiClient
                     name = "Trash";
                     break;
                 default:
-                    name = nodeData.GetString("a") is { } attributes && nodeData.GetString("k") is { } keyField
-                        ? DecryptNodeName(masterAes, attributes, keyField, handle, keys) ?? "Unknown"
-                        : "Unknown";
+                    var decrypted = nodeData.GetString("a") is { } attributes && nodeData.GetString("k") is { } keyField
+                        ? DecryptNodeAttributes(masterAes, attributes, keyField, handle, keys)
+                        : null;
+                    name = decrypted?.Name ?? "Unknown";
+                    attributeJson = decrypted?.Json;
                     break;
             }
 
@@ -207,7 +210,8 @@ internal sealed class MegaApiClient
                 name,
                 type,
                 nodeData.GetInt64("s") ?? 0,
-                nodeData.GetDouble("ts") ?? 0);
+                nodeData.GetDouble("ts") ?? 0,
+                attributeJson);
         }
 
         lock (_gate)
@@ -528,15 +532,101 @@ internal sealed class MegaApiClient
             key = NodeKey(handle) ?? throw CloudProviderException.InvalidResponse();
         }
 
+        // All the attributes, not just the name: the block is replaced whole, and one holding
+        // only the name would take the item's label, favourite mark and the rest away with
+        // the old name.
+        string? current;
+        lock (_gate)
+        {
+            current = _nodes.TryGetValue(handle, out var existing) ? existing.Attributes : null;
+        }
+
+        var json = MegaAttributes.Json(current, newName);
+
         // The attribute command takes the new attributes as "at" (macOS sent "attr").
-        var attributes = MegaCrypto.EncryptAttributes(newName, MegaCrypto.AttributeKey(key));
+        var attributes = MegaCrypto.EncryptAttributeJson(json, MegaCrypto.AttributeKey(key));
         await CallAsync(new JsonObject { ["a"] = "a", ["n"] = handle, ["at"] = attributes }, cancellationToken).ConfigureAwait(false);
 
         lock (_gate)
         {
             if (_nodes.TryGetValue(handle, out var node))
             {
-                _nodes[handle] = node with { Name = newName };
+                _nodes[handle] = node with { Name = newName, Attributes = json };
+            }
+        }
+    }
+
+    // MARK: - Labels
+
+    /// <summary>
+    /// MEGA's colour labels of the items in one folder, by item path. Read from the nodes
+    /// already in memory: a label is part of an item's attributes, which were decrypted for
+    /// its name.
+    /// </summary>
+    public async Task<Dictionary<string, int>> LabelsAsync(string path, CancellationToken cancellationToken)
+    {
+        await EnsureNodesAsync(cancellationToken).ConfigureAwait(false);
+        var parent = ResolveHandle(path);
+        var labels = new Dictionary<string, int>(StringComparer.Ordinal);
+        lock (_gate)
+        {
+            foreach (var node in _nodes.Values)
+            {
+                if (node.ParentHandle != parent || node.Type > 1)
+                {
+                    continue;
+                }
+
+                var label = MegaAttributes.Label(node.Attributes);
+                if (label != 0)
+                {
+                    labels[CloudPath.Combine(path, node.Name)] = label;
+                }
+            }
+        }
+
+        return labels;
+    }
+
+    /// <summary>Sets an item's colour label (1…7), or takes it off (0).</summary>
+    public async Task SetLabelAsync(string path, int label, CancellationToken cancellationToken)
+    {
+        await EnsureNodesAsync(cancellationToken).ConfigureAwait(false);
+        var handle = ResolveHandle(path);
+        var key = NodeKey(handle);
+        if (key is null)
+        {
+            await RefetchNodesAsync(cancellationToken).ConfigureAwait(false);
+            key = NodeKey(handle) ?? throw CloudProviderException.InvalidResponse();
+        }
+
+        MegaNode? node;
+        lock (_gate)
+        {
+            _nodes.TryGetValue(handle, out node);
+        }
+
+        // Without the item's own attributes there is nothing safe to write: the block would
+        // have to be made up, name included.
+        if (node?.Attributes is not { } current)
+        {
+            throw CloudProviderException.InvalidResponse();
+        }
+
+        if (MegaAttributes.Label(current) == label)
+        {
+            return;
+        }
+
+        var json = MegaAttributes.Json(current, node.Name, label);
+        var attributes = MegaCrypto.EncryptAttributeJson(json, MegaCrypto.AttributeKey(key));
+        await CallAsync(new JsonObject { ["a"] = "a", ["n"] = handle, ["at"] = attributes }, cancellationToken).ConfigureAwait(false);
+
+        lock (_gate)
+        {
+            if (_nodes.TryGetValue(handle, out var latest))
+            {
+                _nodes[handle] = latest with { Attributes = json };
             }
         }
     }
@@ -823,7 +913,7 @@ internal sealed class MegaApiClient
                     continue;
                 }
 
-                _nodes[handle] = new MegaNode(handle, nodeData.GetString("p") ?? string.Empty, name, (int)type, size, now);
+                _nodes[handle] = new MegaNode(handle, nodeData.GetString("p") ?? string.Empty, name, (int)type, size, now, MegaAttributes.Json(null, name));
                 _nodeKeys[handle] = key;
                 handles.Add(handle);
             }
@@ -911,7 +1001,7 @@ internal sealed class MegaApiClient
     /// Decrypts a node's key with the master key (4 words for a folder, 8 for a file), caches it
     /// and decrypts the name with it. Null when the key or the attributes don't fit.
     /// </summary>
-    private static string? DecryptNodeName(Aes masterAes, string attributes, string keyField, string handle, Dictionary<string, uint[]> keys)
+    private static (string Name, string Json)? DecryptNodeAttributes(Aes masterAes, string attributes, string keyField, string handle, Dictionary<string, uint[]> keys)
     {
         var encryptedKey = MegaCrypto.FirstKeyPart(keyField);
         if (encryptedKey is null)
@@ -934,7 +1024,7 @@ internal sealed class MegaApiClient
         }
 
         keys[handle] = nodeKey;
-        return MegaCrypto.DecryptName(attributes, MegaCrypto.AttributeKey(nodeKey));
+        return MegaCrypto.DecryptAttributes(attributes, MegaCrypto.AttributeKey(nodeKey));
     }
 }
 

@@ -33,6 +33,11 @@ public sealed class AppServices
         Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
         Mount = new MountService(SettingsStore, dataDirectory);
         Archives = new ArchiveSessions();
+
+        // One store for the whole app: the panels show from it, and transfers and sync (in
+        // Core) carry tags along through the same instance.
+        TagStore.Shared = Tags = new TagStore(Path.Combine(dataDirectory, "Tags"));
+        Accounts.AccountRemoved += (_, id) => Tags.RemoveAccount(id);
         RarTool.InstallDirectory = Path.Combine(dataDirectory, "Tools", "rar");
 
         // Win32 implementations of the operations Core leaves pluggable.
@@ -74,6 +79,9 @@ public sealed class AppServices
 
     /// <summary>Accounts mapped as drives in File Explorer (macOS "Mount in Finder").</summary>
     public MountService Mount { get; }
+
+    /// <summary>The colour tags of files and folders, on this PC and on every account.</summary>
+    public TagStore Tags { get; }
 
     /// <summary>The archives open in the panels (browsed like folders, read-only).</summary>
     public ArchiveSessions Archives { get; }

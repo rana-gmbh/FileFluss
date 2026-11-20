@@ -1024,6 +1024,8 @@ final class SyncViewModel {
         // Drop search-index rows so the account no longer surfaces under
         // Settings → Index Status as an orphan with a stale name.
         await SearchIndex.shared.dropIndexedCloudSource(accountId: account.id)
+        // And the tags FileFluss kept for its items.
+        await TagStore.shared.removeAccount(account.id)
     }
 
     /// Flip the user-controlled offline-mode flag. When on, the sidebar

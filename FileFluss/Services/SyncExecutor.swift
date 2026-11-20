@@ -201,6 +201,9 @@ enum SyncExecutor {
             }
             do {
                 try await provider.deleteItem(at: cloudJoin(rootPath, rel))
+                if !provider.providerType.keepsTagsInFiles {
+                    await TagStore.shared.removeSubtree(account: accountId, path: cloudJoin(rootPath, rel))
+                }
             } catch CloudProviderError.notFound {
                 // Already gone, which is what was wanted. Mirror meets this
                 // when the file is inside a folder it has just replaced.
@@ -244,6 +247,8 @@ enum SyncExecutor {
             if let modificationDate {
                 try? await provider.setModificationDate(at: destPath, to: modificationDate)
             }
+            // Tags travel with the file, in every direction below.
+            await TagTransfer.uploaded(from: src, toAccount: accountId, providerType: provider.providerType, remotePath: destPath)
 
         case let (.cloud(accountId, rootPath), .local(dstRoot)):
             guard let provider = await SyncEngine.shared.provider(for: accountId) else {
@@ -256,6 +261,7 @@ enum SyncExecutor {
                 try? FileManager.default.setAttributes([.modificationDate: modificationDate], ofItemAtPath: dst.path)
             }
             Quarantine.mark(dst)
+            await TagTransfer.downloaded(fromAccount: accountId, providerType: provider.providerType, remotePath: cloudJoin(rootPath, sourceRelative), to: dst)
 
         case let (.cloud(srcAccountId, srcRoot), .cloud(dstAccountId, dstRoot)):
             guard let srcProvider = await SyncEngine.shared.provider(for: srcAccountId),
@@ -265,6 +271,7 @@ enum SyncExecutor {
             let tempURL = StagingLocation.base().appendingPathComponent("filefluss-sync-\(UUID().uuidString)")
             defer { try? FileManager.default.removeItem(at: tempURL) }
             try await srcProvider.downloadFile(remotePath: cloudJoin(srcRoot, sourceRelative), to: tempURL, onBytes: onDownloadBytes)
+            await TagTransfer.downloaded(fromAccount: srcAccountId, providerType: srcProvider.providerType, remotePath: cloudJoin(srcRoot, sourceRelative), to: tempURL)
             // On the staged file too: some servers take the date from the
             // upload itself.
             if let modificationDate {
@@ -277,6 +284,7 @@ enum SyncExecutor {
             if let modificationDate {
                 try? await dstProvider.setModificationDate(at: dstPath, to: modificationDate)
             }
+            await TagTransfer.uploaded(from: tempURL, toAccount: dstAccountId, providerType: dstProvider.providerType, remotePath: dstPath)
 
         case (.offlineIndexed, _), (_, .offlineIndexed):
             throw SyncPlannerError.offlineEndpointNotWritable

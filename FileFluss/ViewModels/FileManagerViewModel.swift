@@ -91,6 +91,67 @@ final class FileManagerViewModel {
     /// happened" is the one answer that can't be acted on.
     var archiveError: String?
 
+    // MARK: - Tags
+
+    /// The Finder tags of the items on screen that have any, by item ID.
+    ///
+    /// Read after the listing rather than with it: asking the listing for
+    /// tags triples the time a large folder takes to appear, and almost no
+    /// file has any. The rows are shown first and the dots follow.
+    var tags: [String: [FileTag]] = [:]
+    /// A tag that couldn't be written, for the panel to show.
+    var tagError: String?
+    /// Bumped whenever the tags on screen are about to be replaced, so a
+    /// read that finishes late can tell it has been overtaken.
+    @ObservationIgnored private var tagGeneration = 0
+
+    /// Reads the tags of the folder on screen again. Also how a tag given
+    /// in Finder gets here: the panel calls this when FileFluss comes back
+    /// to the front.
+    func reloadTags() {
+        tagGeneration += 1
+        guard archiveSession == nil else {
+            // Rows inside an archive have no files behind them.
+            if !tags.isEmpty { tags = [:] }
+            return
+        }
+        let generation = tagGeneration
+        let files = items.map { (key: $0.id, path: $0.url.path) }
+        Task {
+            let loaded = await FinderTags.readAll(files)
+            guard generation == self.tagGeneration else { return }
+            if loaded != self.tags { self.tags = loaded }
+        }
+    }
+
+    /// Adds or removes a tag on the given items. The dots change at once;
+    /// the files are written in the background and the result put right if
+    /// one of them refused.
+    func changeTags(of items: [FileItem], _ change: TagChange) {
+        guard archiveSession == nil, !items.isEmpty else { return }
+        var shown = tags
+        for item in items {
+            let updated = change.applied(to: shown[item.id] ?? [])
+            shown[item.id] = updated.isEmpty ? nil : updated
+        }
+        tags = shown
+        tagGeneration += 1
+        let generation = tagGeneration
+        let files = items.map { (key: $0.id, url: $0.url) }
+        Task {
+            let outcome = await FinderTags.applyAll(change, to: files)
+            if let failure = outcome.failure {
+                self.tagError = L10n.format("The tags of “%@” couldn't be changed: %@", failure.name, failure.message)
+            }
+            guard generation == self.tagGeneration else { return }
+            var actual = self.tags
+            for (key, value) in outcome.tags {
+                actual[key] = value.isEmpty ? nil : value
+            }
+            if actual != self.tags { self.tags = actual }
+        }
+    }
+
     // Drag & Drop
     var draggedItems: [FileItem] = []
     var pendingDrop: PendingDrop?
@@ -154,6 +215,7 @@ final class FileManagerViewModel {
                 // Still inside the archive: served from the entry list, with
                 // no file system access and nothing to wait for.
                 items = session.items(at: inner, showHidden: showHiddenFiles)
+                reloadTags()
                 error = nil
                 isLoading = false
                 if let url, url != currentDirectory {
@@ -182,6 +244,9 @@ final class FileManagerViewModel {
                 guard self.isCurrent(generation: generation, target: targetURL, wasNavigation: url != nil) else { return }
                 self.items = loadedItems
                 if let url, url != self.currentDirectory {
+                    // Another folder's tags mean nothing here; a refresh
+                    // keeps what it has until the new read is in.
+                    if !self.tags.isEmpty { self.tags = [:] }
                     // Going up lands on the folder just left, as in Finder.
                     let left = self.currentDirectory.standardizedFileURL
                     self.selectedItemIDs = Set(loadedItems.filter { $0.url.standardizedFileURL == left }.map(\.id))
@@ -193,6 +258,7 @@ final class FileManagerViewModel {
                 }
                 self.isLoading = false
                 self.watchCurrentDirectory()
+                self.reloadTags()
             }
         } catch {
             await MainActor.run {

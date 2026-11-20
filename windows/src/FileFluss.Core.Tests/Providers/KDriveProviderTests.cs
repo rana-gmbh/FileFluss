@@ -71,6 +71,106 @@ public sealed class KDriveProviderTests : IDisposable
     private static ConnectValues TokenValues(string token = " kd-token\n")
         => new("default", new Dictionary<string, string> { ["apiToken"] = token });
 
+    // MARK: - Categories
+
+    private const string CategoryList = """[{"id":1,"name":"Avertissement","color":"#FF9800","is_predefined":true},{"id":7,"name":"Red","color":"#FF453A","is_predefined":false},{"id":9,"name":"Invoices","color":"#0098ff","is_predefined":false}]""";
+
+    private void RootListing(string files)
+    {
+        DriveInfo();
+        Route("GET /2/drive/101/files/5/files", Data(files));
+    }
+
+    private static string CategoryPage(string files, string cursor = "", bool hasMore = false)
+        => "{\"result\":\"success\",\"data\":" + files + ",\"cursor\":\"" + cursor + "\",\"has_more\":" + (hasMore ? "true" : "false") + "}";
+
+    [Fact]
+    public async Task AFoldersCategoriesBecomeTagsUnderTheirOwnNames()
+    {
+        RootListing("[" + File(11, "Trip", "dir") + "," + File(12, "bill.pdf") + "," + File(13, "plain.txt") + "]");
+        Route("GET /3/drive/101/files/5/files", CategoryPage(
+            """[{"id":11,"name":"Trip","categories":[{"category_id":7,"is_generated_by_ai":false,"added_at":1700000500}]},{"id":12,"name":"bill.pdf","categories":[{"category_id":9},{"category_id":7}]},{"id":13,"name":"plain.txt","categories":[]},{"id":14,"name":"older.txt"}]"""));
+        Route("GET /2/drive/101/categories", Data(CategoryList));
+        using var provider = Connected();
+
+        Assert.Equal(Services.NativeTagSupport.Full, provider.NativeTagSupport);
+        var tags = await provider.NativeTagsAsync("/");
+
+        Assert.Equal([new FileTag("Red", TagColor.Red)], tags["/Trip"]);
+        Assert.Equal([new FileTag("Invoices", TagColor.Blue), new FileTag("Red", TagColor.Red)], tags["/bill.pdf"]);
+        Assert.False(tags.ContainsKey("/plain.txt"));
+        Assert.False(tags.ContainsKey("/older.txt"));
+
+        // Asked for with the categories, and apart from the listing itself.
+        var request = _http.Requests.Single(r => r.Uri.AbsolutePath == "/3/drive/101/files/5/files");
+        Assert.Contains("with=categories", request.Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALongFoldersCategoriesAreAskedForPageByPage()
+    {
+        RootListing("[" + File(11, "a.txt") + "," + File(12, "b.txt") + "]");
+        Route("GET /3/drive/101/files/5/files", (request, _) => FakeHttpHandler.Json(
+            request.RequestUri!.Query.Contains("cursor=next", StringComparison.Ordinal)
+                ? CategoryPage("""[{"id":12,"name":"b.txt","categories":[{"category_id":7}]}]""")
+                : CategoryPage("""[{"id":11,"name":"a.txt","categories":[{"category_id":9}]}]""", "next", hasMore: true)));
+        Route("GET /2/drive/101/categories", Data(CategoryList));
+        using var provider = Connected();
+
+        var tags = await provider.NativeTagsAsync("/");
+
+        Assert.Equal(2, tags.Count);
+        Assert.Equal(2, Count("GET /3/drive/101/files/5/files"));
+    }
+
+    [Fact]
+    public async Task TheCategoryListComesWithTheDrivesWhenItHasNoRouteOfItsOwn()
+    {
+        RootListing("[" + File(11, "a.txt") + "]");
+        Route("GET /3/drive/101/files/5/files", CategoryPage("""[{"id":11,"name":"a.txt","categories":[{"category_id":7}]}]"""));
+        Route("GET /2/drive/101/categories", "{}", HttpStatusCode.NotFound);
+        Route("GET /2/drive/init", Data("""{"drives":[{"id":55,"categories":[]},{"id":101,"categories":""" + CategoryList + "}]}"));
+        using var provider = Connected();
+
+        var tags = await provider.NativeTagsAsync("/");
+
+        Assert.Equal([new FileTag("Red", TagColor.Red)], tags["/a.txt"]);
+    }
+
+    [Fact]
+    public async Task SettingTagsAddsAndRemovesCategoriesAndMakesTheOnesThatAreMissing()
+    {
+        RootListing("[" + File(12, "bill.pdf") + "]");
+        Route("GET /3/drive/101/files/5/files", CategoryPage("""[{"id":12,"name":"bill.pdf","categories":[{"category_id":9}]}]"""));
+        Route("GET /2/drive/101/categories", Data(CategoryList));
+        string? created = null;
+        Route("POST /2/drive/101/categories", (_, body) =>
+        {
+            created = body;
+            return FakeHttpHandler.Json(Data("""{"id":21,"name":"Green","color":"#34C759","is_predefined":false}"""));
+        });
+        Route("POST /2/drive/101/files/12/categories/7", Data("""{"result":true}"""));
+        Route("POST /2/drive/101/files/12/categories/21", Data("""{"result":true}"""));
+        Route("DELETE /2/drive/101/files/12/categories/9", Data("true"));
+        using var provider = Connected();
+        await provider.ListDirectoryAsync("/");
+
+        // "red" is the drive's "Red" whatever its capitals; "Green" doesn't exist yet; "Invoices" goes.
+        await provider.SetNativeTagsAsync("/bill.pdf", [new FileTag("red", TagColor.Red), new FileTag("Green", TagColor.Green)]);
+
+        Assert.Equal(1, Count("POST /2/drive/101/files/12/categories/7"));
+        Assert.Equal(1, Count("POST /2/drive/101/files/12/categories/21"));
+        Assert.Equal(1, Count("DELETE /2/drive/101/files/12/categories/9"));
+        using var body = JsonDocument.Parse(created!);
+        Assert.Equal("Green", body.RootElement.GetProperty("name").GetString());
+        Assert.Equal("#34C759", body.RootElement.GetProperty("color").GetString());
+
+        // Asking again changes nothing: the item already has exactly these.
+        await provider.SetNativeTagsAsync("/bill.pdf", [new FileTag("Red", TagColor.Red), new FileTag("Green", TagColor.Green)]);
+        Assert.Equal(1, Count("POST /2/drive/101/files/12/categories/7"));
+        Assert.Equal(1, Count("POST /2/drive/101/categories"));
+    }
+
     // MARK: - Connect
 
     [Fact]

@@ -160,9 +160,12 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Image Source="{Binding Icon}" Width="16" Height="16" Margin="4,0,8,0" VerticalAlignment="Center"
                                                RenderOptions.BitmapScalingMode="HighQuality" />
+                                        <!-- The item's tags, after its name as in Finder's list. -->
+                                        <local:TagDots Grid.Column="2" Colors="{Binding TagColors}" Margin="6,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" x:Name="NameText" />
                                         <TextBox Grid.Column="1" x:Name="RenameBox" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed"
                                                  Padding="2,0" MinHeight="22" VerticalContentAlignment="Center" Margin="-3,0,0,0"
@@ -265,9 +268,12 @@
                             </Grid.RowDefinitions>
                             <Image Source="{Binding TileImage}" Width="{DynamicResource GalleryImageSize}" Height="{DynamicResource GalleryImageSize}"
                                    Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
-                            <!-- Two lines at most, as in Finder and Explorer; the full name is in the tooltip. -->
-                            <TextBlock Grid.Row="1" x:Name="NameText" Text="{Binding DisplayName}" Margin="0,6,0,0" MaxHeight="34"
-                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Top" />
+                            <!-- Two lines at most, as in Finder and Explorer; the full name is in the tooltip.
+                                 The item's tags come before its name, as in Finder's icon view. -->
+                            <TextBlock Grid.Row="1" x:Name="NameText" Margin="0,6,0,0" MaxHeight="34"
+                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Top">
+                                <InlineUIContainer BaselineAlignment="Center"><local:TagDots Colors="{Binding TagColors}" Gap="5" /></InlineUIContainer><Run Text="{Binding DisplayName, Mode=OneWay}" />
+                            </TextBlock>
                             <TextBox Grid.Row="1" x:Name="RenameBox" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed"
                                      Margin="0,4,0,0" Padding="2,0" VerticalAlignment="Top" TextWrapping="Wrap" TextAlignment="Center"
                                      KeyDown="OnRenameKeyDown" LostKeyboardFocus="OnRenameLostFocus" IsVisibleChanged="OnRenameVisible" />

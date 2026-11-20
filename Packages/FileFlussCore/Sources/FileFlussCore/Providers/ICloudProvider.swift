@@ -220,11 +220,17 @@ public final class ICloudProvider: CloudProvider, @unchecked Sendable {
     /// Builds an absolute file URL beneath the CloudDocs root from a
     /// provider-style remote path (`/foo/bar.txt`).
     public func url(forRemotePath remotePath: String) -> URL {
+        Self.localURL(forRemotePath: remotePath)
+    }
+
+    /// The same mapping without a provider at hand — the panel needs it to
+    /// read an item's Finder tags, which for iCloud Drive are on the file.
+    public static func localURL(forRemotePath remotePath: String) -> URL {
         // `.` and `..` are dropped, because this is the one provider whose
         // paths are real paths: climbing out of CloudDocs reaches the disk.
         let components = remotePath.split(separator: "/").filter { $0 != "." && $0 != ".." }
-        if components.isEmpty { return Self.rootURL }
-        return Self.rootURL.appendingPathComponent(components.joined(separator: "/"))
+        if components.isEmpty { return rootURL }
+        return rootURL.appendingPathComponent(components.joined(separator: "/"))
     }
 
     private func joinedRemotePath(parent: String, name: String) -> String {

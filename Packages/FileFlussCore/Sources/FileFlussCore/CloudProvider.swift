@@ -108,6 +108,19 @@ public protocol CloudProvider: Sendable {
     /// Implementations should NOT cache here; the view model owns caching.
     func storageQuota() async throws -> CloudStorageQuota?
 
+    /// What the service can hold of an item's tags itself. Defaults to
+    /// `.none`: the tags are then FileFluss's own record only.
+    var nativeTagSupport: NativeTagSupport { get }
+
+    /// The service's own labels for the items of one folder, by item path.
+    /// Items without a label are left out. Asked for after the listing,
+    /// never as part of it, so a slow or failing answer costs no rows.
+    func nativeTags(inFolder path: String) async throws -> [String: [FileTag]]
+
+    /// Replaces the service's labels on one item with these (already in
+    /// the form the service can hold, see `NativeTagSync.nativeForm`).
+    func setNativeTags(_ tags: [FileTag], at path: String) async throws
+
     /// A small preview of a file, made by the service itself, as image bytes
     /// (JPEG or PNG) whose longer edge is about `maxPixelSize`. The gallery
     /// shows it instead of the type's icon.
@@ -204,6 +217,16 @@ extension CloudProvider {
     }
 
     public var shareLinkCapabilities: ShareLinkCapabilities { .unsupported }
+
+    public var nativeTagSupport: NativeTagSupport { .none }
+
+    public func nativeTags(inFolder path: String) async throws -> [String: [FileTag]] {
+        [:]
+    }
+
+    public func setNativeTags(_ tags: [FileTag], at path: String) async throws {
+        throw CloudProviderError.notImplemented
+    }
 
     public func createShareLink(at path: String, options: ShareLinkOptions) async throws -> CloudShareLink {
         throw CloudProviderError.notImplemented

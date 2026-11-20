@@ -1346,11 +1346,20 @@ struct CloudFileListView: View {
                 onOpenWith: { items, app in
                     openCloudFiles(items, withApplication: app)
                 },
+                tags: vm.tags,
+                onChangeTags: vm.isBrowsingArchive ? nil : { items, change in
+                    vm.changeTags(of: items, change)
+                },
                 focusToken: appState.focusRequestPanel == panelSide ? appState.focusRequestToken : nil,
                 singlePaneMode: appState.singlePaneMode,
                 viewMode: appState.viewMode(for: panelSide),
                 currentPath: vm.currentPath
             )
+            // For iCloud Drive the tags are Finder's, and one given there
+            // shows up here when FileFluss comes back to the front.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                vm.reloadTags()
+            }
             // A list and a gallery are different AppKit views; a new
             // identity builds the other one when the mode changes.
             .id(appState.viewMode(for: panelSide))

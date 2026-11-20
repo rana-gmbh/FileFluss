@@ -122,6 +122,27 @@ public sealed class MegaProvider : CloudProvider
     public override Task RenameItemAsync(string path, string newName, CancellationToken cancellationToken = default)
         => Api.RenameAsync(CloudPath.Normalize(path), newName, cancellationToken);
 
+    // MARK: - Labels
+
+    /// <summary>MEGA has one colour label per item, in the same seven colours as Finder's tags and with no name of its own.</summary>
+    public override Services.NativeTagSupport NativeTagSupport => Services.NativeTagSupport.OneColor;
+
+    public override async Task<IReadOnlyDictionary<string, IReadOnlyList<FileTag>>> NativeTagsAsync(string folderPath, CancellationToken cancellationToken = default)
+    {
+        var labels = await Api.LabelsAsync(CloudPath.Normalize(folderPath), cancellationToken).ConfigureAwait(false);
+        var tags = new Dictionary<string, IReadOnlyList<FileTag>>(StringComparer.Ordinal);
+        foreach (var (path, label) in labels)
+        {
+            var color = MegaAttributes.TagColorFor(label);
+            tags[path] = [new FileTag(color.EnglishName(), color)];
+        }
+
+        return tags;
+    }
+
+    public override Task SetNativeTagsAsync(string path, IReadOnlyList<FileTag> tags, CancellationToken cancellationToken = default)
+        => Api.SetLabelAsync(CloudPath.Normalize(path), MegaAttributes.LabelFor(tags.FolderTint() ?? TagColor.None), cancellationToken);
+
     public override Task<CloudFileItem> GetFileMetadataAsync(string path, CancellationToken cancellationToken = default)
         => Api.StatAsync(CloudPath.Normalize(path), cancellationToken);
 

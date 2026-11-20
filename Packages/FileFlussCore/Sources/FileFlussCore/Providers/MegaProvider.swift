@@ -88,6 +88,26 @@ public final class MegaProvider: CloudProvider, @unchecked Sendable {
         try await client.renameItem(at: path, to: newName)
     }
 
+    // MARK: - Labels
+
+    /// MEGA has one colour label per item, in the same seven colours as
+    /// Finder's tags and with no name of its own.
+    public var nativeTagSupport: NativeTagSupport { .oneColor }
+
+    public func nativeTags(inFolder path: String) async throws -> [String: [FileTag]] {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.labels(inFolder: path).mapValues { label in
+            let color = MegaNodeAttributes.tagColor(forLabel: label)
+            return [FileTag(name: color.englishName, color: color)]
+        }
+    }
+
+    public func setNativeTags(_ tags: [FileTag], at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        let color = tags.last(where: { $0.color != .none })?.color ?? .none
+        try await client.setLabel(MegaNodeAttributes.label(for: color), at: path)
+    }
+
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.stat(at: path)

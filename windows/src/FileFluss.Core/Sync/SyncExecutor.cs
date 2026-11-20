@@ -335,6 +335,10 @@ public static class SyncExecutor
             try
             {
                 await destination.Provider.DeleteItemAsync(destination.Resolve(op.RelativePath), ct).ConfigureAwait(false);
+                if (Services.TagScope.For(destination.Provider) is { } tagScope)
+                {
+                    Services.TagStore.Shared.RemoveSubtree(tagScope, destination.Resolve(op.RelativePath));
+                }
             }
             catch (OperationCanceledException)
             {

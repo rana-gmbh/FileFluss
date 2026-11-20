@@ -101,14 +101,16 @@ extension FileTableCoordinator: NSCollectionViewDataSource, NSCollectionViewDele
     private func configure(_ tile: FileGalleryItem, with item: FileItem) {
         let metrics = galleryMetrics ?? FileGalleryMetrics()
         let iconSize = metrics.thumbnailSize
+        let itemTags = tags[item.id] ?? []
         let icon = item.isDirectory
-            ? FileTypeIcon.folderIcon(pointSize: iconSize)
+            ? FileTypeIcon.folderIcon(pointSize: iconSize, tint: itemTags.folderTint)
             : FileTypeIcon.icon(for: item.contentType, pointSize: iconSize)
         tile.configure(
             id: item.id,
             name: displayedName(for: item),
             toolTip: item.name,
             icon: icon,
+            tagColors: itemTags.dotColors,
             metrics: metrics
         )
 

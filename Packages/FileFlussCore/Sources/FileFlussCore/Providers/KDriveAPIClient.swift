@@ -16,6 +16,11 @@ public actor KDriveAPIClient {
     // Cache path → fileId mapping for navigation
     private var pathToId: [String: Int] = ["/": 0] // root placeholder, set after init
 
+    /// The drive's categories, fetched when first needed.
+    private var driveCategories: [KDriveCategory]?
+    /// The category ids each item had when its folder was last asked.
+    private var categoryIdsByFile: [Int: [Int]] = [:]
+
     public init(credentials: KDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.fileTransfer()
@@ -678,6 +683,129 @@ public actor KDriveAPIClient {
         return credentials.userEmail
     }
 
+    // MARK: - Categories
+
+    // kDrive's categories are labels with a name and a colour, any number
+    // per file or folder. The routes are the ones Infomaniak's own Android
+    // client uses.
+
+    /// The categories of the items in one folder as tags, by item path.
+    ///
+    /// A request of its own rather than part of the listing: the listing
+    /// stays on the route and paging it has always used, and if this one
+    /// fails the folder is still there, only without its dots.
+    public func categoryTags(inFolder path: String) async throws -> [String: [FileTag]] {
+        let folderId = try await resolvePathToId(path)
+        var listed: [KDriveCategorizedFile] = []
+        var cursor: String?
+        repeat {
+            var query = [
+                URLQueryItem(name: "with", value: "categories"),
+                URLQueryItem(name: "limit", value: "500"),
+            ]
+            if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+            let page: KDriveCursorResponse<[KDriveCategorizedFile]> = try await request(
+                .get,
+                path: "/3/drive/\(credentials.driveId)/files/\(folderId)/files",
+                queryItems: query
+            )
+            listed.append(contentsOf: page.data)
+            cursor = page.hasMore == true ? page.cursor : nil
+        } while cursor != nil
+
+        var known = try await categories()
+        // A category made in another app since ours were fetched.
+        let knownIds = Set(known.map(\.id))
+        if listed.contains(where: { $0.categoryIds.contains(where: { !knownIds.contains($0) }) }) {
+            known = try await categories(refresh: true)
+        }
+        let byId = Dictionary(known.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        var result: [String: [FileTag]] = [:]
+        for file in listed {
+            categoryIdsByFile[file.id] = file.categoryIds
+            let tags = file.categoryIds.compactMap { byId[$0]?.tag }
+            if !tags.isEmpty {
+                result[path == "/" ? "/\(file.name)" : "\(path)/\(file.name)"] = tags
+            }
+        }
+        return result
+    }
+
+    /// Makes an item's categories exactly these: missing ones are added —
+    /// created on the drive first if it has none of that name — and the
+    /// others taken off.
+    public func setCategoryTags(_ tags: [FileTag], at path: String) async throws {
+        let fileId = try await resolvePathToId(path)
+        if categoryIdsByFile[fileId] == nil {
+            // Not asked yet: find out what the item has before changing it.
+            let parent = (path as NSString).deletingLastPathComponent
+            _ = try await categoryTags(inFolder: parent.isEmpty ? "/" : parent)
+        }
+        let current = categoryIdsByFile[fileId] ?? []
+
+        var wanted: [Int] = []
+        for tag in tags {
+            let id = try await categoryId(for: tag)
+            if !wanted.contains(id) { wanted.append(id) }
+        }
+
+        for id in wanted where !current.contains(id) {
+            let _: KDriveResponse<KDriveIgnored> = try await request(
+                .post, path: "/2/drive/\(credentials.driveId)/files/\(fileId)/categories/\(id)"
+            )
+        }
+        for id in current where !wanted.contains(id) {
+            let _: KDriveResponse<KDriveIgnored> = try await request(
+                .delete, path: "/2/drive/\(credentials.driveId)/files/\(fileId)/categories/\(id)"
+            )
+        }
+        categoryIdsByFile[fileId] = wanted
+    }
+
+    /// The drive's category of this tag's name, made if there is none.
+    private func categoryId(for tag: FileTag) async throws -> Int {
+        let name = tag.name.lowercased()
+        if let existing = try await categories().first(where: { $0.name.lowercased() == name }) {
+            return existing.id
+        }
+        struct NewCategory: Encodable {
+            let name: String
+            let color: String
+        }
+        let created: KDriveResponse<KDriveCategory> = try await request(
+            .post,
+            path: "/2/drive/\(credentials.driveId)/categories",
+            body: NewCategory(name: tag.name, color: NativeTagSync.hexColor(for: tag.color))
+        )
+        driveCategories = (driveCategories ?? []) + [created.data]
+        return created.data.id
+    }
+
+    private func categories(refresh: Bool = false) async throws -> [KDriveCategory] {
+        if !refresh, let driveCategories { return driveCategories }
+        let fetched: [KDriveCategory]
+        do {
+            let response: KDriveResponse<[KDriveCategory]> = try await request(
+                .get, path: "/2/drive/\(credentials.driveId)/categories"
+            )
+            fetched = response.data
+        } catch {
+            // The way the Android client gets them: with the drives.
+            let response: KDriveResponse<KDriveInit> = try await request(
+                .get,
+                path: "/2/drive/init",
+                queryItems: [URLQueryItem(name: "with", value: "drives,drives.categories")]
+            )
+            guard let drive = response.data.drives.first(where: { $0.id == credentials.driveId }) else {
+                throw error
+            }
+            fetched = drive.categories ?? []
+        }
+        driveCategories = fetched
+        return fetched
+    }
+
     // MARK: - Path Resolution
 
     public func resolvePathToId(_ path: String) async throws -> Int {
@@ -768,6 +896,98 @@ public actor KDriveAPIClient {
 }
 
 // MARK: - kDrive API Response Types
+
+/// A category of the drive: a label with a name and a colour.
+struct KDriveCategory: Decodable, Sendable {
+    let id: Int
+    let name: String
+    let color: String?
+
+    /// Shown in FileFluss under its own name, in the nearest of the seven
+    /// tag colours.
+    var tag: FileTag {
+        FileTag(name: name, color: NativeTagSync.nearestColor(toHex: color ?? ""))
+    }
+}
+
+/// An entry of a folder listing asked for with its categories.
+struct KDriveCategorizedFile: Decodable {
+    let id: Int
+    let name: String
+    let categoryIds: [Int]
+
+    private struct Assignment: Decodable {
+        let categoryId: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case categoryId = "category_id"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, categories
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        let assignments = (try? container.decodeIfPresent([Assignment].self, forKey: .categories)) ?? nil
+        categoryIds = (assignments ?? []).map(\.categoryId)
+    }
+}
+
+/// A page of a listing that is paged by cursor (the v3 routes).
+struct KDriveCursorResponse<T: Decodable>: Decodable {
+    let data: T
+    let cursor: String?
+    let hasMore: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case data, cursor
+        case hasMore = "has_more"
+    }
+}
+
+/// `data` of `GET /2/drive/init`: the drives, each with its categories.
+struct KDriveInit: Decodable {
+    struct Drive: Decodable {
+        let id: Int
+        let categories: [KDriveCategory]?
+    }
+
+    let drives: [Drive]
+}
+
+/// Reads the two answers kDrive gives about categories, as the client does:
+/// a page of a folder listing asked for `with=categories`, and the drive's
+/// category list. Public so the shapes can be checked without an account.
+public enum KDriveCategoryPayloads {
+    /// Each listed item's tags by its name. Items without categories, and
+    /// category ids the drive's list doesn't know, are left out.
+    public static func tagsByName(listingPage: Data, categoryList: Data) throws -> [String: [FileTag]] {
+        let page = try JSONDecoder().decode(KDriveCursorResponse<[KDriveCategorizedFile]>.self, from: listingPage)
+        let categories = try JSONDecoder().decode(KDriveResponse<[KDriveCategory]>.self, from: categoryList).data
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var result: [String: [FileTag]] = [:]
+        for file in page.data {
+            let tags = file.categoryIds.compactMap { byId[$0]?.tag }
+            if !tags.isEmpty { result[file.name] = tags }
+        }
+        return result
+    }
+
+    /// The cursor to ask the next page with, or nil on the last page.
+    public static func nextCursor(listingPage: Data) throws -> String? {
+        let page = try JSONDecoder().decode(KDriveCursorResponse<[KDriveCategorizedFile]>.self, from: listingPage)
+        return page.hasMore == true ? page.cursor : nil
+    }
+}
+
+/// For a response whose `data` doesn't matter, whatever its shape.
+struct KDriveIgnored: Decodable {
+    init(from decoder: Decoder) throws {}
+}
 
 struct KDriveResponse<T: Decodable>: Decodable {
     let result: String

@@ -26,7 +26,7 @@ internal static class MegaCrypto
     /// <summary>The fixed start value of MEGA's v1 password key (<c>prepare_key</c>).</summary>
     private static readonly byte[] PrepareKeySeed = Convert.FromHexString("93C467E37DB0C7A4D1BE3F810152CB56");
 
-    private static readonly JsonSerializerOptions AttributeJson = new()
+    internal static readonly JsonSerializerOptions AttributeJson = new()
     {
         // Names stay as UTF-8 like the web client writes them; only what JSON requires is escaped.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -239,8 +239,11 @@ internal static class MegaCrypto
 
     /// <summary><c>"MEGA" + {"n":"name"}</c>, zero-padded to the block size, AES-CBC with a zero IV.</summary>
     public static string EncryptAttributes(string name, ReadOnlySpan<byte> key)
+        => EncryptAttributeJson("{\"n\":" + JsonSerializer.Serialize(name, AttributeJson) + "}", key);
+
+    /// <summary>A whole attribute block, as JSON, encrypted the same way.</summary>
+    public static string EncryptAttributeJson(string json, ReadOnlySpan<byte> key)
     {
-        var json = "{\"n\":" + JsonSerializer.Serialize(name, AttributeJson) + "}";
         var plain = Encoding.UTF8.GetBytes("MEGA" + json);
         var padded = new byte[(plain.Length + 15) / 16 * 16];
         plain.CopyTo(padded, 0);
@@ -250,6 +253,13 @@ internal static class MegaCrypto
 
     /// <summary>The <c>n</c> attribute, or null when the attributes don't decrypt to MEGA's format (wrong key, foreign share).</summary>
     public static string? DecryptName(string attributes, ReadOnlySpan<byte> key)
+        => DecryptAttributes(attributes, key)?.Name;
+
+    /// <summary>
+    /// The name and the whole attribute block as the JSON it is kept in — the label is in
+    /// there, and whatever else must be written back unchanged when one of them is.
+    /// </summary>
+    public static (string Name, string Json)? DecryptAttributes(string attributes, ReadOnlySpan<byte> key)
     {
         var data = Base64UrlDecode(attributes);
         if (data is null || data.Length == 0 || data.Length % 16 != 0)
@@ -280,8 +290,9 @@ internal static class MegaCrypto
             using var document = JsonDocument.Parse(json.ToArray());
             return document.RootElement.ValueKind == JsonValueKind.Object &&
                    document.RootElement.TryGetProperty("n", out var n) &&
-                   n.ValueKind == JsonValueKind.String
-                ? n.GetString()
+                   n.ValueKind == JsonValueKind.String &&
+                   n.GetString() is { } name
+                ? (name, Encoding.UTF8.GetString(json))
                 : null;
         }
         catch (JsonException)

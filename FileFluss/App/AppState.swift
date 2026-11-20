@@ -1598,6 +1598,14 @@ final class AppState {
                         [.modificationDate: item.modificationDate],
                         ofItemAtPath: tempURL.path
                     )
+                    // The item's tags ride on the staged file, and are
+                    // read off it again once it has been uploaded.
+                    await TagTransfer.downloaded(
+                        fromAccount: sourceAccountId,
+                        providerType: sourceProvider.providerType,
+                        remotePath: item.path,
+                        to: tempURL
+                    )
                 } catch {
                     await MainActor.run {
                         transfer.recordFailure(item.name, error: L10n.format("Download failed: %@", error.localizedDescription))
@@ -1665,6 +1673,12 @@ final class AppState {
                     } else {
                         try await upload(dstPath)
                     }
+                    await TagTransfer.uploaded(
+                        from: tempURL,
+                        toAccount: destAccountId,
+                        providerType: destProvider.providerType,
+                        remotePath: dstPath
+                    )
                     await MainActor.run {
                         let streamed = transfer.uploadBytes - bytesBeforeUpload
                         if streamed < item.size {

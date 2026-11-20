@@ -644,3 +644,12 @@
 /* The account reconnecting and the gallery view, in Windows wording. */
 "iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud 雲碟無法使用。請檢查 Windows 版 iCloud 是否已登入並已開啟 iCloud 雲碟。";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**Ctrl+加號** 和 **Ctrl+減號** 可放大和縮小縮覽圖，與列表中的列一樣。";
+
+/* Tags: the seven colour tags. The Mac borrows Finder's own names for the colours; Windows has none to borrow. */
+"Red" = "紅色";
+"Orange" = "橙色";
+"Yellow" = "黃色";
+"Green" = "綠色";
+"Blue" = "藍色";
+"Purple" = "紫色";
+"Gray" = "灰色";

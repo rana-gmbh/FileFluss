@@ -1093,5 +1093,89 @@ public class MegaProviderTests
         Assert.Equal(CloudErrorKind.InvalidResponse, Assert.Throws<CloudProviderException>(() => MegaApiClient.Parse("{}"u8.ToArray())).Kind);
         Assert.Equal(JsonValueKind.Array, MegaApiClient.Parse("[0]"u8.ToArray()).ValueKind);
     }
-}
 
+    // MARK: - Labels
+
+    [Fact]
+    public async Task ALabelIsWrittenIntoTheItemsAttributesAndReadBack()
+    {
+        using var h = new MegaHarness();
+        Assert.Equal(Services.NativeTagSupport.OneColor, h.Provider.NativeTagSupport);
+        Assert.Empty(await h.Provider.NativeTagsAsync("/"));
+
+        await h.Provider.SetNativeTagsAsync("/a.txt", [new FileTag("Red", TagColor.Red)]);
+
+        var command = h.Server.CommandsNamed("a").Single();
+        Assert.Equal(MegaTestServer.FileAHandle, (string?)command["n"]);
+        var written = MegaCrypto.DecryptAttributes((string)command["at"]!, h.Server.FileAKey)!.Value;
+        Assert.Equal("a.txt", written.Name);
+
+        // MEGA's red is 1, kept as a string the way MEGA's own apps write it.
+        using var json = JsonDocument.Parse(written.Json);
+        Assert.Equal("1", json.RootElement.GetProperty("lbl").GetString());
+
+        var tags = await h.Provider.NativeTagsAsync("/");
+        Assert.Equal([new FileTag("Red", TagColor.Red)], tags["/a.txt"]);
+
+        // The same label again is not sent twice.
+        await h.Provider.SetNativeTagsAsync("/a.txt", [new FileTag("Rot", TagColor.Red)]);
+        Assert.Single(h.Server.CommandsNamed("a"));
+    }
+
+    [Fact]
+    public async Task ARenameKeepsTheLabelAndTakingItOffRemovesTheKey()
+    {
+        using var h = new MegaHarness();
+        await h.Provider.SetNativeTagsAsync("/a.txt", [new FileTag("Blue", TagColor.Blue)]);
+
+        await h.Provider.RenameItemAsync("/a.txt", "b.txt");
+        var renamed = MegaCrypto.DecryptAttributes((string)h.Server.CommandsNamed("a")[1]["at"]!, h.Server.FileAKey)!.Value;
+        Assert.Equal("b.txt", renamed.Name);
+        Assert.Equal(5, MegaAttributes.Label(renamed.Json));
+
+        await h.Provider.SetNativeTagsAsync("/b.txt", []);
+        var cleared = MegaCrypto.DecryptAttributes((string)h.Server.CommandsNamed("a")[2]["at"]!, h.Server.FileAKey)!.Value;
+        Assert.Equal("b.txt", cleared.Name);
+        Assert.DoesNotContain("lbl", cleared.Json, StringComparison.Ordinal);
+        Assert.Empty(await h.Provider.NativeTagsAsync("/"));
+    }
+
+    [Fact]
+    public void AttributeBlocksKeepEverythingElseWhenOneAttributeChanges()
+    {
+        const string before = """{"n":"Report.pdf","c":"AbCdEf123","fav":"1","t":"work,2026","lbl":"1"}""";
+        using var after = JsonDocument.Parse(MegaAttributes.Json(before, "Report.pdf", 5));
+        Assert.Equal("5", after.RootElement.GetProperty("lbl").GetString());
+        Assert.Equal("AbCdEf123", after.RootElement.GetProperty("c").GetString());
+        Assert.Equal("1", after.RootElement.GetProperty("fav").GetString());
+        Assert.Equal("work,2026", after.RootElement.GetProperty("t").GetString());
+        Assert.Equal(5, after.RootElement.EnumerateObject().Count());
+
+        // Read as MEGA's apps write it, and as a bare number; anything else is no label.
+        Assert.Equal(3, MegaAttributes.Label("""{"n":"a","lbl":"3"}"""));
+        Assert.Equal(3, MegaAttributes.Label("""{"n":"a","lbl":3}"""));
+        Assert.Equal(0, MegaAttributes.Label("""{"n":"a","lbl":"12"}"""));
+        Assert.Equal(0, MegaAttributes.Label("""{"n":"a"}"""));
+        Assert.Equal(0, MegaAttributes.Label("not json"));
+        Assert.Equal(0, MegaAttributes.Label(null));
+
+        // Awkward names survive, without the optional "\/" escape.
+        foreach (var name in new[] { "He said \"hi\".txt", "back\\slash.txt", "Größe ½ – 日本語.txt", "a/b.txt" })
+        {
+            var json = MegaAttributes.Json(null, name, 2);
+            using var parsed = JsonDocument.Parse(json);
+            Assert.Equal(name, parsed.RootElement.GetProperty("n").GetString());
+            Assert.DoesNotContain("\\/", json, StringComparison.Ordinal);
+        }
+
+        // MEGA numbers its seven colours in its own order.
+        TagColor[] order = [TagColor.Red, TagColor.Orange, TagColor.Yellow, TagColor.Green, TagColor.Blue, TagColor.Purple, TagColor.Gray];
+        for (var label = 1; label <= 7; label++)
+        {
+            Assert.Equal(order[label - 1], MegaAttributes.TagColorFor(label));
+            Assert.Equal(label, MegaAttributes.LabelFor(order[label - 1]));
+        }
+
+        Assert.Equal(TagColor.None, MegaAttributes.TagColorFor(0));
+    }
+}

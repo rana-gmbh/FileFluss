@@ -36,6 +36,13 @@ internal sealed class KDriveApiClient
     private readonly AuthenticationHeaderValue _auth;
     private readonly ConcurrentDictionary<string, long> _pathToId = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _rootGate = new(1, 1);
+    private readonly object _categoryGate = new();
+
+    /// <summary>The drive's categories, fetched when first needed.</summary>
+    private List<KDriveCategory>? _categories;
+
+    /// <summary>The category ids each item had when its folder was last asked.</summary>
+    private readonly ConcurrentDictionary<long, long[]> _categoryIdsByFile = new();
 
     public KDriveApiClient(HttpClient http, KDriveCredentials credentials)
     {
@@ -630,6 +637,171 @@ internal sealed class KDriveApiClient
         }
     }
 
+    // MARK: - Categories
+
+    // kDrive's categories are labels with a name and a colour, any number per file or folder.
+    // The routes are the ones Infomaniak's own Android client uses.
+
+    /// <summary>
+    /// The categories of the items in one folder as tags, by item path. A request of its own
+    /// rather than part of the listing: the listing stays on the route and paging it has
+    /// always used, and if this one fails the folder is still there, only without its dots.
+    /// </summary>
+    public async Task<Dictionary<string, IReadOnlyList<FileTag>>> CategoryTagsAsync(string path, CancellationToken cancellationToken)
+    {
+        var folder = CloudPath.Normalize(path);
+        var folderId = await ResolvePathToIdAsync(folder, cancellationToken).ConfigureAwait(false);
+        var listed = new List<KDriveCategorizedFile>();
+        var guard = new PageGuard("kDrive categories");
+        string? cursor = null;
+        do
+        {
+            guard.Count();
+            var query = $"with=categories&limit={PageSize}" + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
+            using var document = await GetDataAsync($"/3/drive/{DriveId}/files/{folderId}/files", query, null, cancellationToken).ConfigureAwait(false);
+            var (items, next) = KDriveCategorizedFile.ReadPage(document.RootElement);
+            listed.AddRange(items);
+            cursor = next;
+        }
+        while (cursor is not null);
+
+        var known = await CategoriesAsync(refresh: false, cancellationToken).ConfigureAwait(false);
+
+        // A category made in another app since ours were fetched.
+        if (listed.Any(file => file.CategoryIds.Any(id => known.All(c => c.Id != id))))
+        {
+            known = await CategoriesAsync(refresh: true, cancellationToken).ConfigureAwait(false);
+        }
+
+        var result = new Dictionary<string, IReadOnlyList<FileTag>>(StringComparer.Ordinal);
+        foreach (var file in listed)
+        {
+            _categoryIdsByFile[file.Id] = file.CategoryIds;
+            var tags = file.CategoryIds
+                .Select(id => known.FirstOrDefault(c => c.Id == id))
+                .Where(c => c is not null)
+                .Select(c => c!.Tag)
+                .ToList();
+            if (tags.Count > 0)
+            {
+                result[CloudPath.Combine(folder, file.Name)] = tags;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Makes an item's categories exactly these: missing ones are added — created on the drive
+    /// first if it has none of that name — and the others taken off.
+    /// </summary>
+    public async Task SetCategoryTagsAsync(string path, IReadOnlyList<FileTag> tags, CancellationToken cancellationToken)
+    {
+        var target = CloudPath.Normalize(path);
+        var fileId = await ResolvePathToIdAsync(target, cancellationToken).ConfigureAwait(false);
+        if (!_categoryIdsByFile.ContainsKey(fileId))
+        {
+            // Not asked yet: find out what the item has before changing it.
+            await CategoryTagsAsync(CloudPath.Parent(target), cancellationToken).ConfigureAwait(false);
+        }
+
+        var current = _categoryIdsByFile.TryGetValue(fileId, out var ids) ? ids : [];
+        var wanted = new List<long>();
+        foreach (var tag in tags)
+        {
+            var id = await CategoryIdAsync(tag, cancellationToken).ConfigureAwait(false);
+            if (!wanted.Contains(id))
+            {
+                wanted.Add(id);
+            }
+        }
+
+        foreach (var id in wanted.Where(id => !current.Contains(id)))
+        {
+            using var response = await SendAsync(HttpMethod.Post, $"/2/drive/{DriveId}/files/{fileId}/categories/{id}", null, null, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(response, $"POST category {id} on {fileId}", target, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var id in current.Where(id => !wanted.Contains(id)))
+        {
+            using var response = await SendAsync(HttpMethod.Delete, $"/2/drive/{DriveId}/files/{fileId}/categories/{id}", null, null, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(response, $"DELETE category {id} on {fileId}", target, cancellationToken).ConfigureAwait(false);
+        }
+
+        _categoryIdsByFile[fileId] = [.. wanted];
+    }
+
+    /// <summary>The drive's category of this tag's name, made if there is none.</summary>
+    private async Task<long> CategoryIdAsync(FileTag tag, CancellationToken cancellationToken)
+    {
+        var known = await CategoriesAsync(refresh: false, cancellationToken).ConfigureAwait(false);
+        if (known.FirstOrDefault(c => string.Equals(c.Name, tag.Name, StringComparison.OrdinalIgnoreCase)) is { } existing)
+        {
+            return existing.Id;
+        }
+
+        var body = CloudHttp.JsonContent(new { name = tag.Name, color = Services.NativeTagSync.HexColor(tag.Color) });
+        using var response = await SendAsync(HttpMethod.Post, $"/2/drive/{DriveId}/categories", null, body, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, "POST categories", null, cancellationToken).ConfigureAwait(false);
+        KDriveCategory? created;
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            created = document.RootElement.TryGetProperty("data", out var data) ? data.Deserialize<KDriveCategory>(CloudHttp.Json) : null;
+        }
+        catch (JsonException)
+        {
+            created = null;
+        }
+
+        if (created is null)
+        {
+            throw CloudProviderException.InvalidResponse();
+        }
+
+        lock (_categoryGate)
+        {
+            _categories = [.. _categories ?? [], created];
+        }
+
+        return created.Id;
+    }
+
+    private async Task<List<KDriveCategory>> CategoriesAsync(bool refresh, CancellationToken cancellationToken)
+    {
+        if (!refresh)
+        {
+            lock (_categoryGate)
+            {
+                if (_categories is { } cached)
+                {
+                    return cached;
+                }
+            }
+        }
+
+        List<KDriveCategory> fetched;
+        try
+        {
+            using var document = await GetDataAsync($"/2/drive/{DriveId}/categories", null, null, cancellationToken).ConfigureAwait(false);
+            fetched = document.RootElement.GetProperty("data").Deserialize<List<KDriveCategory>>(CloudHttp.Json) ?? [];
+        }
+        catch (Exception e) when (e is CloudProviderException or JsonException or InvalidOperationException)
+        {
+            // The way the Android client gets them: with the drives.
+            using var document = await GetDataAsync("/2/drive/init", "with=drives,drives.categories", null, cancellationToken).ConfigureAwait(false);
+            fetched = KDriveCategory.FromInit(document.RootElement, DriveId) ?? throw CloudProviderException.InvalidResponse();
+        }
+
+        lock (_categoryGate)
+        {
+            _categories = fetched;
+        }
+
+        return fetched;
+    }
+
     // MARK: - HTTP
 
     private async Task<JsonDocument> GetDataAsync(string path, string? query, string? itemPath, CancellationToken cancellationToken)
@@ -703,6 +875,79 @@ internal sealed class KDriveApiClient
         => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.TryGetInt64(out var number)
             ? number
             : null;
+}
+
+/// <summary>A category of the drive: a label with a name and a colour.</summary>
+internal sealed record KDriveCategory(
+    [property: JsonPropertyName("id")] long Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("color")] string? Color)
+{
+    /// <summary>Shown in FileFluss under its own name, in the nearest of the seven tag colours.</summary>
+    public FileTag Tag => new(Name, Services.NativeTagSync.NearestColor(Color));
+
+    /// <summary>The categories of one drive out of <c>GET /2/drive/init?with=drives,drives.categories</c>.</summary>
+    public static List<KDriveCategory>? FromInit(JsonElement root, long driveId)
+    {
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object ||
+            !data.TryGetProperty("drives", out var drives) || drives.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var drive in drives.EnumerateArray())
+        {
+            if (drive.ValueKind == JsonValueKind.Object && drive.TryGetProperty("id", out var id) && id.TryGetInt64(out var value) && value == driveId)
+            {
+                return drive.TryGetProperty("categories", out var categories) && categories.ValueKind == JsonValueKind.Array
+                    ? categories.Deserialize<List<KDriveCategory>>(CloudHttp.Json) ?? []
+                    : [];
+            }
+        }
+
+        return null;
+    }
+}
+
+/// <summary>An entry of a folder listing asked for with its categories.</summary>
+internal sealed record KDriveCategorizedFile(long Id, string Name, long[] CategoryIds)
+{
+    /// <summary>One page of the cursor-paged v3 listing: its entries, and the cursor for the next page (null on the last).</summary>
+    public static (List<KDriveCategorizedFile> Items, string? NextCursor) ReadPage(JsonElement root)
+    {
+        var items = new List<KDriveCategorizedFile>();
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in data.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object ||
+                    !entry.TryGetProperty("id", out var id) || !id.TryGetInt64(out var fileId) ||
+                    !entry.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var ids = new List<long>();
+                if (entry.TryGetProperty("categories", out var categories) && categories.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var assignment in categories.EnumerateArray())
+                    {
+                        if (assignment.ValueKind == JsonValueKind.Object &&
+                            assignment.TryGetProperty("category_id", out var category) && category.TryGetInt64(out var categoryId))
+                        {
+                            ids.Add(categoryId);
+                        }
+                    }
+                }
+
+                items.Add(new KDriveCategorizedFile(fileId, name.GetString()!, [.. ids]));
+            }
+        }
+
+        var hasMore = root.TryGetProperty("has_more", out var more) && more.ValueKind == JsonValueKind.True;
+        var cursor = hasMore && root.TryGetProperty("cursor", out var next) && next.ValueKind == JsonValueKind.String ? next.GetString() : null;
+        return (items, string.IsNullOrEmpty(cursor) ? null : cursor);
+    }
 }
 
 /// <summary>A listing/stat entry. <c>last_modified_at</c> is Unix seconds; <c>type</c> is "file" or "dir".</summary>

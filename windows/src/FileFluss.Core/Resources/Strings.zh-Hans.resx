@@ -3589,6 +3589,18 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   <data name="**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." xml:space="preserve">
     <value>**Ctrl+加号** 和 **Ctrl+减号** 可放大和缩小缩略图，与列表中的行一样。</value>
   </data>
+  <data name="Tags" xml:space="preserve">
+    <value>标签</value>
+  </data>
+  <data name="Remove All Tags" xml:space="preserve">
+    <value>移除所有标签</value>
+  </data>
+  <data name="Tags couldn&apos;t be changed" xml:space="preserve">
+    <value>无法更改标签</value>
+  </data>
+  <data name="The tags of “{0}” couldn&apos;t be changed: {1}" xml:space="preserve">
+    <value>无法更改“{0}”的标签：{1}</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>文件</value>
   </data>
@@ -4181,5 +4193,26 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   </data>
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>恢复测试帐户…</value>
+  </data>
+  <data name="Red" xml:space="preserve">
+    <value>红色</value>
+  </data>
+  <data name="Orange" xml:space="preserve">
+    <value>橙色</value>
+  </data>
+  <data name="Yellow" xml:space="preserve">
+    <value>黄色</value>
+  </data>
+  <data name="Green" xml:space="preserve">
+    <value>绿色</value>
+  </data>
+  <data name="Blue" xml:space="preserve">
+    <value>蓝色</value>
+  </data>
+  <data name="Purple" xml:space="preserve">
+    <value>紫色</value>
+  </data>
+  <data name="Gray" xml:space="preserve">
+    <value>灰色</value>
   </data>
 </root>

@@ -1,4 +1,5 @@
 import AppKit
+import FileFlussCore
 import UniformTypeIdentifiers
 
 /// Cached Finder-style icons (NSWorkspace.shared.icon) for use in file
@@ -23,8 +24,15 @@ enum FileTypeIcon {
 
     /// `pointSize` is only worth raising where the icon is drawn large —
     /// the gallery's tiles. Each size is rasterized and cached on its own.
-    static func folderIcon(pointSize: CGFloat = rasterPointSize) -> NSImage {
-        cached(key: "__folder", pointSize: pointSize) { NSWorkspace.shared.icon(for: .folder) }
+    ///
+    /// `tint` colours the folder like its tag, as Finder does since macOS 26.
+    static func folderIcon(pointSize: CGFloat = rasterPointSize, tint: TagColor? = nil) -> NSImage {
+        guard let tint, tint != .none else {
+            return cached(key: "__folder", pointSize: pointSize) { NSWorkspace.shared.icon(for: .folder) }
+        }
+        return cached(key: "__folder|tag\(tint.rawValue)", pointSize: pointSize, tint: tint.nsColor) {
+            NSWorkspace.shared.icon(for: .folder)
+        }
     }
 
     static func icon(for type: UTType?, pointSize: CGFloat = rasterPointSize) -> NSImage {
@@ -45,14 +53,14 @@ enum FileTypeIcon {
         }
     }
 
-    private static func cached(key: String, pointSize: CGFloat, build: () -> NSImage) -> NSImage {
+    private static func cached(key: String, pointSize: CGFloat, tint: NSColor? = nil, build: () -> NSImage) -> NSImage {
         let appearance = NSApp.effectiveAppearance
         let appearanceKey = appearance.bestMatch(from: [.darkAqua, .aqua])?.rawValue ?? "aqua"
         let fullKey = "\(appearanceKey)|\(Int(pointSize))|\(key)"
         if let cached = cache[fullKey] { return cached }
         var img = build()
         appearance.performAsCurrentDrawingAppearance {
-            img = rasterized(img, pointSize: pointSize)
+            img = rasterized(img, pointSize: pointSize, tint: tint)
         }
         cache[fullKey] = img
         return img
@@ -60,7 +68,13 @@ enum FileTypeIcon {
 
     /// Renders `source` into static bitmap reps at @1x and @2x. Falls back
     /// to the original image if rendering fails.
-    private static func rasterized(_ source: NSImage, pointSize: CGFloat) -> NSImage {
+    ///
+    /// With a `tint` the picture is recoloured: drained of its own colour,
+    /// then overlaid with the tint, which keeps the icon's shading. Its
+    /// shape is restored from a copy taken beforehand — from the context,
+    /// not from `rep.cgImage`, which the rep would cache and go on drawing
+    /// instead of the tinted pixels.
+    private static func rasterized(_ source: NSImage, pointSize: CGFloat, tint: NSColor? = nil) -> NSImage {
         let size = NSSize(width: pointSize, height: pointSize)
         let result = NSImage(size: size)
         for scale in [1, 2] {
@@ -73,8 +87,23 @@ enum FileTypeIcon {
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = context
             context.imageInterpolation = .high
-            source.draw(in: NSRect(x: 0, y: 0, width: px, height: px),
-                        from: .zero, operation: .copy, fraction: 1)
+            let rect = NSRect(x: 0, y: 0, width: px, height: px)
+            source.draw(in: rect, from: .zero, operation: .copy, fraction: 1)
+            if let tint {
+                context.flushGraphics()
+                let cg = context.cgContext
+                if let shape = cg.makeImage() {
+                    cg.setBlendMode(.saturation)
+                    cg.setFillColor(NSColor.gray.cgColor)
+                    cg.fill(rect)
+                    cg.setBlendMode(.overlay)
+                    cg.setFillColor(tint.cgColor)
+                    cg.fill(rect)
+                    cg.setBlendMode(.destinationIn)
+                    cg.draw(shape, in: rect)
+                    context.flushGraphics()
+                }
+            }
             NSGraphicsContext.restoreGraphicsState()
             rep.size = size
             result.addRepresentation(rep)

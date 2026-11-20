@@ -258,6 +258,17 @@ public sealed class KDriveProvider : CloudProvider
     public override Task RenameItemAsync(string path, string newName, CancellationToken cancellationToken = default)
         => Require().RenameAsync(path, newName, cancellationToken);
 
+    // MARK: - Categories
+
+    /// <summary>kDrive's categories carry a name and a colour, several per item: everything a tag is.</summary>
+    public override Services.NativeTagSupport NativeTagSupport => Services.NativeTagSupport.Full;
+
+    public override async Task<IReadOnlyDictionary<string, IReadOnlyList<FileTag>>> NativeTagsAsync(string folderPath, CancellationToken cancellationToken = default)
+        => await Require().CategoryTagsAsync(folderPath, cancellationToken).ConfigureAwait(false);
+
+    public override Task SetNativeTagsAsync(string path, IReadOnlyList<FileTag> tags, CancellationToken cancellationToken = default)
+        => Require().SetCategoryTagsAsync(path, tags, cancellationToken);
+
     // MoveItemAsync / CopyItemAsync: not offered. The v2 move endpoint answered 404 against a
     // live account on macOS and the shape Infomaniak accepts now isn't documented, so the
     // default NotImplemented makes callers fall back to download + upload. The client keeps
