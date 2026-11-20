@@ -337,6 +337,15 @@ public sealed class WebDavServerTests : IAsyncLifetime
         Assert.Equal(5000, (await small.SendAsync("GET", small.In("/large.bin"))).Body.Length);
         Assert.Equal(0, small.Cache.TotalBytes);
         Assert.Equal(2, small.Wrapper.Downloads);
+
+        // The temp file goes when the server closes it (DeleteOnClose), just after the last byte
+        // went out — which can be a moment after the client has the whole body. Checked at that
+        // one instant, this failed a release build on the Windows runner.
+        for (var i = 0; i < 100 && Directory.GetFiles(small.Server.TempDirectory).Length > 0; i++)
+        {
+            await Task.Delay(50);
+        }
+
         Assert.Empty(Directory.GetFiles(small.Server.TempDirectory));
     }
 
