@@ -3101,7 +3101,7 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
     <value>Plan konnte nicht berechnet werden: {0}</value>
   </data>
   <data name="pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the &apos;pcauth&apos; cookie value, and paste it into the Access Token field." xml:space="preserve">
-    <value>pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein.</value>
+    <value>pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind gesperrt. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access Token“ ein.</value>
   </data>
   <data name="iCloud Drive is already added." xml:space="preserve">
     <value>iCloud Drive ist bereits hinzugefügt.</value>
@@ -3912,9 +3912,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="Several cameras were found. Choose the one to add." xml:space="preserve">
     <value>Es wurden mehrere Kameras gefunden. Wähle die aus, die du hinzufügen möchtest.</value>
-  </data>
-  <data name="2. Open DevTools (F12 in Chrome/Edge/Firefox)" xml:space="preserve">
-    <value>2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)</value>
   </data>
   <data name="FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." xml:space="preserve">
     <value>FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.</value>

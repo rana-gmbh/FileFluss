@@ -102,6 +102,10 @@ public static class Pkce
 /// exact state ends the wait (with its code or its error); anything else gets a 400 and the
 /// wait goes on. Requests on other paths, without <c>code</c> or <c>error</c> (favicon,
 /// probes), or other than GET get a 404 likewise.</para>
+///
+/// <para>Servers that match the redirect exactly, port included (pCloud), can't take a
+/// random port: for them the listener takes the first free one of a fixed list, each
+/// registered with the server (the macOS <c>OAuthLoopbackRedirect.fixedLocalhost</c>).</para>
 /// </summary>
 public static class OAuthLoopback
 {
@@ -118,26 +122,24 @@ public static class OAuthLoopback
 
     /// <param name="authorizeUrl">Builds the authorize URL from the redirect URI.</param>
     /// <param name="redirectPath">Path appended to the loopback origin; macOS uses none.</param>
+    /// <param name="fixedPorts">
+    /// Listen on the first of these ports that is free, in order, instead of a random one.
+    /// Each must be registered with the server as <see cref="RedirectOrigin"/> writes it.
+    /// When every one is taken, the sign-in fails before the browser opens.
+    /// </param>
     public static async Task<OAuthCallback> AuthenticateAsync(
         Func<string, Uri> authorizeUrl,
         CancellationToken cancellationToken,
-        string redirectPath = "")
+        string redirectPath = "",
+        IReadOnlyList<int>? fixedPorts = null)
     {
-        var v4 = new TcpListener(IPAddress.Loopback, 0);
-        v4.Start();
+        var (v4, v6) = fixedPorts is null
+            ? ListenOnRandomPort()
+            : ListenOnFirstFreePort(fixedPorts)
+              ?? throw CloudProviderException.CommandFailed(Localization.L("The sign-in needs a free local port, and all of them are in use by other apps."));
         var port = ((IPEndPoint)v4.LocalEndpoint).Port;
-        TcpListener? v6 = null;
-        try
-        {
-            v6 = new TcpListener(IPAddress.IPv6Loopback, port);
-            v6.Start();
-        }
-        catch (SocketException)
-        {
-            v6 = null;
-        }
 
-        var redirectUri = $"http://localhost:{port}{redirectPath}";
+        var redirectUri = RedirectOrigin(port) + redirectPath;
         var callbackPath = redirectPath.Length == 0 ? "/" : redirectPath;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
@@ -152,7 +154,7 @@ public static class OAuthLoopback
             BrowserLauncher.Open(authorize);
 
             var target = await result.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
-            return new OAuthCallback(redirectUri, new Uri($"http://localhost:{port}{target}"));
+            return new OAuthCallback(redirectUri, new Uri(RedirectOrigin(port) + target));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -172,6 +174,76 @@ public static class OAuthLoopback
             {
             }
         }
+    }
+
+    /// <summary>
+    /// The redirect's origin for <paramref name="port"/>: "http://localhost:53682", but port 80
+    /// as plain "http://localhost". A browser drops the default port from the address anyway,
+    /// and a server that matches the redirect exactly has it registered without one.
+    /// </summary>
+    internal static string RedirectOrigin(int port) => port == 80 ? "http://localhost" : $"http://localhost:{port}";
+
+    /// <summary>A port the system picks, on 127.0.0.1 and — where the machine has IPv6 — ::1.</summary>
+    private static (TcpListener V4, TcpListener? V6) ListenOnRandomPort()
+    {
+        var v4 = new TcpListener(IPAddress.Loopback, 0);
+        v4.Start();
+        var port = ((IPEndPoint)v4.LocalEndpoint).Port;
+        try
+        {
+            var v6 = new TcpListener(IPAddress.IPv6Loopback, port);
+            v6.Start();
+            return (v4, v6);
+        }
+        catch (SocketException)
+        {
+            return (v4, null);
+        }
+    }
+
+    /// <summary>
+    /// The first of <paramref name="ports"/> that 127.0.0.1 and ::1 can both be bound on, or
+    /// null when every one is taken. The bind itself is the test, not a probe ahead of it: on
+    /// Windows, HTTP.sys often holds port 80 for IIS or another system service, and only a
+    /// real bind says so reliably — and nothing can take the port between a probe and the
+    /// listener. A port someone else holds on ::1 alone is skipped too, since a browser that
+    /// resolves "localhost" to ::1 would hand the code to that program. A machine without
+    /// IPv6 at all is served on 127.0.0.1 alone, as with a random port.
+    /// </summary>
+    internal static (TcpListener V4, TcpListener? V6)? ListenOnFirstFreePort(IReadOnlyList<int> ports)
+    {
+        foreach (var port in ports)
+        {
+            var v4 = new TcpListener(IPAddress.Loopback, port);
+            try
+            {
+                v4.Start();
+            }
+            catch (SocketException e)
+            {
+                SupportLogger.Shared.Log($"OAuth loopback: port {port} is taken ({e.SocketErrorCode}), trying the next", "OAuth", LogLevel.Notice);
+                continue;
+            }
+
+            var v6 = new TcpListener(IPAddress.IPv6Loopback, port);
+            try
+            {
+                v6.Start();
+                return (v4, v6);
+            }
+            catch (SocketException e) when (e.SocketErrorCode is SocketError.AddressAlreadyInUse or SocketError.AccessDenied)
+            {
+                v4.Stop();
+                SupportLogger.Shared.Log($"OAuth loopback: port {port} is taken on ::1 ({e.SocketErrorCode}), trying the next", "OAuth", LogLevel.Notice);
+            }
+            catch (SocketException)
+            {
+                return (v4, null);
+            }
+        }
+
+        SupportLogger.Shared.Log($"OAuth loopback: none of the ports {string.Join(", ", ports)} is free", "OAuth", LogLevel.Error);
+        return null;
     }
 
     private static async Task AcceptLoopAsync(

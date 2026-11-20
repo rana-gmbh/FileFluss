@@ -3,8 +3,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.IO;
@@ -14,8 +12,8 @@ using FileFluss.Core.Net;
 namespace FileFluss.Core.Providers.PCloud;
 
 /// <summary>
-/// pCloud's JSON API for one account — the macOS <c>PCloudAPIClient</c>. Every call is an
-/// auth-stamped GET (uploads a POST) against the account's regional host; failures come back
+/// pCloud's JSON API for one account — the macOS <c>PCloudAPIClient</c>. Every call is a
+/// token-stamped GET (uploads a POST) against the account's regional host; failures come back
 /// as HTTP 200 with a non-zero <c>result</c>. Items are addressed by path throughout.
 ///
 /// <para>The token travels in the query string, as pCloud requires — request URLs are never
@@ -23,11 +21,27 @@ namespace FileFluss.Core.Providers.PCloud;
 /// </summary>
 internal sealed class PCloudApiClient
 {
-    /// <summary>EU first, then US — the order macOS tries them in.</summary>
-    internal static readonly string[] Hostnames = ["eapi.pcloud.com", "api.pcloud.com"];
+    // The app FileFluss is registered as with pCloud (macOS PCloudAppCredentials). pCloud's
+    // code flow needs the secret for the token exchange, so it ships in the binary, as it
+    // must for a desktop app.
+    internal const string ClientId = "vKBvKTqCvbF";
+    internal const string ClientSecret = "YsF6bz4dFjHz4hdGxVkf7L4PAHEk";
+    internal const string AuthorizeUrl = "https://my.pcloud.com/oauth2/authorize";
 
-    /// <summary>pCloud's sign-in endpoints are sent a browser's user agent, as on macOS.</summary>
-    internal const string BrowserUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+    /// <summary>
+    /// Where an account's data lives decides which host serves it: api.pcloud.com in the US,
+    /// eapi.pcloud.com in the EU. The browser sign-in names it, and only these two are accepted.
+    /// </summary>
+    internal static readonly string[] ApiHosts = ["api.pcloud.com", "eapi.pcloud.com"];
+
+    /// <summary>
+    /// pCloud matches the redirect exactly, port included, so each of these is registered in
+    /// the app's settings at docs.pcloud.com: <c>http://localhost</c>,
+    /// <c>http://localhost:53682</c>, <c>http://localhost:53683</c>. Port 80 comes first
+    /// because its address needs no port; the others cover a PC where something else has it —
+    /// on Windows often HTTP.sys, for IIS or another system service.
+    /// </summary>
+    internal static readonly int[] RedirectPorts = [80, 53682, 53683];
 
     private const string Category = "pCloud";
 
@@ -412,166 +426,133 @@ internal sealed class PCloudApiClient
         }
     }
 
-    // MARK: - Sign-in
+    // MARK: - Browser sign-in
 
     /// <summary>
-    /// Digest login across both regions. pCloud's /userinfo still checks the password but
-    /// refuses to issue an <c>auth</c> token unless the caller is an OAuth client — and pCloud
-    /// has suspended new OAuth app registrations. When it says "yes, that's you" without a
-    /// token, the user is told to paste their <c>pcauth</c> cookie instead.
+    /// The authorize page of pCloud's OAuth 2.0 code flow (macOS <c>PCloudAPIClient.startOAuthFlow</c>).
+    /// The user signs in and approves FileFluss there; pCloud then redirects back with a code
+    /// and the API host of the account's region. Its tokens don't expire, so there is no
+    /// refresh step, and pCloud takes no PKCE.
     /// </summary>
-    public static async Task<PCloudCredentials> LoginWithPasswordAsync(HttpClient http, string email, string password, CancellationToken cancellationToken)
+    public static Uri BuildAuthorizeUri(string redirectUri, string state)
     {
-        // pCloud's 2000 "Log in failed" on both hosts leaves this standing: wrong email or password.
-        var lastError = CloudProviderException.InvalidCredentials();
-        var tokenWithheld = false;
-        foreach (var hostname in Hostnames)
+        var query = new (string Key, string Value)[]
         {
-            string digest;
-            try
-            {
-                digest = await FetchDigestAsync(http, hostname, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException e)
-            {
-                lastError = e;
-                continue;
-            }
-
-            var parameters = new (string, string)[]
-            {
-                ("getauth", "1"),
-                ("authexpire", "31536000"),
-                ("username", email),
-                ("digest", digest),
-                ("passworddigest", PasswordDigest(email, password, digest)),
-            };
-
-            try
-            {
-                if (await SubmitLoginAsync(http, hostname, parameters, cancellationToken).ConfigureAwait(false) is { } credentials)
-                {
-                    return credentials;
-                }
-
-                tokenWithheld = true;
-            }
-            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.Unauthorized)
-            {
-                // Wrong region (or wrong password) — try the other host.
-            }
-            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.InvalidCredentials)
-            {
-                throw;
-            }
-            catch (CloudProviderException e)
-            {
-                lastError = e;
-            }
-        }
-
-        if (tokenWithheld)
-        {
-            throw TokenWithheld();
-        }
-
-        throw lastError;
-    }
-
-    /// <summary>The password was right, but pCloud would not hand a token to a third-party app.</summary>
-    internal static CloudProviderException TokenWithheld()
-        => CloudProviderException.CommandFailed(Localization.L("pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field."));
-
-    /// <summary>The account behind a pasted token, trying each region's host in turn.</summary>
-    public static async Task<PCloudCredentials> ValidateTokenAsync(HttpClient http, string token, CancellationToken cancellationToken)
-    {
-        foreach (var hostname in Hostnames)
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(hostname, "userinfo", [("auth", token)]));
-            request.Headers.UserAgent.ParseAdd(BrowserUserAgent);
-            HttpResponseMessage response;
-            try
-            {
-                response = await http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException)
-            {
-                continue;
-            }
-
-            using (response)
-            {
-                if (!response.IsSuccessStatusCode)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var info = await response.ReadJsonAsync<PCloudUserInfoResponse>(cancellationToken).ConfigureAwait(false);
-                    if (info.Result == 0 && info.UserId is { } userId)
-                    {
-                        return new PCloudCredentials(token, hostname, userId);
-                    }
-                }
-                catch (CloudProviderException)
-                {
-                    // Undecodable — try the other host.
-                }
-            }
-        }
-
-        throw CloudProviderException.InvalidCredentials();
-    }
-
-    /// <returns>The credentials, or null when pCloud authenticated the user but withheld the token.</returns>
-    private static async Task<PCloudCredentials?> SubmitLoginAsync(HttpClient http, string hostname, (string, string)[] parameters, CancellationToken cancellationToken)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(hostname, "userinfo", parameters));
-        request.Headers.UserAgent.ParseAdd(BrowserUserAgent);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw CloudProviderException.ServerError(0);
-        }
-
-        var login = await response.ReadJsonAsync<PCloudLoginResponse>(cancellationToken).ConfigureAwait(false);
-        return login.Result switch
-        {
-            0 when !string.IsNullOrEmpty(login.Auth) && login.UserId is { } userId => new PCloudCredentials(login.Auth, hostname, userId),
-            // Authenticated, but the auth token was silently dropped — the OAuth-only rule.
-            0 => null,
-            2000 or 2012 => throw CloudProviderException.Unauthorized(),
-            2205 or 2297 => throw CloudProviderException.InvalidCredentials(),
-            _ => throw CloudProviderException.ServerError(login.Result),
+            ("client_id", ClientId),
+            ("response_type", "code"),
+            ("redirect_uri", redirectUri),
+            ("state", state),
         };
+        return new Uri(AuthorizeUrl + "?" + string.Join('&', query.Select(q => $"{q.Key}={CloudHttp.Escape(q.Value)}")));
     }
 
-    private static async Task<string> FetchDigestAsync(HttpClient http, string hostname, CancellationToken cancellationToken)
+    /// <summary>
+    /// Exchanges the redirect's code for a token on the API host the redirect named — only if
+    /// that is one of pCloud's own (<see cref="OAuthHost"/>), because the app secret goes
+    /// there. When the answer doesn't name the user, userinfo does.
+    /// </summary>
+    public static async Task<PCloudCredentials> ExchangeCodeAsync(HttpClient http, string code, string? hostname, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://{hostname}/getdigest");
-        request.Headers.UserAgent.ParseAdd(BrowserUserAgent);
-        using var response = await http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        var host = OAuthHost(hostname);
+        byte[] body;
+        using (var request = new HttpRequestMessage(HttpMethod.Get, BuildUri(host, "oauth2_token", [("client_id", ClientId), ("client_secret", ClientSecret), ("code", code)])))
+        using (var response = await http.SendApiAsync(request, cancellationToken).ConfigureAwait(false))
         {
-            throw CloudProviderException.ServerError(0);
+            if (!response.IsSuccessStatusCode)
+            {
+                SupportLogger.Shared.Log($"[pCloud] oauth2_token → HTTP {(int)response.StatusCode}", Category, LogLevel.Error);
+                throw CloudProviderException.ServerError((int)response.StatusCode);
+            }
+
+            body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var digest = await response.ReadJsonAsync<PCloudDigestResponse>(cancellationToken).ConfigureAwait(false);
-        return digest.Result == 0 && !string.IsNullOrEmpty(digest.Digest) ? digest.Digest : throw CloudProviderException.InvalidResponse();
+        var (accessToken, userId) = ParseTokenResponse(body);
+        var credentials = new PCloudCredentials(accessToken, host, userId ?? 0, IsOAuth: true);
+        if (userId is null)
+        {
+            // Not every answer names the user; userinfo always does.
+            var info = await new PCloudApiClient(http, credentials).UserInfoAsync(cancellationToken).ConfigureAwait(false);
+            credentials = credentials with { UserId = info.UserId };
+        }
+
+        return credentials;
     }
 
-    /// <summary>sha1(password + sha1hex(lowercased email) + digest), hex — pCloud's documented digest login.</summary>
-    internal static string PasswordDigest(string email, string password, string digest)
+    /// <summary>
+    /// Reads oauth2_token's answer. The documentation promises <c>access_token</c> and
+    /// <c>uid</c>, but pCloud actually sends <c>userid</c> (seen 2026-11: access_token,
+    /// locationid, result, token_type, userid), so both spellings are read, as a number or as
+    /// text, and <c>auth</c> for the token too. A refusal carries pCloud's own words. The
+    /// support log records which fields came back, never their values.
+    /// </summary>
+    internal static (string AccessToken, ulong? UserId) ParseTokenResponse(byte[] body)
     {
-        var emailHash = Sha1Hex(Encoding.UTF8.GetBytes(email.ToLowerInvariant()));
-        return Sha1Hex(Encoding.UTF8.GetBytes(password + emailHash + digest));
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException)
+        {
+            throw CloudProviderException.InvalidResponse();
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw CloudProviderException.InvalidResponse();
+            }
+
+            var result = root.TryGetProperty("result", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var code) ? code : -1;
+            var fields = string.Join(", ", root.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
+            SupportLogger.Shared.Log($"pCloud oauth2_token: result {result}, fields {fields}", Category);
+
+            if (result != 0)
+            {
+                throw CloudProviderException.CommandFailed(Text(root, "error") ?? Localization.L("pCloud didn't issue a token."));
+            }
+
+            var token = Text(root, "access_token") ?? Text(root, "auth")
+                ?? throw CloudProviderException.CommandFailed(Localization.L("pCloud didn't issue a token."));
+            return (token, Number(root, "uid") ?? Number(root, "userid"));
+        }
+
+        static string? Text(JsonElement root, string name)
+            => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text ? text : null;
+
+        static ulong? Number(JsonElement root, string name)
+        {
+            if (!root.TryGetProperty(name, out var value))
+            {
+                return null;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.Number when value.TryGetUInt64(out var number) => number,
+                JsonValueKind.String when ulong.TryParse(value.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var number) => number,
+                _ => null,
+            };
+        }
     }
 
-#pragma warning disable CA5350 // pCloud's login protocol is defined in terms of SHA-1.
-    private static string Sha1Hex(byte[] data) => Convert.ToHexStringLower(SHA1.HashData(data));
-#pragma warning restore CA5350
+    /// <summary>
+    /// The API host named in the redirect, if it is one of pCloud's own. Anything else is
+    /// refused: the code and the app secret go there next.
+    /// </summary>
+    internal static string OAuthHost(string? hostname)
+    {
+        if (hostname?.ToLowerInvariant() is { } host && ApiHosts.Contains(host, StringComparer.Ordinal))
+        {
+            return host;
+        }
+
+        SupportLogger.Shared.Log($"pCloud: the sign-in named an API host that isn't pCloud's ({hostname ?? "none"})", Category, LogLevel.Error);
+        throw CloudProviderException.InvalidResponse();
+    }
 
     // MARK: - HTTP
 
@@ -622,9 +603,9 @@ internal sealed class PCloudApiClient
         return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>"https://{account host}/{method}?auth=…&amp;…".</summary>
+    /// <summary>"https://{account host}/{method}?access_token=…&amp;…" — or <c>auth=</c> for a token from before the browser sign-in.</summary>
     private Uri ApiUri(string method, IEnumerable<(string Key, string Value)> parameters)
-        => BuildUri(Credentials.Hostname, method, new[] { ("auth", Credentials.AccessToken) }.Concat(parameters));
+        => BuildUri(Credentials.Hostname, method, new[] { Credentials.AuthParameter }.Concat(parameters));
 
     private static Uri BuildUri(string hostname, string method, IEnumerable<(string Key, string Value)> parameters)
     {

@@ -3101,7 +3101,7 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
     <value>无法计算同步计划：{0}</value>
   </data>
   <data name="pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the &apos;pcauth&apos; cookie value, and paste it into the Access Token field." xml:space="preserve">
-    <value>pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。</value>
+    <value>pCloud 现在要求第三方应用使用 OAuth，且已停止新应用注册。请登录 my.pcloud.com，拷贝“pcauth” Cookie 的值，并粘贴到“Access Token”栏中。</value>
   </data>
   <data name="iCloud Drive is already added." xml:space="preserve">
     <value>已添加 iCloud 云盘。</value>
@@ -3912,9 +3912,6 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   </data>
   <data name="Several cameras were found. Choose the one to add." xml:space="preserve">
     <value>找到了多台相机。请选择要添加的相机。</value>
-  </data>
-  <data name="2. Open DevTools (F12 in Chrome/Edge/Firefox)" xml:space="preserve">
-    <value>2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）</value>
   </data>
   <data name="FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." xml:space="preserve">
     <value>FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。</value>

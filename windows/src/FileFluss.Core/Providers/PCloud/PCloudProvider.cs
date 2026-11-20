@@ -9,18 +9,14 @@ namespace FileFluss.Core.Providers.PCloud;
 
 /// <summary>
 /// pCloud (US and EU regions) through its JSON API — the macOS <c>PCloudProvider</c>.
-/// Signs in with email + password (digest login) or, because pCloud now withholds tokens
-/// from third-party apps, with the <c>pcauth</c> cookie value pasted from a browser.
+/// Signs in through pCloud's own page in the browser (OAuth 2.0 code flow), like Box: pCloud
+/// stopped issuing tokens to third-party apps through password login, which had left only
+/// copying the <c>pcauth</c> cookie out of the browser. Accounts added either of those ways
+/// keep working with the <c>auth</c> token they hold.
 /// </summary>
 [CloudProvider(CloudProviderType.PCloud)]
 public sealed class PCloudProvider : CloudProvider
 {
-    internal const string PasswordMode = "password";
-    internal const string TokenMode = "token";
-    internal const string EmailField = "email";
-    internal const string PasswordField = "password";
-    internal const string TokenField = "token";
-
     private readonly HttpClient _http;
     private volatile PCloudApiClient? _client;
 
@@ -39,6 +35,13 @@ public sealed class PCloudProvider : CloudProvider
         }
     }
 
+    /// <summary>
+    /// The browser round trip, on the first free one of the redirect ports registered with
+    /// pCloud. Tests replace it so no listener or browser is involved.
+    /// </summary>
+    internal Func<Func<string, Uri>, CancellationToken, Task<OAuthCallback>> Authenticator { get; set; }
+        = (authorizeUrl, cancellationToken) => OAuthLoopback.AuthenticateAsync(authorizeUrl, cancellationToken, fixedPorts: PCloudApiClient.RedirectPorts);
+
     public override CloudProviderType ProviderType => CloudProviderType.PCloud;
 
     protected override string CredentialKeyPrefix => "pcloud";
@@ -47,55 +50,36 @@ public sealed class PCloudProvider : CloudProvider
 
     // MARK: - Connecting
 
-    /// <summary>
-    /// The macOS form shows both ways at once and uses the token when one was pasted; here
-    /// they are two modes. Email + password comes first as on macOS, with the warning that
-    /// most accounts will need the token.
-    /// </summary>
-    public override ConnectSpec ConnectSpec { get; } = new(
-    [
-        new ConnectMode(PasswordMode, "Email & Password",
-        [
-            ConnectField.Info("pCloud no longer issues auth tokens via password login for third-party apps. You can still try email + password below, but most accounts will need to paste an access token."),
-            new ConnectField(EmailField, ConnectFieldKind.Email, "Email"),
-            new ConnectField(PasswordField, ConnectFieldKind.Password, "Password"),
-        ]),
-        new ConnectMode(TokenMode, "Access Token",
-        [
-            ConnectField.Info("How to get your token:"),
-            ConnectField.Info("1. Sign in at my.pcloud.com in your browser"),
-            // macOS says ⌥⌘I; every Windows browser opens DevTools with F12. No Safari here.
-            ConnectField.Info("2. Open DevTools (F12 in Chrome/Edge/Firefox)"),
-            ConnectField.Info("3. Chrome/Edge: Application tab → Storage → Cookies → https://my.pcloud.com"),
-            ConnectField.Info("   Firefox: Storage tab → Cookies → https://my.pcloud.com"),
-            ConnectField.Info("4. Copy the Value of the cookie named \"pcauth\" and paste it below"),
-            ConnectField.Link("Open my.pcloud.com", "https://my.pcloud.com"),
-            new ConnectField(TokenField, ConnectFieldKind.Password, "Access Token (pcauth cookie value)"),
-        ]),
-    ]);
+    /// <summary>Add: Connect opens the browser. Edit (stored credentials): Re-authorize, as on macOS.</summary>
+    public override ConnectSpec ConnectSpec => IsAuthenticated
+        ? ConnectSpec.Browser(
+            ConnectField.Info("Click Re-authorize to sign in again. Your browser will open and the existing token is replaced once you complete the flow."))
+        : ConnectSpec.Browser(
+            ConnectField.Info("Click Connect to sign in with your pCloud account. Your browser will open for authentication."));
 
     public override async Task<ConnectResult> ConnectAsync(ConnectValues values, IConnectPrompt prompt, CancellationToken cancellationToken = default)
     {
-        var token = values.GetTrimmed(TokenField);
-        var useToken = values.Mode == TokenMode || (values.Mode != PasswordMode && token.Length > 0);
-
+        prompt.ShowStatus(Localization.L("Waiting for sign-in in browser…"));
         PCloudCredentials credentials;
-        if (useToken)
+        try
         {
-            if (token.Length == 0)
+            // CSRF defence: the authorization server must round-trip the same state.
+            var state = Pkce.CreateState();
+            var callback = await Authenticator(
+                redirectUri => PCloudApiClient.BuildAuthorizeUri(redirectUri, state),
+                cancellationToken).ConfigureAwait(false);
+            var code = callback.RequireCode(state);
+            if (code.Length == 0)
             {
-                throw CloudProviderException.InvalidCredentials();
+                throw CloudProviderException.Unauthorized();
             }
 
-            credentials = await PCloudApiClient.ValidateTokenAsync(_http, token, cancellationToken).ConfigureAwait(false);
+            // The redirect also names the API host of the account's region.
+            credentials = await PCloudApiClient.ExchangeCodeAsync(_http, code, callback.Get("hostname"), cancellationToken).ConfigureAwait(false);
         }
-        else
+        finally
         {
-            credentials = await PCloudApiClient.LoginWithPasswordAsync(
-                _http,
-                values.GetTrimmed(EmailField),
-                values.Get(PasswordField),
-                cancellationToken).ConfigureAwait(false);
+            prompt.ShowStatus(null);
         }
 
         // Only now, with a working token, is the previous sign-in replaced.

@@ -11,25 +11,26 @@ namespace FileFluss.Core.Providers.PCloud;
 
 /// <summary>
 /// What the credential store holds for one pCloud account (macOS <c>PCloudCredentials</c>).
-/// <see cref="Hostname"/> records which regional API host accepted the sign-in:
+/// <see cref="Hostname"/> records which regional API host the sign-in named:
 /// <c>api.pcloud.com</c> for US accounts, <c>eapi.pcloud.com</c> for EU ones. Every later
 /// call goes there, because a token only works on its own region's host.
 /// </summary>
+/// <param name="IsOAuth">
+/// True for a token from the browser sign-in, which pCloud expects as <c>access_token</c>.
+/// Accounts added before, with a password login or a pasted <c>pcauth</c> cookie, have no
+/// such field and hold an <c>auth</c> token, which keeps being sent that way — and their
+/// stored JSON stays exactly as it was.
+/// </param>
 internal sealed record PCloudCredentials(
     [property: JsonPropertyName("accessToken")] string AccessToken,
     [property: JsonPropertyName("hostname")] string Hostname,
-    [property: JsonPropertyName("userId")] ulong UserId);
-
-internal sealed record PCloudLoginResponse(
-    [property: JsonPropertyName("result")] int Result,
-    [property: JsonPropertyName("auth")] string? Auth,
-    [property: JsonPropertyName("userid")] ulong? UserId,
-    [property: JsonPropertyName("email")] string? Email,
-    [property: JsonPropertyName("error")] string? Error);
-
-internal sealed record PCloudDigestResponse(
-    [property: JsonPropertyName("result")] int Result,
-    [property: JsonPropertyName("digest")] string? Digest);
+    [property: JsonPropertyName("userId")] ulong UserId,
+    [property: JsonPropertyName("isOAuth"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsOAuth = null)
+{
+    /// <summary>The query parameter every API call carries the token in.</summary>
+    [JsonIgnore]
+    public (string Key, string Value) AuthParameter => (IsOAuth == true ? "access_token" : "auth", AccessToken);
+}
 
 internal sealed record PCloudUserInfoResponse(
     [property: JsonPropertyName("result")] int Result,

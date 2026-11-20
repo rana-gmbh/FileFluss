@@ -302,7 +302,10 @@ public sealed class AccountDialog : Window, IConnectPrompt
         DockPanel.SetDock(_back, Dock.Left);
         buttons.Children.Add(_back);
 
-        _connect = new Button { Content = _editingId is null ? L("Connect") : L("Save"), MinWidth = 110, IsDefault = true };
+        // Editing a browser sign-in has nothing to save: the button runs the flow again, and
+        // says so, as on macOS.
+        var primary = _editingId is null ? L("Connect") : _mode?.OpensBrowser == true ? L("Re-authorize") : L("Save");
+        _connect = new Button { Content = primary, MinWidth = 110, IsDefault = true };
         if (TryFindResource("AccentButtonStyle") is Style accent)
         {
             _connect.Style = accent;

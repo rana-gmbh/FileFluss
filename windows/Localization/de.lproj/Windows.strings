@@ -281,10 +281,8 @@
 "Authorization code invalid or expired." = "Autorisierungscode ungültig oder abgelaufen.";
 "Server URL is not a valid URL." = "Die Server-URL ist keine gültige URL.";
 "Several cameras were found. Choose the one to add." = "Es wurden mehrere Kameras gefunden. Wähle die aus, die du hinzufügen möchtest.";
-"2. Open DevTools (F12 in Chrome/Edge/Firefox)" = "2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)";
 "FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." = "FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
 "iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." = "iCloud Drive wurde auf diesem PC nicht gefunden. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an, aktiviere iCloud Drive und versuche es dann erneut.";
-"pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field." = "pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein.";
 "This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead." = "Dieser Nextcloud-Server bietet keinen Login Flow v2 an. Verwende stattdessen die Anmeldung mit App-Passwort.";
 "Waiting for authorization in the TeraBox app." = "Warte auf die Autorisierung in der TeraBox-App.";
 "Authorization timed out — the QR code expired before it was scanned." = "Zeitüberschreitung bei der Autorisierung – der QR-Code ist abgelaufen, bevor er gescannt wurde.";

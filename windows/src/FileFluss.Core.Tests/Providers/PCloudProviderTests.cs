@@ -2,9 +2,11 @@
 
 using System.Collections.Specialized;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Web;
 using FileFluss.Core.Models;
+using FileFluss.Core.Net;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Providers.PCloud;
 using FileFluss.Core.Security;
@@ -89,17 +91,26 @@ public sealed class PCloudProviderTests : IDisposable
     }
 
     [Fact]
-    public void FormOffersPasswordAndTokenModes()
+    public void AddingSignsInThroughTheBrowser()
+    {
+        using var provider = new PCloudProvider(_accountId, _store, _http);
+        var mode = Assert.Single(provider.ConnectSpec.Modes);
+        Assert.True(mode.OpensBrowser);
+        Assert.Equal(
+            "Click Connect to sign in with your pCloud account. Your browser will open for authentication.",
+            Assert.Single(mode.Fields).Label);
+        Assert.DoesNotContain(mode.Fields, f => f.HasValue);
+        Assert.True(provider.ConnectSpec.SupportsInlineReauthentication);
+    }
+
+    [Fact]
+    public void EditingOffersReauthorize()
     {
         using var provider = Provider();
-        var modes = provider.ConnectSpec.Modes;
-        Assert.Equal(["password", "token"], modes.Select(m => m.Id));
-        Assert.Equal(["email", "password"], modes[0].Fields.Where(f => f.HasValue).Select(f => f.Key));
-        Assert.Equal(["token"], modes[1].Fields.Where(f => f.HasValue).Select(f => f.Key));
-        Assert.Contains(modes[1].Fields, f => f.Kind == ConnectFieldKind.Link && f.Url == "https://my.pcloud.com");
-        Assert.Contains(modes[1].Fields, f => f.Label.Contains("F12", StringComparison.Ordinal));
-        Assert.DoesNotContain(modes[1].Fields, f => f.Label.Contains("⌥⌘I", StringComparison.Ordinal) || f.Label.Contains("Safari", StringComparison.Ordinal));
-        Assert.False(provider.ConnectSpec.SupportsInlineReauthentication);
+        var mode = Assert.Single(provider.ConnectSpec.Modes);
+        Assert.True(mode.OpensBrowser);
+        Assert.StartsWith("Click Re-authorize", Assert.Single(mode.Fields).Label, StringComparison.Ordinal);
+        Assert.True(provider.ConnectSpec.SupportsInlineReauthentication);
     }
 
     // MARK: - Listing
@@ -612,139 +623,250 @@ public sealed class PCloudProviderTests : IDisposable
 
     // MARK: - Connect
 
+    /// <summary>
+    /// A browser round trip that redirects to <paramref name="redirectUri"/> with
+    /// <paramref name="query"/> appended to the state the authorize URL carried.
+    /// </summary>
+    private static Func<Func<string, Uri>, CancellationToken, Task<OAuthCallback>> Redirect(string query, string redirectUri = "http://localhost", Action<Uri>? authorize = null)
+        => (build, _) =>
+        {
+            var authorizeUri = build(redirectUri);
+            authorize?.Invoke(authorizeUri);
+            var state = HttpUtility.ParseQueryString(authorizeUri.Query)["state"];
+            return Task.FromResult(new OAuthCallback(redirectUri, new Uri($"{redirectUri}/?state={Uri.EscapeDataString(state!)}&{query}")));
+        };
+
+    private const string TokenAnswer = """{ "result": 0, "access_token": "OAUTH", "token_type": "bearer", "locationid": 2, "userid": 4711 }""";
+
     [Fact]
-    public void PasswordDigestFollowsPCloudsScheme()
-        // sha1("s3cret!" + sha1hex("user@example.com") + "abcDEF123"), computed independently.
-        => Assert.Equal("257d098d44df8bf114aef051d8d2abf8e7894789", PCloudApiClient.PasswordDigest("User@Example.com", "s3cret!", "abcDEF123"));
-
-    private static ConnectValues TokenValues(string token) => new("token", new Dictionary<string, string> { ["token"] = token });
-
-    private static ConnectValues PasswordValues(string email = "User@Example.com", string password = "s3cret!")
-        => new("password", new Dictionary<string, string> { ["email"] = email, ["password"] = password });
-
-    [Fact]
-    public async Task ATokenIsTriedOnEachRegionAndKeepsTheOneThatAnswers()
+    public async Task ConnectSignsInInTheBrowserAndStoresAnOAuthToken()
     {
-        _http.OnJson(HttpMethod.Get, "eapi.pcloud.com/userinfo", """{ "result": 2000, "error": "Log in failed." }""");
-        _http.OnJson(HttpMethod.Get, "api.pcloud.com/userinfo", """{ "result": 0, "userid": 4711, "email": "me@example.com", "quota": 1, "usedquota": 0 }""");
-        using var provider = new PCloudProvider(_accountId, _store, _http);
+        _http.OnJson(HttpMethod.Get, "eapi.pcloud.com/oauth2_token", TokenAnswer);
+        _http.OnJson(HttpMethod.Get, "eapi.pcloud.com/userinfo", """{ "result": 0, "userid": 4711, "email": "me@example.com", "quota": 1, "usedquota": 0 }""");
+        Uri? authorizeUri = null;
+        using var provider = new PCloudProvider(_accountId, _store, _http)
+        {
+            Authenticator = Redirect("code=the-code&hostname=EAPI.pcloud.com&locationid=2", authorize: uri => authorizeUri = uri),
+        };
+        var prompt = new ScriptedConnectPrompt();
 
-        var result = await provider.ConnectAsync(TokenValues("  PCAUTH  "), new ScriptedConnectPrompt());
+        var result = await provider.ConnectAsync(ConnectValues.Empty("browser"), prompt);
 
         Assert.Equal("me@example.com", result.AccountLabel);
-        Assert.Equal(new PCloudCredentials("PCAUTH", "api.pcloud.com", 4711), Stored());
         Assert.True(provider.IsAuthenticated);
-        var probes = _http.Requests.Where(r => r.Uri.AbsolutePath == "/userinfo").ToList();
-        Assert.Equal(["eapi.pcloud.com", "api.pcloud.com", "api.pcloud.com"], probes.Select(r => r.Uri.Host));
-        Assert.All(probes, r => Assert.Equal("PCAUTH", Query(r)["auth"]));
-        Assert.Contains("Safari", probes[0].Headers["User-Agent"], StringComparison.Ordinal);
+        Assert.Equal(new PCloudCredentials("OAUTH", "eapi.pcloud.com", 4711, IsOAuth: true), Stored());
+
+        Assert.Equal("https://my.pcloud.com/oauth2/authorize", authorizeUri!.GetLeftPart(UriPartial.Path));
+        var authorize = HttpUtility.ParseQueryString(authorizeUri.Query);
+        Assert.Equal(PCloudApiClient.ClientId, authorize["client_id"]);
+        Assert.Equal("code", authorize["response_type"]);
+        Assert.Equal("http://localhost", authorize["redirect_uri"]);
+        Assert.False(string.IsNullOrEmpty(authorize["state"]));
+        Assert.Null(authorize["client_secret"]);
+
+        var exchange = Call("oauth2_token");
+        Assert.Equal("eapi.pcloud.com", exchange.Uri.Host);
+        var query = Query(exchange);
+        Assert.Equal(PCloudApiClient.ClientId, query["client_id"]);
+        Assert.Equal(PCloudApiClient.ClientSecret, query["client_secret"]);
+        Assert.Equal("the-code", query["code"]);
+
+        var userinfo = Query(Call("userinfo"));
+        Assert.Equal("OAUTH", userinfo["access_token"]);
+        Assert.Null(userinfo["auth"]);
+        Assert.NotNull(prompt.StatusLines.First());
+        Assert.Null(prompt.StatusLines.Last());
     }
 
     [Fact]
-    public async Task AnInvalidTokenLeavesStoredCredentialsUntouched()
+    public async Task ATokenAnswerThatDoesNotNameTheUserIsCompletedFromUserinfo()
     {
-        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 2000, "error": "Log in failed." }""");
+        _http.OnJson(HttpMethod.Get, "/oauth2_token", """{ "result": 0, "access_token": "OAUTH" }""");
+        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 0, "userid": 99, "email": "me@example.com" }""");
+        using var provider = new PCloudProvider(_accountId, _store, _http) { Authenticator = Redirect("code=c&hostname=api.pcloud.com") };
+
+        await provider.ConnectAsync(ConnectValues.Empty("browser"), new ScriptedConnectPrompt());
+
+        Assert.Equal(new PCloudCredentials("OAUTH", "api.pcloud.com", 99, IsOAuth: true), Stored());
+        Assert.All(Calls("userinfo"), r => Assert.Equal("OAUTH", Query(r)["access_token"]));
+    }
+
+    [Theory]
+    [InlineData("eapi.pcloud.com", "eapi.pcloud.com")]
+    [InlineData("api.pcloud.com", "api.pcloud.com")]
+    [InlineData("API.pcloud.com", "api.pcloud.com")]
+    public void PCloudsOwnApiHostsAreAccepted(string named, string expected)
+        => Assert.Equal(expected, PCloudApiClient.OAuthHost(named));
+
+    [Theory]
+    [InlineData("evil.example.com")]
+    [InlineData("eapi.pcloud.com.evil.example")]
+    [InlineData("pcloud.com")]
+    [InlineData("eapi.pcloud.com:8443")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void AnyOtherHostIsRefused(string? named)
+    {
+        var error = Assert.Throws<CloudProviderException>(() => PCloudApiClient.OAuthHost(named));
+        Assert.Equal(CloudErrorKind.InvalidResponse, error.Kind);
+    }
+
+    /// <summary>The code and the app secret go to the host the redirect names — never to a foreign one.</summary>
+    [Fact]
+    public async Task ARedirectNamingAForeignHostSendsNothing()
+    {
         using var provider = Provider();
+        provider.Authenticator = Redirect("code=c&hostname=evil.example.com");
 
-        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(TokenValues("bad"), new ScriptedConnectPrompt()));
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty("browser"), new ScriptedConnectPrompt()));
 
-        Assert.Equal(CloudErrorKind.InvalidCredentials, error.Kind);
+        Assert.Equal(CloudErrorKind.InvalidResponse, error.Kind);
+        Assert.Empty(_http.Requests);
         Assert.Equal(new PCloudCredentials("TOKEN", "eapi.pcloud.com", 42), Stored());
     }
 
-    [Fact]
-    public async Task PasswordLoginUsesTheDigestAndTheRegionThatIssuedTheToken()
+    [Theory]
+    [InlineData("""{ "result": 0, "access_token": "t", "token_type": "bearer", "uid": 7 }""", "t", 7UL)]
+    [InlineData("""{ "result": 0, "access_token": "t", "userid": 8 }""", "t", 8UL)]
+    [InlineData("""{ "result": 0, "access_token": "t", "uid": "9" }""", "t", 9UL)]
+    [InlineData("""{ "result": 0, "access_token": "t", "userid": "10" }""", "t", 10UL)]
+    [InlineData("""{ "result": 0, "auth": "a", "userid": 11 }""", "a", 11UL)]
+    [InlineData("""{ "result": 0, "access_token": "t", "auth": "a", "uid": 12, "userid": 13 }""", "t", 12UL)]
+    public void TheTokenAnswerIsReadWithEitherSpelling(string json, string token, ulong userId)
     {
-        _http.OnJson(HttpMethod.Get, "/getdigest", """{ "result": 0, "digest": "abcDEF123" }""");
-        _http.On(HttpMethod.Get, "/userinfo", (request, _) =>
-        {
-            var query = HttpUtility.ParseQueryString(request.RequestUri!.Query);
-            return FakeHttpHandler.Json(query["getauth"] == "1"
-                ? """{ "result": 0, "auth": "ISSUED", "userid": 9, "email": "user@example.com" }"""
-                : """{ "result": 0, "userid": 9, "email": "user@example.com", "quota": 0, "usedquota": 0 }""");
-        });
-        using var provider = new PCloudProvider(_accountId, _store, _http);
-
-        var result = await provider.ConnectAsync(PasswordValues(), new ScriptedConnectPrompt());
-
-        Assert.Equal("user@example.com", result.AccountLabel);
-        Assert.Equal(new PCloudCredentials("ISSUED", "eapi.pcloud.com", 9), Stored());
-        var login = Query(_http.Requests.First(r => r.Uri.AbsolutePath == "/userinfo"));
-        Assert.Equal("User@Example.com", login["username"]);
-        Assert.Equal("abcDEF123", login["digest"]);
-        Assert.Equal("257d098d44df8bf114aef051d8d2abf8e7894789", login["passworddigest"]);
-        Assert.Equal("31536000", login["authexpire"]);
-        Assert.Null(login["password"]);
-        Assert.DoesNotContain(_http.Requests, r => r.Uri.ToString().Contains("s3cret", StringComparison.Ordinal));
+        var (accessToken, uid) = PCloudApiClient.ParseTokenResponse(Encoding.UTF8.GetBytes(json));
+        Assert.Equal(token, accessToken);
+        Assert.Equal(userId, uid);
     }
 
-    [Fact]
-    public async Task AWithheldTokenPointsTheUserToTheCookie()
-    {
-        _http.OnJson(HttpMethod.Get, "/getdigest", """{ "result": 0, "digest": "d" }""");
-        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 0, "userid": 9, "email": "user@example.com" }""");
-        using var provider = Provider();
+    [Theory]
+    [InlineData("""{ "result": 0, "access_token": "t" }""")]
+    [InlineData("""{ "result": 0, "access_token": "t", "userid": "not a number" }""")]
+    [InlineData("""{ "result": 0, "access_token": "t", "userid": null }""")]
+    public void AnAnswerWithoutAUserLeavesItOpen(string json)
+        => Assert.Null(PCloudApiClient.ParseTokenResponse(Encoding.UTF8.GetBytes(json)).UserId);
 
-        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(), new ScriptedConnectPrompt()));
+    [Fact]
+    public void PCloudsOwnRefusalIsPassedOn()
+    {
+        var error = Assert.Throws<CloudProviderException>(() =>
+            PCloudApiClient.ParseTokenResponse(Encoding.UTF8.GetBytes("""{ "result": 2012, "error": "Invalid 'code' provided." }""")));
 
         Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
-        Assert.Contains("pcauth", error.Message, StringComparison.Ordinal);
-        Assert.Equal(2, Calls("getdigest").Count);
-        Assert.Equal("TOKEN", Stored()!.AccessToken);
+        Assert.Equal("Invalid 'code' provided.", error.Message);
+    }
+
+    [Theory]
+    [InlineData("<html>maintenance</html>")]
+    [InlineData("[1, 2]")]
+    public void AnAnswerThatIsNoJsonObjectIsAnInvalidResponse(string body)
+        => Assert.Equal(CloudErrorKind.InvalidResponse, Assert.Throws<CloudProviderException>(() => PCloudApiClient.ParseTokenResponse(Encoding.UTF8.GetBytes(body))).Kind);
+
+    [Fact]
+    public async Task AFailedExchangeLeavesTheStoredSignInInPlace()
+    {
+        _http.OnJson(HttpMethod.Get, "/oauth2_token", """{ "result": 2012, "error": "Invalid 'code' provided." }""");
+        using var provider = Provider();
+        provider.Authenticator = Redirect("code=stale&hostname=eapi.pcloud.com");
+        var prompt = new ScriptedConnectPrompt();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty("browser"), prompt));
+
+        Assert.Equal("Invalid 'code' provided.", error.Message);
+        Assert.Equal(new PCloudCredentials("TOKEN", "eapi.pcloud.com", 42), Stored());
+        Assert.True(provider.IsAuthenticated);
+        Assert.Null(prompt.StatusLines.Last());
     }
 
     [Fact]
-    public async Task AWrongPasswordStopsAtTheFirstDefinitiveAnswer()
+    public async Task AnOAuthErrorCallbackIsUnauthorized()
     {
-        _http.OnJson(HttpMethod.Get, "/getdigest", """{ "result": 0, "digest": "d" }""");
-        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 2297, "error": "Invalid password." }""");
-        using var provider = new PCloudProvider(_accountId, _store, _http);
+        using var provider = new PCloudProvider(_accountId, _store, _http) { Authenticator = Redirect("error=access_denied") };
 
-        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(), new ScriptedConnectPrompt()));
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty("browser"), new ScriptedConnectPrompt()));
 
-        Assert.Equal(CloudErrorKind.InvalidCredentials, error.Kind);
-        Assert.Single(Calls("getdigest"));
+        Assert.Equal(CloudErrorKind.Unauthorized, error.Kind);
+        Assert.Empty(_http.Requests);
         Assert.Null(Stored());
     }
 
     [Fact]
-    public async Task LoginFailedOnBothRegionsIsInvalidCredentials()
+    public async Task ACallbackForAnotherSignInIsRefused()
     {
-        _http.OnJson(HttpMethod.Get, "/getdigest", """{ "result": 0, "digest": "d" }""");
-        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 2000, "error": "Log in failed." }""");
-        using var provider = new PCloudProvider(_accountId, _store, _http);
+        using var provider = new PCloudProvider(_accountId, _store, _http)
+        {
+            Authenticator = (_, _) => Task.FromResult(new OAuthCallback("http://localhost", new Uri("http://localhost/?code=c&hostname=api.pcloud.com&state=forged"))),
+        };
 
-        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(), new ScriptedConnectPrompt()));
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty("browser"), new ScriptedConnectPrompt()));
 
-        Assert.Equal(CloudErrorKind.InvalidCredentials, error.Kind);
-        Assert.Equal(2, Calls("userinfo").Count);
-    }
-
-    [Fact]
-    public async Task AnUnreachableDigestEndpointReportsTheLastFailure()
-    {
-        _http.OnText(HttpMethod.Get, "/getdigest", "down", HttpStatusCode.ServiceUnavailable);
-        using var provider = new PCloudProvider(_accountId, _store, _http);
-
-        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(), new ScriptedConnectPrompt()));
-
-        Assert.Equal(CloudErrorKind.ServerError, error.Kind);
-        Assert.Empty(Calls("userinfo"));
+        Assert.Equal(CloudErrorKind.Unauthorized, error.Kind);
+        Assert.Empty(_http.Requests);
     }
 
     [Fact]
     public async Task ALabelLookupFailureStillConnects()
     {
-        var probes = 0;
-        _http.On(HttpMethod.Get, "/userinfo", (_, _) => FakeHttpHandler.Json(Interlocked.Increment(ref probes) == 1
-            ? """{ "result": 0, "userid": 1 }"""
-            : """{ "result": 4000, "error": "Too many login tries." }"""));
-        using var provider = new PCloudProvider(_accountId, _store, _http);
+        _http.OnJson(HttpMethod.Get, "/oauth2_token", TokenAnswer);
+        _http.OnJson(HttpMethod.Get, "/userinfo", """{ "result": 4000, "error": "Too many login tries." }""");
+        using var provider = new PCloudProvider(_accountId, _store, _http) { Authenticator = Redirect("code=c&hostname=api.pcloud.com") };
 
-        var result = await provider.ConnectAsync(TokenValues("T"), new ScriptedConnectPrompt());
+        var result = await provider.ConnectAsync(ConnectValues.Empty("browser"), new ScriptedConnectPrompt());
 
         Assert.Null(result.AccountLabel);
         Assert.NotNull(Stored());
+    }
+
+    /// <summary>pCloud matches the redirect exactly, port included: port 80 is the registered bare http://localhost.</summary>
+    [Fact]
+    public void TheRegisteredRedirectPortsStartWithPort80()
+    {
+        Assert.Equal([80, 53682, 53683], PCloudApiClient.RedirectPorts);
+        Assert.Equal(["http://localhost", "http://localhost:53682", "http://localhost:53683"], PCloudApiClient.RedirectPorts.Select(OAuthLoopback.RedirectOrigin));
+    }
+
+    // MARK: - Tokens from before the browser sign-in
+
+    [Fact]
+    public async Task ABrowserSignInTokenIsSentAsAccessToken()
+    {
+        _store.Save(Key, new PCloudCredentials("OAUTH", "api.pcloud.com", 1, IsOAuth: true));
+        _http.OnJson(HttpMethod.Get, "/listfolder", """{ "result": 0, "metadata": { "isfolder": true, "contents": [] } }""");
+        _http.OnJson(HttpMethod.Post, "/uploadfile", Ok);
+        using var provider = new PCloudProvider(_accountId, _store, _http);
+
+        await provider.ListDirectoryAsync("/");
+        await provider.UploadFileAsync(TempFile(3), "/a.bin");
+
+        Assert.Equal("https://api.pcloud.com/listfolder?access_token=OAUTH&path=%2F&timeformat=timestamp", Call("listfolder").Uri.AbsoluteUri);
+        var upload = Query(Call("uploadfile"));
+        Assert.Equal("OAUTH", upload["access_token"]);
+        Assert.Null(upload["auth"]);
+    }
+
+    /// <summary>
+    /// Accounts added with a password or a pasted pcauth cookie have no isOAuth field: they
+    /// keep sending auth, and their stored JSON comes back exactly as it was.
+    /// </summary>
+    [Fact]
+    public async Task AnAccountSavedBeforeKeepsSendingAuth()
+    {
+        const string legacy = """{"accessToken":"PCAUTH","hostname":"api.pcloud.com","userId":42}""";
+        _store.Save(Key, Encoding.UTF8.GetBytes(legacy));
+        _http.OnJson(HttpMethod.Get, "/listfolder", """{ "result": 0, "metadata": { "isfolder": true, "contents": [] } }""");
+        using var provider = new PCloudProvider(_accountId, _store, _http);
+
+        await provider.ListDirectoryAsync("/");
+
+        var query = Query(Call("listfolder"));
+        Assert.Equal("PCAUTH", query["auth"]);
+        Assert.Null(query["access_token"]);
+
+        var credentials = _store.Load<PCloudCredentials>(Key)!;
+        Assert.Null(credentials.IsOAuth);
+        var other = new MemoryCredentialStore();
+        other.Save(Key, credentials);
+        Assert.Equal(legacy, Encoding.UTF8.GetString(other.Load(Key)!));
     }
 
     [Fact]
@@ -761,7 +883,31 @@ public sealed class PCloudProviderTests : IDisposable
     [Fact]
     public void StoredCredentialsUseTheMacOSFieldNames()
     {
-        var json = JsonSerializer.Serialize(new PCloudCredentials("t", "api.pcloud.com", 7));
-        Assert.Equal("""{"accessToken":"t","hostname":"api.pcloud.com","userId":7}""", json);
+        Assert.Equal(
+            """{"accessToken":"t","hostname":"api.pcloud.com","userId":7}""",
+            JsonSerializer.Serialize(new PCloudCredentials("t", "api.pcloud.com", 7)));
+        Assert.Equal(
+            """{"accessToken":"t","hostname":"api.pcloud.com","userId":7,"isOAuth":true}""",
+            JsonSerializer.Serialize(new PCloudCredentials("t", "api.pcloud.com", 7, IsOAuth: true)));
+    }
+}
+
+/// <summary>pCloud's token answer without a token, in the app's own words — English here, so it shares the language switch's collection.</summary>
+[Collection("Localization")]
+public sealed class PCloudTokenAnswerTextTests
+{
+    [Theory]
+    [InlineData("""{ "result": 2012 }""")]
+    [InlineData("""{ "result": 0 }""")]
+    [InlineData("""{ "result": 0, "access_token": "" }""")]
+    [InlineData("""{ "access_token": "t" }""")]
+    public void NoTokenSaysSo(string json)
+    {
+        Localization.Use(AppLanguage.English);
+
+        var error = Assert.Throws<CloudProviderException>(() => PCloudApiClient.ParseTokenResponse(Encoding.UTF8.GetBytes(json)));
+
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
+        Assert.Equal("pCloud didn't issue a token.", error.Message);
     }
 }

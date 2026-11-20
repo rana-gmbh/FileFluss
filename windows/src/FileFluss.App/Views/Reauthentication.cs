@@ -11,8 +11,8 @@ namespace FileFluss.App.Views;
 
 /// <summary>
 /// "Sign In Again" from a panel whose credentials stopped working. Browser-only providers
-/// (Google, Dropbox, Box, OneDrive) re-run their OAuth flow right here; the rest open the
-/// account's edit form, since they need something typed.
+/// (Google, Dropbox, Box, OneDrive, pCloud) re-run their OAuth flow right here; the rest open
+/// the account's edit form, since they need something typed.
 /// </summary>
 public static class Reauthentication
 {

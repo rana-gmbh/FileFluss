@@ -201,7 +201,6 @@ were left alone and want a human decision.
 | `en` | `Re-index for Offline Search…` | windows override | Re-index for Offline Search… |
 | `en` | `Unmount from Finder` | windows override | Disconnect Network Drive |
 | `en` | `Could not compute plan: %@` | windows override | Could not compute plan: %@ |
-| `en` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field. |
 | `en` | `Desktop` | windows override | Desktop |
 | `en` | `Document` | windows override | Document |
 | `en` | `Text Document` | windows override | Text Document |
@@ -487,7 +486,6 @@ were left alone and want a human decision.
 | `de` | `Re-index for Offline Search…` | windows override | Für die Offline-Suche neu indizieren… |
 | `de` | `Unmount from Finder` | windows override | Netzlaufwerk trennen |
 | `de` | `Could not compute plan: %@` | windows override | Plan konnte nicht berechnet werden: %@ |
-| `de` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein. |
 | `de` | `Desktop` | windows override | Desktop |
 | `de` | `Document` | windows override | Dokument |
 | `de` | `Text Document` | windows override | Textdokument |
@@ -788,7 +786,6 @@ were left alone and want a human decision.
 | `zh-Hans` | `Re-index for Offline Search…` | windows override | 为离线搜索重新编制索引… |
 | `zh-Hans` | `Unmount from Finder` | windows override | 断开网络驱动器 |
 | `zh-Hans` | `Could not compute plan: %@` | windows override | 无法计算同步计划：%@ |
-| `zh-Hans` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。 |
 | `zh-Hans` | `Desktop` | windows override | 桌面 |
 | `zh-Hans` | `Document` | windows override | 文档 |
 | `zh-Hans` | `Text Document` | windows override | 文本文档 |
@@ -1090,7 +1087,6 @@ were left alone and want a human decision.
 | `zh-Hant` | `Re-index for Offline Search…` | windows override | 為離線搜尋重新建立索引… |
 | `zh-Hant` | `Unmount from Finder` | windows override | 中斷網路磁碟機連線 |
 | `zh-Hant` | `Could not compute plan: %@` | windows override | 無法計算同步計畫：%@ |
-| `zh-Hant` | `pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field.` | windows override | pCloud 現在要求第三方應用程式使用 OAuth，且已停止新應用程式註冊。請在 my.pcloud.com 登入，複製「pcauth」Cookie 的值，並將其貼到「存取權杖」欄位中。 |
 | `zh-Hant` | `Desktop` | windows override | 桌面 |
 | `zh-Hant` | `Document` | windows override | 文件 |
 | `zh-Hant` | `Text Document` | windows override | 文字文件 |

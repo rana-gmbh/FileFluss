@@ -76,12 +76,15 @@ public sealed record ConnectField(string Key, ConnectFieldKind Kind, string Labe
 
 /// <summary>
 /// One way of signing in. Most providers have a single mode; NextCloud offers "Browser" and
-/// "App Password", pCloud "Email & Password" and "Access Token", SFTP "Password" and
-/// "Private Key". The form shows a segmented switch when there is more than one.
+/// "App Password", SFTP "Password" and "Private Key". The form shows a segmented switch when
+/// there is more than one.
 /// </summary>
 public sealed record ConnectMode(string Id, string Title, IReadOnlyList<ConnectField> Fields)
 {
-    /// <summary>Connect hands off to the system browser (OAuth); the form says "Waiting for sign-in in browser…".</summary>
+    /// <summary>
+    /// Connect hands off to the system browser (OAuth); the form says "Waiting for sign-in in
+    /// browser…", and editing an account offers Re-authorize rather than Save.
+    /// </summary>
     public bool OpensBrowser { get; init; }
 }
 

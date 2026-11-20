@@ -285,10 +285,8 @@
 "Authorization code invalid or expired." = "授权码无效或已过期。";
 "Server URL is not a valid URL." = "服务器 URL 不是有效的 URL。";
 "Several cameras were found. Choose the one to add." = "找到了多台相机。请选择要添加的相机。";
-"2. Open DevTools (F12 in Chrome/Edge/Firefox)" = "2. 打开开发者工具（Chrome/Edge/Firefox 中按 F12）";
 "FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." = "FileFluss 使用 Windows 版 iCloud——此处无需密码。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘。";
 "iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." = "在这台电脑上找不到 iCloud 云盘。请从 Microsoft Store 安装 Windows 版 iCloud，使用你的 Apple 账户登录并开启 iCloud 云盘，然后重试。";
-"pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field." = "pCloud 现在要求第三方应用使用 OAuth，并且已停止新应用注册。请在 my.pcloud.com 登录，复制“pcauth” Cookie 的值，并将其粘贴到“访问令牌”字段中。";
 "This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead." = "此 Nextcloud 服务器未提供 Login Flow v2。请改用应用专用密码登录方式。";
 "Waiting for authorization in the TeraBox app." = "正在等待 TeraBox 应用中的授权。";
 "Authorization timed out — the QR code expired before it was scanned." = "授权超时——二维码在扫描前已过期。";
