@@ -508,11 +508,15 @@ final class FileGalleryTileView: NSView {
 
     override var isFlipped: Bool { true }
 
-    /// Every click goes to the gallery: it decides selection, drags and
-    /// rubber-band selection from where the click landed, and a label or
-    /// image view in between would only get in its way.
+    /// The tile answers for itself, never for its label or image view: the
+    /// click travels up the responder chain to the gallery, which decides
+    /// selection, drags and rubber-band selection from where it landed.
+    ///
+    /// Not nil, though — the collection view finds the item under a point by
+    /// hit-testing the item views, so a tile that answered nil was invisible
+    /// to it: clicks selected nothing and a double-click opened nothing.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
+        frame.contains(point) ? self : nil
     }
 
     override func layout() {
