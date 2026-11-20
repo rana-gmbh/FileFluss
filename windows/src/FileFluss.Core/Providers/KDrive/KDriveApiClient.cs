@@ -347,6 +347,62 @@ internal sealed class KDriveApiClient
         return total;
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>The kDrive error code for a file its virus scan didn't pass.</summary>
+    internal const string ScanRefusalCode = "file_scan_status_not_safe_error";
+
+    /// <summary>
+    /// kDrive's own preview of a file (<c>GET /2/drive/{drive_id}/files/{file_id}/thumbnail</c>),
+    /// or null when it has none. A listed file's id is used directly; anything else is
+    /// resolved through the path cache.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string itemId, string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        var target = CloudPath.Normalize(path);
+        var fileId = FileId(itemId) ?? await ResolvePathToIdAsync(target, cancellationToken).ConfigureAwait(false);
+        using var response = await SendAsync(HttpMethod.Get, ThumbnailPath(DriveId, fileId), ThumbnailQuery(maxPixelSize), null, cancellationToken).ConfigureAwait(false);
+        var status = (int)response.StatusCode;
+        if (WebDavHttp.IsSuccess(response))
+        {
+            var type = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            return bytes.Length > 0 && (type.Length == 0 || type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) ? bytes : null;
+        }
+
+        if (status == 404)
+        {
+            return null;
+        }
+
+        var body = await response.ReadBodySnippetAsync(cancellationToken).ConfigureAwait(false);
+        if (status == 403 && ParseError(body)?.Code == ScanRefusalCode)
+        {
+            // kDrive withholds the bytes of a file its virus scan didn't pass, previews
+            // included. That's about this file, not the account.
+            return null;
+        }
+
+        SupportLogger.Shared.Log($"GET files/{fileId}/thumbnail → HTTP {status}: {body}", LogCategory, LogLevel.Error);
+        throw WebDavHttp.MapStatus(status, target);
+    }
+
+    /// <summary>The numeric file id inside a listed item's id, which listings build as "f" plus the id for files ("d" for folders).</summary>
+    internal static long? FileId(string itemId)
+        => itemId.Length > 1 && itemId[0] == 'f' && long.TryParse(itemId.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
+
+    internal static string ThumbnailPath(long driveId, long fileId)
+        => $"/2/drive/{driveId.ToString(CultureInfo.InvariantCulture)}/files/{fileId.ToString(CultureInfo.InvariantCulture)}/thumbnail";
+
+    /// <summary>The endpoint takes <c>width</c> and <c>height</c>, each 10 to 400. Both are set to the tile's size, as a box the preview fits in.</summary>
+    internal static string ThumbnailQuery(int maxPixelSize)
+    {
+        var edge = ThumbnailEdge(maxPixelSize).ToString(CultureInfo.InvariantCulture);
+        return $"width={edge}&height={edge}";
+    }
+
+    internal static int ThumbnailEdge(int maxPixelSize) => Math.Clamp(maxPixelSize, 10, 400);
+
     // MARK: - Server-side move / copy
     //
     // Not wired to the provider: `POST /files/{id}/move/{dir}` answered 404 against a live

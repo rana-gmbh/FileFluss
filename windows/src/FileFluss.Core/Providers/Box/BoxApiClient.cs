@@ -53,6 +53,7 @@ internal sealed class BoxApiClient
     private static readonly JsonSerializerOptions WriteOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly HttpClient _http;
+    private readonly HttpClient _noRedirectHttp;
     private readonly Action<BoxCredentials> _credentialsChanged;
     private readonly Lock _gate = new();
     private BoxCredentials _credentials;
@@ -76,9 +77,14 @@ internal sealed class BoxApiClient
     /// one only in memory leaves a dead token in the store and the next launch asks the user to
     /// sign in again, every time (issue #46).
     /// </param>
-    public BoxApiClient(HttpClient http, BoxCredentials credentials, Action<BoxCredentials> credentialsChanged)
+    /// <param name="noRedirectHttp">
+    /// A client that doesn't follow redirects, for thumbnails (see <see cref="ThumbnailAsync"/>).
+    /// Null uses <paramref name="http"/>, which is right for a test handler that never follows one.
+    /// </param>
+    public BoxApiClient(HttpClient http, BoxCredentials credentials, Action<BoxCredentials> credentialsChanged, HttpClient? noRedirectHttp = null)
     {
         _http = http;
+        _noRedirectHttp = noRedirectHttp ?? http;
         _credentials = credentials;
         _credentialsChanged = credentialsChanged;
     }
@@ -535,6 +541,110 @@ internal sealed class BoxApiClient
         }
 
         await HttpTransfer.SaveToFileAsync(response, localPath, onBytes, cancellationToken).ConfigureAwait(false);
+    }
+
+    // MARK: - Thumbnails
+
+    /// <summary>The square JPEG sizes <c>/files/{id}/thumbnail.jpg</c> makes, smallest first. Its size parameters accept 32 to 320.</summary>
+    internal static readonly int[] ThumbnailJpegSizes = [32, 160, 320];
+
+    /// <summary>The smallest size that reaches <paramref name="maxPixelSize"/>, or the largest there is.</summary>
+    internal static int ThumbnailSize(int maxPixelSize)
+    {
+        foreach (var size in ThumbnailJpegSizes)
+        {
+            if (size >= maxPixelSize)
+            {
+                return size;
+            }
+        }
+
+        return ThumbnailJpegSizes[^1];
+    }
+
+    /// <summary>
+    /// The thumbnail address for a file id. Only lower bounds: Box picks the smallest size
+    /// meeting them. Upper bounds as well could clash with a picture smaller than the size,
+    /// which Box doesn't scale up.
+    /// </summary>
+    internal static string ThumbnailUrl(string fileId, int maxPixelSize)
+    {
+        var size = ThumbnailSize(maxPixelSize).ToString(CultureInfo.InvariantCulture);
+        return $"{ApiUrl}/files/{CloudHttp.Escape(fileId)}/thumbnail.jpg?min_width={size}&min_height={size}";
+    }
+
+    /// <summary>
+    /// Whether an error answer means "no preview for this file": 404
+    /// <c>preview_cannot_be_generated</c> for a type Box can't draw, 400
+    /// <c>requested_preview_unavailable</c> when the asked size doesn't exist for it. Any other
+    /// 404 — the file itself gone — stays an error.
+    /// </summary>
+    internal static bool IsThumbnailRefusal(int status, string? body)
+    {
+        string? code;
+        try
+        {
+            using var document = JsonDocument.Parse(body ?? string.Empty);
+            code = StringProperty(document.RootElement, "code");
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return status switch
+        {
+            404 => code == "preview_cannot_be_generated",
+            400 => code == "requested_preview_unavailable",
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// A preview made by Box, or null where Box has none for the file yet. Sent through the
+    /// client that doesn't follow redirects: Box answers a file it can't preview with a 302 to
+    /// its generic icon for the type, which would otherwise arrive here as a 200 and stand in
+    /// for the file's own picture.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        path = CloudPath.Normalize(path);
+        var fileId = await ResolvePathToIdAsync(path, cancellationToken).ConfigureAwait(false);
+        var url = ThumbnailUrl(fileId, maxPixelSize);
+        using var response = await SendAuthorizedAsync(
+            token =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Authorization = CloudHttp.Bearer(token);
+                return request;
+            },
+            transfer: false,
+            "GET /files/thumbnail.jpg",
+            cancellationToken,
+            _noRedirectHttp).ConfigureAwait(false);
+
+        var status = (int)response.StatusCode;
+        switch (status)
+        {
+            case 200:
+                var data = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                return data.Length == 0 ? null : data;
+
+            // 202: still being made, the body is a placeholder; the next visit to the folder
+            // asks again. 3xx: Box can't make one and points at its generic icon instead.
+            case 202:
+            case >= 300 and <= 399:
+                return null;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (IsThumbnailRefusal(status, body))
+        {
+            return null;
+        }
+
+        SupportLogger.Shared.Log($"[Box] GET thumbnail → HTTP {status}: {Prefix(body, 500)}", LogCategory, LogLevel.Error);
+        throw MapHttpError(status, body, path);
     }
 
     public async Task UploadFileAsync(string localPath, string remotePath, ByteProgress? onBytes, CancellationToken cancellationToken)
@@ -1155,11 +1265,12 @@ internal sealed class BoxApiClient
     /// Sends an authorized request: refresh-if-stale first, and one forced refresh + retry on
     /// a 401 — which usually means Box invalidated the token server-side ahead of our expiry.
     /// <paramref name="build"/> runs again for the retry so upload content is re-created.
+    /// <paramref name="client"/> picks another HttpClient than the usual one (thumbnails).
     /// </summary>
-    private async Task<HttpResponseMessage> SendAuthorizedAsync(Func<string, HttpRequestMessage> build, bool transfer, string logPath, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendAuthorizedAsync(Func<string, HttpRequestMessage> build, bool transfer, string logPath, CancellationToken cancellationToken, HttpClient? client = null)
     {
         var credentials = await RefreshIfNeededAsync(cancellationToken).ConfigureAwait(false);
-        var response = await SendOnceAsync(build(credentials.AccessToken), transfer, cancellationToken).ConfigureAwait(false);
+        var response = await SendOnceAsync(build(credentials.AccessToken), transfer, client, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.Unauthorized)
         {
             return response;
@@ -1168,16 +1279,17 @@ internal sealed class BoxApiClient
         response.Dispose();
         SupportLogger.Shared.Log($"[Box] {logPath} → 401, force-refreshing and retrying once", LogCategory);
         var fresh = await ForceRefreshAsync(cancellationToken).ConfigureAwait(false);
-        return await SendOnceAsync(build(fresh.AccessToken), transfer, cancellationToken).ConfigureAwait(false);
+        return await SendOnceAsync(build(fresh.AccessToken), transfer, client, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<HttpResponseMessage> SendOnceAsync(HttpRequestMessage request, bool transfer, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendOnceAsync(HttpRequestMessage request, bool transfer, HttpClient? client, CancellationToken cancellationToken)
     {
+        client ??= _http;
         using (request)
         {
             return transfer
-                ? await _http.SendTransferAsync(request, cancellationToken).ConfigureAwait(false)
-                : await _http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
+                ? await client.SendTransferAsync(request, cancellationToken).ConfigureAwait(false)
+                : await client.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
         }
     }
 

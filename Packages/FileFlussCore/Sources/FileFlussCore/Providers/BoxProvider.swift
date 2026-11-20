@@ -160,6 +160,16 @@ public final class BoxProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Thumbnails
+
+    /// Box previews pictures, videos and documents; it says per file when
+    /// it can't, so nothing is filtered here.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(path: item.path, maxPixelSize: maxPixelSize)
+    }
+
     // MARK: - Share links
 
     /// Box supports the full set on `PUT /files/{id}` — including reading the

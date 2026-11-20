@@ -1090,6 +1090,104 @@ public actor OneDriveAPIClient {
     }
 }
 
+// MARK: - Thumbnails
+
+extension OneDriveAPIClient {
+    /// The service's preview of a file, or nil when OneDrive has none.
+    /// Graph answers `…/thumbnails/0/{size}/content` with a redirect to the
+    /// image, which URLSession follows, as it does for downloads.
+    public func thumbnail(itemId: String, path: String, maxPixelSize: Int) async throws -> Data? {
+        let item: String
+        if let id = Self.graphItemId(fromItemId: itemId),
+           let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            item = "/me/drive/items/\(encodedId)"
+        } else {
+            let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+            item = "/me/drive/root:\(encodedPath):"
+        }
+
+        let size = Self.thumbnailSize(forMaxPixelSize: maxPixelSize)
+        switch try await thumbnailContent(at: "\(item)/thumbnails/0/\(size)/content") {
+        case .image(let data):
+            return data
+        case .none:
+            return nil
+        case .refused:
+            // Custom sizes are made on request; should one be turned down,
+            // the standard size Graph keeps ready is asked for once.
+            let fallback = Self.standardThumbnailSize(forMaxPixelSize: maxPixelSize)
+            if case .image(let data) = try await thumbnailContent(at: "\(item)/thumbnails/0/\(fallback)/content") {
+                return data
+            }
+            return nil
+        }
+    }
+
+    /// The listed item's Graph id. Listings build ids as "f" plus the item
+    /// id for files ("d" for folders), and the id works even where the path
+    /// doesn't, as for search results, which carry no real parent path.
+    static func graphItemId(fromItemId itemId: String) -> String? {
+        guard itemId.hasPrefix("f"), itemId.count > 1 else { return nil }
+        return String(itemId.dropFirst())
+    }
+
+    /// A custom size bounded by a square box, `c{n}x{n}`: Graph fits the
+    /// preview inside it and keeps the aspect ratio, so the longer edge is
+    /// about the tile's size. Kept between Graph's small (96) and large
+    /// (800) standard sizes.
+    static func thumbnailSize(forMaxPixelSize maxPixelSize: Int) -> String {
+        let edge = min(max(maxPixelSize, 96), 800)
+        return "c\(edge)x\(edge)"
+    }
+
+    /// The smallest of Graph's standard sizes (longer edge 96, 176 or 800)
+    /// that still covers the tile, so the caller only ever scales down.
+    static func standardThumbnailSize(forMaxPixelSize maxPixelSize: Int) -> String {
+        switch maxPixelSize {
+        case ...96: return "small"
+        case ...176: return "medium"
+        default: return "large"
+        }
+    }
+
+    private enum ThumbnailContent {
+        case image(Data)
+        /// The item has no preview, or what came back wasn't one.
+        case none
+        /// A 400 or 404, which says either that the item has no preview or
+        /// that this size can't be made; worth one try at another size.
+        case refused
+    }
+
+    private func thumbnailContent(at path: String) async throws -> ThumbnailContent {
+        guard let url = URL(string: "\(graphURL)\(path)") else { throw CloudProviderError.invalidResponse }
+
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
+        switch http.statusCode {
+        case 200...299:
+            let type = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+            guard !data.isEmpty, type.isEmpty || type.hasPrefix("image/") else { return .none }
+            return .image(data)
+        case 400, 404:
+            return .refused
+        default:
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+    }
+}
+
 // MARK: - Thread-safe continuation wrapper
 
 // MARK: - Microsoft Graph API Response Types

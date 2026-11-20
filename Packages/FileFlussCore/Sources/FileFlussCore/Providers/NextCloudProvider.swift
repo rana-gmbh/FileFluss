@@ -163,6 +163,14 @@ public final class NextCloudProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    /// Nextcloud renders previews for images, PDFs and (with ffmpeg on the
+    /// server) videos; the client turns "no preview for this file" into nil.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(path: item.path, maxPixelSize: maxPixelSize)
+    }
+
     // MARK: - Share links
 
     /// Nextcloud supports the full set. Note these are only the server's

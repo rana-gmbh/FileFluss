@@ -181,6 +181,86 @@ internal sealed class PCloudApiClient
         await HttpTransfer.SaveToFileAsync(response, localPath, onBytes, cancellationToken).ConfigureAwait(false);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// The edge of the square box asked of <c>getthumb</c>: the first value from
+    /// <paramref name="maxPixelSize"/> up that pCloud accepts — divisible by 4 or 5, 16 to 1024
+    /// (the height's limit, the lower of the two). Without <c>crop</c> the picture keeps its
+    /// proportions inside the box, so its longer edge is this one.
+    /// </summary>
+    internal static int ThumbnailEdge(int maxPixelSize)
+    {
+        var edge = Math.Clamp(maxPixelSize, 16, 1024);
+        while (edge % 4 != 0 && edge % 5 != 0)
+        {
+            edge++;
+        }
+
+        return edge;
+    }
+
+    /// <summary>The file id inside a listed item's id ("f123"), or null for anything else, which is then looked up by path instead.</summary>
+    internal static ulong? FileId(string itemId)
+        => itemId.StartsWith('f') &&
+           ulong.TryParse(itemId.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var value) &&
+           value != 0
+            ? value
+            : null;
+
+    /// <summary>The <c>getthumb</c> parameters, without the token.</summary>
+    internal static List<(string Key, string Value)> ThumbnailParameters(ulong? fileId, string path, int maxPixelSize)
+    {
+        var edge = ThumbnailEdge(maxPixelSize).ToString(CultureInfo.InvariantCulture);
+        return
+        [
+            fileId is { } id ? ("fileid", id.ToString(CultureInfo.InvariantCulture)) : ("path", CloudPath.Normalize(path)),
+            ("size", $"{edge}x{edge}"),
+        ];
+    }
+
+    /// <summary>pCloud's answers that mean "no preview for this file": 1014, a type it can't draw, and 3001, a file it failed to draw.</summary>
+    internal static bool IsThumbnailRefusal(int code) => code is 1014 or 3001;
+
+    /// <summary>
+    /// A preview made by pCloud, or null where pCloud has none for the file. A token-stamped
+    /// GET on the account's own host like every other call here. The answer is the picture
+    /// itself; a refusal comes back as the usual JSON envelope with a non-zero <c>result</c>.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(ulong? fileId, string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, ApiUri("getthumb", ThumbnailParameters(fileId, path, maxPixelSize)));
+        using var response = await _http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            SupportLogger.Shared.Log($"[pCloud] getthumb → HTTP {(int)response.StatusCode}", Category, LogLevel.Error);
+            throw response.StatusCode == HttpStatusCode.TooManyRequests
+                ? CloudProviderException.RateLimited()
+                : CloudProviderException.ServerError((int)response.StatusCode);
+        }
+
+        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        var mediaType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+        if (response.Headers.Contains("X-Error") || mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            var (code, _) = ResultCode(body);
+            if (code == 0)
+            {
+                // JSON where a picture was due, yet no error: nothing to show.
+                throw CloudProviderException.InvalidResponse();
+            }
+
+            if (IsThumbnailRefusal(code))
+            {
+                return null;
+            }
+
+            throw MapError(code, path);
+        }
+
+        return body.Length == 0 ? null : body;
+    }
+
     /// <summary>
     /// <c>uploadfile</c> with the file as one multipart part, streamed from disk. The local
     /// modification and creation times go along as <c>mtime</c>/<c>ctime</c>, and

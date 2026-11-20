@@ -215,6 +215,15 @@ public sealed class SynologyDriveProvider : CloudProvider
     public override async Task<IReadOnlyList<CloudFileItem>?> SearchFilesAsync(string query, string? path, CancellationToken cancellationToken = default)
         => await Client.SearchFilesAsync(query, path, cancellationToken).ConfigureAwait(false);
 
+    /// <summary>
+    /// DSM keeps thumbnails of images, and of videos in its indexed folders; the client turns
+    /// "no thumbnail for this file" into null.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : Client.ThumbnailAsync(item.Path, maxPixelSize, cancellationToken);
+
     // MARK: - Share links
 
     public override Task<CloudShareLink> CreateShareLinkAsync(string path, ShareLinkOptions options, CancellationToken cancellationToken = default)

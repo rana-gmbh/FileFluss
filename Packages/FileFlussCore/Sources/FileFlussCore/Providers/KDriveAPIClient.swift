@@ -614,6 +614,69 @@ public actor KDriveAPIClient {
         )
     }
 
+    // MARK: - Thumbnails
+
+    /// kDrive's own preview of a file (`GET /2/drive/{drive_id}/files/{file_id}/thumbnail`),
+    /// or nil when it has none.
+    public func thumbnail(itemId: String, path: String, maxPixelSize: Int) async throws -> Data? {
+        let fileId: Int
+        if let id = Self.fileId(fromItemId: itemId) {
+            fileId = id
+        } else {
+            fileId = try await resolvePathToId(path)
+        }
+        guard let url = Self.thumbnailURL(baseURL: baseURL, driveId: credentials.driveId, fileId: fileId, maxPixelSize: maxPixelSize) else {
+            throw CloudProviderError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(credentials.apiToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        switch http.statusCode {
+        case 200...299:
+            let type = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+            guard !data.isEmpty, type.isEmpty || type.hasPrefix("image/") else { return nil }
+            return data
+        case 404:
+            return nil
+        case 403 where Self.isScanRefusal(data):
+            // kDrive withholds the bytes of a file its virus scan didn't
+            // pass, previews included. That's about this file, not the account.
+            return nil
+        default:
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+    }
+
+    /// The numeric file id inside a listed item's id, which listings build
+    /// as "f" plus the id for files ("d" for folders).
+    static func fileId(fromItemId itemId: String) -> Int? {
+        guard itemId.hasPrefix("f") else { return nil }
+        return Int(itemId.dropFirst())
+    }
+
+    /// The thumbnail endpoint takes `width` and `height`, each 10 to 400.
+    /// Both are set to the tile's size, as a box the preview fits in.
+    static func thumbnailURL(baseURL: String, driveId: Int, fileId: Int, maxPixelSize: Int) -> URL? {
+        let edge = thumbnailEdge(forMaxPixelSize: maxPixelSize)
+        var components = URLComponents(string: "\(baseURL)/2/drive/\(driveId)/files/\(fileId)/thumbnail")
+        components?.queryItems = [
+            URLQueryItem(name: "width", value: "\(edge)"),
+            URLQueryItem(name: "height", value: "\(edge)"),
+        ]
+        return components?.url
+    }
+
+    static func thumbnailEdge(forMaxPixelSize maxPixelSize: Int) -> Int {
+        min(max(maxPixelSize, 10), 400)
+    }
+
+    private static func isScanRefusal(_ data: Data) -> Bool {
+        let envelope = try? JSONDecoder().decode(KDriveErrorEnvelope.self, from: data)
+        return envelope?.error?.code == "file_scan_status_not_safe_error"
+    }
+
     // MARK: - User Info
 
     public func userInfo() async throws -> String {

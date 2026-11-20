@@ -120,6 +120,16 @@ public protocol CloudProvider: Sendable {
     /// Replaces the service's labels on one item with these (already in
     /// the form the service can hold, see `NativeTagSync.nativeForm`).
     func setNativeTags(_ tags: [FileTag], at path: String) async throws
+
+    /// A small preview of a file, made by the service itself, as image bytes
+    /// (JPEG or PNG) whose longer edge is about `maxPixelSize`. The gallery
+    /// shows it instead of the type's icon.
+    ///
+    /// Nil means the service has no preview for this file — or no preview
+    /// API at all, which is what the default says. The gallery then falls
+    /// back to downloading small images and drawing them itself, so a
+    /// provider only implements this to save that download.
+    func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data?
 }
 
 extension CloudProvider {
@@ -199,6 +209,10 @@ extension CloudProvider {
     }
 
     public func storageQuota() async throws -> CloudStorageQuota? {
+        nil
+    }
+
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
         nil
     }
 

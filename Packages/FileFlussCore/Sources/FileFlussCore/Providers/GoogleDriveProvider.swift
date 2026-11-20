@@ -113,6 +113,14 @@ public final class GoogleDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    /// Drive makes previews of images, videos and PDFs itself; the client
+    /// looks up the file's short-lived `thumbnailLink` and fetches it.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory, item.role == .normal else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(itemId: item.id, path: item.path, maxPixelSize: maxPixelSize)
+    }
+
     // MARK: - Share links
 
     /// Drive's "anyone with the link" permission carries no password and no

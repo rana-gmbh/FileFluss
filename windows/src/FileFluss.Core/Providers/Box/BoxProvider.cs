@@ -15,6 +15,13 @@ namespace FileFluss.Core.Providers.Box;
 public sealed class BoxProvider : CloudProvider
 {
     private readonly HttpClient _http;
+
+    /// <summary>
+    /// For thumbnails only: Box redirects a file it can't preview to a generic icon, which
+    /// must not be fetched in its place. A test handler follows no redirects, so tests share
+    /// <see cref="_http"/> (null here).
+    /// </summary>
+    private readonly HttpClient? _noRedirectHttp;
     private volatile BoxApiClient? _client;
 
     public BoxProvider(Guid accountId, ICredentialStore credentials)
@@ -27,6 +34,7 @@ public sealed class BoxProvider : CloudProvider
         : base(accountId, credentials)
     {
         _http = handler is null ? CloudHttp.Create() : CreateClient(handler);
+        _noRedirectHttp = handler is null ? CloudHttp.Create(allowAutoRedirect: false) : null;
 
         // Restore only; the first API call refreshes the access token when it has expired.
         // Credentials live under "box.<account uuid>" — never "box.<login>", the key the
@@ -142,6 +150,17 @@ public sealed class BoxProvider : CloudProvider
 
     // FolderSizeAsync: macOS walks the listing recursively — exactly the inherited default.
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// Box previews pictures, videos and documents; it says per file when it can't, so nothing
+    /// is filtered here beyond folders.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : Client.ThumbnailAsync(item.Path, maxPixelSize, cancellationToken);
+
     // MARK: - Quota
 
     public override Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)
@@ -185,6 +204,7 @@ public sealed class BoxProvider : CloudProvider
         if (disposing)
         {
             _http.Dispose();
+            _noRedirectHttp?.Dispose();
         }
 
         base.Dispose(disposing);
@@ -201,13 +221,17 @@ public sealed class BoxProvider : CloudProvider
     private BoxApiClient NewClient(BoxCredentials credentials)
     {
         BoxApiClient? client = null;
-        client = new BoxApiClient(_http, credentials, updated =>
-        {
-            if (ReferenceEquals(_client, client))
+        client = new BoxApiClient(
+            _http,
+            credentials,
+            updated =>
             {
-                Credentials.Save(CredentialKey, updated);
-            }
-        });
+                if (ReferenceEquals(_client, client))
+                {
+                    Credentials.Save(CredentialKey, updated);
+                }
+            },
+            _noRedirectHttp);
         return client;
     }
 

@@ -812,12 +812,16 @@ public sealed class PanelViewModel : Observable
             // thread only the swap. Unchanged items keep their row (icon, thumbnail, folder size).
             var hide = _services.Settings.HideFileExtensions;
             var local = provider.IsLocal;
+
+            // Only a real account has previews to fetch: local folders get the shell's own
+            // thumbnails, and archives and the offline index have nothing to fetch from.
+            var previewSource = provider as Core.Providers.CloudProvider;
             var previous = _allRows;
             var field = _sortField;
             var culture = System.Globalization.CultureInfo.CurrentCulture;
             var (rows, sorted, folderCount) = await Task.Run(() =>
             {
-                var built = BuildRows(items, previous, local, hide);
+                var built = BuildRows(items, previous, local, hide, previewSource);
                 var (ordered, folders) = SortRows(built, field, culture);
                 return (built, ordered, folders);
             }, ct);
@@ -1191,7 +1195,7 @@ public sealed class PanelViewModel : Observable
     }
 
     /// <summary>The listing as rows, keeping the row of every item that did not change (thread-safe: no UI state is touched).</summary>
-    internal static List<FileRowViewModel> BuildRows(IReadOnlyList<CloudFileItem> items, IReadOnlyList<FileRowViewModel> previous, bool isLocal, bool hideExtension)
+    internal static List<FileRowViewModel> BuildRows(IReadOnlyList<CloudFileItem> items, IReadOnlyList<FileRowViewModel> previous, bool isLocal, bool hideExtension, Core.Providers.CloudProvider? previewSource = null)
     {
         var byName = new Dictionary<string, FileRowViewModel>(previous.Count, StringComparer.Ordinal);
         foreach (var row in previous)
@@ -1202,13 +1206,13 @@ public sealed class PanelViewModel : Observable
         var rows = new List<FileRowViewModel>(items.Count);
         foreach (var item in items)
         {
-            if (byName.TryGetValue(item.Name, out var old) && old.CanReuseFor(item, isLocal, hideExtension))
+            if (byName.TryGetValue(item.Name, out var old) && old.CanReuseFor(item, isLocal, hideExtension, previewSource))
             {
                 rows.Add(old);
             }
             else
             {
-                rows.Add(new FileRowViewModel(item, isLocal, hideExtension) { FolderSize = old?.FolderSize });
+                rows.Add(new FileRowViewModel(item, isLocal, hideExtension, previewSource) { FolderSize = old?.FolderSize });
             }
         }
 

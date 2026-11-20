@@ -432,6 +432,109 @@ internal sealed class SynologyDriveApiClient
         return (results.Files ?? []).Where(f => f.Path is not null).Select(ToItem).ToList();
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// A thumbnail DSM keeps for the file, through <c>SYNO.FileStation.Thumb</c> (File Station
+    /// API guide, DSM 6.0 and later). It answers with the image itself, and with a plain HTTP
+    /// 404 when it has none: a type it doesn't thumbnail, or a video outside the "photo" share
+    /// and the home folders, the only places DSM indexes them. An expired session can still
+    /// come back as the usual JSON envelope, so that is read the way <c>CallAsync</c>
+    /// reads it, logging in again once.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        var size = ThumbnailSize(maxPixelSize);
+        for (var attempt = 0; ; attempt++)
+        {
+            var sid = await EnsureSessionAsync(cancellationToken).ConfigureAwait(false);
+            var query = new List<(string, string)>(ThumbnailQuery(path, size)) { ("_sid", sid) };
+            using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("/webapi/entry.cgi", query));
+            request.Headers.Accept.ParseAdd("image/*");
+            using var response = await _http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            EnsureHttpSuccess(response);
+            var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            if (response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return body.Length > 0 ? body : null;
+            }
+
+            if (EnvelopeErrorCode(body) == 119)
+            {
+                if (attempt > 0)
+                {
+                    throw CloudProviderException.NotAuthenticated();
+                }
+
+                InvalidateSession(sid);
+                continue;
+            }
+
+            // Any other refusal (no such file, no permission for this one) is about the file,
+            // not the account.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// DSM's thumbnails come in three fixed sizes; which pixel size each one is varies by DSM
+    /// version and isn't documented, so this asks for one comfortably above the tile and lets
+    /// the caller scale it down: "small" only for tiny tiles, "medium" for the gallery's usual
+    /// sizes, "large" beyond that. "original" would be the whole picture.
+    /// </summary>
+    internal static string ThumbnailSize(int maxPixelSize) => maxPixelSize switch
+    {
+        <= 120 => "small",
+        <= 320 => "medium",
+        _ => "large",
+    };
+
+    /// <summary>
+    /// The path goes in JSON-quoted, as the API guide's own example passes it. The session id
+    /// is added by the caller, like on every other File Station call, and never belongs here.
+    /// </summary>
+    internal static IReadOnlyList<(string Name, string Value)> ThumbnailQuery(string path, string size) =>
+    [
+        ("api", "SYNO.FileStation.Thumb"),
+        ("version", "2"),
+        ("method", "get"),
+        ("path", JsonQuoted(path)),
+        ("size", size),
+    ];
+
+    /// <summary>
+    /// The error code of a DSM JSON envelope (-1 when it names none), or null when the body
+    /// isn't one.
+    /// </summary>
+    internal static int? EnvelopeErrorCode(byte[] body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("success", out _))
+            {
+                return null;
+            }
+
+            return root.TryGetProperty("error", out var error)
+                   && error.ValueKind == JsonValueKind.Object
+                   && error.TryGetProperty("code", out var value)
+                   && value.TryGetInt32(out var code)
+                ? code
+                : -1;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     // MARK: - Share links
 
     /// <summary>
@@ -671,9 +774,15 @@ internal sealed class SynologyDriveApiClient
             throw CloudProviderException.InvalidResponse();
         }
 
-        var encoded = string.Join('&', query.Select(q => Uri.EscapeDataString(q.Name) + "=" + Uri.EscapeDataString(q.Value)));
-        return new Uri(server.GetLeftPart(UriPartial.Authority) + path + "?" + encoded);
+        return new Uri(server.GetLeftPart(UriPartial.Authority) + path + "?" + EncodeQuery(query));
     }
+
+    /// <summary>
+    /// Strict percent-encoding of every name and value. That covers "+" too, which DSM's CGI
+    /// would otherwise read as a space ("a+b.jpg" would name a file that isn't there).
+    /// </summary>
+    internal static string EncodeQuery(IEnumerable<(string Name, string Value)> query)
+        => string.Join('&', query.Select(q => Uri.EscapeDataString(q.Name) + "=" + Uri.EscapeDataString(q.Value)));
 
     private void EnsureHttpSuccess(HttpResponseMessage response)
     {

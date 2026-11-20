@@ -173,6 +173,18 @@ public sealed class PCloudProvider : CloudProvider
     public override Task<long> FolderSizeAsync(string path, CancellationToken cancellationToken = default)
         => Client.FolderSizeAsync(path, cancellationToken);
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// pCloud knows which of its files it can preview and refuses the rest one by one, so
+    /// nothing is filtered here beyond folders. The listed id ("f123") names the file exactly;
+    /// the path is the fallback for an item that carries none.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : Client.ThumbnailAsync(PCloudApiClient.FileId(item.Id), item.Path, maxPixelSize, cancellationToken);
+
     /// <summary>From userinfo; a quota of 0 means pCloud reported no upper bound.</summary>
     public override async Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)
     {

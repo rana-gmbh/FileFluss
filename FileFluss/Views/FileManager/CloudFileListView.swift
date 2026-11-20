@@ -1332,6 +1332,7 @@ struct CloudFileListView: View {
                 },
                 archiveMode: vm.isBrowsingArchive,
                 archiveDragPlan: archiveDragPlan,
+                thumbnailAccountId: vm.isBrowsingArchive ? nil : vm.accountId,
                 onExtractHere: isReadOnly ? nil : { archive in
                     let transfer = TransferProgress(operation: "Extracting", totalItems: 1)
                     appState.addTransfer(transfer, panel: panelSide)

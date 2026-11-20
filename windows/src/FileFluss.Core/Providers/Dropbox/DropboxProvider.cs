@@ -147,6 +147,17 @@ public sealed class DropboxProvider : CloudProvider
 
     // FolderSizeAsync: macOS walks list_folder recursively — exactly the inherited default.
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// Dropbox draws previews of pictures, and in practice of many videos and PDFs too; it
+    /// says so per file, so nothing is filtered here beyond folders.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : Client.ThumbnailAsync(item.Path, item.Name, maxPixelSize, cancellationToken);
+
     // MARK: - Quota
 
     public override Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)

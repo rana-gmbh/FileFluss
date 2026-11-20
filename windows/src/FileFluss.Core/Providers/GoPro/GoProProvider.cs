@@ -461,18 +461,25 @@ public sealed class GoProProvider : CloudProvider
     public override Task<long> FolderSizeAsync(string path, CancellationToken cancellationToken = default)
         => WithClientAsync(client => client.FolderSizeAsync(path, cancellationToken), cancellationToken);
 
-    /// <summary>Raw thumbnail JPEG of a media item, or null. Not part of the provider contract; callers that know they hold a GoPro may use it.</summary>
+    /// <summary>Raw thumbnail JPEG of a media item, or null.</summary>
     public async Task<byte[]?> ThumbnailAsync(string path, CancellationToken cancellationToken = default)
     {
         try
         {
             return await WithClientAsync(client => client.ThumbnailAsync(path, cancellationToken), cancellationToken).ConfigureAwait(false);
         }
-        catch (CloudProviderException)
+        catch (CloudProviderException e) when (e.Kind != CloudErrorKind.NetworkError)
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// The camera makes one fixed-size thumbnail per photo and video; the gallery scales it to
+    /// the tile. A camera that has dropped off the network throws, so the tile asks again later.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory ? Task.FromResult<byte[]?>(null) : ThumbnailAsync(item.Path, cancellationToken);
 
     // MARK: - Write operations (unsupported — the camera is an import source)
 

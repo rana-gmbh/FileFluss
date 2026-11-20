@@ -141,6 +141,20 @@ public final class PCloudProvider: CloudProvider, @unchecked Sendable {
         )
     }
 
+    // MARK: - Thumbnails
+
+    /// pCloud knows which of its files it can preview and refuses the rest
+    /// one by one, so nothing is filtered here.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(
+            fileId: PCloudAPIClient.fileId(fromItemId: item.id),
+            path: item.path,
+            maxPixelSize: maxPixelSize
+        )
+    }
+
     // MARK: - Share links
 
     /// pCloud creates public links on any plan, but `linkpassword` and

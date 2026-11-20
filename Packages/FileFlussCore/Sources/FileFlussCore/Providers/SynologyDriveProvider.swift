@@ -156,6 +156,14 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.folderSize(path: path)
     }
 
+    /// DSM keeps thumbnails of images, and of videos in its indexed
+    /// folders; the client turns "no thumbnail for this file" into nil.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(path: item.path, maxPixelSize: maxPixelSize)
+    }
+
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem]? {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         return try await client.searchFiles(query: query, path: path)

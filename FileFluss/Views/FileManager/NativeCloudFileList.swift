@@ -65,6 +65,9 @@ struct NativeCloudFileList: NSViewRepresentable {
     /// a drag hands over file promises that unpack the entry at the drop.
     var archiveMode: Bool = false
     var archiveDragPlan: ArchiveDragPlan?
+    /// The account whose files the gallery fetches previews of. Nil shows
+    /// type icons only.
+    var thumbnailAccountId: UUID?
     /// Unpacks the clicked archive beside it. Nil on a read-only account.
     var onExtractHere: ((CloudFileItem) -> Void)?
     /// Unpacks the clicked archive — or, inside one, the selected entries —
@@ -223,6 +226,7 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onCompress = onCompress
         coordinator.archiveMode = archiveMode
         coordinator.archiveDragPlan = archiveDragPlan
+        coordinator.thumbnailAccountId = thumbnailAccountId
         coordinator.onExtractHere = onExtractHere
         coordinator.onExtractToOtherPanel = onExtractToOtherPanel
         coordinator.onOpenWith = onOpenWith
@@ -452,6 +456,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onCompress: (([CloudFileItem], ArchiveCreationFormat) -> Void)?
     var archiveMode = false
     var archiveDragPlan: ArchiveDragPlan?
+    var thumbnailAccountId: UUID?
     var onExtractHere: ((CloudFileItem) -> Void)?
     var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
     var onOpenWith: (([CloudFileItem], URL) -> Void)?
