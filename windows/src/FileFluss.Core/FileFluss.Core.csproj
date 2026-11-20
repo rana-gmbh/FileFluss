@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Platform-neutral layer: models, the cloud-provider contract and every provider, sync
+    planning, folder comparison, the search index, localization and settings. Plain net10.0
+    (not -windows) on purpose, so it builds and unit-tests without a Windows host — the same
+    split the NetFluss Windows port uses.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>FileFluss.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FileFluss.Core.Tests" />
+    <InternalsVisibleTo Include="FileFluss" />
+  </ItemGroup>
+
+  <!--
+    Dependencies, each one justified as the macOS CLAUDE.md asks:
+    - SSH.NET: SFTP. macOS shells out to /usr/bin/ssh; a library gives real progress,
+      server-side rename and host-key handling without parsing a TTY.
+    - FluentFTP: FTP/FTPS. macOS drives curl; same reasoning.
+    - Microsoft.Data.Sqlite: the search/offline index (macOS uses the system SQLite).
+    - SharpCompress (MIT, pure C#, no native code, no dependencies on net10.0): reading ZIP,
+      RAR (4 and 5), 7z, BZip2 and XZ, and writing 7z and BZip2. macOS uses the system
+      libarchive; Windows has no archive API, and its bundled tar.exe crashes on file names
+      outside the ANSI code page. Tarballs, GZip and ZIP writing stay on .NET's own classes.
+  -->
+  <ItemGroup>
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="FluentFTP" Version="55.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <RootNamespace>FileFluss.App</RootNamespace>
+    <AssemblyName>FileFluss</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WPF's Fluent theme (ThemeMode) is still flagged experimental. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <ApplicationIcon>Assets\FileFluss.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    Release publishes (always for a runtime) precompile FileFluss's own code and the libraries
+    it starts with, so startup runs native code instead of waiting for the JIT; the .NET and
+    WPF assemblies come precompiled already. The Windows SDK projection and BouncyCastle are
+    left to the JIT: precompiled they would add 37 MB for code that startup never touches
+    (the rest adds about 7 MB).
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PublishReadyToRunExclude Include="Microsoft.Windows.SDK.NET.dll;BouncyCastle.Cryptography.dll;WinRT.Runtime.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FileFluss.Core/FileFluss.Core.csproj" />
+    <ProjectReference Include="../FileFluss.Native/FileFluss.Native.csproj" />
+    <InternalsVisibleTo Include="FileFluss.App.Tests" />
+  </ItemGroup>
+
+</Project>

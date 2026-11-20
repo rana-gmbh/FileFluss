@@ -1,0 +1,96 @@
+// Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
+
+using System.IO;
+using FileFluss.App.Services;
+using FileFluss.Core.Archives;
+using FileFluss.Core.Commands;
+using FileFluss.Core.IO;
+using FileFluss.Core.Models;
+using FileFluss.Core.Providers;
+using FileFluss.Core.Services;
+using FileFluss.Core.Settings;
+using FileFluss.Native;
+
+namespace FileFluss.App;
+
+/// <summary>
+/// The composition root: one instance of each long-lived service, created once at startup.
+/// The macOS app reached the same objects through <c>AppState</c> and a handful of
+/// <c>.shared</c> singletons.
+/// </summary>
+public sealed class AppServices
+{
+    public AppServices(string dataDirectory)
+    {
+        DataDirectory = dataDirectory;
+        SettingsStore = new SettingsStore(Path.Combine(dataDirectory, "settings.json"));
+        Credentials = new DpapiCredentialStore(Path.Combine(dataDirectory, "credentials"));
+        Hub = new ProviderHub();
+        Accounts = new AccountsService(new AccountStore(Path.Combine(dataDirectory, "accounts.json")), Hub, Credentials);
+        Transfers = new TransferCenter();
+        Export = new CloudFileExport(Transfers);
+        Keyboard = new KeyboardMap(Settings);
+        Search = new SearchServices(Path.Combine(dataDirectory, "index.sqlite"), Hub);
+        Mount = new MountService(SettingsStore, dataDirectory);
+        Archives = new ArchiveSessions();
+        RarTool.InstallDirectory = Path.Combine(dataDirectory, "Tools", "rar");
+
+        // Win32 implementations of the operations Core leaves pluggable.
+        LocalFileProvider.CopyFileHandler = ShellFileOperations.CopyFileAsync;
+        LocalFileProvider.RecycleHandler = ShellFileOperations.MoveToRecycleBin;
+        StagingLocation.SecureFolder = path => PrivateFolder.Apply(path);
+        StagingLocation.CustomFolder = Settings.CustomCacheFolder;
+        SettingsStore.Changed += (_, name) =>
+        {
+            if (name is null or nameof(AppSettings.CustomCacheFolder))
+            {
+                StagingLocation.CustomFolder = Settings.CustomCacheFolder;
+            }
+        };
+    }
+
+    public static AppServices Current { get; set; } = null!;
+
+    public string DataDirectory { get; }
+
+    public SettingsStore SettingsStore { get; }
+
+    public AppSettings Settings => SettingsStore.Settings;
+
+    public DpapiCredentialStore Credentials { get; }
+
+    public ProviderHub Hub { get; }
+
+    public AccountsService Accounts { get; }
+
+    public TransferCenter Transfers { get; }
+
+    /// <summary>Cloud files dragged or copied out to Explorer and other apps.</summary>
+    public CloudFileExport Export { get; }
+
+    public KeyboardMap Keyboard { get; }
+
+    public SearchServices Search { get; }
+
+    /// <summary>Accounts mapped as drives in File Explorer (macOS "Mount in Finder").</summary>
+    public MountService Mount { get; }
+
+    /// <summary>The archives open in the panels (browsed like folders, read-only).</summary>
+    public ArchiveSessions Archives { get; }
+
+    /// <summary>
+    /// What a panel lists for a location: the disk, a connected account — or, for an account in
+    /// offline mode or an unplugged drive, the read-only view of its index — or the inside of
+    /// an archive opened this session.
+    /// </summary>
+    public FileProvider? ProviderFor(PanelLocation location)
+    {
+        if (location.IsArchive)
+        {
+            return Archives.Find(location);
+        }
+
+        var account = location.AccountId is { } id ? Accounts.Find(id) : null;
+        return Search.OfflineProvider(location, account) ?? Hub.For(location);
+    }
+}

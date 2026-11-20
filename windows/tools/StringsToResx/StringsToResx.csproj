@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Generates the FileFluss.Core .resx files from the macOS Localizable.strings catalogues
+    (the app's and FileFlussCore's) plus the Windows-only catalogue under windows/Localization.
+    Ported from the NetFluss Windows tool so both ports translate the same way.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>FileFluss.Tools.StringsToResx</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

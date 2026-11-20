@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Windows-only tests of the shell interop in FileFluss.Native, driven through real COM:
+    apartments, proxies, the OLE clipboard and the Shell's own drop target. Pure logic is
+    tested in FileFluss.Core.Tests, which runs on any OS.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FileFluss.Native/FileFluss.Native.csproj" />
+    <Compile Include="../FileFluss.Core.Tests/Support/MemoryCloudProvider.cs" Link="Support/MemoryCloudProvider.cs" />
+  </ItemGroup>
+
+</Project>

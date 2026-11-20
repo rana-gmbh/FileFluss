@@ -1,0 +1,625 @@
+/* Windows-only strings — German. Keys match en.lproj/Windows.strings. */
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of macOS strings whose wording is wrong on Windows
+   --------------------------------------------------------------------------------------------- */
+
+"System Default follows the language selected in macOS." = "„Systemstandard“ folgt der in Windows eingestellten Sprache.";
+"Search all sources (⌘F)" = "Alle Quellen durchsuchen (Strg+F)";
+"Move to Trash" = "In den Papierkorb verschieben";
+"\"%@\" can't be moved to the Trash because its volume doesn't have one. Delete it permanently? This can't be undone." = "„%@“ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
+"%d items can't be moved to the Trash because their volume doesn't have one. Delete them permanently? This can't be undone." = "%d Objekte können nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
+"Are you sure you want to move \"%@\" to the Trash?" = "Möchtest du „%@“ wirklich in den Papierkorb verschieben?";
+"Are you sure you want to move %d items to the Trash?" = "Möchtest du %d Objekte wirklich in den Papierkorb verschieben?";
+"FileFluss is a dual‑panel file manager for macOS that lets you work with local folders and multiple cloud storage accounts side by side. It is built around a left and right panel — copy, move, sync, and compare files between them with a few clicks." = "FileFluss ist ein zweispaltiger Dateimanager für Windows, mit dem du lokale Ordner und mehrere Cloud-Speicherkonten nebeneinander nutzen kannst. Er ist um einen linken und einen rechten Bereich herum aufgebaut – kopiere, bewege, synchronisiere und vergleiche Dateien mit wenigen Klicks zwischen ihnen.";
+"**Search** (⌘F) — open the search window." = "**Suchen** (Strg+F) – öffnet das Suchfenster.";
+"Right‑click the toolbar and choose *Customize Toolbar…* to rearrange or hide buttons." = "Die meisten Schaltflächen der Symbolleiste erklären sich in einer QuickInfo, wenn du mit der Maus darauf zeigst.";
+"Open **Settings → Cloud Accounts** (⌘,)." = "Öffne **Einstellungen → Cloud-Konten** (Strg+,).";
+"Sign in via the provider's authentication flow. FileFluss stores the tokens securely in your macOS Keychain." = "Melde dich über den Authentifizierungsablauf des Anbieters an. FileFluss speichert die Tokens im Windows-Anmeldedatenspeicher, verschlüsselt für dein Windows-Benutzerkonto.";
+"In **Settings → Cloud Accounts**, click the trash icon next to the account." = "Klicke unter **Einstellungen → Cloud-Konten** neben dem Konto auf **Entfernen**.";
+"Click **Search** in the toolbar, or press **⌘F**." = "Klicke in der Symbolleiste auf **Suchen** oder drücke **Strg+F**.";
+"Click the round X close button, press **Esc**, or click the red traffic‑light button." = "Klicke auf den runden X-Schließknopf, drücke **Esc** oder klicke auf die Schließen-Schaltfläche des Fensters.";
+"**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on." = "**Doppelklick** auf eine beliebige Datei. Word-Dokumente öffnen sich in Word, PDFs in deinem PDF-Viewer, Bilder in der Fotos-App usw.";
+"Could not mount in Finder" = "Konnte nicht als Netzlaufwerk verbunden werden";
+"Reveal in Finder" = "Im Explorer anzeigen";
+"Open this account as a drive in Finder" = "Dieses Konto als Netzlaufwerk verbinden";
+"Each cloud account you mount in Finder keeps recently-downloaded files locally up to this size, so re-opening the same file is instant. New value applies to the next mount." = "Jedes als Netzlaufwerk verbundene Cloud-Konto behält kürzlich geladene Dateien lokal bis zu dieser Größe, sodass das erneute Öffnen derselben Datei sofort erfolgt. Ein neuer Wert gilt ab der nächsten Verbindung eines Laufwerks.";
+"Eject this drive from Finder" = "Dieses Netzlaufwerk trennen";
+"Finder-Mount Read Cache" = "Lese-Cache für Netzlaufwerke";
+"Mount in Finder" = "Als Netzlaufwerk verbinden";
+"macOS / Finder Style" = "Windows- / Explorer-Stil";
+"Open in Finder" = "Im Explorer öffnen";
+"Do you want to mount “%@” in Finder?" = "Möchtest du „%@“ als Netzlaufwerk verbinden?";
+"This account isn't mounted yet. Mounting it adds it as a drive in Finder so you can open this item there." = "Dieses Konto ist noch nicht als Netzlaufwerk verbunden. Dabei wird es als Laufwerk im Explorer hinzugefügt, damit du dieses Element dort öffnen kannst.";
+"Mount this account in Finder first — a cloud folder has no path a terminal can open." = "Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";
+"A terminal can only open a folder that exists on this Mac. Mounting this account adds it as a drive in Finder, and the terminal opens inside it." = "Ein Terminal kann nur Ordner öffnen, die es auf diesem PC gibt. Wird dieses Konto als Netzlaufwerk verbunden, erscheint es im Explorer, und das Terminal öffnet darin.";
+"2. Open DevTools (⌥⌘I in Chrome/Safari/Firefox)" = "2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)";
+"Click Connect to sign in with your Box account. Your browser will open for authentication. Uploads are capped at 50 MB per file in this version." = "Klicke auf „Verbinden“, um dich mit deinem Box-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.";
+"FileFluss reads the key file once and stores its contents in the macOS Keychain — moving or deleting the original file later won't affect this account." = "FileFluss liest die Schlüsseldatei einmal und speichert ihren Inhalt im Windows-Anmeldedatenspeicher, verschlüsselt für dein Benutzerkonto – das spätere Verschieben oder Löschen der Originaldatei wirkt sich nicht auf dieses Konto aus.";
+"FileFluss uses your Mac's existing iCloud sign-in — no password needed here. iCloud Drive must be turned on in System Settings → Apple Account → iCloud → iCloud Drive." = "FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
+"iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud verwendet die Anmeldung von iCloud für Windows – hier gibt es nichts zu bearbeiten. Verwalte iCloud Drive in der App „iCloud für Windows“.";
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";
+
+/* ---------------------------------------------------------------------------------------------
+   Menus, toolbar, panels and sidebar
+   --------------------------------------------------------------------------------------------- */
+
+"File" = "Datei";
+"Edit" = "Bearbeiten";
+"View" = "Ansicht";
+"Help" = "Hilfe";
+"Exit" = "Beenden";
+"Open" = "Öffnen";
+"Open With…" = "Öffnen mit…";
+"Close" = "Schließen";
+"Properties" = "Eigenschaften";
+"Move to Recycle Bin" = "In den Papierkorb verschieben";
+"Show in Explorer" = "Im Explorer anzeigen";
+"Sort By" = "Sortieren nach";
+"Folder" = "Ordner";
+"Cloud" = "Cloud";
+"Local" = "Lokal";
+"This PC" = "Dieser PC";
+"Local Disk" = "Lokaler Datenträger";
+"USB Drive" = "USB-Laufwerk";
+"DVD Drive" = "DVD-Laufwerk";
+"Home" = "Benutzerordner";
+"Desktop" = "Desktop";
+"Documents" = "Dokumente";
+"Downloads" = "Downloads";
+"Pictures" = "Bilder";
+"Music" = "Musik";
+"Videos" = "Videos";
+"Retry" = "Wiederholen";
+"Show only the active panel" = "Nur den aktiven Bereich anzeigen";
+"Storage Analysis" = "Speicheranalyse";
+"Storage Analysis…" = "Speicheranalyse…";
+"Share Link…" = "Link teilen…";
+"Where" = "Ort";
+"Checksum" = "Prüfsumme";
+"bytes" = "Bytes";
+"1 byte" = "1 Byte";
+"%@ bytes" = "%@ Bytes";
+"1 file" = "1 Datei";
+"1 folder" = "1 Ordner";
+"%@ items" = "%@ Objekte";
+"%@ used" = "%@ belegt";
+"%@ of %@ used" = "%@ von %@ belegt";
+"%@ (offline)" = "%@ (offline)";
+"Name of the new folder:" = "Name des neuen Ordners:";
+"A file with that name already exists." = "Eine Datei mit diesem Namen ist bereits vorhanden.";
+"A name can't contain \"/\"." = "Ein Name darf kein „/“ enthalten.";
+"A file name can't contain any of the following characters: %@" = "Ein Dateiname darf keines der folgenden Zeichen enthalten: %@";
+"\"%@\" isn't a valid name on Windows." = "„%@“ ist unter Windows kein gültiger Name.";
+"Couldn't open \"%@\"" = "„%@“ konnte nicht geöffnet werden";
+"You don't have permission to open \"%@\"." = "Du hast keine Berechtigung, „%@“ zu öffnen.";
+"The folder \"%@\" can't be found." = "Der Ordner „%@“ wurde nicht gefunden.";
+"This location is read-only." = "Dieser Ort ist schreibgeschützt.";
+"Loading preview…" = "Vorschau wird geladen…";
+"Mount this account first — a cloud folder has no path a terminal can open." = "Verbinde dieses Konto zuerst als Netzlaufwerk – ein Cloud-Ordner hat keinen Pfad, den ein Terminal öffnen kann.";
+"Transfers are still running" = "Übertragungen laufen noch";
+"Quitting cancels them. Files already transferred will remain." = "Beim Beenden werden sie abgebrochen. Bereits übertragene Dateien bleiben erhalten.";
+"Quit Anyway" = "Trotzdem beenden";
+
+/* ---------------------------------------------------------------------------------------------
+   Deleting, copying and moving
+   --------------------------------------------------------------------------------------------- */
+
+"Are you sure you want to move \"%@\" to the Recycle Bin?" = "Möchtest du „%@“ wirklich in den Papierkorb verschieben?";
+"Are you sure you want to move %@ items to the Recycle Bin?" = "Möchtest du %@ Objekte wirklich in den Papierkorb verschieben?";
+"\"%@\" couldn't be moved to the Recycle Bin." = "„%@“ konnte nicht in den Papierkorb verschoben werden.";
+"%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone." = "%@ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
+"\"%@\" can't be moved." = "„%@“ kann nicht verschoben werden.";
+"A folder can't be copied or moved into itself." = "Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.";
+"An item named “%@” already exists at the destination." = "Am Ziel ist bereits ein Objekt namens „%@“ vorhanden.";
+"The items need %@, but only %@ is available at the destination." = "Die Objekte benötigen %@, am Ziel sind aber nur %@ verfügbar.";
+"Copy Anyway" = "Trotzdem kopieren";
+"Move Anyway" = "Trotzdem verschieben";
+"Replace or Skip" = "Ersetzen oder überspringen";
+"Source" = "Quelle";
+"Destination" = "Ziel";
+"Transfer" = "Übertragung";
+"Cloud account not connected" = "Cloud-Konto nicht verbunden";
+"The file changed while it was being uploaded." = "Die Datei wurde während des Hochladens geändert.";
+"The server returned an unsafe file name (\"%@\"), so the download was stopped." = "Der Server hat einen unsicheren Dateinamen („%@“) geliefert, daher wurde der Download abgebrochen.";
+
+/* ---------------------------------------------------------------------------------------------
+   Transfers
+   --------------------------------------------------------------------------------------------- */
+
+"Copied" = "Kopiert";
+"Moved" = "Verschoben";
+"Downloaded" = "Heruntergeladen";
+"Uploaded" = "Hochgeladen";
+"Opened" = "Geöffnet";
+"Synced" = "Synchronisiert";
+"Done" = "Fertig";
+"Cancelled" = "Abgebrochen";
+"Cancelling…" = "Wird abgebrochen…";
+"Downloading %@" = "%@ wird heruntergeladen";
+"Uploading %@" = "%@ wird hochgeladen";
+"%@ %@ — %@ of %@ files" = "%@: %@ – %@ von %@ Dateien";
+"Cancelled: %@ %@" = "Abgebrochen – %@: %@";
+"%@ %@ of %@ — %@ failed" = "%@: %@ von %@ – %@ fehlgeschlagen";
+"Failed: %@ %@ — %@" = "Fehlgeschlagen – %@: %@ – %@";
+"Skipped: %@" = "Übersprungen: %@";
+"Done: %@ %@" = "Fertig – %@: %@";
+"Done: %@ %@ (%@ files)" = "Fertig – %@: %@ (%@ Dateien)";
+"Done: %@ %@ +%@ more" = "Fertig – %@: %@ und %@ weitere";
+"%@ of %@" = "%@ von %@";
+"~%@ left" = "noch ca. %@";
+"%@ of %@ files failed: %@" = "%@ von %@ Dateien fehlgeschlagen: %@";
+"Unknown error" = "Unbekannter Fehler";
+
+/* ---------------------------------------------------------------------------------------------
+   Sync and compare
+   --------------------------------------------------------------------------------------------- */
+
+"Bidirectional" = "In beide Richtungen";
+"Upload Only" = "Nur hochladen";
+"Download Only" = "Nur herunterladen";
+"Paused" = "Pausiert";
+"Syncing..." = "Wird synchronisiert…";
+"Sync needs a live folder on both sides." = "Zum Synchronisieren wird auf beiden Seiten ein erreichbarer Ordner benötigt.";
+"Could not compute plan: %@" = "Plan konnte nicht berechnet werden: %@";
+"Could not read folders: %@" = "Ordner konnten nicht gelesen werden: %@";
+"Left newer" = "Links neuer";
+"Right newer" = "Rechts neuer";
+"%@ different" = "%@ unterschiedlich";
+"%@ only left" = "%@ nur links";
+"%@ only right" = "%@ nur rechts";
+"%@ same" = "%@ gleich";
+
+/* ---------------------------------------------------------------------------------------------
+   Search and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Current Folder" = "Aktueller Ordner";
+"This Source" = "Diese Quelle";
+"All Sources" = "Alle Quellen";
+"Local Files" = "Lokale Dateien";
+"Account not connected" = "Konto nicht verbunden";
+"Could not save the index: %@" = "Der Index konnte nicht gespeichert werden: %@";
+"Failed to open search index: %@" = "Der Suchindex konnte nicht geöffnet werden: %@";
+"Search index error: %@" = "Fehler im Suchindex: %@";
+"\"%@\" is offline. Its indexed contents can be browsed and searched, but not opened, copied or changed." = "„%@“ ist offline. Die indizierten Inhalte lassen sich durchblättern und durchsuchen, aber nicht öffnen, kopieren oder ändern.";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis
+   --------------------------------------------------------------------------------------------- */
+
+"Pick a cloud account or a folder, then choose Analyse." = "Wähle ein Cloud-Konto oder einen Ordner und dann „Analysieren“.";
+"All sizes" = "Alle Größen";
+"1 MB and up" = "Ab 1 MB";
+"10 MB and up" = "Ab 10 MB";
+"100 MB and up" = "Ab 100 MB";
+"1 GB and up" = "Ab 1 GB";
+"No files above this size." = "Keine Dateien über dieser Größe.";
+"%@ files · %@" = "%@ Dateien · %@";
+"%@ files · %@ · %@" = "%@ Dateien · %@ · %@";
+"%@ · %@ files · %@ folders" = "%@ · %@ Dateien · %@ Ordner";
+"%@%% of the total" = "%@ %% der Gesamtgröße";
+"Stopped early, so these totals are a lower bound — the real figures are larger." = "Vorzeitig beendet – diese Summen sind daher eine Untergrenze, die tatsächlichen Werte sind höher.";
+
+/* ---------------------------------------------------------------------------------------------
+   Settings
+   --------------------------------------------------------------------------------------------- */
+
+"Files" = "Dateien";
+"Sidebar" = "Seitenleiste";
+"Updates" = "Updates";
+"Welcome" = "Willkommen";
+"Show" = "Anzeigen";
+"When FileFluss opens" = "Beim Start von FileFluss";
+"Home folder" = "Benutzerordner";
+"The folders from last time" = "Die Ordner vom letzten Mal";
+"Specific folders" = "Bestimmte Ordner";
+"A folder that no longer exists — a deleted folder, an unplugged drive, a disconnected cloud account — opens at your home folder instead." = "Ein Ordner, den es nicht mehr gibt – ein gelöschter Ordner, ein entferntes Laufwerk, ein getrenntes Cloud-Konto –, öffnet stattdessen deinen Benutzerordner.";
+"Programs" = "Programme";
+"Check for updates automatically" = "Automatisch nach Updates suchen";
+"FileFluss checks daily and asks before installing." = "FileFluss sucht täglich und fragt vor der Installation.";
+"Up to date" = "Auf dem neuesten Stand";
+"Copy direct download links when available" = "Direkte Download-Links kopieren, sofern verfügbar";
+"\"Copy Share Link\" then copies a link that downloads the file straight away, instead of the provider's preview page. Providers that offer no direct link always give their own page." = "„Freigabelink kopieren“ kopiert dann einen Link, der die Datei sofort herunterlädt, statt der Vorschauseite des Anbieters. Anbieter ohne direkten Link liefern immer ihre eigene Seite.";
+"System Default follows the language selected in Windows." = "„Systemstandard“ folgt der in Windows eingestellten Sprache.";
+"Cloud files opened or previewed are kept here so reopening them is instant." = "Geöffnete oder in der Vorschau angezeigte Cloud-Dateien werden hier aufbewahrt, damit sie sich sofort wieder öffnen lassen.";
+"Open Cache Folder" = "Cache-Ordner öffnen";
+"Clear" = "Leeren";
+"Automatic management" = "Automatische Verwaltung";
+"At launch, delete old cached files and keep the cache under its size limit." = "Beim Start alte Cache-Dateien löschen und den Cache unter seiner Größenbeschränkung halten.";
+"3 days" = "3 Tage";
+"1 week" = "1 Woche";
+"2 weeks" = "2 Wochen";
+"1 month" = "1 Monat";
+"3 months" = "3 Monate";
+"Downloads are staged through this folder. Point it at a folder on an external drive to keep big transfers to that drive off your system disk. If the folder isn't available, the system temporary folder is used." = "Downloads werden über diesen Ordner zwischengespeichert. Wähle einen Ordner auf einem externen Laufwerk, damit große Übertragungen auf dieses Laufwerk deinen Systemdatenträger nicht belasten. Ist der Ordner nicht verfügbar, wird der temporäre Systemordner verwendet.";
+"System temporary folder" = "Temporärer Systemordner";
+"Use Default" = "Standard verwenden";
+"Edit Account" = "Konto bearbeiten";
+"Remove Account" = "Konto entfernen";
+"Remove from FileFluss" = "Aus FileFluss entfernen";
+"Remove \"%@\" from FileFluss? Files in the account are not touched." = "„%@“ aus FileFluss entfernen? Die Dateien im Konto bleiben unverändert.";
+"App icon by @JohnnyFireOne · file-type icons by redbooth/free-file-icons (MIT)" = "App-Symbol von @JohnnyFireOne · Dateityp-Symbole von redbooth/free-file-icons (MIT)";
+"GNU General Public License v3.0 ↗" = "GNU General Public License v3.0 ↗";
+"github.com/rana-gmbh/filefluss" = "github.com/rana-gmbh/filefluss";
+"www.filefluss.de" = "www.filefluss.de";
+
+/* Keyboard map */
+"Preset" = "Vorlage";
+"Windows / Explorer Style" = "Windows- / Explorer-Stil";
+"None" = "Keine";
+"Space" = "Leertaste";
+"Press a shortcut…" = "Tastenkombination drücken…";
+"Shortcut in use" = "Tastenkombination belegt";
+"%@ is already used by %@. Use it for %@ instead?" = "%@ wird bereits von %@ verwendet. Stattdessen für %@ verwenden?";
+"Reassign" = "Neu zuweisen";
+"Panel Navigation" = "Navigation im Bereich";
+"File Operations" = "Dateioperationen";
+"Clipboard" = "Zwischenablage";
+"Selection" = "Auswahl";
+"View & Sort" = "Ansicht & Sortierung";
+"Cross-panel & Tools" = "Bereichsübergreifend & Werkzeuge";
+"Misc" = "Sonstiges";
+
+/* ---------------------------------------------------------------------------------------------
+   Add / edit account
+   --------------------------------------------------------------------------------------------- */
+
+"Cloud Storage Providers" = "Cloud-Speicheranbieter";
+"Other Protocols" = "Andere Protokolle";
+"Cameras & Devices" = "Kameras & Geräte";
+"(optional)" = "(optional)";
+"Continue" = "Weiter";
+"Save Changes" = "Änderungen speichern";
+"Choose File…" = "Datei auswählen…";
+"No file chosen" = "Keine Datei ausgewählt";
+"All files" = "Alle Dateien";
+"Leave empty to keep the stored secret access key." = "Leer lassen, um den gespeicherten geheimen Zugriffsschlüssel zu behalten.";
+"This account type isn't available in this version." = "Dieser Kontotyp ist in dieser Version nicht verfügbar.";
+"Select the folders for FileFluss in your browser…" = "Wähle die Ordner für FileFluss in deinem Browser aus…";
+"Timed out waiting for browser sign-in." = "Zeitüberschreitung beim Warten auf die Anmeldung im Browser.";
+"Authorization code invalid or expired." = "Autorisierungscode ungültig oder abgelaufen.";
+"Server URL is not a valid URL." = "Die Server-URL ist keine gültige URL.";
+"Several cameras were found. Choose the one to add." = "Es wurden mehrere Kameras gefunden. Wähle die aus, die du hinzufügen möchtest.";
+"2. Open DevTools (F12 in Chrome/Edge/Firefox)" = "2. Öffne die Entwicklertools (F12 in Chrome/Edge/Firefox)";
+"FileFluss uses iCloud for Windows — no password needed here. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive." = "FileFluss verwendet iCloud für Windows – hier ist kein Passwort nötig. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
+"iCloud Drive wasn't found on this PC. Install iCloud for Windows from the Microsoft Store, sign in with your Apple Account and turn on iCloud Drive, then try again." = "iCloud Drive wurde auf diesem PC nicht gefunden. Installiere iCloud für Windows aus dem Microsoft Store, melde dich mit deinem Apple-Account an, aktiviere iCloud Drive und versuche es dann erneut.";
+"pCloud now requires OAuth for third-party apps, and new app registrations are disabled. Sign in at my.pcloud.com, copy the 'pcauth' cookie value, and paste it into the Access Token field." = "pCloud verlangt für Apps von Drittanbietern inzwischen OAuth, und neue App-Registrierungen sind deaktiviert. Melde dich bei my.pcloud.com an, kopiere den Wert des Cookies „pcauth“ und füge ihn in das Feld „Access-Token“ ein.";
+"This Nextcloud server doesn't expose Login Flow v2. Use the App Password sign-in option instead." = "Dieser Nextcloud-Server bietet keinen Login Flow v2 an. Verwende stattdessen die Anmeldung mit App-Passwort.";
+"Waiting for authorization in the TeraBox app." = "Warte auf die Autorisierung in der TeraBox-App.";
+"Authorization timed out — the QR code expired before it was scanned." = "Zeitüberschreitung bei der Autorisierung – der QR-Code ist abgelaufen, bevor er gescannt wurde.";
+"Box authentication failed: %@" = "Box-Authentifizierung fehlgeschlagen: %@";
+
+/* ---------------------------------------------------------------------------------------------
+   Share links
+   --------------------------------------------------------------------------------------------- */
+
+"Create Link" = "Link erstellen";
+"Copy Link" = "Link kopieren";
+"Stop Sharing" = "Freigabe beenden";
+"Allow downloading" = "Herunterladen erlauben";
+"Set an expiry date" = "Ablaufdatum festlegen";
+"Protect with password" = "Mit Passwort schützen";
+"Expires" = "Läuft ab";
+"expiry dates" = "Ablaufdaten";
+"password protection" = "Passwortschutz";
+" and " = " und ";
+"%@ usually need a paid plan." = "%@ erfordern meist ein kostenpflichtiges Abo.";
+"Create a public link to this file and copy it to the clipboard." = "Einen öffentlichen Link zu dieser Datei erstellen und in die Zwischenablage kopieren.";
+"Anyone with this link can download the file until it expires. The link cannot be revoked early." = "Jeder mit diesem Link kann die Datei herunterladen, bis er abläuft. Der Link kann nicht vorzeitig widerrufen werden.";
+"The link is on the clipboard." = "Der Link ist in der Zwischenablage.";
+"This file is shared. The link is on the clipboard." = "Diese Datei ist freigegeben. Der Link ist in der Zwischenablage.";
+"This file is no longer shared." = "Diese Datei ist nicht mehr freigegeben.";
+"Couldn't create the share link: %@" = "Der Freigabelink konnte nicht erstellt werden: %@";
+"Couldn't change sharing: %@" = "Die Freigabe konnte nicht geändert werden: %@";
+"Checked just now: %@" = "Gerade geprüft: %@";
+"The link couldn't be checked from here: %@" = "Der Link konnte von hier aus nicht geprüft werden: %@";
+"the link is not reachable without signing in." = "der Link ist ohne Anmeldung nicht erreichbar.";
+"the server didn't answer." = "der Server hat nicht geantwortet.";
+"Links from this account have needed a sign-in before. Check the link before you send it." = "Links aus diesem Konto haben bisher eine Anmeldung erfordert. Prüfe den Link, bevor du ihn verschickst.";
+"This link only works for people who can sign in to the account." = "Dieser Link funktioniert nur für Personen, die sich bei dem Konto anmelden können.";
+"This account can't serve direct download links, so the share page link was copied instead." = "Dieses Konto kann keine direkten Download-Links bereitstellen, daher wurde stattdessen der Link zur Freigabeseite kopiert.";
+"This file already had a public link, so the requested settings were not applied." = "Diese Datei hatte bereits einen öffentlichen Link, daher wurden die gewünschten Einstellungen nicht übernommen.";
+"This file already had a share link, so that one was returned." = "Diese Datei hatte bereits einen Freigabelink, daher wurde dieser verwendet.";
+"This file already has a public link. Open it in Dropbox to copy that link." = "Diese Datei hat bereits einen öffentlichen Link. Öffne sie in Dropbox, um diesen Link zu kopieren.";
+"This file doesn't have a public link." = "Diese Datei hat keinen öffentlichen Link.";
+"This item doesn't have a public link." = "Dieses Objekt hat keinen öffentlichen Link.";
+"This file has no public link to update. Create one first." = "Diese Datei hat keinen öffentlichen Link, der aktualisiert werden könnte. Erstelle zuerst einen.";
+"This file isn't shared with anyone who has the link." = "Diese Datei ist nicht für Personen mit dem Link freigegeben.";
+"This file was already public — WordPress media has no private state." = "Diese Datei war bereits öffentlich – WordPress-Medien können nicht privat sein.";
+"OneDrive can't change a link's settings in place, so the previous link was revoked and a new one created — the old address no longer works." = "OneDrive kann die Einstellungen eines Links nicht direkt ändern, daher wurde der bisherige Link widerrufen und ein neuer erstellt – die alte Adresse funktioniert nicht mehr.";
+"OneDrive refused to create a public link for this file. Sharing by link can be switched off for an account, and business accounts often allow links only for people inside the organisation." = "OneDrive hat das Erstellen eines öffentlichen Links für diese Datei abgelehnt. Das Teilen per Link kann für ein Konto deaktiviert sein, und Geschäftskonten erlauben Links oft nur für Personen innerhalb der Organisation.";
+"This link is not public: OneDrive granted it as \"%@\", so opening it asks for a Microsoft sign-in." = "Dieser Link ist nicht öffentlich: OneDrive hat ihn als „%@“ vergeben, daher verlangt das Öffnen eine Microsoft-Anmeldung.";
+"This Microsoft account doesn't allow apps to change a file's existing link. Open the file in OneDrive on the web to change or remove it." = "Dieses Microsoft-Konto erlaubt Apps nicht, den bestehenden Link einer Datei zu ändern. Öffne die Datei in OneDrive im Web, um ihn zu ändern oder zu entfernen.";
+"This Microsoft account doesn't allow apps to manage a file's existing links. Open the file in OneDrive on the web and remove the link there." = "Dieses Microsoft-Konto erlaubt Apps nicht, die bestehenden Links einer Datei zu verwalten. Öffne die Datei in OneDrive im Web und entferne den Link dort.";
+"This Microsoft account doesn't allow apps to remove an existing link. Open the file in OneDrive on the web and remove the link there." = "Dieses Microsoft-Konto erlaubt Apps nicht, einen bestehenden Link zu entfernen. Öffne die Datei in OneDrive im Web und entferne den Link dort.";
+"Box kept the public link in place — check whether your administrator manages sharing for this item." = "Box hat den öffentlichen Link beibehalten – prüfe, ob dein Administrator die Freigabe für dieses Objekt verwaltet.";
+"Your Box administrator disabled downloads for shared links — recipients can only preview the file." = "Dein Box-Administrator hat Downloads über Freigabelinks deaktiviert – Empfänger können die Datei nur in der Vorschau ansehen.";
+"Your Box administrator restricted this link to people in your company — it is not publicly accessible." = "Dein Box-Administrator hat diesen Link auf Personen in deinem Unternehmen beschränkt – er ist nicht öffentlich zugänglich.";
+"Your Box administrator restricted this link to the file's collaborators — it is not publicly accessible." = "Dein Box-Administrator hat diesen Link auf die Mitwirkenden der Datei beschränkt – er ist nicht öffentlich zugänglich.";
+"Seafile cannot change a link's settings, so the link was replaced — the previous URL no longer works." = "Seafile kann die Einstellungen eines Links nicht ändern, daher wurde der Link ersetzt – die bisherige URL funktioniert nicht mehr.";
+"Jottacloud accepted the request but returned no public link for this file." = "Jottacloud hat die Anfrage angenommen, aber keinen öffentlichen Link für diese Datei geliefert.";
+"kDrive created the link without download permission — recipients can view the file only." = "kDrive hat den Link ohne Download-Berechtigung erstellt – Empfänger können die Datei nur ansehen.";
+"The NAS built this link from the address DSM thinks it has, so it may only work on your local network. Check DSM's external access settings if recipients can't open it." = "Das NAS hat diesen Link aus der Adresse gebildet, die DSM für die eigene hält, daher funktioniert er möglicherweise nur in deinem lokalen Netzwerk. Prüfe die Einstellungen für den externen Zugriff in DSM, falls Empfänger ihn nicht öffnen können.";
+"The NAS has reached its maximum number of sharing links — delete some in File Station and try again." = "Das NAS hat die maximale Anzahl an Freigabelinks erreicht – lösche einige in der File Station und versuche es erneut.";
+"Failed to access the NAS's sharing links." = "Auf die Freigabelinks des NAS konnte nicht zugegriffen werden.";
+"The sharing link does not exist." = "Der Freigabelink existiert nicht.";
+
+/* ---------------------------------------------------------------------------------------------
+   Provider errors
+   --------------------------------------------------------------------------------------------- */
+
+"The request timed out." = "Zeitüberschreitung bei der Anfrage.";
+"Could not connect to the server." = "Es konnte keine Verbindung zum Server hergestellt werden.";
+"Network is unreachable from this PC." = "Das Netzwerk ist von diesem PC aus nicht erreichbar.";
+"Permission denied." = "Zugriff verweigert.";
+"Permission denied: %@" = "Zugriff verweigert: %@";
+"Invalid file name." = "Ungültiger Dateiname.";
+"TLS/SSL error: %@" = "TLS/SSL-Fehler: %@";
+"the server's certificate could not be verified." = "das Zertifikat des Servers konnte nicht überprüft werden.";
+"S3 error (HTTP %@): %@" = "S3-Fehler (HTTP %@): %@";
+"S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "Die S3-Endpunkt-URL ist ungültig (Host: „%@“). Prüfe das Feld „Endpunkt-URL“.";
+"This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions." = "Dieser Schlüssel darf die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). Gib den Bucket-Namen im Feld „Pfad“ ein – FileFluss arbeitet dann nur mit diesem Bucket und benötigt keine kontoweiten Berechtigungen.";
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.";
+
+/* FTP and SFTP */
+"FTP command failed." = "FTP-Befehl fehlgeschlagen.";
+"Could not connect — check the host, port, and that FTP is reachable." = "Verbindung fehlgeschlagen – prüfe Host und Port und ob FTP erreichbar ist.";
+"Could not resolve host. Check the server address." = "Host konnte nicht aufgelöst werden. Prüfe die Serveradresse.";
+"Connection timed out." = "Zeitüberschreitung der Verbindung.";
+"SFTP command failed." = "SFTP-Befehl fehlgeschlagen.";
+"Connection refused — is the SSH daemon running on this host and port?" = "Verbindung abgelehnt – läuft der SSH-Dienst auf diesem Host und Port?";
+"Connection timed out. Check the hostname, port, and your network." = "Zeitüberschreitung der Verbindung. Prüfe Hostname, Port und dein Netzwerk.";
+"Could not resolve hostname. Check spelling or DNS." = "Hostname konnte nicht aufgelöst werden. Prüfe die Schreibweise oder das DNS.";
+"SSH authentication failed. Check the username and password." = "SSH-Authentifizierung fehlgeschlagen. Prüfe Benutzername und Passwort.";
+"SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong." = "SSH-Authentifizierung fehlgeschlagen. Möglicherweise ist dein öffentlicher Schlüssel auf dem Server nicht autorisiert, oder die Passphrase ist falsch.";
+"SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)." = "Der SSH-Schlüssel wurde vom Server abgelehnt. Stelle sicher, dass der öffentliche Schlüssel in ~/.ssh/authorized_keys auf dem Server steht (oder bei verwalteten Diensten wie der Hetzner Storage Box in der SSH-Schlüssel-Verwaltung des Anbieters hinterlegt ist).";
+"The private key is protected by a passphrase. Enter it and try again." = "Der private Schlüssel ist durch eine Passphrase geschützt. Gib sie ein und versuche es erneut.";
+"Wrong passphrase for the private key." = "Falsche Passphrase für den privaten Schlüssel.";
+"Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "Der private Schlüssel liegt in einem nicht unterstützten Format vor. Konvertiere ihn ins OpenSSH-Format (z. B. mit `puttygen key.ppk -O private-openssh -o id_rsa`).";
+"This SFTP operation is not supported by the bundled SSH library." = "Dieser SFTP-Vorgang wird von der mitgelieferten SSH-Bibliothek nicht unterstützt.";
+"Host key changed" = "Hostschlüssel geändert";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "Überprüfung des Hostschlüssels fehlgeschlagen – der Hostschlüssel des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um den neuen Schlüssel zu akzeptieren.";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "Der SSH-Hostschlüssel von %@ hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server neu installiert wurde – oder wenn jemand die Verbindung abfängt.\n\nBisher: %@\nJetzt: %@\n\nDem neuen Schlüssel vertrauen?";
+
+/* Seafile */
+"Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." = "Eine Seafile-Bibliothek kann nicht in FileFluss gelöscht werden. Verwende die Seafile-Weboberfläche.";
+"Cannot share the Seafile library list — pick a file or folder inside a library." = "Die Liste der Seafile-Bibliotheken kann nicht geteilt werden – wähle eine Datei oder einen Ordner innerhalb einer Bibliothek.";
+"Cannot upload directly to the Seafile library root — pick a library first." = "In die oberste Ebene der Seafile-Bibliotheken kann nicht direkt hochgeladen werden – wähle zuerst eine Bibliothek.";
+"Create a library in the Seafile web UI before adding folders." = "Erstelle in der Seafile-Weboberfläche eine Bibliothek, bevor du Ordner hinzufügst.";
+"Rename a Seafile library from its web UI." = "Benenne eine Seafile-Bibliothek in der Weboberfläche um.";
+"This library is encrypted. Unlock it in the Seafile web interface, then try again." = "Diese Bibliothek ist verschlüsselt. Entsperre sie in der Seafile-Weboberfläche und versuche es dann erneut.";
+
+/* Filen */
+"Filen API error" = "Filen-API-Fehler";
+"Filen /v3/auth/info returned an unexpected payload." = "Filen /v3/auth/info hat unerwartete Daten geliefert.";
+"Filen /v3/user/baseFolder didn't return a root UUID." = "Filen /v3/user/baseFolder hat keine Stamm-UUID geliefert.";
+"Filen /v3/user/baseFolder failed (HTTP %@)" = "Filen /v3/user/baseFolder fehlgeschlagen (HTTP %@)";
+"Filen account uses auth version %@. FileFluss currently supports v2 accounts only — Filen v1 / v3 (Argon2) are not yet implemented." = "Das Filen-Konto verwendet die Auth-Version %@. FileFluss unterstützt derzeit nur v2-Konten – Filen v1 / v3 (Argon2) sind noch nicht implementiert.";
+"Filen file key isn't 32 ASCII bytes — encrypted with an auth-version we don't support yet." = "Der Filen-Dateischlüssel ist nicht 32 ASCII-Bytes lang – er wurde mit einer Auth-Version verschlüsselt, die noch nicht unterstützt wird.";
+"Filen file metadata not cached — listing didn't populate chunk info." = "Filen-Dateimetadaten nicht im Cache – die Auflistung hat keine Chunk-Informationen geliefert.";
+"Filen file metadata not cached — re-open the folder and try again." = "Filen-Dateimetadaten nicht im Cache – öffne den Ordner erneut und versuche es noch einmal.";
+"Filen login succeeded but the server didn't return an apiKey." = "Die Filen-Anmeldung war erfolgreich, aber der Server hat keinen apiKey geliefert.";
+
+/* Synology */
+"Synology login failed (code %@)." = "Synology-Anmeldung fehlgeschlagen (Code %@).";
+"Synology rejected the file path." = "Synology hat den Dateipfad abgelehnt.";
+"Synology administrator must enforce 2-factor authentication." = "Der Synology-Administrator verlangt eine Zwei-Faktor-Authentifizierung.";
+"No such account or incorrect password." = "Konto nicht vorhanden oder Passwort falsch.";
+"Account is disabled." = "Das Konto ist deaktiviert.";
+"Insufficient user privilege." = "Unzureichende Benutzerrechte.";
+"Password expired — please reset it from DSM." = "Passwort abgelaufen – bitte setze es in DSM zurück.";
+"Password must be changed at first login." = "Das Passwort muss bei der ersten Anmeldung geändert werden.";
+"This account requires a 2-factor authentication (OTP) code." = "Dieses Konto erfordert einen Code für die Zwei-Faktor-Authentifizierung (OTP).";
+"OTP code is incorrect." = "Der OTP-Code ist falsch.";
+"OTP code authentication has failed too many times." = "Die OTP-Authentifizierung ist zu oft fehlgeschlagen.";
+"Maximum number of OTP retries reached. Try again later." = "Maximale Anzahl an OTP-Versuchen erreicht. Versuche es später erneut.";
+"Multiple login detected." = "Mehrfache Anmeldung erkannt.";
+"Unknown API method." = "Unbekannte API-Methode.";
+"Invalid API method." = "Ungültige API-Methode.";
+"Invalid API method version." = "Ungültige Version der API-Methode.";
+"Invalid parameter for the request." = "Ungültiger Parameter in der Anfrage.";
+"Request denied — too many connections." = "Anfrage abgelehnt – zu viele Verbindungen.";
+
+/* ---------------------------------------------------------------------------------------------
+   Welcome window
+   --------------------------------------------------------------------------------------------- */
+
+"Your files and your clouds, side by side." = "Deine Dateien und deine Clouds, Seite an Seite.";
+"Two panels" = "Zwei Bereiche";
+"Browse two places at once. F5 copies the selection to the other panel, F6 moves it, Tab switches panels." = "Durchsuche zwei Orte gleichzeitig. F5 kopiert die Auswahl in den anderen Bereich, F6 verschiebt sie, Tab wechselt den Bereich.";
+"Every cloud in one place" = "Alle Clouds an einem Ort";
+"Add OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP and many more. Copy between them as if they were folders." = "Füge OneDrive, Google Drive, Dropbox, pCloud, WebDAV, SFTP und viele mehr hinzu. Kopiere zwischen ihnen, als wären es Ordner.";
+"Find anything" = "Alles finden";
+"Search local folders and every connected account at once. Index a drive or account to search it even while it is offline." = "Durchsuche lokale Ordner und alle verbundenen Konten gleichzeitig. Indiziere ein Laufwerk oder Konto, um es auch offline durchsuchen zu können.";
+"Keyboard shortcuts" = "Tastenkombinationen";
+"You can change every shortcut later in Settings → Keyboard Map." = "Du kannst jede Tastenkombination später unter Einstellungen → Tastaturbelegung ändern.";
+"Get Started" = "Los geht’s";
+
+/* ---------------------------------------------------------------------------------------------
+   Search window and offline index
+   --------------------------------------------------------------------------------------------- */
+
+"Results" = "Ergebnisse";
+"Searching..." = "Suche läuft…";
+"No Results for \"%@\"" = "Keine Ergebnisse für „%@“";
+"Check the spelling or try a new search." = "Prüfe die Schreibweise oder starte eine neue Suche.";
+"Index for Offline Search…" = "Für die Offline-Suche indizieren…";
+"Re-index for Offline Search…" = "Für die Offline-Suche neu indizieren…";
+"Erase all offline indexes?" = "Alle Offline-Indizes löschen?";
+"Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again." = "Für die Offline-Suche lassen sich Cloud-Konten und alle Laufwerke außer dem Windows-Laufwerk indizieren. Öffne eines davon im aktiven Bereich und versuche es erneut.";
+
+/* ---------------------------------------------------------------------------------------------
+   Storage analysis window
+   --------------------------------------------------------------------------------------------- */
+
+"Analyse" = "Analysieren";
+"Analyse any folder on this PC" = "Einen beliebigen Ordner auf diesem PC analysieren";
+"Choose Folder…" = "Ordner auswählen…";
+"Folders" = "Ordner";
+"Largest files" = "Größte Dateien";
+"Reveal" = "Im Bereich zeigen";
+"Expand" = "Erweitern";
+"Collapse" = "Reduzieren";
+
+/* ---------------------------------------------------------------------------------------------
+   Compare window (screen-reader names)
+   --------------------------------------------------------------------------------------------- */
+
+"Different" = "Unterschiedlich";
+"Expanded" = "Erweitert";
+"Collapsed" = "Reduziert";
+"Delete from %@ Panel" = "Aus Bereich %@ löschen";
+
+/* ---------------------------------------------------------------------------------------------
+   Updates
+   --------------------------------------------------------------------------------------------- */
+
+"FileFluss %@ is available — you have %@." = "FileFluss %@ ist verfügbar – du hast %@.";
+"FileFluss %@ is currently the newest version available." = "FileFluss %@ ist derzeit die neueste verfügbare Version.";
+"You're up to date!" = "Du bist auf dem neuesten Stand!";
+"FileFluss could not check for updates: %@" = "FileFluss konnte nicht nach Updates suchen: %@";
+"Install and Relaunch" = "Installieren und neu starten";
+"Skip This Version" = "Diese Version überspringen";
+"Open Release Page" = "Release-Seite öffnen";
+"Downloading FileFluss %@…" = "FileFluss %@ wird heruntergeladen…";
+"The update could not be downloaded: %@" = "Das Update konnte nicht heruntergeladen werden: %@";
+"The update could not be verified, so it was not installed." = "Das Update konnte nicht überprüft werden und wurde daher nicht installiert.";
+"This copy of FileFluss was not installed with the FileFluss setup, so it can't update itself. Download the new version from the release page." = "Diese FileFluss-Kopie wurde nicht mit dem FileFluss-Setup installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.";
+
+/* ---------------------------------------------------------------------------------------------
+   Network drives
+   --------------------------------------------------------------------------------------------- */
+
+"Disconnect Network Drive (%@)" = "Netzlaufwerk trennen (%@)";
+"Only cloud accounts can be mounted as a drive." = "Nur Cloud-Konten können als Laufwerk verbunden werden.";
+"No free drive letter is available. Disconnect a network drive and try again." = "Es ist kein Laufwerkbuchstabe frei. Trenne ein Netzlaufwerk und versuche es erneut.";
+"Could not mount in File Explorer: %@" = "Konnte nicht als Netzlaufwerk verbunden werden: %@";
+"Could not reach the internal WebDAV server on 127.0.0.1:%@: %@" = "Der interne WebDAV-Server auf 127.0.0.1:%@ ist nicht erreichbar: %@";
+"The internal WebDAV server didn't respond with 200 OK to OPTIONS." = "Der interne WebDAV-Server hat auf OPTIONS nicht mit 200 OK geantwortet.";
+"Showing a cloud account as a drive needs the Windows \"WebClient\" service, which isn't installed on this PC. On Windows Server, add the \"WebDAV Redirector\" feature." = "Um ein Cloud-Konto als Laufwerk anzuzeigen, wird der Windows-Dienst „WebClient“ benötigt, der auf diesem PC nicht installiert ist. Füge unter Windows Server das Feature „WebDAV-Redirector“ hinzu.";
+"The Windows \"WebClient\" service is disabled, so the account can't appear as a drive. An administrator can set it to \"Manual\" in Services (services.msc)." = "Der Windows-Dienst „WebClient“ ist deaktiviert, daher kann das Konto nicht als Laufwerk erscheinen. Ein Administrator kann ihn unter „Dienste“ (services.msc) auf „Manuell“ stellen.";
+"Windows' WebDAV redirector (the \"WebClient\" service) couldn't connect to FileFluss. Make sure the WebClient service isn't blocked by a policy or security software." = "Der WebDAV-Redirector von Windows (der Dienst „WebClient“) konnte keine Verbindung zu FileFluss herstellen. Stelle sicher, dass der WebClient-Dienst nicht durch eine Richtlinie oder Sicherheitssoftware blockiert wird.";
+"Windows only opens and saves files up to %@ on drives like this one. Larger files can still be copied with FileFluss itself. An administrator can raise the limit (FileSizeLimitInBytes of the WebClient service)." = "Windows öffnet und speichert auf solchen Laufwerken nur Dateien bis %@. Größere Dateien lassen sich weiterhin mit FileFluss selbst kopieren. Ein Administrator kann das Limit erhöhen (FileSizeLimitInBytes des WebClient-Dienstes).";
+
+/* ---------------------------------------------------------------------------------------------
+   One-click share links
+   --------------------------------------------------------------------------------------------- */
+
+"Copy Share Link" = "Freigabelink kopieren";
+"Shared" = "Freigegeben";
+"Change Sharing…" = "Freigabe ändern…";
+"Share link copied" = "Freigabelink kopiert";
+"Link copied — not public" = "Link kopiert – nicht öffentlich";
+"Expires %@" = "Läuft ab: %@";
+"Sharing failed" = "Freigabe fehlgeschlagen";
+"Stop sharing this file?" = "Freigabe dieser Datei beenden?";
+"The link to \"%@\" stops working for everyone who has it. This can't be undone." = "Der Link zu „%@“ funktioniert dann für niemanden mehr, der ihn hat. Dies kann nicht rückgängig gemacht werden.";
+"Couldn't stop sharing: %@" = "Die Freigabe konnte nicht beendet werden: %@";
+"Couldn't read this file's share link: %@" = "Der Freigabelink dieser Datei konnte nicht gelesen werden: %@";
+"This account refused %@ for the link. Most providers only offer these on paid plans. Sharing without them will still work, and these options are now hidden for this account." = "Dieses Konto hat %@ für den Link abgelehnt. Die meisten Anbieter bieten das nur in kostenpflichtigen Tarifen an. Teilen funktioniert auch ohne diese Optionen; sie werden für dieses Konto ab jetzt ausgeblendet.";
+"a password and an expiry date" = "ein Passwort und ein Ablaufdatum";
+"a password" = "ein Passwort";
+"an expiry date" = "ein Ablaufdatum";
+
+/* ---------------------------------------------------------------------------------------------
+   Support log, cache, status bar
+   --------------------------------------------------------------------------------------------- */
+
+"Support Log" = "Supportprotokoll";
+"Support Log (Recording…)" = "Supportprotokoll (Aufzeichnung läuft…)";
+"Save FileFluss Support Log" = "FileFluss-Supportprotokoll speichern";
+"Last checked: %@" = "Zuletzt geprüft: %@";
+"Clear the cache?" = "Cache leeren?";
+"1 transfer — click for details" = "1 Übertragung – für Details klicken";
+"%@ transfers — click for details" = "%@ Übertragungen – für Details klicken";
+"1 folder size — click for details" = "1 Ordnergröße – für Details klicken";
+"%@ folder sizes — click for details" = "%@ Ordnergrößen – für Details klicken";
+
+/* Favourite icons */
+"Document" = "Dokument";
+"Text Document" = "Textdokument";
+"Star" = "Stern";
+"Heart" = "Herz";
+"Flag" = "Fahne";
+"Bookmark" = "Lesezeichen";
+"Tag" = "Etikett";
+"Work" = "Arbeit";
+"Archive" = "Archiv";
+"Inbox" = "Posteingang";
+"Sent" = "Gesendet";
+"Personal" = "Persönlich";
+
+/* Jottacloud: FileFluss encrypts credentials with DPAPI per user; it does not use Credential Manager. */
+"Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored encrypted in the Windows credential store." = "Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.";
+
+/* Dragging or pasting cloud files into Explorer and other apps. */
+"Couldn't Hand Over Files" = "Dateien konnten nicht übergeben werden";
+"Some files in this selection are nested too deeply to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Einige Dateien dieser Auswahl sind zu tief verschachtelt, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.";
+"The files couldn't be prepared for the other app: %@" = "Die Dateien konnten nicht für die andere App vorbereitet werden: %@";
+"This selection contains more than %@ files and folders, too many to hand over to Explorer or another app. Open a local folder in the other panel and copy the selection there with FileFluss." = "Diese Auswahl enthält mehr als %@ Dateien und Ordner – zu viele, um sie an den Explorer oder eine andere App zu übergeben. Öffne einen lokalen Ordner im anderen Bereich und kopiere die Auswahl dort mit FileFluss.";
+
+/* Status bar: singular forms (macOS always uses the plural). */
+"1 file, 1 folder — %@" = "1 Datei, 1 Ordner – %@";
+"1 file, %@ folders — %@" = "1 Datei, %@ Ordner – %@";
+"%@ files, 1 folder — %@" = "%@ Dateien, 1 Ordner – %@";
+"Selected: 1 item, calculating…" = "Ausgewählt: 1 Objekt, wird berechnet …";
+"Selected: 1 item, %@" = "Ausgewählt: 1 Objekt, %@";
+
+/* ---------------------------------------------------------------------------------------------
+   Overrides of the macOS 1.6 strings (see en.lproj). Mac translations that already read right
+   on Windows — "Papierkorb" is the Recycle Bin's German name too — are not repeated here.
+   --------------------------------------------------------------------------------------------- */
+
+"Open System Settings…" = "Windows-Einstellungen öffnen …";
+"macOS will ask once per protected folder (Desktop, Documents, Downloads, …). The first open of each may take a few seconds — but only the first time." = "Windows kann Änderungen in geschützten Ordnern (Desktop, Dokumente, Downloads, …) blockieren, solange der überwachte Ordnerzugriff in Windows-Sicherheit aktiviert ist.";
+"System Settings is now open. Drag the FileFluss icon below into the **Full Disk Access** list — then click **Quit & Relaunch** so the new permission takes effect." = "Windows-Sicherheit ist nun geöffnet. Wähle unter **Überwachter Ordnerzugriff** die Option **App durch überwachten Ordnerzugriff zulassen** und füge FileFluss hinzu – klicke dann auf **Beenden & neu starten**, damit die neue Berechtigung wirksam wird.";
+"Or click the **+** button in System Settings and pick FileFluss from your Applications folder." = "Klicke dort auf **Zulässige App hinzufügen** und wähle FileFluss.exe aus dem Ordner, in dem FileFluss installiert ist.";
+"Get Info" = "Eigenschaften";
+"macOS refused to move %@ to the Trash because the Trash folder (%@) belongs to the user \"%@\" instead of you." = "Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil der Papierkorb-Ordner (%@) dem Benutzer „%@“ gehört statt dir.";
+"macOS refused to move %@ to the Trash because the permissions of the Trash folder (%@) don't allow changes." = "Windows hat das Verschieben von %@ in den Papierkorb verweigert, weil die Zugriffsrechte des Papierkorb-Ordners (%@) keine Änderungen erlauben.";
+"Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password." = "Der Explorer scheitert daran genauso. Zum Reparieren kopiere den Befehl und führe ihn in einem Terminal aus, das du als Administrator geöffnet hast.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info." = "Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb lässt es sich weder in den Papierkorb legen noch löschen. Der Besitzer des Ordners kann das im Explorer unter Eigenschaften → Sicherheit ändern.";
+"macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "Windows hat FileFluss das Verschieben von %@ in den Papierkorb verweigert. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss.";
+"The files pass through this Mac on the way: that needs %@ on %@, which has %@ free. The folder they pass through is set in Settings → Storage." = "Die Dateien laufen unterwegs über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Der Ordner dafür lässt sich unter Einstellungen → Speicher wählen.";
+"The files pass through this Mac on the way between the two accounts: that needs %@ on %@, which has %@ free. Free up space, or choose another folder in Settings → Storage." = "Die Dateien laufen auf dem Weg zwischen beiden Konten über diesen PC: Dafür werden %@ auf %@ benötigt, dort sind %@ frei. Schaffe Platz oder wähle unter Einstellungen → Speicher einen anderen Ordner.";
+"The files pass through this Mac: %@ doesn't have room for that." = "Die Dateien laufen über diesen PC: Auf %@ ist dafür kein Platz.";
+"Needs on this Mac:" = "Benötigt auf diesem PC:";
+"“%@” was changed on this Mac after FileFluss opened it. FileFluss doesn't upload changes made in another app yet, so the edited copy has been kept and the version from the account opened instead. To edit in place, mount the account in Finder." = "„%@“ wurde auf diesem PC geändert, nachdem FileFluss die Datei geöffnet hat. FileFluss lädt Änderungen aus anderen Apps noch nicht zurück, deshalb wurde die bearbeitete Kopie behalten und stattdessen die Version aus dem Konto geöffnet. Zum direkten Bearbeiten verbinde das Konto als Netzlaufwerk.";
+"Analyse any folder on this Mac" = "Einen beliebigen Ordner auf diesem PC analysieren";
+"Network is unreachable from this Mac." = "Das Netzwerk ist von diesem PC aus nicht erreichbar.";
+"You're not signed into iCloud on this Mac. Open System Settings → Apple Account → iCloud → iCloud Drive and turn it on." = "Du bist auf diesem PC nicht bei iCloud angemeldet. Öffne iCloud für Windows, melde dich mit deinem Apple-Account an und aktiviere iCloud Drive.";
+"Show in Finder" = "Im Explorer anzeigen";
+"Show Archive in Finder" = "Archiv im Explorer anzeigen";
+"Reveal “%@” in Finder" = "„%@“ im Explorer anzeigen";
+"Could not mount in Finder: %@" = "Konnte nicht als Netzlaufwerk verbunden werden: %@";
+"Unmount from Finder" = "Netzlaufwerk trennen";
+"Mount and Open in Terminal" = "Als Netzlaufwerk verbinden und im Terminal öffnen";
+"macOS and the internal server couldn't agree on an authentication method (NetFS status %d). Please report it." = "Windows und der interne Server konnten sich auf keine Anmeldemethode einigen (Status %d). Bitte melde es.";
+"macOS found nothing to mount at the internal server (NetFS status %d)." = "Windows hat auf dem internen Server nichts zum Verbinden gefunden (Status %d).";
+"Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt.";
+"Keychain save failed (OSStatus %d)" = "Speichern im Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d)";
+"Keychain delete failed (OSStatus %d)" = "Löschen aus dem Windows-Anmeldedatenspeicher fehlgeschlagen (Fehler %d)";
+"FileFluss can download RAR %@ for macOS from rarlab.com (under 1 MB), check it against a known fingerprint, and keep it in its own folder. No administrator password is needed.\n\nRAR is trial software from RARLAB: it may be used for up to 40 days, after which a licence has to be bought from rarlab.com." = "FileFluss kann WinRAR %@ von rarlab.com laden (etwa 4 MB), es mit einem bekannten Fingerabdruck prüfen und nur das Befehlszeilenprogramm rar in einem eigenen Ordner behalten. Das Installationsprogramm wird nie ausgeführt, und es sind keine Administratorrechte nötig.\n\nRAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach muss eine Lizenz bei rarlab.com gekauft werden.";
+
+/* Transfers: a move whose copy failed verification, and a download cut short. */
+"\"%@\" didn't arrive complete, so the original was kept." = "„%@“ ist nicht vollständig angekommen, deshalb wurde das Original behalten.";
+"The download ended after %@ of %@ bytes." = "Der Download brach nach %@ von %@ Bytes ab.";
+
+/* Open With: Explorer names the system chooser this way. */
+"Other…" = "Andere App auswählen …";
+
+/* Moving to the Recycle Bin refused: the real cause (macOS 1.6 "a refused Trash names the real cause"). */
+"FileFluss couldn't move this to the Recycle Bin" = "FileFluss konnte das nicht in den Papierkorb verschieben";
+"The Recycle Bin can't be used" = "Der Papierkorb kann nicht verwendet werden";
+"Open Storage Settings…" = "Speichereinstellungen öffnen …";
+"Windows refused to move %@ to the Recycle Bin because it is open in another program. Close it there and try again." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben, weil es in einem anderen Programm geöffnet ist. Schließe es dort und versuche es erneut.";
+"You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Recycle Bin or deleted. Its owner can change this in File Explorer under Properties → Security." = "Du darfst den Ordner, in dem %@ liegt (%@), nicht ändern. Deshalb kann es weder in den Papierkorb verschoben noch gelöscht werden. Der Besitzer kann das im Explorer unter Eigenschaften → Sicherheit ändern.";
+"Windows refused to move %@ to the Recycle Bin because the Recycle Bin on %@ is damaged or can't be written to. File Explorer runs into the same problem. Emptying the Recycle Bin of that drive usually repairs it: in Settings → System → Storage → Temporary files, or by right-clicking the Recycle Bin on the desktop. Deleting permanently can't be undone." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben, weil der Papierkorb auf %@ beschädigt ist oder nicht beschrieben werden kann. Der Explorer hat dasselbe Problem. Meist hilft es, den Papierkorb dieses Laufwerks zu leeren: unter Einstellungen → System → Speicher → Temporäre Dateien oder per Rechtsklick auf den Papierkorb auf dem Desktop. Endgültiges Löschen kann nicht rückgängig gemacht werden.";
+"%@ can't be moved to the Recycle Bin because its path is longer than the Recycle Bin accepts. Delete permanently? This can't be undone." = "%@ kann nicht in den Papierkorb verschoben werden, weil der Pfad länger ist, als der Papierkorb zulässt. Endgültig löschen? Das kann nicht rückgängig gemacht werden.";
+"%@ is no longer there. It may have been moved or deleted outside FileFluss." = "%@ ist nicht mehr vorhanden. Es wurde womöglich außerhalb von FileFluss verschoben oder gelöscht.";
+"Windows refused to move %@ to the Recycle Bin (error %@). If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss. Deleting permanently can't be undone." = "Windows hat sich geweigert, %@ in den Papierkorb zu verschieben (Fehler %@). Wenn auch der Explorer es nicht in den Papierkorb verschieben kann, liegt die Ursache außerhalb von FileFluss. Endgültiges Löschen kann nicht rückgängig gemacht werden.";
+
+/* Debug builds only: test accounts kept apart from the release app. */
+"Save Test Accounts…" = "Testkonten sichern …";
+"Restore Test Accounts…" = "Testkonten wiederherstellen …";

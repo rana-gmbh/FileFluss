@@ -85,3 +85,19 @@ Debug builds must expose the **Run Version Test…** menu item (File → Support
 ## Design Philosophy
 
 Speed and snappiness are top priorities. Prefer lazy loading, background processing, and non-blocking UI patterns. Avoid synchronous work on the main thread. Every interaction should feel instant.
+
+## Windows port
+
+The Windows port lives in `windows/` (C#, .NET 10, WPF) — see `windows/README.md`. The macOS Swift code is its specification, and the macOS `Localizable.strings` files (both locations) are the single source of truth for its strings.
+
+```bash
+dotnet build windows/FileFluss.sln                                      # warnings are errors
+dotnet test windows/src/FileFluss.Core.Tests
+dotnet run --project windows/src/FileFluss.App
+dotnet run --project windows/tools/StringsToResx                        # after editing any Localizable.strings
+powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0     # installers, portable zips, SHA256SUMS.txt
+```
+
+**Windows releases are tagged `win-vX.Y.Z` and must be created with `--latest=false`.** The macOS Sparkle feed is `releases/latest/download/appcast.xml`, so a Windows release marked "latest" cuts every Mac off from updates. `windows-release.yml` (triggered by `win-v*`) creates the release with `--latest=false` and moves "latest" back to the newest macOS release if needed; a plain `v*` tag is always the macOS release. The Windows in-app updater (`UpdateLookup` / `UpdateService`) only looks at `win-v*` releases and installs nothing it cannot match against the release's `SHA256SUMS.txt`.
+
+Commits to the Windows port follow the same rule as everywhere else: never mention Claude or AI in commit messages or Co-Authored-By lines. All commits are authored by Robert Rudolph from Rana GmbH.
