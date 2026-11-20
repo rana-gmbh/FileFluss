@@ -379,6 +379,89 @@ internal sealed class NextCloudApi
             : null;
     }
 
+    // MARK: - Previews
+
+    /// <summary>
+    /// A preview the server renders itself, through the endpoint the Nextcloud web UI uses
+    /// (<c>core/Controller/PreviewController.php</c>, <c>GET /index.php/core/preview.png</c>).
+    /// It takes the path relative to the user's folder, which is exactly what our items carry,
+    /// so no extra PROPFIND for a file id is needed. Null when the server has no preview for
+    /// the file: it answers 404 for a type no preview provider handles (videos without ffmpeg,
+    /// say), 400 for arguments it rejects and 403 for a share that doesn't allow viewing the
+    /// content.
+    ///
+    /// <para>index.php routes open a login session for a Basic-auth request and hand back its
+    /// cookies. If they were kept, every later WebDAV call would ride on that session as well
+    /// as on the app password. The provider's client is built without a cookie container
+    /// (<c>CloudHttp.Create</c> turns cookies off unless one is passed), so the
+    /// session cookie is dropped here just as it is on every other call.</para>
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        if (!Uri.TryCreate(PreviewUrl(_credentials.ServerUrl, path, PreviewEdge(maxPixelSize)), UriKind.Absolute, out var url))
+        {
+            throw CloudProviderException.InvalidResponse();
+        }
+
+        using var response = await WebDavHttp.SendAsync(
+            _http,
+            url,
+            u =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, u) { Headers = { Authorization = _auth } };
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/*"));
+                return request;
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        var status = (int)response.StatusCode;
+        switch (status)
+        {
+            case 200:
+                // A server that bounced us to its login page answers 200 with HTML; that is no
+                // preview either.
+                if (response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true)
+                {
+                    return null;
+                }
+
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                return bytes.Length > 0 ? bytes : null;
+            case 400 or 403 or 404:
+                return null;
+            default:
+                SupportLogger.Shared.Log($"Preview failed: HTTP {status}", LogCategory, LogLevel.Error);
+                throw WebDavHttp.MapStatus(status, path);
+        }
+    }
+
+    /// <summary>
+    /// Nextcloud keeps every preview it renders, one file per requested size, so asking for a
+    /// few fixed sizes lets all gallery tile sizes share them instead of filling the server's
+    /// preview folder with one copy per pixel count. The caller scales the result down.
+    /// </summary>
+    internal static int PreviewEdge(int maxPixelSize) => maxPixelSize switch
+    {
+        <= 256 => 256,
+        <= 512 => 512,
+        _ => 1024,
+    };
+
+    /// <summary>
+    /// <c>a=1</c> keeps the aspect ratio (the server crops to the box otherwise), and
+    /// <c>forceIcon=0</c> makes the server check up front whether it can preview the type at
+    /// all and say 404 rather than try. The path is strictly percent-encoded, so a <c>&amp;</c>
+    /// can't split the query and a <c>+</c> reaches PHP as <c>%2B</c> — PHP reads a bare
+    /// <c>+</c> as a space and "a+b.jpg" would name a file that isn't there.
+    /// </summary>
+    internal static string PreviewUrl(string serverUrl, string path, int edge)
+    {
+        var baseUrl = serverUrl.EndsWith('/') ? serverUrl[..^1] : serverUrl;
+        var file = path.StartsWith('/') ? path : "/" + path;
+        var size = edge.ToString(CultureInfo.InvariantCulture);
+        return $"{baseUrl}/index.php/core/preview.png?file={CloudHttp.Escape(file)}&x={size}&y={size}&a=1&forceIcon=0";
+    }
+
     // MARK: - Share links
 
     /// <summary>

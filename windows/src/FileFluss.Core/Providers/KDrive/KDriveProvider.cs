@@ -282,6 +282,12 @@ public sealed class KDriveProvider : CloudProvider
     public override Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)
         => _client is { } client ? client.StorageQuotaAsync(cancellationToken) : Task.FromResult<CloudStorageQuota?>(null);
 
+    /// <summary>kDrive makes previews of images, videos and PDFs itself.</summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : Require().ThumbnailAsync(item.Id, item.Path, maxPixelSize, cancellationToken);
+
     // MARK: - Share links
 
     /// <summary>

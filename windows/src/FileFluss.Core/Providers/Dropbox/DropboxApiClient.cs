@@ -396,6 +396,126 @@ internal sealed class DropboxApiClient
         await HttpTransfer.SaveToFileAsync(response, localPath, onBytes, cancellationToken).ConfigureAwait(false);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>The fixed sizes <c>/files/get_thumbnail_v2</c> offers, smallest first.</summary>
+    internal static readonly (string Name, int Width, int Height)[] ThumbnailSizes =
+    [
+        ("w32h32", 32, 32),
+        ("w64h64", 64, 64),
+        ("w128h128", 128, 128),
+        ("w256h256", 256, 256),
+        ("w480h320", 480, 320),
+        ("w640h480", 640, 480),
+        ("w960h640", 960, 640),
+        ("w1024h768", 1024, 768),
+        ("w2048h1536", 2048, 1536),
+    ];
+
+    /// <summary>
+    /// The smallest size whose shorter side reaches <paramref name="maxPixelSize"/>, or the
+    /// largest there is. The shorter side is what counts: in <c>bestfit</c> mode a square
+    /// picture asked for at w480h320 comes back 320 square, so only that edge is certain.
+    /// </summary>
+    internal static string ThumbnailSizeName(int maxPixelSize)
+    {
+        foreach (var size in ThumbnailSizes)
+        {
+            if (Math.Min(size.Width, size.Height) >= maxPixelSize)
+            {
+                return size.Name;
+            }
+        }
+
+        return ThumbnailSizes[^1].Name;
+    }
+
+    /// <summary>
+    /// Dropbox advises JPEG for photos and PNG for screenshots and drawings. PNG and GIF files
+    /// are mostly the latter, and may be transparent, which JPEG would lose.
+    /// </summary>
+    internal static string ThumbnailFormat(string fileName)
+    {
+        var dot = fileName.LastIndexOf('.');
+        var extension = dot <= 0 ? string.Empty : fileName[(dot + 1)..].ToLowerInvariant();
+        return extension is "png" or "gif" ? "png" : "jpeg";
+    }
+
+    /// <summary>
+    /// The <c>Dropbox-API-Arg</c> header for a thumbnail, escaped for HTTP like every other
+    /// content call's. <c>bestfit</c> fits the picture inside the size or its transpose, so a
+    /// portrait photo isn't shrunk to the height of a landscape box.
+    /// </summary>
+    internal static string ThumbnailArgument(string path, string fileName, int maxPixelSize)
+        => ApiArg(new JsonObject
+        {
+            ["resource"] = new JsonObject { [".tag"] = "path", ["path"] = DropboxPath(path) },
+            ["format"] = ThumbnailFormat(fileName),
+            ["size"] = ThumbnailSizeName(maxPixelSize),
+            ["mode"] = "bestfit",
+        });
+
+    /// <summary>
+    /// Whether a 409 from <c>get_thumbnail_v2</c> means "no preview for this file" — a type it
+    /// can't draw, or a picture it can't read or that is too large — rather than a missing
+    /// file or a refused link, which stay errors.
+    /// </summary>
+    internal static bool IsThumbnailRefusal(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                   root.TryGetProperty("error", out var error) &&
+                   error.ValueKind == JsonValueKind.Object &&
+                   error.TryGetProperty(".tag", out var tag) &&
+                   tag.ValueKind == JsonValueKind.String &&
+                   tag.GetString() is "unsupported_extension" or "unsupported_image" or "conversion_error";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A preview made by Dropbox, or null where Dropbox has none for the file. A POST, not a
+    /// GET: Dropbox's GET answers carry an ETag that lets caches hand back one size for another.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string path, string fileName, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        var arg = ThumbnailArgument(path, fileName, maxPixelSize);
+        using var response = await SendAuthorizedAsync(
+            token =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, ContentUrl + "/files/get_thumbnail_v2");
+                request.Headers.Authorization = CloudHttp.Bearer(token);
+                request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", arg);
+                return request;
+            },
+            transfer: false,
+            "/files/get_thumbnail_v2",
+            cancellationToken).ConfigureAwait(false);
+
+        var data = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        var status = (int)response.StatusCode;
+        if (IsSuccess(status))
+        {
+            return data.Length == 0 ? null : data;
+        }
+
+        // Not logged: a gallery of unsupported files would fill the log.
+        var body = Encoding.UTF8.GetString(data);
+        if (status == 409 && IsThumbnailRefusal(body))
+        {
+            return null;
+        }
+
+        SupportLogger.Shared.Log($"[Dropbox] get_thumbnail_v2 failed: HTTP {status}: {(body.Length <= 500 ? body : body[..500])}", LogCategory, LogLevel.Error);
+        throw MapHttpError(status, body, path);
+    }
+
     public async Task UploadFileAsync(string localPath, string remotePath, ByteProgress? onBytes, CancellationToken cancellationToken)
     {
         var info = new FileInfo(localPath);

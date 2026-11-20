@@ -6,6 +6,7 @@ using FileFluss.App.Mvvm;
 using FileFluss.App.Services;
 using FileFluss.Core.Formatting;
 using FileFluss.Core.Models;
+using FileFluss.Core.Providers;
 using FileFluss.Native;
 using static FileFluss.Core.Localization;
 
@@ -16,6 +17,7 @@ public sealed class FileRowViewModel : Observable
 {
     private readonly bool _isLocal;
     private readonly bool _hideExtension;
+    private readonly CloudProvider? _previewSource;
     private ImageSource? _icon;
     private ImageSource? _thumbnail;
     private bool _iconLoaded;
@@ -29,18 +31,20 @@ public sealed class FileRowViewModel : Observable
     private bool _isDropTarget;
     private long? _folderSize;
 
-    public FileRowViewModel(CloudFileItem item, bool isLocal, bool hideExtension)
+    /// <param name="previewSource">The cloud account whose service (or a small download) gives this row's gallery tile a preview; null for local files, archives and the offline index.</param>
+    public FileRowViewModel(CloudFileItem item, bool isLocal, bool hideExtension, CloudProvider? previewSource = null)
     {
         Item = item;
         _isLocal = isLocal;
         _hideExtension = hideExtension;
+        _previewSource = previewSource;
     }
 
     public CloudFileItem Item { get; }
 
     /// <summary>Whether a refreshed listing can keep this row (with its icon, thumbnail and folder size) for <paramref name="item"/>.</summary>
-    public bool CanReuseFor(CloudFileItem item, bool isLocal, bool hideExtension)
-        => _isLocal == isLocal && _hideExtension == hideExtension && Item == item;
+    public bool CanReuseFor(CloudFileItem item, bool isLocal, bool hideExtension, CloudProvider? previewSource = null)
+        => _isLocal == isLocal && _hideExtension == hideExtension && ReferenceEquals(_previewSource, previewSource) && Item == item;
 
     public string Name => Item.Name;
 
@@ -114,8 +118,9 @@ public sealed class FileRowViewModel : Observable
 
     /// <summary>
     /// The image on the row's gallery tile (macOS gallery view): a content thumbnail for local
-    /// files the shell can draw — images, videos, PDFs, documents — otherwise the large type
-    /// icon. Like <see cref="Icon"/> it is only read while the tile is on screen.
+    /// files the shell can draw — images, videos, PDFs, documents — and for cloud photos,
+    /// videos and PDFs a preview from the service or a small download; otherwise the large
+    /// type icon. Like <see cref="Icon"/> it is only read while the tile is on screen.
     /// </summary>
     public ImageSource? TileImage
     {
@@ -136,6 +141,14 @@ public sealed class FileRowViewModel : Observable
             if (!IsDrive && ThumbnailCache.ShouldUseGalleryThumbnail(Item, _isLocal))
             {
                 _tileThumbnail = ThumbnailCache.Get(Item, OnTileThumbnailLoaded, ThumbnailCache.GalleryPixelSize);
+                if (_tileThumbnail is not null)
+                {
+                    return _tileThumbnail;
+                }
+            }
+            else if (_previewSource is not null && CloudThumbnailRules.WantsThumbnail(Item))
+            {
+                _tileThumbnail = CloudThumbnailCache.Get(_previewSource, Item, OnTileThumbnailLoaded, ThumbnailCache.GalleryPixelSize);
                 if (_tileThumbnail is not null)
                 {
                     return _tileThumbnail;

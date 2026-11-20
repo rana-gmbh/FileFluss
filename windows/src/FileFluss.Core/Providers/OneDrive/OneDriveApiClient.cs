@@ -336,6 +336,98 @@ internal sealed class OneDriveApiClient
         return new CloudStorageQuota(drive.Quota?.Used ?? 0, total);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// The service's preview of a file, or null when OneDrive has none. Graph answers
+    /// <c>…/thumbnails/0/{size}/content</c> with a redirect to the image, which HttpClient
+    /// follows as it does for downloads, dropping the Authorization header the pre-authenticated
+    /// URL doesn't want.
+    /// </summary>
+    public async Task<byte[]?> ThumbnailAsync(string itemId, string path, int maxPixelSize, CancellationToken cancellationToken)
+    {
+        var item = ThumbnailItemEndpoint(itemId, path);
+        var (outcome, image) = await ThumbnailContentAsync($"{item}/thumbnails/0/{ThumbnailSize(maxPixelSize)}/content", path, cancellationToken).ConfigureAwait(false);
+        if (outcome != ThumbnailOutcome.Refused)
+        {
+            return image;
+        }
+
+        // Custom sizes are made on request; should one be turned down, the standard size Graph
+        // keeps ready is asked for once.
+        (_, image) = await ThumbnailContentAsync($"{item}/thumbnails/0/{StandardThumbnailSize(maxPixelSize)}/content", path, cancellationToken).ConfigureAwait(false);
+        return image;
+    }
+
+    /// <summary>
+    /// The listed item's Graph id. Listings build ids as "f" plus the item id for files ("d"
+    /// for folders), and the id works even where the path doesn't, as for search results whose
+    /// folder Graph didn't say.
+    /// </summary>
+    internal static string? GraphItemId(string itemId)
+        => itemId.Length > 1 && itemId[0] == 'f' ? itemId[1..] : null;
+
+    /// <summary>The item by id when the listing gave one (<c>/me/drive/items/{id}</c>), else by path (<c>/me/drive/root:{path}:</c>).</summary>
+    internal static string ThumbnailItemEndpoint(string itemId, string path)
+        => GraphItemId(itemId) is { } id ? $"/me/drive/items/{EscapeId(id)}" : ItemEndpoint(path);
+
+    /// <summary>
+    /// A custom size bounded by a square box, <c>c{n}x{n}</c>: Graph fits the preview inside it
+    /// and keeps the aspect ratio, so the longer edge is about the tile's size. Kept between
+    /// Graph's small (96) and large (800) standard sizes.
+    /// </summary>
+    internal static string ThumbnailSize(int maxPixelSize)
+    {
+        var edge = Math.Clamp(maxPixelSize, 96, 800).ToString(CultureInfo.InvariantCulture);
+        return $"c{edge}x{edge}";
+    }
+
+    /// <summary>The smallest of Graph's standard sizes (longer edge 96, 176 or 800) that still covers the tile, so the caller only ever scales down.</summary>
+    internal static string StandardThumbnailSize(int maxPixelSize) => maxPixelSize switch
+    {
+        <= 96 => "small",
+        <= 176 => "medium",
+        _ => "large",
+    };
+
+    /// <summary>
+    /// One thumbnail request. A 400 or 404 says either that the item has no preview or that
+    /// this size can't be made, so it is <see cref="ThumbnailOutcome.Refused"/> and worth one
+    /// try at another size; a 2xx that isn't an image is no preview. Other failures map as
+    /// every other Graph call does.
+    /// </summary>
+    private async Task<(ThumbnailOutcome Outcome, byte[]? Image)> ThumbnailContentAsync(string endpoint, string path, CancellationToken cancellationToken)
+    {
+        var uri = GraphUri(endpoint);
+        using var response = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, uri), false, cancellationToken).ConfigureAwait(false);
+        if (response.IsSuccessStatusCode)
+        {
+            var type = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            return bytes.Length > 0 && (type.Length == 0 || type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                ? (ThumbnailOutcome.Image, bytes)
+                : (ThumbnailOutcome.None, null);
+        }
+
+        if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound)
+        {
+            return (ThumbnailOutcome.Refused, null);
+        }
+
+        throw await GraphErrorAsync(response, $"GET {uri.AbsolutePath}", path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private enum ThumbnailOutcome
+    {
+        Image,
+
+        /// <summary>The item has no preview, or what came back wasn't one.</summary>
+        None,
+
+        /// <summary>A 400 or 404: no preview, or not at this size.</summary>
+        Refused,
+    }
+
     // MARK: - Transfers
 
     public async Task DownloadAsync(string remotePath, string localPath, ByteProgress? onBytes, CancellationToken cancellationToken)

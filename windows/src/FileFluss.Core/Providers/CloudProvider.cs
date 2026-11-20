@@ -82,6 +82,23 @@ public abstract class CloudProvider : FileProvider, IDisposable
     public virtual Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<CloudStorageQuota?>(null);
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// A small preview of a file made by the service itself, as image bytes (JPEG or PNG)
+    /// whose longer edge is about <paramref name="maxPixelSize"/> — the macOS
+    /// <c>thumbnail(for:maxPixelSize:)</c>. The gallery shows it instead of the type icon.
+    ///
+    /// <para>Null means the service has no preview for this file, or no preview API at all,
+    /// which is the default. The gallery then downloads small images and PDFs and lets the
+    /// shell draw them, so a provider implements this only to save that download (and to give
+    /// videos a preview). Per-file refusals (unsupported type, still being made) return null;
+    /// network failures throw <see cref="HttpRequestException"/> or
+    /// <see cref="OperationCanceledException"/> so the caller can try again later.</para>
+    /// </summary>
+    public virtual Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => Task.FromResult<byte[]?>(null);
+
     public override async Task<long?> AvailableSpaceAsync(string path, CancellationToken cancellationToken = default)
         => (await StorageQuotaAsync(cancellationToken).ConfigureAwait(false))?.FreeBytes;
 
