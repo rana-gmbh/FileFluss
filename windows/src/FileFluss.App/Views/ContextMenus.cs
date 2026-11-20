@@ -137,6 +137,15 @@ public static class ContextMenus
 
         items.AddRange(CompressAndExtractItems(main, panel, selection));
         items.Add(new Separator());
+
+        // Tags are FileFluss's own record of an item, so they need nothing from the account
+        // — only a real item to belong to.
+        if (panel.TagScope is not null && selection.All(r => r.Item.IsModifiable))
+        {
+            items.Add(TagsMenu(main, panel, selection));
+            items.Add(new Separator());
+        }
+
         if (single is not null && modifiable)
         {
             items.Add(Item(L("Rename"), Glyphs.Rename, Shortcut(KeyboardCommand.Rename), view.BeginRename));
@@ -185,6 +194,53 @@ public static class ContextMenus
         }
 
         return TrimSeparators(items);
+    }
+
+    // MARK: - Tags
+
+    /// <summary>
+    /// The "Tags" submenu: the seven colours, ticked where every selected item has the tag
+    /// and marked with a dash where only some do; then any other tags the selection carries;
+    /// then "Remove All Tags" when there is something to remove.
+    /// </summary>
+    private static MenuItem TagsMenu(MainViewModel main, PanelViewModel panel, IReadOnlyList<FileRowViewModel> selection)
+    {
+        var menu = new MenuItem { Header = L("Tags"), Icon = new TextBlock { Text = Glyphs.Tag, FontFamily = new FontFamily(Glyphs.FontFamily), FontSize = 14 } };
+        var rows = selection.ToList();
+        var tagSets = rows.Select(r => r.Tags).ToList();
+        var standard = FileTags.Standard;
+        var index = 0;
+        foreach (var row in TagMenuModel.Rows(standard, tagSets))
+        {
+            if (index++ == standard.Count)
+            {
+                menu.Items.Add(new Separator());
+            }
+
+            var change = row.Change;
+            var item = new MenuItem { Header = TagVisuals.MenuHeader(row.Tag) };
+            switch (row.Presence)
+            {
+                case TagMenuModel.Presence.All:
+                    item.IsChecked = true;
+                    break;
+                case TagMenuModel.Presence.Some:
+                    item.Icon = new TextBlock { Text = "–", HorizontalAlignment = HorizontalAlignment.Center };
+                    break;
+            }
+
+            AutomationProperties.SetName(item, TagVisuals.DisplayName(row.Tag));
+            item.Click += (_, _) => main.ChangeTags(panel, rows, change);
+            menu.Items.Add(item);
+        }
+
+        if (TagMenuModel.HasAnyTag(tagSets))
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(Item(L("Remove All Tags"), null, null, () => main.ChangeTags(panel, rows, new TagChange.RemoveAll())));
+        }
+
+        return menu;
     }
 
     // MARK: - Archives

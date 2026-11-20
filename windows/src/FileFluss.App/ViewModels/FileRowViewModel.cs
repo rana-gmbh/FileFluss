@@ -28,6 +28,8 @@ public sealed class FileRowViewModel : Observable
     private bool _isCut;
     private bool _isDropTarget;
     private long? _folderSize;
+    private IReadOnlyList<FileTag> _tags = FileTags.None;
+    private IReadOnlyList<TagColor> _tagColors = [];
 
     public FileRowViewModel(CloudFileItem item, bool isLocal, bool hideExtension)
     {
@@ -72,6 +74,45 @@ public sealed class FileRowViewModel : Observable
 
     public bool IsEvicted => Item.DownloadStatus == CloudDownloadStatus.Evicted;
 
+    // MARK: - Tags
+
+    /// <summary>
+    /// The item's tags. Filled in after the listing, from FileFluss's own record: the row is
+    /// on screen first and gains its dots a moment later.
+    /// </summary>
+    public IReadOnlyList<FileTag> Tags
+    {
+        get => _tags;
+        set
+        {
+            if (_tags.SameAs(value))
+            {
+                return;
+            }
+
+            var tintBefore = FolderTint;
+            _tags = value;
+            _tagColors = value.DotColors();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(TagColors));
+            if (tintBefore != FolderTint)
+            {
+                // A folder shows its tag in its colour too.
+                OnPropertyChanged(nameof(Icon));
+                OnPropertyChanged(nameof(TileImage));
+            }
+        }
+    }
+
+    /// <summary>The colours of the dots beside the name.</summary>
+    public IReadOnlyList<TagColor> TagColors => _tagColors;
+
+    /// <summary>The colour an ordinary folder is drawn in; drives and synthetic rows keep their own icon.</summary>
+    private TagColor? FolderTint => Item.IsDirectory && !IsDrive && Item.IconOverride is null ? _tags.FolderTint() : null;
+
+    private ImageSource? Tinted(ImageSource? icon)
+        => icon is not null && FolderTint is { } tint ? Views.TagIconTint.Apply(icon, tint) : icon;
+
     /// <summary>
     /// The type icon, or — for local images and PDFs, as on macOS — a content thumbnail once
     /// it has been made. Read only while the row is on screen (the list virtualizes), so only
@@ -105,7 +146,7 @@ public sealed class FileRowViewModel : Observable
                 }
             }
 
-            return _icon;
+            return Tinted(_icon);
         }
     }
 
@@ -142,7 +183,7 @@ public sealed class FileRowViewModel : Observable
                 }
             }
 
-            return _tileIcon;
+            return Tinted(_tileIcon);
         }
     }
 

@@ -921,6 +921,11 @@ public sealed class CompareWindow : Window
                         {
                             await endpoint.Provider.DeleteItemAsync(paths[i]);
                         }
+
+                        if (Core.Services.TagScope.For(endpoint.Provider) is { } tagScope)
+                        {
+                            AppServices.Current.Tags.RemoveSubtree(tagScope, paths[i]);
+                        }
                     }
                     catch (Exception e)
                     {

@@ -3589,6 +3589,18 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   <data name="**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." xml:space="preserve">
     <value>**Strg+Plus** und **Strg+Minus** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste.</value>
   </data>
+  <data name="Tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Remove All Tags" xml:space="preserve">
+    <value>Alle Tags entfernen</value>
+  </data>
+  <data name="Tags couldn&apos;t be changed" xml:space="preserve">
+    <value>Tags konnten nicht geändert werden</value>
+  </data>
+  <data name="The tags of “{0}” couldn&apos;t be changed: {1}" xml:space="preserve">
+    <value>Die Tags von „{0}“ konnten nicht geändert werden: {1}</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
   </data>
@@ -4181,5 +4193,26 @@ Dem neuen Schlüssel vertrauen?</value>
   </data>
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>Testkonten wiederherstellen …</value>
+  </data>
+  <data name="Red" xml:space="preserve">
+    <value>Rot</value>
+  </data>
+  <data name="Orange" xml:space="preserve">
+    <value>Orange</value>
+  </data>
+  <data name="Yellow" xml:space="preserve">
+    <value>Gelb</value>
+  </data>
+  <data name="Green" xml:space="preserve">
+    <value>Grün</value>
+  </data>
+  <data name="Blue" xml:space="preserve">
+    <value>Blau</value>
+  </data>
+  <data name="Purple" xml:space="preserve">
+    <value>Lila</value>
+  </data>
+  <data name="Gray" xml:space="preserve">
+    <value>Grau</value>
   </data>
 </root>

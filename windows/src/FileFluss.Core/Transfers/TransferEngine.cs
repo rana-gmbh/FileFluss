@@ -46,6 +46,9 @@ public sealed record TransferRequest(
 
     /// <summary>Name to give each top-level item at the destination, when it differs (sync's "keep both").</summary>
     public IReadOnlyDictionary<string, string>? DestinationNames { get; init; }
+
+    /// <summary>Where tags are kept, so they travel with what is copied or moved. Null uses the app's store.</summary>
+    public Services.TagStore? Tags { get; init; }
 }
 
 /// <summary>
@@ -273,6 +276,7 @@ public static class TransferEngine
                 {
                     if (UsesServerSide(request, plan) && await TryServerSideAsync(request, plan, targetPath, ct).ConfigureAwait(false))
                     {
+                        CarryTagsServerSide(request, plan, targetPath);
                         progress.RecordSuccess(plan.Item.Name);
                         continue;
                     }
@@ -299,6 +303,7 @@ public static class TransferEngine
                         continue;
                     }
 
+                    CarryTags(request, plan, targetPath, outcome.Arrivals);
                     if (request.IsMove)
                     {
                         // The source goes only once the copy is confirmed whole at the
@@ -312,6 +317,7 @@ public static class TransferEngine
                         }
 
                         await DeleteSourceAsync(source, plan, outcome.Arrivals, ct).ConfigureAwait(false);
+                        ForgetMovedSourceTags(request, plan, outcome.Arrivals);
                     }
 
                     progress.RecordSuccess(plan.Item.Name);
@@ -654,6 +660,100 @@ public static class TransferEngine
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             // Never written, or already gone: nothing to clean up.
+        }
+    }
+
+    // MARK: - Tags
+
+    // Tags are FileFluss's own record of an item (Services.TagStore), so they travel only if
+    // the transfer takes them along. A transfer never fails over them: whatever goes wrong
+    // here is logged and the files are where they were asked to be.
+
+    /// <summary>The server moved or copied the item whole: its tags, and those of everything inside it, follow.</summary>
+    private static void CarryTagsServerSide(TransferRequest request, ItemPlan plan, string targetPath)
+    {
+        if (Services.TagScope.For(request.Source) is not { } scope)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = request.Tags ?? Services.TagStore.Shared;
+            if (request.IsMove)
+            {
+                store.MoveSubtree(scope, plan.Item.Path, targetPath);
+            }
+            else
+            {
+                store.CopySubtree(scope, plan.Item.Path, scope, targetPath, replaceDestination: true);
+            }
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Tags of {plan.Item.Name} did not follow it: {e.Message}", "Tags", LogLevel.Error);
+        }
+    }
+
+    /// <summary>
+    /// The bytes travelled. The copy takes the source's tags and keeps any it already had: a
+    /// sync that refreshes a file must not take off the tag someone gave it on the other side.
+    /// </summary>
+    private static void CarryTags(TransferRequest request, ItemPlan plan, string targetPath, IReadOnlyList<Arrival> arrivals)
+    {
+        if (Services.TagScope.For(request.Source) is not { } from || Services.TagScope.For(request.Destination) is not { } to)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = request.Tags ?? Services.TagStore.Shared;
+
+            // The item and what is inside it, by position in the tree…
+            store.CopySubtree(from, plan.Item.Path, to, targetPath);
+
+            // …and each file again by where it actually landed: a name that isn't legal at the
+            // destination was changed on the way, and a downloaded document may have gained an
+            // extension.
+            foreach (var arrival in arrivals)
+            {
+                store.CopySubtree(from, arrival.SourcePath, to, arrival.DestinationPath);
+            }
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Tags of {plan.Item.Name} did not follow it: {e.Message}", "Tags", LogLevel.Error);
+        }
+    }
+
+    /// <summary>After a move by bytes: what was deleted at the source is forgotten, and only that.</summary>
+    private static void ForgetMovedSourceTags(TransferRequest request, ItemPlan plan, IReadOnlyList<Arrival> arrivals)
+    {
+        if (Services.TagScope.For(request.Source) is not { } scope)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = request.Tags ?? Services.TagStore.Shared;
+            if (request.Source.IsLocal && plan.Item.IsDirectory && Directory.Exists(plan.Item.Path))
+            {
+                // Something stayed behind in the folder (saved into it while it travelled).
+                foreach (var arrival in arrivals)
+                {
+                    store.RemoveSubtree(scope, arrival.SourcePath);
+                }
+
+                return;
+            }
+
+            store.RemoveSubtree(scope, plan.Item.Path);
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Tags of {plan.Item.Name} were not cleared at its old place: {e.Message}", "Tags", LogLevel.Error);
         }
     }
 

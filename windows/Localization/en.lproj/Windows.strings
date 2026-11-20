@@ -635,3 +635,12 @@
 /* The account reconnecting and the gallery view, in Windows wording. */
 "iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud Drive isn't available. Check that iCloud for Windows is signed in and has iCloud Drive turned on.";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**Ctrl+Plus** and **Ctrl+Minus** make the thumbnails bigger and smaller, as they do with the rows of the list.";
+
+/* Tags: the seven colour tags. The Mac borrows Finder's own names for the colours; Windows has none to borrow. */
+"Red" = "Red";
+"Orange" = "Orange";
+"Yellow" = "Yellow";
+"Green" = "Green";
+"Blue" = "Blue";
+"Purple" = "Purple";
+"Gray" = "Gray";

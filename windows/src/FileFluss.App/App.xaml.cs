@@ -194,6 +194,9 @@ public partial class App : Application
         // Settings are written shortly after they change; the last ones (window frame, session folders) now.
         ExitStep("settings", () => Services?.SettingsStore.Flush());
 
+        // Tags are written shortly after they change too.
+        ExitStep("tags", () => Services?.Tags.Flush());
+
         // A launch from now on waits for this process to finish instead of handing over to it.
         ExitStep("stop listening", SingleInstance.StopListening);
         if (Services is { } services)

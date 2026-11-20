@@ -1284,6 +1284,12 @@ public sealed partial class MainViewModel : Observable
         try
         {
             await provider.RenameItemAsync(row.Path, newName);
+            if (panel.TagScope is { } tagScope)
+            {
+                // The item's tags, and those of everything inside it, keep up with its name.
+                _services.Tags.MoveSubtree(tagScope, row.Path, provider.CombinePath(provider.GetParentPath(row.Path), newName));
+            }
+
             await panel.RefreshAsync(quiet: true);
             SelectAfterLoad(panel, newName);
             if (Panel(panel.Side.Other()) is { } other && other.Location == panel.Location)
@@ -1319,6 +1325,18 @@ public sealed partial class MainViewModel : Observable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Right-click → Tags. A panel showing the same folder on the other side follows.
+    /// </summary>
+    public void ChangeTags(PanelViewModel panel, IReadOnlyList<FileRowViewModel> rows, TagChange change)
+    {
+        panel.ChangeTags(rows, change);
+        if (OtherPanel.Location == panel.Location && !ReferenceEquals(OtherPanel, panel))
+        {
+            OtherPanel.ReloadTags();
+        }
     }
 
     public async Task DeleteSelectionAsync(PanelViewModel panel)
@@ -1357,6 +1375,7 @@ public sealed partial class MainViewModel : Observable
 
         var failures = new List<string>();
         var refused = new List<(FileRowViewModel Row, RecycleRefusal Refusal)>();
+        var tagScope = panel.TagScope;
         await Task.Run(async () =>
         {
             foreach (var row in rows)
@@ -1370,6 +1389,11 @@ public sealed partial class MainViewModel : Observable
                     else
                     {
                         await provider.DeleteItemAsync(row.Path);
+                    }
+
+                    if (tagScope is not null)
+                    {
+                        _services.Tags.RemoveSubtree(tagScope, row.Path);
                     }
                 }
                 catch (RecycleRefusedException e) when (e.Refusal.Kind is not (RecycleRefusalKind.NotFound or RecycleRefusalKind.Declined))

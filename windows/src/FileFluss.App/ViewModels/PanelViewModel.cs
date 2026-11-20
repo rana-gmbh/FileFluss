@@ -846,6 +846,9 @@ public sealed class PanelViewModel : Observable
             ItemsListed?.Invoke(this, items);
             Loaded?.Invoke(this, select);
 
+            // After the rows, never with them: a listing must not wait for its tags.
+            _ = LoadTagsAsync(provider, rows, generation);
+
             // An upload, delete or new folder changed what this folder holds, and the free
             // space or quota with it: macOS re-probes when the item count changes.
             if (_listedLocation == location && previous.Count != _allRows.Count)
@@ -885,6 +888,80 @@ public sealed class PanelViewModel : Observable
             {
                 IsLoading = false;
             }
+        }
+    }
+
+    // MARK: - Tags
+
+    /// <summary>Whose tags this panel shows, or null where there are none to show (inside an archive, an unplugged drive).</summary>
+    public Core.Services.TagScope? TagScope => IsReadOnlyLocation ? null : Core.Services.TagScope.For(_provider);
+
+    private bool IsReadOnlyLocation => _location.IsArchive || _location.IsOfflineDrive;
+
+    /// <summary>
+    /// Looks up the tags of the rows on screen and hands each row its own. Rows a refresh
+    /// kept still show what they had, so nothing flickers while this runs.
+    /// </summary>
+    private async Task LoadTagsAsync(FileProvider provider, IReadOnlyList<FileRowViewModel> rows, int generation)
+    {
+        try
+        {
+            if (IsReadOnlyLocation || Core.Services.TagScope.For(provider) is not { } scope)
+            {
+                foreach (var row in rows)
+                {
+                    row.Tags = FileTags.None;
+                }
+
+                return;
+            }
+
+            var store = _services.Tags;
+            var found = await Task.Run(() => store.Resolve(scope, rows.Select(r => r.Item).ToList()));
+            if (generation != _loadGeneration)
+            {
+                return;
+            }
+
+            foreach (var row in rows)
+            {
+                row.Tags = found.TryGetValue(row.Path, out var tags) ? tags : FileTags.None;
+            }
+        }
+        catch (Exception e)
+        {
+            SupportLogger.Shared.Log($"Tags for {_location.Path} could not be read: {e.Message}", "Tags", LogLevel.Error);
+        }
+    }
+
+    /// <summary>Reads the tags of the folder on screen again, after they were changed from the other panel.</summary>
+    public void ReloadTags()
+    {
+        if (_loadedProvider is { } provider)
+        {
+            _ = LoadTagsAsync(provider, _allRows, _loadGeneration);
+        }
+    }
+
+    /// <summary>Adds or removes a tag on the given rows. The dots change at once; the record is written behind them.</summary>
+    public void ChangeTags(IReadOnlyList<FileRowViewModel> rows, TagChange change)
+    {
+        if (TagScope is not { } scope)
+        {
+            return;
+        }
+
+        var store = _services.Tags;
+        foreach (var row in rows)
+        {
+            if (!row.Item.IsModifiable)
+            {
+                continue;
+            }
+
+            var updated = change.Apply(row.Tags);
+            row.Tags = updated;
+            store.SetTags(scope, row.Path, updated, row.Item.Id);
         }
     }
 
