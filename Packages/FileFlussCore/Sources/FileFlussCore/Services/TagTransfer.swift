@@ -78,16 +78,25 @@ public enum TagTransfer {
         }
     }
 
-    /// Call after `remotePath` has been downloaded to `localURL`.
+    /// Call after `remotePath` has been downloaded to `localURL`. `known`
+    /// is for an item whose tags the caller has just learned from the
+    /// service itself — one inside a folder FileFluss has never listed in a
+    /// panel, which the record therefore says nothing about.
     public static func downloaded(
         fromAccount account: UUID,
         providerType: CloudProviderType?,
         remotePath: String,
         to localURL: URL,
+        known: [FileTag]? = nil,
         store: TagStore = .shared
     ) async {
         if providerType?.keepsTagsInFiles == true { return }
-        let tags = await store.tags(account: account, path: remotePath)
+        let tags: [FileTag]
+        if let known {
+            tags = known
+        } else {
+            tags = await store.tags(account: account, path: remotePath)
+        }
         guard !tags.isEmpty else { return }
         try? FinderTags.write(tags, to: localURL)
     }

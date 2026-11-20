@@ -177,6 +177,7 @@ public actor MegaAPIClient {
 
             // Decrypt node name from attributes
             let name: String
+            var attributes: String?
             if type == 2 {
                 name = "Cloud Drive"
                 rootHandle = handle
@@ -186,7 +187,12 @@ public actor MegaAPIClient {
                 name = "Trash"
             } else if let attrBase64 = nodeData["a"] as? String,
                       let keyStr = nodeData["k"] as? String {
-                name = decryptNodeName(attr: attrBase64, keyStr: keyStr, handle: handle) ?? "Unknown"
+                if let decrypted = decryptNodeAttributes(attr: attrBase64, keyStr: keyStr, handle: handle) {
+                    name = decrypted.name
+                    attributes = decrypted.json
+                } else {
+                    name = "Unknown"
+                }
             } else {
                 name = "Unknown"
             }
@@ -197,7 +203,8 @@ public actor MegaAPIClient {
                 name: name,
                 type: type,
                 size: size,
-                timestamp: timestamp
+                timestamp: timestamp,
+                attributes: attributes
             )
             nodes[handle] = node
         }
@@ -358,7 +365,8 @@ public actor MegaAPIClient {
                     name: fileName,
                     type: type,
                     size: Int64(fileSize),
-                    timestamp: Date().timeIntervalSince1970
+                    timestamp: Date().timeIntervalSince1970,
+                    attributes: MegaNodeAttributes.json(updating: nil, name: fileName)
                 )
                 nodes[handle] = node
                 newHandles.append(handle)
@@ -448,7 +456,8 @@ public actor MegaAPIClient {
                     name: folderName,
                     type: type,
                     size: 0,
-                    timestamp: Date().timeIntervalSince1970
+                    timestamp: Date().timeIntervalSince1970,
+                    attributes: MegaNodeAttributes.json(updating: nil, name: folderName)
                 )
                 nodes[handle] = node
             }
@@ -465,11 +474,12 @@ public actor MegaAPIClient {
             throw CloudProviderError.notFound(path)
         }
 
-        // Re-encrypt attributes with new name using the node's key
-        let nodeKey = try getNodeKey(handle: handle)
-        let encryptedAttrs = encryptAttributes(name: newName, key: nodeKey)
-
-        let _ = try await apiCall([["a": "a", "n": handle, "attr": encryptedAttrs]])
+        // Re-encrypt the attributes with the new name using the node's key.
+        // All of them: the block is replaced whole, and one holding only
+        // the name would take the item's label, favourite mark and the rest
+        // away with the old name.
+        let attributes = MegaNodeAttributes.json(updating: node.attributes, name: newName)
+        try await writeAttributes(attributes, handle: handle)
 
         // Update cache
         nodes[handle] = MegaNode(
@@ -478,8 +488,77 @@ public actor MegaAPIClient {
             name: newName,
             type: node.type,
             size: node.size,
-            timestamp: node.timestamp
+            timestamp: node.timestamp,
+            attributes: attributes
         )
+    }
+
+    // MARK: - Labels
+
+    /// MEGA's colour labels of the items in one folder, by item path. Read
+    /// from the nodes already in memory: a label is part of an item's
+    /// attributes, which were decrypted for its name.
+    public func labels(inFolder path: String) async throws -> [String: Int] {
+        if nodes.isEmpty {
+            try await fetchNodes()
+        }
+        let parentHandle = try resolveHandle(for: path)
+        var result: [String: Int] = [:]
+        for node in nodes.values where node.parentHandle == parentHandle && node.type <= 1 {
+            let label = MegaNodeAttributes.label(in: node.attributes)
+            if label != 0 {
+                result[path == "/" ? "/\(node.name)" : "\(path)/\(node.name)"] = label
+            }
+        }
+        return result
+    }
+
+    /// Sets an item's colour label (1…7), or takes it off (0).
+    public func setLabel(_ label: Int, at path: String) async throws {
+        if nodes.isEmpty {
+            try await fetchNodes()
+        }
+        let handle = try resolveHandle(for: path)
+        guard let node = nodes[handle] else {
+            throw CloudProviderError.notFound(path)
+        }
+        guard MegaNodeAttributes.label(in: node.attributes) != label else { return }
+        // Without the item's own attributes there is nothing safe to write:
+        // the block would have to be made up, name included.
+        guard node.attributes != nil else {
+            throw CloudProviderError.invalidResponse
+        }
+        let attributes = MegaNodeAttributes.json(updating: node.attributes, name: node.name, label: label)
+        try await writeAttributes(attributes, handle: handle)
+        nodes[handle] = MegaNode(
+            handle: node.handle,
+            parentHandle: node.parentHandle,
+            name: node.name,
+            type: node.type,
+            size: node.size,
+            timestamp: node.timestamp,
+            attributes: attributes
+        )
+    }
+
+    private func writeAttributes(_ json: String, handle: String) async throws {
+        // The block is encrypted with the item's own key. `getNodeKey` falls
+        // back to the account's key when it has none for the item — true of
+        // a folder made a moment ago — and attributes written with that
+        // can't be read again, name included. So the key is fetched first,
+        // and without it nothing is written.
+        if nodeKeys[handle] == nil {
+            try await fetchNodes()
+        }
+        guard nodeKeys[handle] != nil else {
+            throw CloudProviderError.invalidResponse
+        }
+        let nodeKey = try getNodeKey(handle: handle)
+        let encryptedAttrs = encryptAttributes(json: json, key: nodeKey)
+        // MEGA's own web client and the Windows port send the block as
+        // "at"; this client has always sent "attr". Both are sent, so the
+        // write doesn't depend on which of the two the server reads.
+        let _ = try await apiCall([["a": "a", "n": handle, "at": encryptedAttrs, "attr": encryptedAttrs]])
     }
 
     public func stat(at path: String) async throws -> CloudFileItem {
@@ -866,7 +945,10 @@ public actor MegaAPIClient {
 
     // MARK: - Crypto Helpers
 
-    private func decryptNodeName(attr: String, keyStr: String, handle: String) -> String? {
+    /// An item's name, and its attributes whole as the JSON they are kept
+    /// in — the label is in there, and whatever else must be written back
+    /// unchanged when one of them is.
+    private func decryptNodeAttributes(attr: String, keyStr: String, handle: String) -> (name: String, json: String)? {
         // Key string format: "owner:base64key" or "handle:base64key/..."
         let keyParts = keyStr.split(separator: "/").compactMap { part -> Data? in
             let segments = part.split(separator: ":")
@@ -918,7 +1000,7 @@ public actor MegaAPIClient {
             return nil
         }
 
-        return name
+        return (name, jsonData)
     }
 
     private func getNodeKey(handle: String) throws -> [UInt32] {
@@ -999,7 +1081,10 @@ public actor MegaAPIClient {
     }
 
     private func encryptAttributes(name: String, key: [UInt32]) -> String {
-        let json = "{\"n\":\"\(name.replacingOccurrences(of: "\"", with: "\\\""))\"}"
+        encryptAttributes(json: MegaNodeAttributes.json(updating: nil, name: name), key: key)
+    }
+
+    private func encryptAttributes(json: String, key: [UInt32]) -> String {
         var attrBytes = Array("MEGA".utf8) + Array(json.utf8)
         // Pad to 16-byte boundary
         while attrBytes.count % 16 != 0 {
@@ -1487,6 +1572,86 @@ struct MegaNode: Sendable {
     let type: Int // 0=file, 1=folder, 2=root, 3=inbox, 4=trash
     let size: Int64
     let timestamp: TimeInterval
+    /// The decrypted attribute JSON, kept so that changing one attribute
+    /// can write all the others back. Nil for nodes created in this session
+    /// before the next fetch, and for the root, inbox and trash.
+    var attributes: String? = nil
+}
+
+/// The JSON a MEGA item's attributes are kept in: `{"n":"name","lbl":"3",…}`.
+///
+/// MEGA replaces the block whole, so a change to one attribute has to carry
+/// every other one along. The label is written the way MEGA's own apps
+/// write it — a string holding the number — and removed by leaving the key
+/// out; it is read whether it arrives as a string or as a number.
+public enum MegaNodeAttributes {
+    static let labelKey = "lbl"
+    static let nameKey = "n"
+
+    /// The label in an attribute block: 1…7, or 0 for none.
+    public static func label(in json: String?) -> Int {
+        guard let json, let attributes = parse(json) else { return 0 }
+        let value: Int?
+        switch attributes[labelKey] {
+        case let text as String: value = Int(text)
+        case let number as NSNumber: value = number.intValue
+        default: value = nil
+        }
+        guard let value, (1...7).contains(value) else { return 0 }
+        return value
+    }
+
+    /// The block with the name set and, when `label` is given, the label
+    /// set (1…7) or removed (0). Everything else stays as it was.
+    public static func json(updating json: String?, name: String, label: Int? = nil) -> String {
+        var attributes = json.flatMap(parse) ?? [:]
+        attributes[nameKey] = name
+        if let label {
+            if (1...7).contains(label) {
+                attributes[labelKey] = String(label)
+            } else {
+                attributes.removeValue(forKey: labelKey)
+            }
+        }
+        // Slashes are left alone: MEGA's own reader is not known to undo
+        // the optional "\/" escape, and no JSON reader needs it.
+        guard let data = try? JSONSerialization.data(withJSONObject: attributes, options: [.sortedKeys, .withoutEscapingSlashes]),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{\"n\":\"\(name)\"}"
+        }
+        return text
+    }
+
+    static func parse(_ json: String) -> [String: Any]? {
+        (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
+    }
+
+    /// MEGA numbers its seven label colours in its own order.
+    public static func tagColor(forLabel label: Int) -> TagColor {
+        switch label {
+        case 1: return .red
+        case 2: return .orange
+        case 3: return .yellow
+        case 4: return .green
+        case 5: return .blue
+        case 6: return .purple
+        case 7: return .gray
+        default: return .none
+        }
+    }
+
+    public static func label(for color: TagColor) -> Int {
+        switch color {
+        case .red: return 1
+        case .orange: return 2
+        case .yellow: return 3
+        case .green: return 4
+        case .blue: return 5
+        case .purple: return 6
+        case .gray: return 7
+        case .none: return 0
+        }
+    }
 }
 
 // MARK: - Base64 Mega Encoding

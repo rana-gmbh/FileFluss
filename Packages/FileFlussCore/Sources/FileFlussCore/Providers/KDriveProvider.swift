@@ -183,6 +183,22 @@ public final class KDriveProvider: CloudProvider, @unchecked Sendable {
     // download+upload path. The API client retains the method implementations
     // so the fix is a one-liner once the correct endpoint is confirmed.
 
+    // MARK: - Categories
+
+    /// kDrive's categories carry a name and a colour, several per item:
+    /// everything a tag is.
+    public var nativeTagSupport: NativeTagSupport { .full }
+
+    public func nativeTags(inFolder path: String) async throws -> [String: [FileTag]] {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.categoryTags(inFolder: path)
+    }
+
+    public func setNativeTags(_ tags: [FileTag], at path: String) async throws {
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await client.setCategoryTags(tags, at: path)
+    }
+
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
         let fileId = try await client.resolvePathToId(path)

@@ -64,9 +64,23 @@ public actor TagStore {
         items: [(id: String, path: String)],
         stableIDs: Bool
     ) -> [String: [FileTag]] {
+        resolveDetailed(account: account, items: items, stableIDs: stableIDs).tags
+    }
+
+    /// As `resolve`, and also which of the items had a record without an
+    /// identifier until now: those were written by a transfer — an upload,
+    /// a copy from another account — and this listing is the first time
+    /// FileFluss has seen them on the service. A service with labels of its
+    /// own hasn't been told their tags yet (see `NativeTagSync`).
+    public func resolveDetailed(
+        account: UUID,
+        items: [(id: String, path: String)],
+        stableIDs: Bool
+    ) -> (tags: [String: [FileTag]], newlySeen: Set<String>) {
         var entries = entries(for: account)
-        guard !entries.isEmpty else { return [:] }
+        guard !entries.isEmpty else { return ([:], []) }
         var result: [String: [FileTag]] = [:]
+        var newlySeen: Set<String> = []
 
         guard stableIDs else {
             for item in items {
@@ -74,7 +88,7 @@ public actor TagStore {
                     result[item.path] = entry.tags
                 }
             }
-            return result
+            return (result, newlySeen)
         }
 
         var pathByID: [String: String] = [:]
@@ -100,6 +114,7 @@ public actor TagStore {
         for item in unmatched {
             let path = Self.normalized(item.path)
             guard var entry = entries.removeValue(forKey: path) else { continue }
+            if entry.itemID == nil { newlySeen.insert(item.path) }
             entry.itemID = item.id
             changed = true
             matched.append((path, entry))
@@ -113,7 +128,7 @@ public actor TagStore {
             accounts[account] = entries
             markDirty(account)
         }
-        return result
+        return (result, newlySeen)
     }
 
     // MARK: - Writing

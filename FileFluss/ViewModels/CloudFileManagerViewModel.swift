@@ -391,10 +391,59 @@ final class CloudFileManagerViewModel {
         } else {
             let lasting = providerType?.hasLastingItemIDs ?? false
             let references = listed.map { (id: $0.id, path: $0.path) }
+            let folder = currentPath
+            let standard = SystemTagNames.standard
             Task {
-                let loaded = await TagStore.shared.resolve(account: account, items: references, stableIDs: lasting)
-                guard generation == self.tagGeneration else { return }
-                if loaded != self.tags { self.tags = loaded }
+                let record = await TagStore.shared.resolveDetailed(account: account, items: references, stableIDs: lasting)
+                var loaded = record.tags
+                var toSend: [(path: String, tags: [FileTag])] = []
+
+                // A service with labels of its own is asked for them, and
+                // the two sides are brought into step (see NativeTagSync).
+                // If it can't be asked, FileFluss's record is shown as it is.
+                let provider = await SyncEngine.shared.provider(for: account)
+                if let provider, provider.nativeTagSupport != .none {
+                    let support = provider.nativeTagSupport
+                    do {
+                        let native = try await provider.nativeTags(inFolder: folder)
+                        for item in listed where item.role == .normal {
+                            let stored = loaded[item.path] ?? []
+                            let outcome = NativeTagSync.reconcile(
+                                stored: stored,
+                                native: native[item.path] ?? [],
+                                support: support,
+                                pending: record.newlySeen.contains(item.path),
+                                standard: standard
+                            )
+                            if outcome.tags != stored {
+                                await TagStore.shared.setTags(outcome.tags, account: account, path: item.path, itemID: item.id)
+                                loaded[item.path] = outcome.tags.isEmpty ? nil : outcome.tags
+                            }
+                            if let push = outcome.push {
+                                toSend.append((item.path, push))
+                            }
+                        }
+                    } catch {
+                        SupportLogger.shared.log("labels of \(folder) could not be read — \(error.localizedDescription)", category: self.cloudCategory, level: .error)
+                    }
+                }
+
+                if generation == self.tagGeneration, loaded != self.tags {
+                    self.tags = loaded
+                }
+
+                // What a transfer brought and the service hasn't been told.
+                // Sent even if the panel has moved on: next time the item is
+                // listed it would no longer count as just written.
+                if let provider {
+                    for item in toSend {
+                        do {
+                            try await provider.setNativeTags(item.tags, at: item.path)
+                        } catch {
+                            SupportLogger.shared.log("labels of \(item.path) could not be written — \(error.localizedDescription)", category: self.cloudCategory, level: .error)
+                        }
+                    }
+                }
             }
         }
     }
@@ -428,11 +477,28 @@ final class CloudFileManagerViewModel {
         } else {
             let lasting = providerType?.hasLastingItemIDs ?? false
             let account = accountId
-            let writes = items.map { (path: $0.path, tags: shown[$0.path] ?? [], id: lasting ? $0.id : nil) }
+            let writes = items.map { (path: $0.path, name: $0.name, tags: shown[$0.path] ?? [], id: lasting ? $0.id : nil) }
             Task {
                 for write in writes {
                     await TagStore.shared.setTags(write.tags, account: account, path: write.path, itemID: write.id)
                 }
+                // And on the service itself, where it has labels of its own.
+                guard let provider = await SyncEngine.shared.provider(for: account),
+                      provider.nativeTagSupport != .none else { return }
+                var failed = false
+                for write in writes {
+                    do {
+                        try await provider.setNativeTags(
+                            NativeTagSync.nativeForm(write.tags, support: provider.nativeTagSupport),
+                            at: write.path
+                        )
+                    } catch {
+                        failed = true
+                        self.actionError = L10n.format("The tags of “%@” couldn't be changed: %@", write.name, error.localizedDescription)
+                    }
+                }
+                // What the service has is what counts; show that again.
+                if failed { self.reloadTags() }
             }
         }
     }
@@ -810,17 +876,33 @@ final class CloudFileManagerViewModel {
         progress?.isCancelled == true || Task.isCancelled
     }
 
-    private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int) async throws {
+    private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int, knownTags: [FileTag]? = nil) async throws {
         // Some providers make no call that notices a cancel, so a folder
         // would otherwise go on fetching its remaining files.
         if Self.wasCancelled(progress) { throw CancellationError() }
         if item.isDirectory {
             let folderURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-            await TagTransfer.downloaded(fromAccount: accountId, providerType: providerType, remotePath: item.path, to: folderURL)
+            await TagTransfer.downloaded(fromAccount: accountId, providerType: providerType, remotePath: item.path, to: folderURL, known: knownTags)
             let contents = try await provider.listDirectory(at: item.path)
+            // A folder never opened in a panel has no record yet. Where the
+            // service has labels of its own, they are asked for here so the
+            // files inside come down tagged all the same.
+            let support = provider.nativeTagSupport
+            let native = support == .none ? nil : try? await provider.nativeTags(inFolder: item.path)
+            let standard = SystemTagNames.standard
             for child in contents {
-                try await downloadRecursively(item: child, to: folderURL, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+                var childTags: [FileTag]?
+                if let native {
+                    childTags = NativeTagSync.reconcile(
+                        stored: await TagStore.shared.tags(account: accountId, path: child.path),
+                        native: native[child.path] ?? [],
+                        support: support,
+                        pending: false,
+                        standard: standard
+                    ).tags
+                }
+                try await downloadRecursively(item: child, to: folderURL, provider: provider, progress: progress, downloadedCount: &downloadedCount, knownTags: childTags)
             }
         } else {
             let localURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
@@ -847,7 +929,7 @@ final class CloudFileManagerViewModel {
             )
             Quarantine.mark(finalURL)
             // The item's tags come down with it, as Finder tags on the file.
-            await TagTransfer.downloaded(fromAccount: accountId, providerType: providerType, remotePath: item.path, to: finalURL)
+            await TagTransfer.downloaded(fromAccount: accountId, providerType: providerType, remotePath: item.path, to: finalURL, known: knownTags)
             progress?.totalBytes += item.size
             downloadedCount += 1
             progress?.totalFiles = downloadedCount
