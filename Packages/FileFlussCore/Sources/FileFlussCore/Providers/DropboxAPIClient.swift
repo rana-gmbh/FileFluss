@@ -378,6 +378,121 @@ public actor DropboxAPIClient {
         try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
+    // MARK: - Thumbnails
+
+    /// The fixed sizes `/files/get_thumbnail_v2` offers, smallest first.
+    static let thumbnailSizes: [(name: String, width: Int, height: Int)] = [
+        ("w32h32", 32, 32),
+        ("w64h64", 64, 64),
+        ("w128h128", 128, 128),
+        ("w256h256", 256, 256),
+        ("w480h320", 480, 320),
+        ("w640h480", 640, 480),
+        ("w960h640", 960, 640),
+        ("w1024h768", 1024, 768),
+        ("w2048h1536", 2048, 1536),
+    ]
+
+    /// The smallest size whose shorter side reaches `maxPixelSize`. The
+    /// shorter side is what counts: in `bestfit` mode a square picture asked
+    /// for at w480h320 comes back 320 square, so only that edge is certain.
+    static func thumbnailSizeName(forMaxPixelSize maxPixelSize: Int) -> String {
+        let fit = thumbnailSizes.first { min($0.width, $0.height) >= maxPixelSize }
+        return (fit ?? thumbnailSizes[thumbnailSizes.count - 1]).name
+    }
+
+    /// Dropbox advises JPEG for photos and PNG for screenshots and drawings.
+    /// PNG and GIF files are mostly the latter, and may be transparent,
+    /// which JPEG would lose.
+    static func thumbnailFormat(forFileName name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "png", "gif": return "png"
+        default: return "jpeg"
+        }
+    }
+
+    /// The `Dropbox-API-Arg` header for a thumbnail, escaped for HTTP.
+    /// `bestfit` fits the picture inside the size or its transpose, so a
+    /// portrait photo isn't shrunk to the height of a landscape box.
+    static func thumbnailArgument(path: String, fileName: String, maxPixelSize: Int) throws -> String {
+        struct Resource: Encodable {
+            let tag = "path"
+            let path: String
+            enum CodingKeys: String, CodingKey {
+                case tag = ".tag"
+                case path
+            }
+        }
+        struct ThumbnailArg: Encodable {
+            let resource: Resource
+            let format: String
+            let size: String
+            let mode: String
+        }
+        let arg = ThumbnailArg(
+            resource: Resource(path: path),
+            format: thumbnailFormat(forFileName: fileName),
+            size: thumbnailSizeName(forMaxPixelSize: maxPixelSize),
+            mode: "bestfit"
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(arg)
+        return escapeNonASCII(String(data: data, encoding: .utf8) ?? "")
+    }
+
+    /// Whether a 409 from `get_thumbnail_v2` means "no preview for this
+    /// file" — a type it can't draw, or a picture it can't read or that is
+    /// too large — rather than a missing file or a refused link.
+    static func isThumbnailRefusal(_ body: Data) -> Bool {
+        struct Envelope: Decodable {
+            struct Tagged: Decodable {
+                let tag: String
+                enum CodingKeys: String, CodingKey { case tag = ".tag" }
+            }
+            let error: Tagged
+        }
+        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: body) else { return false }
+        return ["unsupported_extension", "unsupported_image", "conversion_error"].contains(envelope.error.tag)
+    }
+
+    /// A preview made by Dropbox, or nil where Dropbox has none for the file.
+    public func thumbnail(path: String, fileName: String, maxPixelSize: Int) async throws -> Data? {
+        let argString = try Self.thumbnailArgument(
+            path: dropboxPath(path), fileName: fileName, maxPixelSize: maxPixelSize
+        )
+        let url = URL(string: "\(Self.contentURL)/files/get_thumbnail_v2")!
+
+        func send(accessToken: String) async throws -> (Data, HTTPURLResponse) {
+            // POST, not GET: Dropbox's GET responses carry an ETag that let
+            // caches hand back one size for another.
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue(argString, forHTTPHeaderField: "Dropbox-API-Arg")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(accessToken: try await refreshTokenIfNeeded().accessToken)
+        if http.statusCode == 401 {
+            dropboxLog.info("[Dropbox] Got 401 on get_thumbnail_v2, refreshing token and retrying")
+            (data, http) = try await send(accessToken: try await forceRefreshToken().accessToken)
+        }
+
+        if (200...299).contains(http.statusCode) {
+            return data.isEmpty ? nil : data
+        }
+        // Not logged: a gallery of unsupported files would fill the log.
+        if http.statusCode == 409, Self.isThumbnailRefusal(data) {
+            return nil
+        }
+        let bodyStr = String(data: data, encoding: .utf8) ?? ""
+        dropboxLog.error("[Dropbox] get_thumbnail_v2 failed: HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+        throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+    }
+
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }

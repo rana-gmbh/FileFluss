@@ -745,6 +745,54 @@ public sealed class GoogleDriveProvider : CloudProvider
         return await GoogleDriveApi.StorageQuotaAsync(_http, accessToken, cancellationToken).ConfigureAwait(false);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// Drive makes previews of images, videos and PDFs itself; this looks up the file's
+    /// short-lived <c>thumbnailLink</c> and fetches it. A listed file's id is used directly;
+    /// only an item without one (none in practice) costs a path walk, and the shared-drive
+    /// nodes and folders it might resolve to have no preview.
+    /// </summary>
+    public override async Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+    {
+        if (item.IsDirectory || item.Role != CloudItemRole.Normal)
+        {
+            return null;
+        }
+
+        var session = RequireSession();
+        string fileId;
+        if (GoogleDriveApi.DriveFileId(item.Id) is { } listedId)
+        {
+            fileId = listedId;
+        }
+        else
+        {
+            var path = GoogleDriveApi.Trim(item.Path);
+            if (IsVirtualSharedDriveNode(path))
+            {
+                return null;
+            }
+
+            var cached = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
+            if (cached.MimeType == GoogleDriveApi.FolderMimeType || cached.Id == SharedDrivesSentinelId)
+            {
+                return null;
+            }
+
+            fileId = cached.Id;
+        }
+
+        return await GoogleDriveApi.FetchThumbnailAsync(
+            _http,
+            session,
+            fileId,
+            maxPixelSize,
+            (status, body) => MapError(status, GoogleDriveApi.ParseErrorMessage(body), item.Path),
+            LogCategory,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     // MARK: - Share links
 
     /// <summary>

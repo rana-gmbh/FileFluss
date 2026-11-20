@@ -921,6 +921,82 @@ public actor NextCloudAPIClient {
         return try WebDAVResponseParser.parse(data: data, basePath: davBaseURL, requestPath: searchPath)
     }
 
+    // MARK: - Previews
+
+    /// A preview the server renders itself, through the same endpoint the
+    /// Nextcloud web UI uses (`core/Controller/PreviewController.php`,
+    /// `GET /index.php/core/preview.png`). It takes the path relative to the
+    /// user's folder, which is exactly what our items carry, so no extra
+    /// PROPFIND for a file id is needed. Nil when the server has no preview
+    /// for the file: it answers 404 for a type no preview provider handles
+    /// (videos without ffmpeg, say), 400 for arguments it rejects, and 403
+    /// for a share that doesn't allow viewing the content.
+    public func thumbnail(path: String, maxPixelSize: Int) async throws -> Data? {
+        let edge = Self.previewEdge(forMaxPixelSize: maxPixelSize)
+        guard let url = Self.previewURL(serverURL: credentials.serverURL, path: path, edge: edge) else {
+            throw CloudProviderError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        // index.php routes open a login session for a Basic-auth request and
+        // hand back its cookies. Keeping them would make every later WebDAV
+        // call ride on that session as well as on the app password, so the
+        // preview calls stay cookie-free like the rest of the client.
+        request.httpShouldHandleCookies = false
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        switch http.statusCode {
+        case 200:
+            // A server that bounced us to its login page would answer 200
+            // with HTML; that is no preview either.
+            guard !data.isEmpty, http.mimeType?.hasPrefix("image/") ?? false else { return nil }
+            return data
+        case 400, 403, 404:
+            return nil
+        default:
+            throw Self.mapHTTPError(statusCode: http.statusCode)
+        }
+    }
+
+    /// Nextcloud keeps every preview it renders, one file per requested
+    /// size, so asking for a few fixed sizes lets all gallery tile sizes
+    /// share them instead of filling the server's preview folder with one
+    /// copy per pixel count. The caller scales the result down.
+    static func previewEdge(forMaxPixelSize maxPixelSize: Int) -> Int {
+        switch maxPixelSize {
+        case ...256: return 256
+        case ...512: return 512
+        default: return 1024
+        }
+    }
+
+    /// `a=1` keeps the aspect ratio (the server crops to the box otherwise),
+    /// and `forceIcon=0` makes the server check up front whether it can
+    /// preview the type at all and say 404 rather than try.
+    static func previewURL(serverURL: String, path: String, edge: Int) -> URL? {
+        let base = serverURL.hasSuffix("/") ? String(serverURL.dropLast()) : serverURL
+        guard var components = URLComponents(string: "\(base)/index.php/core/preview.png") else { return nil }
+        let file = path.hasPrefix("/") ? path : "/" + path
+        components.queryItems = [
+            URLQueryItem(name: "file", value: file),
+            URLQueryItem(name: "x", value: String(edge)),
+            URLQueryItem(name: "y", value: String(edge)),
+            URLQueryItem(name: "a", value: "1"),
+            URLQueryItem(name: "forceIcon", value: "0"),
+        ]
+        // URLComponents leaves `+` alone, and PHP reads a bare `+` in a query
+        // as a space, so "a+b.jpg" would name a file that isn't there.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+        return components.url
+    }
+
     // MARK: - Private
 
     private func buildDAVPath(_ path: String) -> String {

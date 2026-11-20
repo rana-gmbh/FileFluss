@@ -806,6 +806,87 @@ public sealed class SeafileProvider : CloudProvider
         return new CloudStorageQuota(info.Usage ?? 0, info.Total is > 0 ? info.Total : null);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// A preview Seahub renders itself (<c>ThumbnailView</c> in <c>seahub/api2/views.py</c>,
+    /// <c>GET /api2/repos/&lt;repo_id&gt;/thumbnail/</c>), with the same token as every other
+    /// call. Seahub makes thumbnails of images and PDFs. Null for the library list and the
+    /// libraries themselves, and whenever Seahub won't make one: 400 for a type it can't
+    /// preview (videos unless a thumbnail server is set up), an image over its size limit or a
+    /// path it can't find, 403 for an encrypted library, 404 when the library is gone or
+    /// thumbnails are switched off.
+    /// </summary>
+    public override async Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+    {
+        if (item.IsDirectory || item.Role != CloudItemRole.Normal)
+        {
+            return null;
+        }
+
+        var session = Current;
+        var resolved = await ResolveAsync(session, CloudPath.Normalize(item.Path), cancellationToken).ConfigureAwait(false);
+        if (resolved is not { } target || target.Inner == "/")
+        {
+            return null;
+        }
+
+        var query = ThumbnailQuery(target.Inner, ThumbnailSize(maxPixelSize));
+        using var request = Request(session, HttpMethod.Get, $"/api2/repos/{target.Library.Id}/thumbnail/?{query}");
+        // JSON too, at lower priority: Seahub's REST framework answers a refusal ("videos have
+        // no thumbnail") with 406 when it may not send its JSON error.
+        request.Headers.Accept.Clear();
+        request.Headers.Accept.ParseAdd("image/*");
+        request.Headers.Accept.ParseAdd("application/json; q=0.5");
+        using var response = await session.Http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
+        switch ((int)response.StatusCode)
+        {
+            case 200:
+                // A proxy's login page or an error page served with 200 is no thumbnail.
+                if (response.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true)
+                {
+                    return null;
+                }
+
+                var bytes = await ReadBytesAsync(response, cancellationToken).ConfigureAwait(false);
+                return bytes.Length > 0 ? bytes : null;
+            case 400 or 403 or 404 or 406:
+                return null;
+            default:
+                var body = await ReadBodyAsync(response, cancellationToken).ConfigureAwait(false);
+                SupportLogger.Shared.Log($"thumbnail failed: HTTP {(int)response.StatusCode}", LogCategory, LogLevel.Error);
+                throw MapError(response.StatusCode, body, item.Path);
+        }
+    }
+
+    /// <summary>
+    /// Seahub stores each thumbnail on disk under the size it was asked for, so a few fixed
+    /// sizes — 256 is its own default, 512 what its grid view uses — let every tile size share
+    /// them. The caller scales down.
+    /// </summary>
+    internal static int ThumbnailSize(int maxPixelSize) => maxPixelSize switch
+    {
+        <= 256 => 256,
+        <= 512 => 512,
+        _ => 1024,
+    };
+
+    /// <summary>Strictly encoded, so a "&amp;", "+" or "=" in a file name can't break the query apart.</summary>
+    internal static string ThumbnailQuery(string innerPath, int size)
+        => $"p={QueryEncoded(innerPath)}&size={size.ToString(CultureInfo.InvariantCulture)}";
+
+    private static async Task<byte[]> ReadBytesAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException)
+        {
+            throw CloudProviderException.Network(e);
+        }
+    }
+
     // MARK: - Share links
 
     /// <summary>

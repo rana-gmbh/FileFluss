@@ -127,6 +127,15 @@ public sealed class NextCloudProvider : WebDavProviderBase
     public override Task<CloudStorageQuota?> StorageQuotaAsync(CancellationToken cancellationToken = default)
         => _api is { } api ? api.StorageQuotaAsync(cancellationToken) : Task.FromResult<CloudStorageQuota?>(null);
 
+    /// <summary>
+    /// Nextcloud renders previews of images, PDFs and (with ffmpeg on the server) videos; the
+    /// API turns "no preview for this file" into null.
+    /// </summary>
+    public override Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+        => item.IsDirectory || item.Role != CloudItemRole.Normal
+            ? Task.FromResult<byte[]?>(null)
+            : RequireApi().ThumbnailAsync(item.Path, maxPixelSize, cancellationToken);
+
     // MARK: - Share links
 
     /// <summary>

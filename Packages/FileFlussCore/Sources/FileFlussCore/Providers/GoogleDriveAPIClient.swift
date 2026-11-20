@@ -1350,6 +1350,172 @@ public actor GoogleDriveAPIClient {
     }
 }
 
+// MARK: - Thumbnails
+
+extension GoogleDriveAPIClient {
+    /// The service's preview of a file, or nil when Drive has none for it.
+    public func thumbnail(itemId: String, path: String, maxPixelSize: Int) async throws -> Data? {
+        let fileId: String
+        if let id = Self.driveFileId(fromItemId: itemId) {
+            fileId = id
+        } else {
+            let cached = try await resolvePathToCachedFile(path)
+            guard cached.mimeType != "application/vnd.google-apps.folder",
+                  cached.id != Self.sharedDrivesSentinelId else { return nil }
+            fileId = cached.id
+        }
+        return try await Self.fetchThumbnail(
+            fileId: fileId,
+            maxPixelSize: maxPixelSize,
+            apiURL: apiURL,
+            session: session,
+            accessToken: { [self] forceRefresh in
+                forceRefresh ? try await self.forceRefresh().accessToken : try await self.refreshTokenIfNeeded().accessToken
+            }
+        )
+    }
+
+    /// The Drive file id inside a listed item's id. Listings and searches
+    /// build ids as "f" plus the file id (and "d" plus the id for folders),
+    /// so a file's own id saves walking its path. Anything else is nil.
+    static func driveFileId(fromItemId itemId: String) -> String? {
+        guard itemId.hasPrefix("f"), itemId.count > 1 else { return nil }
+        return String(itemId.dropFirst())
+    }
+
+    /// The longer edge to ask Drive for. The tile's own size, within bounds
+    /// that keep a mistaken caller from asking for a tiny or a huge image.
+    static func thumbnailEdge(forMaxPixelSize maxPixelSize: Int) -> Int {
+        min(max(maxPixelSize, 32), 1600)
+    }
+
+    /// `thumbnailLink` carries its size in the URL: a trailing `=s220` on
+    /// googleusercontent links, or an `sz=s220` query item on older ones.
+    /// Google doesn't document changing it, so only those exact forms are
+    /// rewritten; any other link is used as it came, at Drive's default
+    /// size, which the caller scales anyway.
+    static func thumbnailURL(from link: String, edge: Int) -> URL? {
+        guard var components = URLComponents(string: link) else { return nil }
+        if let range = components.percentEncodedPath.range(of: #"=s\d+$"#, options: .regularExpression) {
+            components.percentEncodedPath.replaceSubrange(range, with: "=s\(edge)")
+        } else if var items = components.percentEncodedQueryItems,
+                  let index = items.firstIndex(where: { item in
+                      item.name == "sz" && item.value?.range(of: #"^s\d+$"#, options: .regularExpression) != nil
+                  }) {
+            items[index].value = "s\(edge)"
+            components.percentEncodedQueryItems = items
+        }
+        return components.url
+    }
+
+    /// Whether a thumbnail URL may be sent the account's token. Drive's
+    /// thumbnails are fetched with credentials, so the link has to be an
+    /// HTTPS address of Google's own; anything else is never fetched.
+    static func mayCarryGoogleToken(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased() else { return false }
+        return ["googleusercontent.com", "google.com", "googleapis.com"].contains { domain in
+            host == domain || host.hasSuffix("." + domain)
+        }
+    }
+
+    /// Asks Drive for the file's `thumbnailLink` and fetches the image
+    /// behind it. The link is short-lived, so it is looked up fresh each
+    /// time rather than kept; the caller keeps the image instead. Both
+    /// requests carry the token, because Drive serves a private file's
+    /// thumbnail only to a credentialed request.
+    ///
+    /// Shared by both Drive accounts: the full-Drive client passes a token
+    /// source that can force a refresh after a 401, the selected-folders
+    /// one a source that just returns its current token.
+    static func fetchThumbnail(
+        fileId: String,
+        maxPixelSize: Int,
+        apiURL: String = "https://www.googleapis.com/drive/v3",
+        session: URLSession,
+        accessToken: @escaping @Sendable (_ forceRefresh: Bool) async throws -> String
+    ) async throws -> Data? {
+        guard var components = URLComponents(string: "\(apiURL)/files/\(fileId)") else { return nil }
+        components.queryItems = [
+            URLQueryItem(name: "fields", value: "hasThumbnail,thumbnailLink"),
+            URLQueryItem(name: "supportsAllDrives", value: "true"),
+        ]
+        guard let metadataURL = components.url else { return nil }
+
+        let (data, http) = try await sendWithToken(metadataURL, session: session, accessToken: accessToken)
+        switch http.statusCode {
+        case 200...299:
+            break
+        case 404:
+            // Gone since the listing: nothing to preview.
+            return nil
+        default:
+            throw mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+
+        struct ThumbnailInfo: Decodable {
+            let hasThumbnail: Bool?
+            let thumbnailLink: String?
+        }
+        // The link is only there when this app may read the file's content
+        // and Drive has made a preview, so its absence is the "no preview"
+        // answer.
+        let info = try JSONDecoder().decode(ThumbnailInfo.self, from: data)
+        guard info.hasThumbnail != false, let link = info.thumbnailLink, !link.isEmpty else { return nil }
+
+        let sized = thumbnailURL(from: link, edge: thumbnailEdge(forMaxPixelSize: maxPixelSize))
+        if let sized, mayCarryGoogleToken(sized),
+           let image = try await fetchThumbnailImage(sized, session: session, accessToken: accessToken) {
+            return image
+        }
+        // The size rewrite isn't documented, so a refusal of the resized
+        // link gets one more try with the link exactly as Drive gave it.
+        guard let original = URL(string: link), original != sized, mayCarryGoogleToken(original) else { return nil }
+        return try await fetchThumbnailImage(original, session: session, accessToken: accessToken)
+    }
+
+    /// The image behind a thumbnail link. Nil when the link is refused or
+    /// what comes back isn't an image, as when an expired link lands on a
+    /// sign-in page.
+    private static func fetchThumbnailImage(
+        _ url: URL,
+        session: URLSession,
+        accessToken: @escaping @Sendable (_ forceRefresh: Bool) async throws -> String
+    ) async throws -> Data? {
+        let (data, http) = try await sendWithToken(url, session: session, accessToken: accessToken)
+        switch http.statusCode {
+        case 200...299:
+            let type = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+            guard !data.isEmpty, type.isEmpty || type.hasPrefix("image/") else { return nil }
+            return data
+        case 400, 403, 404, 410:
+            return nil
+        default:
+            throw mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+    }
+
+    /// A GET with the account's token, sent once more with a refreshed
+    /// token after a 401, as the other requests here do.
+    private static func sendWithToken(
+        _ url: URL,
+        session: URLSession,
+        accessToken: @escaping @Sendable (_ forceRefresh: Bool) async throws -> String
+    ) async throws -> (Data, HTTPURLResponse) {
+        func send(forceRefresh: Bool) async throws -> (Data, HTTPURLResponse) {
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(try await accessToken(forceRefresh))", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+        var (data, http) = try await send(forceRefresh: false)
+        if http.statusCode == 401 {
+            (data, http) = try await send(forceRefresh: true)
+        }
+        return (data, http)
+    }
+}
+
 // Use CommonCrypto for SHA256
 import CommonCrypto
 

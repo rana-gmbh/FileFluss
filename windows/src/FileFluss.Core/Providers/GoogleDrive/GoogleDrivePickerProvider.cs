@@ -606,6 +606,34 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
         return await GoogleDriveApi.StorageQuotaAsync(_http, accessToken, cancellationToken).ConfigureAwait(false);
     }
 
+    // MARK: - Thumbnails
+
+    /// <summary>
+    /// Same previews as the full-Drive account, through the same lookup. Drive fills in
+    /// <c>thumbnailLink</c> for any file this app may read, which under <c>drive.file</c> is
+    /// everything inside the picked folders. Only a listed file's own id is used: resolving a
+    /// path here walks the folders live, which is far too slow to do once per tile.
+    ///
+    /// <para>Unlike macOS, whose client here can't be made to refresh early, this account's
+    /// token session can, so a 401 gets one retry with a fresh token as on the full-Drive account.</para>
+    /// </summary>
+    public override async Task<byte[]?> ThumbnailAsync(CloudFileItem item, int maxPixelSize, CancellationToken cancellationToken = default)
+    {
+        if (item.IsDirectory || item.Role != CloudItemRole.Normal || GoogleDriveApi.DriveFileId(item.Id) is not { } fileId)
+        {
+            return null;
+        }
+
+        return await GoogleDriveApi.FetchThumbnailAsync(
+            _http,
+            RequireSession(),
+            fileId,
+            maxPixelSize,
+            (status, _) => MapError(status, item.Path),
+            LogCategory,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     // MARK: - HTTP
 
     /// <summary>

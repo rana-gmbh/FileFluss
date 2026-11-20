@@ -129,6 +129,16 @@ public final class DropboxProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    // MARK: - Thumbnails
+
+    /// Dropbox draws previews of pictures, and in practice of many videos
+    /// and PDFs too; it says so per file, so nothing is filtered here.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(path: item.path, fileName: item.name, maxPixelSize: maxPixelSize)
+    }
+
     // MARK: - Share links
 
     /// Dropbox's link settings cover the full set. Password and expiry are

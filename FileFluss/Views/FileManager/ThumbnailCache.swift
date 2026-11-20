@@ -2,38 +2,55 @@ import AppKit
 @preconcurrency import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
-/// Caches Quick Look thumbnail previews for local files. Keyed by
-/// (path, mtime, size, pixel size) so an edited file invalidates
-/// automatically and the list's tiny icons never stand in for a gallery
-/// tile. Used in the file-list cells and the gallery tiles to render real
-/// previews instead of generic type icons.
+/// What a thumbnail source made of one file.
+enum ThumbnailOutcome: Sendable {
+    /// Encoded image bytes, JPEG or PNG.
+    case data(Data)
+    /// There is no preview of this file, and asking again won't change that.
+    case none
+    /// Nothing this time — the network was down, the service busy. Not
+    /// remembered, so the next time the tile shows it asks again.
+    case unavailable
+}
+
+/// Caches thumbnail previews in memory: Quick Look's for local files, and
+/// the cloud gallery's, which come from the service or from a small
+/// download. Keyed by (identity, mtime, size, pixel size) so an edited file
+/// invalidates automatically and the list's tiny icons never stand in for a
+/// gallery tile.
 @MainActor
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
 
     private struct Key: Hashable {
-        let path: String
+        /// A local file's path, or a cloud file's account-qualified path.
+        let identity: String
         let mtime: TimeInterval
         let size: Int64
-        /// Edge length asked of Quick Look, in pixels.
+        /// Edge length asked for, in pixels.
         let pixels: Int
     }
 
-    /// One Quick Look request and everyone waiting for it. Main-actor bound
-    /// like the cache itself — a nested type doesn't inherit that — so the
+    private enum Result {
+        case image(NSImage)
+        /// The file has no thumbnail; remembered.
+        case refused
+        /// No thumbnail this time; forgotten.
+        case transient
+    }
+
+    /// One request and everyone waiting for it. Main-actor bound like the
+    /// cache itself — a nested type doesn't inherit that — so the
     /// cancellation handler can hand it back to the main actor.
     @MainActor
     private final class Generation {
-        let request: QLThumbnailGenerator.Request
-        var task: Task<NSImage?, Never>?
+        var task: Task<Result, Never>?
+        /// Withdraws the work behind `task` when nobody waits for it any more.
+        var withdraw: (@MainActor () -> Void)?
         var waiters = 0
         var cancelledWaiters = 0
         var isCancelled = false
         var isFinished = false
-
-        init(request: QLThumbnailGenerator.Request) {
-            self.request = request
-        }
     }
 
     private var cache: [Key: (image: NSImage, cost: Int)] = [:]
@@ -48,8 +65,8 @@ final class ThumbnailCache {
     /// existing generation instead of queuing a second one.
     private var inFlight: [Key: Generation] = [:]
     /// Files whose thumbnail generation failed. Without this, every cell
-    /// reuse re-asks Quick Look for a thumbnail it already refused, which
-    /// is worst exactly where it hurts: scrolling a big folder.
+    /// reuse re-asks for a thumbnail that was already refused, which is
+    /// worst exactly where it hurts: scrolling a big folder.
     private var failed: Set<Key> = []
 
     /// Returns true when a content thumbnail is worth generating instead
@@ -68,19 +85,25 @@ final class ThumbnailCache {
         return !type.conforms(to: .directory) && !type.conforms(to: .package)
     }
 
-    private static var scale: CGFloat { NSScreen.main?.backingScaleFactor ?? 2 }
+    static var scale: CGFloat { NSScreen.main?.backingScaleFactor ?? 2 }
 
-    private static func key(for url: URL, mtime: Date, size: Int64, pointSize: CGFloat) -> Key {
+    static func pixels(for pointSize: CGFloat) -> Int {
+        Int((pointSize * scale).rounded())
+    }
+
+    private static func key(identity: String, mtime: Date, size: Int64, pointSize: CGFloat) -> Key {
         Key(
-            path: url.path,
+            identity: identity,
             mtime: mtime.timeIntervalSinceReferenceDate,
             size: size,
-            pixels: Int((pointSize * scale).rounded())
+            pixels: pixels(for: pointSize)
         )
     }
 
+    // MARK: Local files (Quick Look)
+
     func cached(for url: URL, mtime: Date, size: Int64, pointSize: CGFloat = 18) -> NSImage? {
-        cache[Self.key(for: url, mtime: mtime, size: size, pointSize: pointSize)]?.image
+        cached(identity: url.path, mtime: mtime, size: size, pointSize: pointSize)
     }
 
     /// Generates (or finds) the thumbnail. When every caller waiting for a
@@ -88,38 +111,87 @@ final class ThumbnailCache {
     /// the Quick Look request is withdrawn, so the tiles that are on screen
     /// don't queue behind ones nobody can see any more.
     func thumbnail(for url: URL, mtime: Date, size: Int64, pointSize: CGFloat = 18) async -> NSImage? {
-        let key = Self.key(for: url, mtime: mtime, size: size, pointSize: pointSize)
+        let key = Self.key(identity: url.path, mtime: mtime, size: size, pointSize: pointSize)
+        return await thumbnail(for: key) {
+            let request = QLThumbnailGenerator.Request(
+                fileAt: url,
+                size: CGSize(width: pointSize, height: pointSize),
+                scale: Self.scale,
+                representationTypes: .thumbnail
+            )
+            let task = Task { () -> Result in
+                let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
+                return rep.map { .image($0.nsImage) } ?? .refused
+            }
+            return (task, { QLThumbnailGenerator.shared.cancel(request) })
+        }
+    }
+
+    // MARK: Files without a local copy
+
+    func cached(identity: String, mtime: Date, size: Int64, pointSize: CGFloat) -> NSImage? {
+        cache[Self.key(identity: identity, mtime: mtime, size: size, pointSize: pointSize)]?.image
+    }
+
+    /// The thumbnail of a file Quick Look can't reach — a cloud file —
+    /// made by `generate`, which gets the edge length in pixels. Shares the
+    /// local thumbnails' memory budget, de-duplication and withdrawal: a
+    /// tile scrolled out of view cancels the work behind it.
+    func thumbnail(
+        identity: String,
+        mtime: Date,
+        size: Int64,
+        pointSize: CGFloat,
+        generate: @escaping @Sendable (_ pixels: Int) async -> ThumbnailOutcome
+    ) async -> NSImage? {
+        let key = Self.key(identity: identity, mtime: mtime, size: size, pointSize: pointSize)
+        let pixels = key.pixels
+        return await thumbnail(for: key) {
+            let task = Task { () -> Result in
+                switch await generate(pixels) {
+                case .data(let data):
+                    return NSImage(data: data).map { .image($0) } ?? .refused
+                case .none:
+                    return .refused
+                case .unavailable:
+                    return .transient
+                }
+            }
+            return (task, { task.cancel() })
+        }
+    }
+
+    // MARK: Shared machinery
+
+    private func thumbnail(
+        for key: Key,
+        start: () -> (Task<Result, Never>, @MainActor () -> Void)
+    ) async -> NSImage? {
         if let cached = cache[key] { return cached.image }
         if failed.contains(key) { return nil }
 
-        let generation = inFlight[key] ?? start(key, url: url, pointSize: pointSize)
+        let generation: Generation
+        if let existing = inFlight[key] {
+            generation = existing
+        } else {
+            generation = Generation()
+            let (task, withdraw) = start()
+            generation.task = task
+            generation.withdraw = withdraw
+            inFlight[key] = generation
+        }
         generation.waiters += 1
-        let image = await withTaskCancellationHandler {
-            await generation.task?.value ?? nil
+        let result = await withTaskCancellationHandler {
+            await generation.task?.value ?? .transient
         } onCancel: {
             // `self` strongly: the cache lives as long as the app. A weak capture is a mutable
             // box, which Swift 6.3 — the compiler the release is built with — refuses to send
             // to the main actor ("sending 'self' risks causing data races").
             Task { @MainActor in self.waiterCancelled(generation, key: key) }
         }
-        finish(generation, key: key, image: image)
-        return image
-    }
-
-    private func start(_ key: Key, url: URL, pointSize: CGFloat) -> Generation {
-        let request = QLThumbnailGenerator.Request(
-            fileAt: url,
-            size: CGSize(width: pointSize, height: pointSize),
-            scale: Self.scale,
-            representationTypes: .thumbnail
-        )
-        let generation = Generation(request: request)
-        generation.task = Task { () -> NSImage? in
-            let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
-            return rep?.nsImage
-        }
-        inFlight[key] = generation
-        return generation
+        finish(generation, key: key, result: result)
+        if case .image(let image) = result { return image }
+        return nil
     }
 
     private func waiterCancelled(_ generation: Generation, key: Key) {
@@ -131,21 +203,24 @@ final class ThumbnailCache {
         // the withdrawn request winds down starts a fresh one rather than
         // inheriting a cancellation.
         if inFlight[key] === generation { inFlight[key] = nil }
-        QLThumbnailGenerator.shared.cancel(generation.request)
+        generation.withdraw?()
     }
 
-    private func finish(_ generation: Generation, key: Key, image: NSImage?) {
+    private func finish(_ generation: Generation, key: Key, result: Result) {
         // Every waiter passes through here; the first does the bookkeeping.
         guard !generation.isFinished else { return }
         generation.isFinished = true
         if inFlight[key] === generation { inFlight[key] = nil }
 
-        guard let image else {
+        switch result {
+        case .image(let image):
+            store(image, for: key)
+        case .refused:
             // A withdrawn request says nothing about the file.
             if !generation.isCancelled { failed.insert(key) }
-            return
+        case .transient:
+            break
         }
-        store(image, for: key)
     }
 
     private func store(_ image: NSImage, for key: Key) {

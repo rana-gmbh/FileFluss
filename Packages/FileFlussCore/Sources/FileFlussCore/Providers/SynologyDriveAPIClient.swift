@@ -235,6 +235,91 @@ public actor SynologyDriveAPIClient {
         try FileSystemService.placeDownload(from: tmp, at: localURL)
     }
 
+    // MARK: - Thumbnails
+
+    /// A thumbnail DSM keeps for the file, through `SYNO.FileStation.Thumb`
+    /// (File Station API guide, "SYNO.FileStation.Thumb", DSM 6.0 and
+    /// later). It answers with the image itself, and with a plain HTTP 404
+    /// when it has none: a type it doesn't thumbnail, or a video outside the
+    /// "photo" share and the home folders, the only places DSM indexes them.
+    /// An expired session can still come back as the usual JSON envelope,
+    /// so that is read the way `call` reads it, logging in again once.
+    public func thumbnail(path: String, maxPixelSize: Int) async throws -> Data? {
+        let size = Self.thumbnailSize(forMaxPixelSize: maxPixelSize)
+        var attempt = 0
+        while true {
+            let sid = try await ensureSession()
+            let url = try thumbnailURL(path: path, size: size, sid: sid)
+            var request = URLRequest(url: url)
+            request.setValue("image/*", forHTTPHeaderField: "Accept")
+
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, http.statusCode == 404 {
+                return nil
+            }
+            try validateHTTP(response)
+
+            if (response as? HTTPURLResponse)?.mimeType?.hasPrefix("image/") ?? false {
+                return data.isEmpty ? nil : data
+            }
+            guard let envelope = try? JSONDecoder().decode(SynologyEnvelope<SynologyEmptyData>.self, from: data) else {
+                return nil
+            }
+            let code = envelope.error?.code ?? -1
+            if code == 119 {
+                guard attempt == 0 else { throw CloudProviderError.notAuthenticated }
+                self.sid = nil
+                attempt += 1
+                continue
+            }
+            // Any other refusal (no such file, no permission for this one)
+            // is about the file, not the account.
+            return nil
+        }
+    }
+
+    /// DSM's thumbnails come in three fixed sizes; which pixel size each
+    /// one is varies by DSM version and isn't documented, so this asks for
+    /// one comfortably above the tile and lets the caller scale it down:
+    /// "small" only for tiny tiles, "medium" for the gallery's usual sizes,
+    /// "large" beyond that. "original" would be the whole picture.
+    static func thumbnailSize(forMaxPixelSize maxPixelSize: Int) -> String {
+        switch maxPixelSize {
+        case ...120: return "small"
+        case ...320: return "medium"
+        default: return "large"
+        }
+    }
+
+    /// The path goes in JSON-quoted, as the API guide's own example passes
+    /// it. `_sid` sits in the query like on every other File Station call.
+    private func thumbnailURL(path: String, size: String, sid: String) throws -> URL {
+        let url = try buildURL(
+            path: "/webapi/entry.cgi",
+            queryItems: Self.thumbnailQueryItems(path: path, size: size) + [URLQueryItem(name: "_sid", value: sid)]
+        )
+        return Self.encodingPlus(in: url)
+    }
+
+    static func thumbnailQueryItems(path: String, size: String) -> [URLQueryItem] {
+        [
+            URLQueryItem(name: "api", value: "SYNO.FileStation.Thumb"),
+            URLQueryItem(name: "version", value: "2"),
+            URLQueryItem(name: "method", value: "get"),
+            URLQueryItem(name: "path", value: jsonQuoted(path)),
+            URLQueryItem(name: "size", value: size),
+        ]
+    }
+
+    /// URLComponents leaves `+` as it is, and DSM's CGI reads a bare `+` in
+    /// a query as a space, so "a+b.jpg" would name a file that isn't there.
+    static func encodingPlus(in url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+        return components.url ?? url
+    }
+
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
         let sid = try await ensureSession()
         let parentPath = (remotePath as NSString).deletingLastPathComponent

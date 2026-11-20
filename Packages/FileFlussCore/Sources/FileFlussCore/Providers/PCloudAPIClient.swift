@@ -292,6 +292,85 @@ public actor PCloudAPIClient {
         try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
+    // MARK: - Thumbnails
+
+    /// The edge of the square box asked of `getthumb`: the first value from
+    /// `maxPixelSize` up that pCloud accepts — divisible by 4 or 5, 16 to
+    /// 1024 (the height's limit, the lower of the two). Without `crop` the
+    /// picture keeps its proportions inside the box, so its longer edge is
+    /// this one.
+    static func thumbnailEdge(forMaxPixelSize maxPixelSize: Int) -> Int {
+        var edge = min(max(maxPixelSize, 16), 1024)
+        while edge % 4 != 0 && edge % 5 != 0 { edge += 1 }
+        return edge
+    }
+
+    /// The file id inside a listed item's id ("f123"), or nil for anything
+    /// else, which is then looked up by path instead.
+    static func fileId(fromItemId id: String) -> UInt64? {
+        guard id.hasPrefix("f"), let value = UInt64(id.dropFirst()), value != 0 else { return nil }
+        return value
+    }
+
+    /// The `getthumb` parameters, without the token.
+    static func thumbnailParameters(fileId: UInt64?, path: String, maxPixelSize: Int) -> [URLQueryItem] {
+        let edge = thumbnailEdge(forMaxPixelSize: maxPixelSize)
+        let file = fileId.map { URLQueryItem(name: "fileid", value: String($0)) }
+            ?? URLQueryItem(name: "path", value: path)
+        return [file, URLQueryItem(name: "size", value: "\(edge)x\(edge)")]
+    }
+
+    /// A form body, every value escaped except unreserved characters — a
+    /// "+" or "&" in a file name must reach pCloud as itself.
+    static func formEncoded(_ items: [URLQueryItem]) -> Data {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let pairs = items.map { item in
+            let name = item.name.addingPercentEncoding(withAllowedCharacters: allowed) ?? item.name
+            let value = (item.value ?? "").addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+            return "\(name)=\(value)"
+        }
+        return Data(pairs.joined(separator: "&").utf8)
+    }
+
+    /// pCloud's answers that mean "no preview for this file": 1014, a type
+    /// it can't draw, and 3001, a file it failed to draw.
+    static func isThumbnailRefusal(code: Int) -> Bool {
+        code == 1014 || code == 3001
+    }
+
+    /// A preview made by pCloud, or nil where pCloud has none for the file.
+    ///
+    /// Sent as a POST so the token travels in the body rather than in the
+    /// address, on the account's own API host like every other call. The
+    /// answer is the picture itself; a refusal comes back as the usual
+    /// JSON with a non-zero `result`.
+    public func thumbnail(fileId: UInt64?, path: String, maxPixelSize: Int) async throws -> Data? {
+        guard let url = URL(string: "\(baseURL)/getthumb") else { throw CloudProviderError.invalidResponse }
+        let parameters = [credentials.authQueryItem]
+            + Self.thumbnailParameters(fileId: fileId, path: path, maxPixelSize: maxPixelSize)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.formEncoded(parameters)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            throw CloudProviderError.serverError(http.statusCode)
+        }
+
+        let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+        if http.value(forHTTPHeaderField: "X-Error") != nil || contentType.contains("json") {
+            guard let envelope = try? JSONDecoder().decode(PCloudErrorEnvelope.self, from: data) else {
+                throw CloudProviderError.invalidResponse
+            }
+            if envelope.result == 0 { throw CloudProviderError.invalidResponse }
+            if Self.isThumbnailRefusal(code: envelope.result) { return nil }
+            throw Self.mapError(code: envelope.result)
+        }
+        return data.isEmpty ? nil : data
+    }
+
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String) async throws {
         try await uploadFile(from: localURL, toFolder: folderPath, fileName: fileName, onBytes: nil)
     }

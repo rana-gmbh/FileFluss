@@ -3,7 +3,8 @@ import FileFlussCore
 
 // The cloud panel's gallery. As in the local one, everything a tile can do
 // runs through the coordinator methods the list uses. Cloud files have no
-// local copy for Quick Look to draw from, so tiles show the type's icon.
+// local copy for Quick Look to draw from, so a tile shows the type's icon
+// until `CloudThumbnailLoader` brings a preview.
 
 extension NativeCloudFileList {
     func makeGallery(coordinator: CloudTableCoordinator) -> NSScrollView {
@@ -136,6 +137,34 @@ extension CloudTableCoordinator: NSCollectionViewDataSource, NSCollectionViewDel
             badge: badge,
             metrics: metrics
         )
+        loadThumbnail(into: tile, for: item, pointSize: iconSize)
+    }
+
+    /// Replaces the type icon with a preview from the service, or from a
+    /// small download, once it arrives. A tile reused for another file
+    /// drops the late preview and withdraws the request.
+    private func loadThumbnail(into tile: FileGalleryItem, for item: CloudFileItem, pointSize: CGFloat) {
+        guard let accountId = thumbnailAccountId, !archiveMode,
+              CloudThumbnailLoader.wantsThumbnail(for: item) else { return }
+        let cache = ThumbnailCache.shared
+        let identity = "cloud:\(accountId.uuidString)\(item.path)"
+        if let thumb = cache.cached(identity: identity, mtime: item.modificationDate, size: item.size, pointSize: pointSize) {
+            tile.showThumbnail(thumb)
+            return
+        }
+        let id = item.id
+        tile.thumbnailTask = Task { @MainActor [weak tile] in
+            let thumb = await cache.thumbnail(
+                identity: identity,
+                mtime: item.modificationDate,
+                size: item.size,
+                pointSize: pointSize
+            ) { pixels in
+                await CloudThumbnailLoader.shared.thumbnail(accountId: accountId, item: item, pixels: pixels)
+            }
+            guard let thumb, !Task.isCancelled, let tile, tile.representedID == id else { return }
+            tile.showThumbnail(thumb)
+        }
     }
 
     // MARK: Selection
