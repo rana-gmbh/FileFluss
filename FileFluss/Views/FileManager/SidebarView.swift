@@ -462,15 +462,21 @@ struct SidebarView: View {
                         }
                         .help(cloudAccountTooltip(for: account))
                         .contextMenu {
-                            if appState.syncManager.accountsNeedingSignIn.contains(account.id),
-                               appState.syncManager.providerSupportsInlineReauth(account.providerType) {
-                                Button(L10n.text("Sign In Again")) {
-                                    Task {
-                                        await appState.syncManager.reauthenticate(accountId: account.id)
-                                        await appState.cloudFileManager(for: account.id, side: panelSide).refresh()
+                            if appState.syncManager.accountsNeedingSignIn.contains(account.id) {
+                                switch appState.syncManager.reconnectMethod(for: account.providerType) {
+                                case .browser:
+                                    Button(L10n.text("Sign In Again")) {
+                                        appState.reconnect(accountId: account.id)
                                     }
+                                    Divider()
+                                case .credentials:
+                                    Button(L10n.text("Reconnect…")) {
+                                        appState.reconnect(accountId: account.id)
+                                    }
+                                    Divider()
+                                case .systemSettings, .addAgain:
+                                    EmptyView()
                                 }
-                                Divider()
                             }
                             Button(L10n.text("Rename...")) {
                                 renamingAccountId = account.id

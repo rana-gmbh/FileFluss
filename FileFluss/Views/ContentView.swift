@@ -115,6 +115,10 @@ struct ContentView: View {
             AddCloudAccountView()
                 .environment(appState)
         }
+        .sheet(item: Bindable(appState).reconnectSheetAccount) { account in
+            EditCloudAccountView(account: account, isReconnecting: true)
+                .environment(appState)
+        }
         .sheet(isPresented: Bindable(appState).showGoToFolder) {
             GoToFolderSheet()
                 .environment(appState)

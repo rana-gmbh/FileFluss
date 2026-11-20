@@ -15,6 +15,11 @@ struct EditCloudAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     let account: CloudAccount
+    /// Opened from a panel or the sidebar because the account's sign-in
+    /// stopped working, rather than from Settings to change it. Same form;
+    /// the wording says what it's for, and saving doesn't wait for an edit —
+    /// the saved details may be fine and only need trying again.
+    var isReconnecting: Bool = false
 
     @State private var didConfigureWindow = false
     @State private var isAuthenticating = false
@@ -60,6 +65,12 @@ struct EditCloudAccountView: View {
     @State private var megaOTP = ""
 
     @State private var nextCloudMode: AddCloudAccountView.NextCloudAuthMode = .browser
+    @State private var drimeMode: AddCloudAccountView.DrimeAuthMode = DrimeAPIClient.isOAuthAvailable ? .browser : .token
+
+    /// Browser sign-in exists only once FileFluss has a Drime client ID.
+    private var effectiveDrimeMode: AddCloudAccountView.DrimeAuthMode {
+        DrimeAPIClient.isOAuthAvailable ? drimeMode : .token
+    }
 
     var body: some View {
         ScrollView {
@@ -97,10 +108,21 @@ struct EditCloudAccountView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            CloudProviderIcon(providerType: account.providerType, size: 24)
-            Text(L10n.format("Edit %@", account.displayName))
-                .font(.title2.bold())
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                CloudProviderIcon(providerType: account.providerType, size: 24)
+                Text(isReconnecting
+                     ? L10n.format("Reconnect %@", account.displayName)
+                     : L10n.format("Edit %@", account.displayName))
+                    .font(.title2.bold())
+            }
+            if isReconnecting {
+                LText("FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -124,7 +146,7 @@ struct EditCloudAccountView: View {
         case .internxt:
             internxtFields
         case .terabox:
-            teraboxHint
+            teraboxFields
         case .ftp:
             ftpFields
         case .seafile:
@@ -150,15 +172,15 @@ struct EditCloudAccountView: View {
         case .iCloud:
             iCloudHint
         case .jottacloud:
-            jottacloudHint
+            jottacloudFields
         case .googleDrivePicker:
             googleDrivePickerHint
         case .gopro:
             goProHint
         case .github:
-            gitHubHint
+            gitHubFields
         case .drime:
-            drimeHint
+            drimeFields
         }
     }
 
@@ -169,25 +191,79 @@ struct EditCloudAccountView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var gitHubHint: some View {
-        LText("To use a different personal access token, remove this account and add it again.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+    /// A token pasted from the provider's website, with a link to the page
+    /// that issues one. GitHub, Jottacloud and Drime tokens get revoked or
+    /// expire, and getting a new one shouldn't mean removing the account.
+    private func tokenFields(
+        explanation: String,
+        linkTitle: String,
+        url: URL?,
+        fieldLabel: String
+    ) -> some View {
+        VStack(spacing: 12) {
+            Text(explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let url {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label(linkTitle, systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+            SecureField(fieldLabel, text: $apiToken)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isAuthenticating)
+                .onSubmit { save() }
+        }
     }
 
-    private var drimeHint: some View {
-        LText("To connect Drime with a different token or account, remove this account and add it again.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+    private var gitHubFields: some View {
+        tokenFields(
+            explanation: L10n.text("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories."),
+            linkTitle: L10n.text("Open GitHub token settings"),
+            url: URL(string: "https://github.com/settings/tokens"),
+            fieldLabel: L10n.text("Personal Access Token")
+        )
     }
 
-    private var jottacloudHint: some View {
-        LText("To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
+    private var jottacloudFields: some View {
+        tokenFields(
+            explanation: L10n.text("Generate a Personal Login Token in your Jottacloud account, then paste it below."),
+            linkTitle: L10n.text("Open Jottacloud token page"),
+            url: URL(string: "https://www.jottacloud.com/web/secure"),
+            fieldLabel: L10n.text("Personal Login Token")
+        )
+    }
+
+    private var drimeFields: some View {
+        VStack(spacing: 12) {
+            if DrimeAPIClient.isOAuthAvailable {
+                Picker(L10n.text("Sign-in method"), selection: $drimeMode) {
+                    ForEach(AddCloudAccountView.DrimeAuthMode.allCases) { mode in
+                        Text(L10n.text(mode.rawValue)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(isAuthenticating || appState.syncManager.isAuthenticatingDrime)
+                .labelsHidden()
+            }
+            switch effectiveDrimeMode {
+            case .browser:
+                oauthForm
+            case .token:
+                tokenFields(
+                    explanation: L10n.text("Create a personal access token in your Drime account under Settings → Developers, then paste it below."),
+                    linkTitle: L10n.text("Open Drime token settings"),
+                    url: DrimeAPIClient.tokenSettingsURL,
+                    fieldLabel: L10n.text("Personal Access Token")
+                )
+            }
+        }
     }
 
     private var googleDrivePickerHint: some View {
@@ -197,15 +273,21 @@ struct EditCloudAccountView: View {
             .multilineTextAlignment(.center)
     }
 
+    /// Any of the browser sign-ins this sheet can start is waiting on the
+    /// browser. Only the pCloud and Drime flows set their flag here; the
+    /// others report through `isAuthenticating`.
+    private var isPendingBrowserAuth: Bool {
+        appState.syncManager.isAuthenticatingGoogleDrive
+            || appState.syncManager.isAuthenticatingDropbox
+            || appState.syncManager.isAuthenticatingOneDrive
+            || appState.syncManager.isAuthenticatingBox
+            || appState.syncManager.isAuthenticatingPCloud
+            || appState.syncManager.isAuthenticatingDrime
+    }
+
     private var oauthForm: some View {
         VStack(spacing: 12) {
-            let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
-                || appState.syncManager.isAuthenticatingDropbox
-                || appState.syncManager.isAuthenticatingOneDrive
-                || appState.syncManager.isAuthenticatingBox
-                || appState.syncManager.isAuthenticatingPCloud
-
-            if isPendingBrowserAuth {
+            if isPendingBrowserAuth || isAuthenticating {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
                     LText("Waiting for sign-in in browser…")
@@ -633,12 +715,25 @@ struct EditCloudAccountView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var teraboxHint: some View {
-        LText("TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
+    private var teraboxFields: some View {
+        VStack(spacing: 12) {
+            if let qrData = appState.syncManager.teraboxQRImageData, let image = NSImage(data: qrData) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: 200, height: 200)
+                LText("Open the TeraBox app and scan this QR code to authorize.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                LText("TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var ftpFields: some View {
@@ -698,19 +793,13 @@ struct EditCloudAccountView: View {
     @ViewBuilder
     private var primaryButton: some View {
         switch account.providerType {
-        case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+        case .iCloud, .googleDrivePicker, .gopro:
             EmptyView()
-        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud:
-            let isPendingBrowserAuth = appState.syncManager.isAuthenticatingGoogleDrive
-                || appState.syncManager.isAuthenticatingDropbox
-                || appState.syncManager.isAuthenticatingOneDrive
-                || appState.syncManager.isAuthenticatingBox
-                || appState.syncManager.isAuthenticatingPCloud
-            if isPendingBrowserAuth {
+        case .terabox:
+            if appState.syncManager.isAuthenticatingTeraBox {
                 Button(L10n.text("Cancel Sign-In"), role: .destructive) {
                     saveTask?.cancel()
                     saveTask = nil
-                    appState.syncManager.cancelPendingBrowserAuth()
                     isAuthenticating = false
                 }
             } else {
@@ -718,6 +807,10 @@ struct EditCloudAccountView: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(isAuthenticating)
             }
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud:
+            browserSignInButton
+        case .drime where effectiveDrimeMode == .browser:
+            browserSignInButton
         case .nextCloud where nextCloudMode == .browser:
             if appState.syncManager.isAuthenticatingNextCloud {
                 Button(L10n.text("Cancel Sign-In"), role: .destructive) {
@@ -732,9 +825,27 @@ struct EditCloudAccountView: View {
                     .disabled(serverURL.isEmpty || isAuthenticating)
             }
         default:
-            Button(L10n.text("Save")) { save() }
+            // Reconnecting may need nothing changed: the saved details can
+            // be fine and simply couldn't be used at the time.
+            Button(isReconnecting ? L10n.text("Reconnect") : L10n.text("Save")) { save() }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!hasChanges || !isFormValid || isAuthenticating)
+                .disabled((!hasChanges && !isReconnecting) || !isFormValid || isAuthenticating)
+        }
+    }
+
+    @ViewBuilder
+    private var browserSignInButton: some View {
+        if isPendingBrowserAuth {
+            Button(L10n.text("Cancel Sign-In"), role: .destructive) {
+                saveTask?.cancel()
+                saveTask = nil
+                appState.syncManager.cancelPendingBrowserAuth()
+                isAuthenticating = false
+            }
+        } else {
+            Button(L10n.text("Re-authorize")) { save() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isAuthenticating)
         }
     }
 
@@ -745,8 +856,10 @@ struct EditCloudAccountView: View {
     /// something — matches design decision (a) from issue follow-up.
     private var hasChanges: Bool {
         switch account.providerType {
-        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .googleDrivePicker, .gopro:
             return false  // these use Re-authorize / no-op buttons
+        case .jottacloud, .github, .drime:
+            return !apiToken.isEmpty
         case .nextCloud:
             switch nextCloudMode {
             case .browser:
@@ -863,9 +976,12 @@ struct EditCloudAccountView: View {
             return !s3AccessKeyId.isEmpty && !s3SecretAccessKey.isEmpty && !s3Endpoint.isEmpty
         case .synologyC2:
             return !s3AccessKeyId.isEmpty && !s3SecretAccessKey.isEmpty && !s3Region.isEmpty
-        case .kDrive:
-            return !apiToken.isEmpty
-        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+        case .kDrive, .jottacloud, .github:
+            return !apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .drime:
+            return effectiveDrimeMode == .browser
+                || !apiToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .dropbox, .googleDrive, .oneDrive, .box, .pCloud, .iCloud, .terabox, .googleDrivePicker, .gopro:
             return true
         }
     }
@@ -1044,11 +1160,39 @@ struct EditCloudAccountView: View {
                     useTLS: ftpUseTLS,
                     allowInvalidCertificate: ftpAllowSelfSigned
                 )
-            case .iCloud, .terabox, .jottacloud, .googleDrivePicker, .gopro, .github, .drime:
+            case .terabox:
+                await appState.syncManager.updateTeraBoxAccount(accountId: id)
+            case .jottacloud:
+                await appState.syncManager.updateJottacloudAccount(
+                    accountId: id,
+                    personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            case .github:
+                await appState.syncManager.updateGitHubAccount(
+                    accountId: id,
+                    token: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            case .drime:
+                switch effectiveDrimeMode {
+                case .browser:
+                    await appState.syncManager.updateDrimeAccountViaBrowser(accountId: id)
+                case .token:
+                    await appState.syncManager.updateDrimeAccount(
+                        accountId: id,
+                        personalToken: apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
+            case .iCloud, .googleDrivePicker, .gopro:
                 break
             }
 
+            // A closed sheet cancels the task, and must not close another
+            // sheet or reload panels for a sign-in that never happened.
+            guard !Task.isCancelled else { return }
             if appState.syncManager.authError == nil {
+                // Any panel still showing the sign-in error for this account
+                // lists its folder again instead of waiting for a click.
+                Task { await appState.reloadCloudPanels(for: id) }
                 dismiss()
             }
             isAuthenticating = false

@@ -118,6 +118,11 @@ final class CloudFileManagerViewModel {
     /// that succeeds has to say otherwise.
     private var reportedSignInProblem = false
 
+    /// Reads the account's saved sign-in again when it has no provider —
+    /// `SyncViewModel.restoreSavedSignIn(accountId:)`, handed in by
+    /// `AppState`, which owns both. True when a provider exists afterwards.
+    @ObservationIgnored var restoreSavedSignIn: (@MainActor (UUID) async -> Bool)?
+
     /// A failed action, for an alert. Kept apart from `error`, which replaces
     /// the file list and belongs to listing failures: a rename that clashes
     /// shouldn't hide the folder it happened in.
@@ -285,9 +290,20 @@ final class CloudFileManagerViewModel {
         needsReAuth = false
 
         do {
-            let provider = await SyncEngine.shared.provider(for: accountId)
+            var provider = await SyncEngine.shared.provider(for: accountId)
+            if provider == nil, let restoreSavedSignIn, await restoreSavedSignIn(accountId) {
+                provider = await SyncEngine.shared.provider(for: accountId)
+            }
             guard let provider else {
-                error = "Cloud account not connected"
+                // Nothing saved that works. Saying "not connected" with only
+                // a Try Again button left people stuck: trying again can't
+                // conjure up credentials. As a sign-in problem the panel
+                // offers the way back for this kind of account instead.
+                guard self.currentPath == targetPath else { return }
+                error = providerType == .iCloud
+                    ? L10n.text("iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.")
+                    : L10n.text("FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again.")
+                flagNeedsReAuthentication()
                 isLoading = false
                 return
             }

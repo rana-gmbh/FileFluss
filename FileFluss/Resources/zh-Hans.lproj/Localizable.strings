@@ -308,7 +308,13 @@
 "Error" = "错误";
 "Sign In Again" = "重新登录";
 "Open Settings…" = "打开设置…";
-"Open Settings to Re-Connect…" = "打开设置以重新连接…";
+"iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud 云盘不可用。请检查这台 Mac 是否已登录 iCloud 并已打开 iCloud 云盘。";
+"FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again." = "FileFluss 无法使用此账户已保存的登录信息。请重新连接，以便再次查看你的文件。";
+"Reconnect…" = "重新连接…";
+"Open iCloud Settings…" = "打开 iCloud 设置…";
+"Your browser opens so you can sign in to %@ again." = "浏览器将打开，以便你重新登录 %@。";
+"Enter your %@ sign-in details again. Nothing else about the account changes." = "请重新输入你的 %@ 登录信息。账户的其他设置保持不变。";
+"%@ can't be signed in again from here. Remove the account in Settings and add it again." = "无法在此处重新登录 %@。请在设置中移除该账户，然后重新添加。";
 "Could not download file" = "无法下载文件";
 "Empty Folder" = "空文件夹";
 "This cloud folder is empty" = "此云端文件夹为空";
@@ -582,7 +588,6 @@
 "Open Jottacloud token page" = "打开 Jottacloud 令牌页面";
 "Personal Login Token" = "个人登录令牌";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 没有公开 API，因此 FileFluss 使用与官方命令行工具相同的接口。令牌将被兑换为登录凭据并存储在您的钥匙串中。";
-"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "要使用新的个人登录令牌重新连接 Jottacloud，请移除此帐户并重新添加。";
 "Open my.pcloud.com" = "打开 my.pcloud.com";
 "Open the TeraBox app and scan this QR code to authorize." = "打开 TeraBox 应用并扫描此二维码以授权。";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "或手动输入你的用户名和应用专用密码。在 设置 → 安全 → 设备与会话 中创建一个。";
@@ -630,6 +635,9 @@
 "Credentials (password or key) are not prefilled and must be re-entered." = "凭据（密码或密钥）不会预填，必须重新输入。";
 "Display name (optional)" = "显示名称（可选）";
 "Edit %@" = "编辑 %@";
+"Reconnect %@" = "重新连接 %@";
+"FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are." = "FileFluss 无法再登录此账户。请在下方重新登录——你的文件夹、同步规则和个人收藏都将保持不变。";
+"Reconnect" = "重新连接";
 "Endpoint URL" = "端点 URL";
 "Hostname" = "主机名";
 "Initial path" = "初始路径";
@@ -644,7 +652,7 @@
 "Server" = "服务器";
 "Server URL" = "服务器 URL";
 "Site URL" = "站点 URL";
-"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox 通过在 TeraBox 应用中扫描二维码登录——此处无可编辑内容。若要重新连接，请移除此账户并重新添加。";
+"TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app." = "TeraBox 使用二维码登录。点按“重新授权”获取新的二维码，然后用 TeraBox App 扫描。";
 "That doesn't look like a PEM private key." = "这看起来不像 PEM 私钥。";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用你 Mac 的系统登录——此处无可编辑内容。请在 系统设置 → Apple 账户 → iCloud 中管理 iCloud 云盘。";
 
@@ -906,7 +914,6 @@
 "Open GitHub token settings" = "打开 GitHub 令牌设置";
 "Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories." = "在 GitHub 上创建一个个人访问令牌，然后粘贴到下方。细粒度令牌需要 Contents 和 Metadata 的读取权限；经典令牌需要 repo 权限范围才能看到私有仓库。";
 "FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." = "FileFluss 只从 GitHub 读取。可以浏览仓库、取出单个文件，每个仓库还提供其默认分支的快照归档，可复制到其他账户。";
-"To use a different personal access token, remove this account and add it again." = "要使用其他个人访问令牌，请移除此账户并重新添加。";
 
 /* Archives: browsing inside zip/rar/7z, compressing and extracting */
 "Compress" = "压缩";
@@ -955,7 +962,6 @@
 "Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "在你的 Drime 账户中前往 设置 → 开发者 创建一个个人访问令牌，然后粘贴到下方。";
 "Open Drime token settings" = "打开 Drime 令牌设置";
 "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "请为令牌授予“All”权限，或授予 Files、Folders 和 Sharing 的写入权限。令牌保存在你的钥匙串中。";
-"To connect Drime with a different token or account, remove this account and add it again." = "要使用其他令牌或账户连接 Drime，请移除此账户后重新添加。";
 "Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime 未接受此令牌。请检查它是否已完整复制且未被删除。";
 "Drime sign-in failed: %@" = "Drime 登录失败：%@";
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "此 Drime 文件夹包含的项目超出了 Drime 可列出的数量。请将其拆分为较小的文件夹后在此浏览。";

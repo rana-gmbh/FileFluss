@@ -667,6 +667,8 @@ final class SyncViewModel {
             accounts.append(connectedAccount)
             await syncEngine.registerProvider(for: account.id, provider: provider)
             saveAccounts()
+        } catch is CancellationError {
+            // The sheet was closed; nothing went wrong.
         } catch {
             authError = error.localizedDescription
         }
@@ -1050,59 +1052,122 @@ final class SyncViewModel {
         }
     }
 
-    /// Returns true when the provider's auth flow can be re-run from inside
-    /// the panel — currently the loopback-OAuth providers (Google, Dropbox,
-    /// Box). Anything else needs the Settings → Cloud Accounts sheet because
-    /// it relies on credentials the user must type in.
-    func providerSupportsInlineReauth(_ type: CloudProviderType) -> Bool {
+    /// How an account whose sign-in stopped working gets it back. Decides
+    /// what the panel's Reconnect button does.
+    enum ReconnectMethod: Equatable {
+        /// The provider's own sign-in page, in the browser — nothing to type
+        /// in FileFluss.
+        case browser
+        /// The account's credentials sheet, filled in with whatever is
+        /// still saved: a password, an app password, a token, a QR code.
+        case credentials
+        /// The Mac's own iCloud sign-in, in System Settings.
+        case systemSettings
+        /// Nothing FileFluss can ask for again: the account has to be
+        /// removed and added afresh (a folder pick, a paired camera).
+        case addAgain
+    }
+
+    func reconnectMethod(for type: CloudProviderType) -> ReconnectMethod {
         switch type {
-        case .googleDrive, .dropbox, .box, .oneDrive: return true
-        case .drime: return DrimeAPIClient.isOAuthAvailable
-        default: return false
+        case .googleDrive, .dropbox, .box, .oneDrive, .pCloud:
+            return .browser
+        case .drime:
+            return DrimeAPIClient.isOAuthAvailable ? .browser : .credentials
+        case .iCloud:
+            return .systemSettings
+        case .googleDrivePicker, .gopro:
+            return .addAgain
+        case .nextCloud, .koofr, .mega, .webDAV, .sftp, .ftp, .wordpress, .gmxCloud, .s3,
+             .synologyDrive, .qnap, .ugreen, .asustor, .synologyC2, .s3Compatible, .seafile,
+             .filen, .internxt, .terabox, .jottacloud, .github, .kDrive:
+            return .credentials
         }
     }
 
-    /// Re-runs the OAuth flow for an existing account, reusing the same
+    /// Re-runs the browser sign-in for an existing account, reusing the same
     /// `accountId` so the stored credentials slot is overwritten in the
-    /// keychain. Only handles providers reported by
-    /// `providerSupportsInlineReauth(_:)`; for the rest the caller should
-    /// open Settings → Cloud Accounts instead.
+    /// keychain. Only handles providers whose `reconnectMethod(for:)` is
+    /// `.browser`; the rest go through the credentials sheet.
     func reauthenticate(accountId: UUID) async {
-        guard let account = accounts.first(where: { $0.id == accountId }) else { return }
-        authError = nil
-        do {
-            switch account.providerType {
-            case .googleDrive:
-                let provider = GoogleDriveProvider(accountId: accountId)
-                _ = try await provider.startOAuthFlow()
-                await syncEngine.registerProvider(for: accountId, provider: provider)
-            case .dropbox:
-                let provider = DropboxProvider(accountId: accountId)
-                _ = try await provider.startOAuthFlow()
-                await syncEngine.registerProvider(for: accountId, provider: provider)
-            case .box:
-                let provider = BoxProvider(accountId: accountId)
-                _ = try await provider.startOAuthFlow()
-                await syncEngine.registerProvider(for: accountId, provider: provider)
-            case .oneDrive:
-                let provider = OneDriveProvider(accountId: accountId)
-                _ = try await provider.startOAuthFlow()
-                await syncEngine.registerProvider(for: accountId, provider: provider)
-            case .drime where DrimeAPIClient.isOAuthAvailable:
-                let provider = DrimeProvider(accountId: accountId)
-                _ = try await provider.startOAuthFlow()
-                await syncEngine.registerProvider(for: accountId, provider: provider)
-            default:
-                return
-            }
-            if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
-                accounts[idx].isConnected = true
-                saveAccounts()
-            }
-            markSignInWorks(accountId: accountId)
-        } catch {
-            authError = error.localizedDescription
+        guard let account = accountFor(id: accountId) else { return }
+        switch account.providerType {
+        case .googleDrive: await updateGoogleDriveAccount(accountId: accountId)
+        case .dropbox: await updateDropboxAccount(accountId: accountId)
+        case .box: await updateBoxAccount(accountId: accountId)
+        case .oneDrive: await updateOneDriveAccount(accountId: accountId)
+        case .pCloud: await updatePCloudAccount(accountId: accountId)
+        case .drime where DrimeAPIClient.isOAuthAvailable:
+            await updateDrimeAccountViaBrowser(accountId: accountId)
+        default: return
         }
+    }
+
+    /// Reads the sign-in saved for one account again and puts it back to
+    /// work, for an account that has no provider this session.
+    ///
+    /// That happens when the saved credentials couldn't be read at launch —
+    /// the keychain was still locked, or its access prompt was dismissed
+    /// after an update — and nothing ever tried again, so the account stayed
+    /// "not connected" until the next relaunch although nothing about it had
+    /// changed. True when the account has a provider afterwards.
+    func restoreSavedSignIn(accountId: UUID) async -> Bool {
+        if await syncEngine.provider(for: accountId) != nil { return true }
+        guard let account = accountFor(id: accountId),
+              let provider = await storedProvider(for: account) else { return false }
+        await syncEngine.registerProvider(for: accountId, provider: provider)
+        if let idx = accounts.firstIndex(where: { $0.id == accountId }), !accounts[idx].isConnected {
+            accounts[idx].isConnected = true
+            saveAccounts()
+        }
+        // Credentials to try count as signed in, like at launch; the panel
+        // flags the account again if the provider turns them down.
+        markSignInWorks(accountId: accountId)
+        return true
+    }
+
+    /// A provider built from the sign-in saved for `account`, or nil when
+    /// nothing usable is saved — no credentials, or none that could be read.
+    private func storedProvider(for account: CloudAccount) async -> (any CloudProvider)? {
+        let id = account.id
+        let provider: any CloudProvider
+        switch account.providerType {
+        case .googleDrive: provider = GoogleDriveProvider(accountId: id)
+        case .pCloud: provider = PCloudProvider(accountId: id)
+        case .kDrive: provider = KDriveProvider(accountId: id)
+        case .oneDrive: provider = OneDriveProvider(accountId: id)
+        case .nextCloud: provider = NextCloudProvider(accountId: id)
+        case .koofr: provider = KoofrProvider(accountId: id)
+        case .dropbox: provider = DropboxProvider(accountId: id)
+        case .mega: provider = MegaProvider(accountId: id)
+        case .webDAV: provider = WebDAVProvider(accountId: id)
+        case .sftp: provider = SFTPProvider(accountId: id)
+        case .ftp: provider = FTPProvider(accountId: id)
+        case .wordpress: provider = WordPressProvider(accountId: id)
+        case .gmxCloud: provider = GMXCloudProvider(accountId: id)
+        case .s3: provider = S3Provider(accountId: id)
+        case .synologyDrive: provider = SynologyDriveProvider(accountId: id)
+        case .qnap: provider = QNAPProvider(accountId: id)
+        case .ugreen: provider = NASWebDAVProvider(brand: .ugreen, accountId: id)
+        case .asustor: provider = NASWebDAVProvider(brand: .asustor, accountId: id)
+        case .synologyC2: provider = SynologyC2Provider(accountId: id)
+        case .s3Compatible: provider = S3CompatibleProvider(accountId: id)
+        case .iCloud: provider = ICloudProvider()
+        case .box: provider = BoxProvider(accountId: id)
+        case .seafile: provider = SeafileProvider(accountId: id)
+        case .filen: provider = FilenProvider(accountId: id)
+        case .internxt: provider = InternxtProvider(accountId: id)
+        case .terabox: provider = TeraBoxProvider(accountId: id)
+        case .jottacloud: provider = JottacloudProvider(accountId: id)
+        case .googleDrivePicker: provider = GoogleDrivePickerProvider(accountId: id)
+        case .github: provider = GitHubProvider(accountId: id)
+        case .drime: provider = DrimeProvider(accountId: id)
+        // A paired camera may be off or unplugged now; it's registered
+        // anyway so the account is present. The IP is re-resolved lazily on
+        // first use, and an unreachable camera surfaces as offline.
+        case .gopro: provider = GoProProvider(accountId: id)
+        }
+        return await provider.isAuthenticated ? provider : nil
     }
 
     /// Accounts saved as disconnected by an expired sign-in, in versions that
@@ -1122,167 +1187,20 @@ final class SyncViewModel {
     func reconnectSavedAccounts() async {
         defer { Task { await restoreDisconnectedAccounts() } }
         for account in accounts {
-            switch account.providerType {
-            case .googleDrive:
-                let provider = GoogleDriveProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .pCloud:
-                let provider = PCloudProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .kDrive:
-                let provider = KDriveProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .oneDrive:
-                let provider = OneDriveProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .nextCloud:
-                let provider = NextCloudProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .koofr:
-                let provider = KoofrProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .dropbox:
-                let provider = DropboxProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                    // Self-heal a stuck "Dropbox (Unknown)" name from accounts
-                    // linked before the get_current_account Content-Type fix.
-                    if let freshName = await provider.refreshDisplayName(),
-                       let idx = accounts.firstIndex(where: { $0.id == account.id }) {
-                        accounts[idx].displayName = "\(account.providerType.displayName) (\(freshName))"
-                        saveAccounts()
-                    }
-                }
-            case .mega:
-                let provider = MegaProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .webDAV:
-                let provider = WebDAVProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .sftp:
-                let provider = SFTPProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .ftp:
-                let provider = FTPProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .wordpress:
-                let provider = WordPressProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .gmxCloud:
-                let provider = GMXCloudProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .s3:
-                let provider = S3Provider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .synologyDrive:
-                let provider = SynologyDriveProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .qnap:
-                let provider = QNAPProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .ugreen, .asustor:
-                let provider = NASWebDAVProvider(brand: account.providerType == .ugreen ? .ugreen : .asustor, accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .synologyC2:
-                let provider = SynologyC2Provider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .s3Compatible:
-                let provider = S3CompatibleProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .iCloud:
-                let provider = ICloudProvider()
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .box:
-                let provider = BoxProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .seafile:
-                let provider = SeafileProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .filen:
-                let provider = FilenProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .internxt:
-                let provider = InternxtProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .terabox:
-                let provider = TeraBoxProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .jottacloud:
-                let provider = JottacloudProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .googleDrivePicker:
-                let provider = GoogleDrivePickerProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .github:
-                let provider = GitHubProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .drime:
-                let provider = DrimeProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
-            case .gopro:
-                let provider = GoProProvider(accountId: account.id)
-                if await provider.isAuthenticated {
-                    // The camera may be off/unplugged now; register anyway so
-                    // the account is present. The IP is re-resolved lazily on
-                    // first use, and unreachable cameras surface as offline.
-                    await syncEngine.registerProvider(for: account.id, provider: provider)
-                }
+            guard let provider = await storedProvider(for: account) else {
+                // Grey dot and a Reconnect item in the sidebar from launch,
+                // rather than a green dot until a panel tries the account.
+                markNeedsReAuthentication(accountId: account.id)
+                continue
+            }
+            await syncEngine.registerProvider(for: account.id, provider: provider)
+            // Self-heal a stuck "Dropbox (Unknown)" name from accounts
+            // linked before the get_current_account Content-Type fix.
+            if let dropbox = provider as? DropboxProvider,
+               let freshName = await dropbox.refreshDisplayName(),
+               let idx = accounts.firstIndex(where: { $0.id == account.id }) {
+                accounts[idx].displayName = "\(account.providerType.displayName) (\(freshName))"
+                saveAccounts()
             }
         }
     }
@@ -1307,10 +1225,14 @@ final class SyncViewModel {
     /// required" — the app contradicting itself in two places at once
     /// (issue #46).
     func markNeedsReAuthentication(accountId: UUID) {
+        // Writing the set notifies observers even when nothing changes, and
+        // every sidebar row reads it.
+        guard !accountsNeedingSignIn.contains(accountId) else { return }
         accountsNeedingSignIn.insert(accountId)
     }
 
     func markSignInWorks(accountId: UUID) {
+        guard accountsNeedingSignIn.contains(accountId) else { return }
         accountsNeedingSignIn.remove(accountId)
     }
 
@@ -1571,6 +1493,72 @@ final class SyncViewModel {
             let provider = PCloudProvider(accountId: accountId)
             try await provider.startOAuthFlow()
             await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateDrimeAccountViaBrowser(accountId: UUID) async {
+        authError = nil
+        isAuthenticatingDrime = true
+        defer { isAuthenticatingDrime = false }
+        do {
+            let provider = DrimeProvider(accountId: accountId)
+            _ = try await provider.startOAuthFlow()
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateDrimeAccount(accountId: UUID, personalToken: String) async {
+        authError = nil
+        do {
+            let provider = DrimeProvider(accountId: accountId)
+            _ = try await provider.authenticate(personalToken: personalToken)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateJottacloudAccount(accountId: UUID, personalToken: String) async {
+        authError = nil
+        do {
+            let provider = JottacloudProvider(accountId: accountId)
+            _ = try await provider.authenticate(personalToken: personalToken)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    func updateGitHubAccount(accountId: UUID, token: String) async {
+        authError = nil
+        do {
+            let provider = GitHubProvider(accountId: accountId)
+            _ = try await provider.authenticate(token: token)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// TeraBox's QR sign-in again, for the same account: shows a fresh code
+    /// in `teraboxQRImageData` and waits for the TeraBox app to approve it.
+    func updateTeraBoxAccount(accountId: UUID) async {
+        authError = nil
+        teraboxQRImageData = nil
+        isAuthenticatingTeraBox = true
+        defer { isAuthenticatingTeraBox = false; teraboxQRImageData = nil }
+        do {
+            let provider = TeraBoxProvider(accountId: accountId)
+            let device = try await provider.beginDeviceLogin()
+            teraboxQRImageData = device.qrImageData
+            try await provider.completeDeviceLogin(device)
+            await finalizeUpdate(accountId: accountId, provider: provider)
+        } catch is CancellationError {
+            // The sheet was closed; nothing went wrong.
         } catch {
             authError = error.localizedDescription
         }

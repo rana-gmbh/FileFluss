@@ -88,11 +88,16 @@ public actor TeraBoxAPIClient {
         let interval = max(2, device.interval)
 
         while Date() < deadline {
+            // Closing the sign-in sheet cancels this task. Without these
+            // checks the swallowed cancellation made the sleep return at
+            // once, and the loop hammered the token endpoint until the code
+            // expired.
+            try Task.checkCancellation()
             let tokens = try? await exchange(session: session, grantType: "device_code", code: device.deviceCode)
             if let tokens {
                 return try await Self.completeWithTokenInfo(session: session, tokens: tokens)
             }
-            try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+            try await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
         }
         throw CloudProviderError.commandFailed(L10n.text("Authorization timed out — the QR code expired before it was scanned."))
     }

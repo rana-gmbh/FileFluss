@@ -352,6 +352,76 @@ struct AccountStatusTests {
 }
 
 @MainActor
+@Suite("Reconnecting an account")
+struct ReconnectTests {
+
+    @Test("Every kind of account has a way back to signing in")
+    func reconnectMethods() {
+        let manager = SyncViewModel()
+        for type in [CloudProviderType.googleDrive, .dropbox, .box, .oneDrive, .pCloud] {
+            #expect(manager.reconnectMethod(for: type) == .browser, "\(type)")
+        }
+        for type in [CloudProviderType.webDAV, .sftp, .ftp, .nextCloud, .s3, .kDrive, .github, .jottacloud, .terabox] {
+            #expect(manager.reconnectMethod(for: type) == .credentials, "\(type)")
+        }
+        #expect(manager.reconnectMethod(for: .iCloud) == .systemSettings)
+        #expect(manager.reconnectMethod(for: .gopro) == .addAgain)
+    }
+
+    /// The report that started this: a panel saying "Cloud account not
+    /// connected" with only Try Again, which could never work.
+    @Test("A panel without a usable sign-in asks for one")
+    func missingSignInNeedsReAuth() async {
+        let vm = CloudFileManagerViewModel(accountId: UUID(), providerType: .webDAV)
+        let attempts = Counter()
+        vm.restoreSavedSignIn = { _ in
+            attempts.value += 1
+            return false
+        }
+        await vm.loadDirectory()
+
+        #expect(attempts.value == 1)
+        #expect(vm.needsReAuth)
+        #expect(vm.error != nil)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test("A sign-in that can be read again brings the panel back")
+    func restoredSignInLists() async {
+        let accountId = UUID()
+        let provider = FakeProvider()
+        provider.put("/hello.txt", "hi")
+        let vm = CloudFileManagerViewModel(accountId: accountId, providerType: .webDAV)
+        vm.restoreSavedSignIn = { id in
+            await SyncEngine.shared.registerProvider(for: id, provider: provider)
+            return true
+        }
+        await vm.loadDirectory()
+        await SyncEngine.shared.removeProvider(for: accountId)
+
+        #expect(vm.error == nil)
+        #expect(vm.needsReAuth == false)
+        #expect(vm.items.map(\.name) == ["hello.txt"])
+    }
+
+    @Test("Nothing saved means nothing restored")
+    func restoreWithoutCredentials() async {
+        let manager = SyncViewModel()
+        let account = CloudAccount(providerType: .webDAV, isConnected: true)
+        manager.accounts.append(account)
+        defer { manager.accounts.removeAll { $0.id == account.id } }
+
+        #expect(await manager.restoreSavedSignIn(accountId: account.id) == false)
+        #expect(await SyncEngine.shared.provider(for: account.id) == nil)
+    }
+
+    @MainActor
+    private final class Counter {
+        var value = 0
+    }
+}
+
+@MainActor
 @Suite("Panels follow the folder")
 struct FolderWatchingTests {
 

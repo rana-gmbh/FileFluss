@@ -308,7 +308,13 @@
 "Error" = "錯誤";
 "Sign In Again" = "重新登入";
 "Open Settings…" = "打開設定…";
-"Open Settings to Re-Connect…" = "打開設定以重新連接…";
+"iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud 雲碟無法使用。請檢查這部 Mac 是否已登入 iCloud 並已開啟 iCloud 雲碟。";
+"FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again." = "FileFluss 無法使用此帳戶已儲存的登入資訊。請重新連接，以便再次檢視你的檔案。";
+"Reconnect…" = "重新連接…";
+"Open iCloud Settings…" = "打開 iCloud 設定…";
+"Your browser opens so you can sign in to %@ again." = "瀏覽器將打開，以便你重新登入 %@。";
+"Enter your %@ sign-in details again. Nothing else about the account changes." = "請重新輸入你的 %@ 登入資訊。帳戶的其他設定保持不變。";
+"%@ can't be signed in again from here. Remove the account in Settings and add it again." = "無法在此處重新登入 %@。請在設定中移除該帳戶，然後重新加入。";
 "Could not download file" = "無法下載檔案";
 "Empty Folder" = "空資料夾";
 "This cloud folder is empty" = "此雲端資料夾是空的";
@@ -582,7 +588,6 @@
 "Open Jottacloud token page" = "開啟 Jottacloud 權杖頁面";
 "Personal Login Token" = "個人登入權杖";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證並儲存在您的鑰匙圈中。";
-"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "若要使用新的個人登入權杖重新連線 Jottacloud，請移除此帳戶並重新新增。";
 "Open my.pcloud.com" = "打開 my.pcloud.com";
 "Open the TeraBox app and scan this QR code to authorize." = "打開 TeraBox 應用程式並掃描此 QR 碼以授權。";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "或手動輸入你的使用者名稱和應用程式專用密碼。在 設定 → 安全性 → 裝置與工作階段 中建立一個。";
@@ -630,6 +635,9 @@
 "Credentials (password or key) are not prefilled and must be re-entered." = "憑證（密碼或金鑰）不會預先填入，必須重新輸入。";
 "Display name (optional)" = "顯示名稱（可選）";
 "Edit %@" = "編輯 %@";
+"Reconnect %@" = "重新連接 %@";
+"FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are." = "FileFluss 無法再登入此帳戶。請在下方重新登入——你的檔案夾、同步規則和個人收藏都將保持不變。";
+"Reconnect" = "重新連接";
 "Endpoint URL" = "端點 URL";
 "Hostname" = "主機名稱";
 "Initial path" = "初始路徑";
@@ -644,7 +652,7 @@
 "Server" = "伺服器";
 "Server URL" = "伺服器 URL";
 "Site URL" = "網站 URL";
-"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox 透過在 TeraBox 應用程式中掃描 QR 碼登入——此處無可編輯內容。若要重新連接，請移除此帳戶並重新加入。";
+"TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app." = "TeraBox 使用 QR 碼登入。點按「重新授權」取得新的 QR 碼，然後用 TeraBox App 掃描。";
 "That doesn't look like a PEM private key." = "這看起來不像 PEM 私鑰。";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud 使用你 Mac 的系統登入——此處無可編輯內容。請在 系統設定 → Apple 帳戶 → iCloud 中管理 iCloud 雲碟。";
 
@@ -906,7 +914,6 @@
 "Open GitHub token settings" = "開啟 GitHub 權杖設定";
 "Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories." = "在 GitHub 上建立個人存取權杖，然後貼到下方。細緻權限的權杖需要 Contents 與 Metadata 的讀取權限；傳統權杖需要 repo 範圍才能看到私有儲存庫。";
 "FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." = "FileFluss 只會從 GitHub 讀取。你可以瀏覽儲存庫、取出單一檔案，每個儲存庫也提供其預設分支的快照封存，可複製到其他帳戶。";
-"To use a different personal access token, remove this account and add it again." = "若要改用其他個人存取權杖，請移除此帳戶後重新新增。";
 
 /* Archives: browsing inside zip/rar/7z, compressing and extracting */
 "Compress" = "壓縮";
@@ -955,7 +962,6 @@
 "Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "在你的 Drime 帳號中前往 設定 → 開發者 建立一個個人存取權杖，然後貼到下方。";
 "Open Drime token settings" = "開啟 Drime 權杖設定";
 "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會儲存在你的鑰匙圈中。";
-"To connect Drime with a different token or account, remove this account and add it again." = "要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。";
 "Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime 未接受此權杖。請檢查它是否已完整複製且未被刪除。";
 "Drime sign-in failed: %@" = "Drime 登入失敗：%@";
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "此 Drime 資料夾包含的項目超出了 Drime 可列出的數量。請將其拆分為較小的資料夾後在此瀏覽。";

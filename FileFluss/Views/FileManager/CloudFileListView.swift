@@ -1560,15 +1560,14 @@ struct CloudFileListView: View {
     }
 
     /// Top-aligned error banner shown in place of the file list when a
-    /// cloud listing fails. When the failure is an auth problem and the
-    /// provider supports inline OAuth re-auth, surfaces a "Sign In Again"
-    /// button; otherwise routes to Settings → Cloud Accounts.
+    /// cloud listing fails. A sign-in problem — expired token, changed
+    /// password, credentials that couldn't be read — gets the way back for
+    /// that kind of account rather than a Try Again that can't fix it.
     @ViewBuilder
     private func cloudErrorBanner(message: String) -> some View {
-        let providerType = appState.syncManager.accountFor(id: accountId)?.providerType
-        let canReauthInline = providerType.map { appState.syncManager.providerSupportsInlineReauth($0) } ?? false
+        let account = appState.syncManager.accountFor(id: accountId)
         VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
+            Image(systemName: vm.needsReAuth ? "person.crop.circle.badge.exclamationmark" : "exclamationmark.triangle")
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
             Text(vm.needsReAuth ? L10n.text("Sign-In Required") : L10n.text("Error"))
@@ -1577,31 +1576,10 @@ struct CloudFileListView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            if vm.needsReAuth {
-                HStack(spacing: 8) {
-                    if canReauthInline {
-                        Button(L10n.text("Sign In Again")) {
-                            Task {
-                                await appState.syncManager.reauthenticate(accountId: accountId)
-                                // Otherwise shown only in the account sheets,
-                                // which aren't open.
-                                if let failure = appState.syncManager.authError {
-                                    appState.syncManager.authError = nil
-                                    vm.actionError = failure
-                                }
-                                await vm.loadDirectory()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
-                    }
-                    Button(canReauthInline ? L10n.text("Open Settings…") : L10n.text("Open Settings to Re-Connect…")) {
-                        appState.requestedSettingsTab = .cloud
-                        openWindow(id: "settings")
-                    }
-                    .controlSize(.regular)
-                }
-                .padding(.top, 4)
+                .fixedSize(horizontal: false, vertical: true)
+            if vm.needsReAuth, let account {
+                reconnectControls(for: account)
+                    .padding(.top, 4)
             } else {
                 Button(L10n.text("Try Again")) {
                     Task { await vm.loadDirectory() }
@@ -1613,6 +1591,98 @@ struct CloudFileListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 40)
         .padding(.horizontal, 24)
+    }
+
+    /// Reconnect for this kind of account, with Try Again beside it: the
+    /// saved sign-in may only have been unreadable for a moment (a locked
+    /// keychain), and trying again reads it afresh.
+    @ViewBuilder
+    private func reconnectControls(for account: CloudAccount) -> some View {
+        let method = appState.syncManager.reconnectMethod(for: account.providerType)
+        let providerName = account.providerType.displayName
+        if appState.browserReconnectAccountId == account.id {
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    LText("Waiting for sign-in in browser…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Button(L10n.text("Cancel")) {
+                    appState.cancelBrowserReconnect()
+                }
+                .controlSize(.regular)
+            }
+        } else {
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Group {
+                        switch method {
+                        case .browser:
+                            Button(L10n.text("Sign In Again")) {
+                                appState.reconnect(accountId: account.id)
+                            }
+                        case .credentials:
+                            Button(L10n.text("Reconnect…")) {
+                                appState.reconnect(accountId: account.id)
+                            }
+                        case .systemSettings:
+                            Button(L10n.text("Open iCloud Settings…")) {
+                                Self.openICloudSettings()
+                            }
+                        case .addAgain:
+                            Button(L10n.text("Open Settings…")) {
+                                appState.requestedSettingsTab = .cloud
+                                openWindow(id: "settings")
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(L10n.text("Try Again")) {
+                        Task { await vm.loadDirectory() }
+                    }
+                }
+                .controlSize(.regular)
+
+                Group {
+                    switch method {
+                    case .browser:
+                        Text(L10n.format("Your browser opens so you can sign in to %@ again.", providerName))
+                    case .credentials:
+                        Text(L10n.format("Enter your %@ sign-in details again. Nothing else about the account changes.", providerName))
+                    case .systemSettings:
+                        EmptyView()
+                    case .addAgain:
+                        Text(L10n.format("%@ can't be signed in again from here. Remove the account in Settings and add it again.", providerName))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+                if let failure = appState.reconnectFailures[account.id] {
+                    Text(failure)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: 420)
+        }
+    }
+
+    /// The Apple Account pane, where iCloud Drive is switched on; System
+    /// Settings itself when that pane can't be addressed directly.
+    private static func openICloudSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.systempreferences.AppleIDSettings"),
+           NSWorkspace.shared.open(url) {
+            return
+        }
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences") {
+            NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     private var pathComponents: [(name: String, path: String)] {

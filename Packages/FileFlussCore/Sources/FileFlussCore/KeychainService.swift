@@ -126,6 +126,17 @@ public enum KeychainService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else {
+            // A missing item is ordinary. Anything else — a locked keychain,
+            // a dismissed access prompt — leaves the account looking signed
+            // out although its credentials are still there, and the support
+            // log is the only place that tells the two apart.
+            if status != errSecItemNotFound {
+                SupportLogger.shared.log(
+                    "Keychain read for \(key) failed (OSStatus \(status))",
+                    category: "Keychain",
+                    level: .error
+                )
+            }
             return nil
         }
         return data

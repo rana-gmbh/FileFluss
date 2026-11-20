@@ -308,7 +308,13 @@
 "Error" = "Error";
 "Sign In Again" = "Sign In Again";
 "Open Settings…" = "Open Settings…";
-"Open Settings to Re-Connect…" = "Open Settings to Re-Connect…";
+"iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.";
+"FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again." = "FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again.";
+"Reconnect…" = "Reconnect…";
+"Open iCloud Settings…" = "Open iCloud Settings…";
+"Your browser opens so you can sign in to %@ again." = "Your browser opens so you can sign in to %@ again.";
+"Enter your %@ sign-in details again. Nothing else about the account changes." = "Enter your %@ sign-in details again. Nothing else about the account changes.";
+"%@ can't be signed in again from here. Remove the account in Settings and add it again." = "%@ can't be signed in again from here. Remove the account in Settings and add it again.";
 "Could not download file" = "Could not download file";
 "Empty Folder" = "Empty Folder";
 "This cloud folder is empty" = "This cloud folder is empty";
@@ -582,7 +588,6 @@
 "Open Jottacloud token page" = "Open Jottacloud token page";
 "Personal Login Token" = "Personal Login Token";
 "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain." = "Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that's stored in your keychain.";
-"To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." = "To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again.";
 "Open my.pcloud.com" = "Open my.pcloud.com";
 "Open the TeraBox app and scan this QR code to authorize." = "Open the TeraBox app and scan this QR code to authorize.";
 "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions." = "Or enter your username and an app-specific password manually. Create one at Settings → Security → Devices & sessions.";
@@ -630,6 +635,9 @@
 "Credentials (password or key) are not prefilled and must be re-entered." = "Credentials (password or key) are not prefilled and must be re-entered.";
 "Display name (optional)" = "Display name (optional)";
 "Edit %@" = "Edit %@";
+"Reconnect %@" = "Reconnect %@";
+"FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are." = "FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are.";
+"Reconnect" = "Reconnect";
 "Endpoint URL" = "Endpoint URL";
 "Hostname" = "Hostname";
 "Initial path" = "Initial path";
@@ -644,7 +652,7 @@
 "Server" = "Server";
 "Server URL" = "Server URL";
 "Site URL" = "Site URL";
-"TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again." = "TeraBox signs in with a QR code scanned in the TeraBox app — there's nothing to edit here. To reconnect, remove this account and add it again.";
+"TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app." = "TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app.";
 "That doesn't look like a PEM private key." = "That doesn't look like a PEM private key.";
 "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud." = "iCloud uses your Mac's system sign-in — there's nothing to edit here. Manage iCloud Drive in System Settings → Apple Account → iCloud.";
 
@@ -906,7 +914,6 @@
 "Open GitHub token settings" = "Open GitHub token settings";
 "Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories." = "Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories.";
 "FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." = "FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account.";
-"To use a different personal access token, remove this account and add it again." = "To use a different personal access token, remove this account and add it again.";
 
 /* Archives: browsing inside zip/rar/7z, compressing and extracting */
 "Compress" = "Compress";
@@ -955,7 +962,6 @@
 "Create a personal access token in your Drime account under Settings → Developers, then paste it below." = "Create a personal access token in your Drime account under Settings → Developers, then paste it below.";
 "Open Drime token settings" = "Open Drime token settings";
 "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." = "Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain.";
-"To connect Drime with a different token or account, remove this account and add it again." = "To connect Drime with a different token or account, remove this account and add it again.";
 "Drime didn't accept this token. Check that it was copied completely and hasn't been deleted." = "Drime didn't accept this token. Check that it was copied completely and hasn't been deleted.";
 "Drime sign-in failed: %@" = "Drime sign-in failed: %@";
 "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here." = "This Drime folder holds more items than Drime will list. Split it into smaller folders to browse it here.";

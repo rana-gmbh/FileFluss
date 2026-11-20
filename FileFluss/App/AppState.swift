@@ -508,8 +508,87 @@ final class AppState {
         }
         let providerType = syncManager.accountFor(id: accountId)?.providerType
         let vm = CloudFileManagerViewModel(accountId: accountId, providerType: providerType)
+        vm.restoreSavedSignIn = { [weak self] id in
+            await self?.syncManager.restoreSavedSignIn(accountId: id) ?? false
+        }
         cloudFileManagers[key] = vm
         return vm
+    }
+
+    // MARK: - Reconnecting an account
+
+    /// The account whose credentials sheet is open to reconnect it. Lives
+    /// here rather than in a panel so the sidebar can open it too, and so
+    /// only one sheet appears when both panels show the same account.
+    var reconnectSheetAccount: CloudAccount?
+
+    /// The account waiting on a browser sign-in started from a panel or the
+    /// sidebar, so every panel showing it can say so.
+    private(set) var browserReconnectAccountId: UUID?
+
+    /// Why the last browser sign-in for an account failed, shown under the
+    /// panel's Reconnect button until the next attempt.
+    private(set) var reconnectFailures: [UUID: String] = [:]
+
+    /// Identifies the browser sign-in that's being waited on. The loopback
+    /// sign-in can't be called off once the browser is open, so Cancel only
+    /// stops waiting; a sign-in that still completes afterwards is kept,
+    /// but its outcome no longer drives the panel.
+    @ObservationIgnored private var browserReconnectAttempt: UUID?
+
+    /// Starts whatever gets this account signed in again: the provider's
+    /// page in the browser, or the credentials sheet. iCloud and accounts
+    /// that must be added again are left to the caller, which can open
+    /// System Settings or the Settings window.
+    func reconnect(accountId: UUID) {
+        guard let account = syncManager.accountFor(id: accountId) else { return }
+        switch syncManager.reconnectMethod(for: account.providerType) {
+        case .browser:
+            reconnectInBrowser(accountId: accountId)
+        case .credentials:
+            syncManager.authError = nil
+            reconnectSheetAccount = account
+        case .systemSettings, .addAgain:
+            break
+        }
+    }
+
+    private func reconnectInBrowser(accountId: UUID) {
+        guard browserReconnectAccountId == nil else { return }
+        let attempt = UUID()
+        browserReconnectAttempt = attempt
+        browserReconnectAccountId = accountId
+        reconnectFailures[accountId] = nil
+        Task { [weak self] in
+            guard let self else { return }
+            await self.syncManager.reauthenticate(accountId: accountId)
+            let failure = self.syncManager.authError
+            self.syncManager.authError = nil
+            let stillWaited = self.browserReconnectAttempt == attempt
+            if stillWaited {
+                self.browserReconnectAttempt = nil
+                self.browserReconnectAccountId = nil
+                self.reconnectFailures[accountId] = failure
+            }
+            if failure == nil {
+                await self.reloadCloudPanels(for: accountId)
+            }
+        }
+    }
+
+    /// Stops waiting for a browser sign-in. See `browserReconnectAttempt`.
+    func cancelBrowserReconnect() {
+        browserReconnectAttempt = nil
+        browserReconnectAccountId = nil
+        syncManager.cancelPendingBrowserAuth()
+    }
+
+    /// Lists the folder again in every panel showing this account, after
+    /// its sign-in was fixed.
+    func reloadCloudPanels(for accountId: UUID) async {
+        for (key, vm) in cloudFileManagers where key.accountId == accountId {
+            await vm.refresh()
+        }
     }
 
     /// Removes both panel sides' VMs for an account (used when an account
