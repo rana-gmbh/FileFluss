@@ -590,6 +590,82 @@ public actor BoxAPIClient {
         try FileSystemService.placeDownload(from: tempURL, at: localURL)
     }
 
+    // MARK: - Thumbnails
+
+    /// The square JPEG sizes `/files/{id}/thumbnail.jpg` makes, smallest
+    /// first. Its size parameters accept 32 to 320.
+    static let thumbnailJPEGSizes = [32, 160, 320]
+
+    /// The smallest size that reaches `maxPixelSize`, or the largest there is.
+    static func thumbnailSize(forMaxPixelSize maxPixelSize: Int) -> Int {
+        thumbnailJPEGSizes.first { $0 >= maxPixelSize } ?? thumbnailJPEGSizes[thumbnailJPEGSizes.count - 1]
+    }
+
+    /// Only lower bounds: Box picks the smallest size meeting them. Upper
+    /// bounds as well could clash with a picture smaller than the size,
+    /// which Box doesn't scale up.
+    static func thumbnailQueryItems(forMaxPixelSize maxPixelSize: Int) -> [URLQueryItem] {
+        let size = String(thumbnailSize(forMaxPixelSize: maxPixelSize))
+        return [
+            URLQueryItem(name: "min_width", value: size),
+            URLQueryItem(name: "min_height", value: size),
+        ]
+    }
+
+    /// Whether an error answer means "no preview for this file": 404
+    /// `preview_cannot_be_generated` for a type Box can't draw, 400
+    /// `requested_preview_unavailable` when the asked size doesn't exist
+    /// for it.
+    static func isThumbnailRefusal(statusCode: Int, body: Data) -> Bool {
+        struct BoxError: Decodable { let code: String? }
+        guard let code = (try? JSONDecoder().decode(BoxError.self, from: body))?.code else { return false }
+        switch statusCode {
+        case 404: return code == "preview_cannot_be_generated"
+        case 400: return code == "requested_preview_unavailable"
+        default: return false
+        }
+    }
+
+    /// A preview made by Box, or nil where Box has none for the file yet.
+    public func thumbnail(path: String, maxPixelSize: Int) async throws -> Data? {
+        let fileId = try await resolvePathToId(path)
+        var components = URLComponents(string: "\(Self.apiURL)/files/\(fileId)/thumbnail.jpg")!
+        components.queryItems = Self.thumbnailQueryItems(forMaxPixelSize: maxPixelSize)
+        guard let url = components.url else { throw CloudProviderError.invalidResponse }
+
+        func send(forceRefreshFirst: Bool) async throws -> (Data, HTTPURLResponse) {
+            let creds = forceRefreshFirst ? try await forceRefresh() : try await refreshTokenIfNeeded()
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            // A redirect here leads to Box's generic icon for the file type,
+            // not to the file's preview, so it must not be followed.
+            let (data, response) = try await session.data(for: request, delegate: NoRedirectDelegate())
+            guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+            return (data, http)
+        }
+
+        var (data, http) = try await send(forceRefreshFirst: false)
+        if http.statusCode == 401 {
+            boxLog.info("[Box] GET thumbnail → 401, force-refreshing and retrying once")
+            (data, http) = try await send(forceRefreshFirst: true)
+        }
+
+        switch http.statusCode {
+        case 200:
+            return data.isEmpty ? nil : data
+        case 202, 300...399:
+            // 202: still being made, the body is a placeholder; the next
+            // visit to the folder asks again. 302: Box can't make one.
+            return nil
+        default:
+            if Self.isThumbnailRefusal(statusCode: http.statusCode, body: data) { return nil }
+            let bodyStr = String(data: data, encoding: .utf8) ?? ""
+            boxLog.error("[Box] GET thumbnail → HTTP \(http.statusCode): \(bodyStr.prefix(500))")
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+    }
+
     public func uploadFile(from localURL: URL, to remotePath: String) async throws {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }

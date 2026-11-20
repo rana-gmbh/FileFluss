@@ -116,6 +116,13 @@ public final class OneDriveProvider: CloudProvider, @unchecked Sendable {
         return try await client.storageQuota()
     }
 
+    /// OneDrive makes previews of images, videos and PDFs itself.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory, item.role == .normal else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        return try await client.thumbnail(itemId: item.id, path: item.path, maxPixelSize: maxPixelSize)
+    }
+
     // MARK: - Share links
 
     /// Microsoft Graph's `createLink` takes a password and an expiry, but

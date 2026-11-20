@@ -107,6 +107,16 @@ public protocol CloudProvider: Sendable {
     /// returns nil so providers compile without touching their files.
     /// Implementations should NOT cache here; the view model owns caching.
     func storageQuota() async throws -> CloudStorageQuota?
+
+    /// A small preview of a file, made by the service itself, as image bytes
+    /// (JPEG or PNG) whose longer edge is about `maxPixelSize`. The gallery
+    /// shows it instead of the type's icon.
+    ///
+    /// Nil means the service has no preview for this file — or no preview
+    /// API at all, which is what the default says. The gallery then falls
+    /// back to downloading small images and drawing them itself, so a
+    /// provider only implements this to save that download.
+    func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data?
 }
 
 extension CloudProvider {
@@ -186,6 +196,10 @@ extension CloudProvider {
     }
 
     public func storageQuota() async throws -> CloudStorageQuota? {
+        nil
+    }
+
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
         nil
     }
 

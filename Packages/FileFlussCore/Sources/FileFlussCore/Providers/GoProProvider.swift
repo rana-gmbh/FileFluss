@@ -202,11 +202,17 @@ public final class GoProProvider: CloudProvider, @unchecked Sendable {
         try await liveClient().folderSize(at: path)
     }
 
-    /// Raw thumbnail JPEG bytes for a media item, or nil. Not part of
-    /// `CloudProvider`; callers that know they hold a GoPro provider can use it.
+    /// Raw thumbnail JPEG bytes for a media item, or nil.
     public func thumbnailData(at path: String) async -> Data? {
         guard let client = try? await liveClient() else { return nil }
         return await client.thumbnail(at: path)
+    }
+
+    /// The camera makes one fixed-size thumbnail per photo and video; the
+    /// gallery scales it to the tile.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory else { return nil }
+        return await thumbnailData(at: item.path)
     }
 
     // MARK: - Write operations (unsupported — camera is an import source)

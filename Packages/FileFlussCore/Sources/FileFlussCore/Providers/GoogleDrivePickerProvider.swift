@@ -149,6 +149,25 @@ public final class GoogleDrivePickerProvider: CloudProvider, @unchecked Sendable
         return try await client.storageQuota()
     }
 
+    /// Same previews as the full-Drive account, through the same lookup.
+    /// Drive fills in `thumbnailLink` for any file this app may read, which
+    /// under `drive.file` is everything inside the picked folders. Only a
+    /// listed file's own id is used: resolving a path here walks the folders
+    /// live, which is far too slow to do once per tile.
+    public func thumbnail(for item: CloudFileItem, maxPixelSize: Int) async throws -> Data? {
+        guard !item.isDirectory, item.role == .normal,
+              let fileId = GoogleDriveAPIClient.driveFileId(fromItemId: item.id) else { return nil }
+        guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        // This client refreshes its token when it nears expiry but can't be
+        // made to refresh early, so a retry after a 401 gets the same token.
+        return try await GoogleDriveAPIClient.fetchThumbnail(
+            fileId: fileId,
+            maxPixelSize: maxPixelSize,
+            session: URLSession.shared,
+            accessToken: { _ in try await client.validAccessToken() }
+        )
+    }
+
     /// Pull the latest credentials snapshot out of the actor and persist it so
     /// rotated refresh tokens and live root pruning survive a relaunch.
     private func persistCredentials(from client: GoogleDrivePickerAPIClient) async throws {

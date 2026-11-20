@@ -605,6 +605,58 @@ public actor SeafileAPIClient {
         return entries.first(where: { $0.name == name })?.type == "dir"
     }
 
+    // MARK: - Thumbnails
+
+    /// A preview Seahub renders itself (`ThumbnailView` in
+    /// `seahub/api2/views.py`, `GET /api2/repos/<repo_id>/thumbnail/`), with
+    /// the same token as every other call. Nil for the library list, and
+    /// whenever Seahub won't make one: 400 for a type it can't preview
+    /// (videos unless a thumbnail server is set up), an image over its size
+    /// limit or a path it can't find, 403 for an encrypted library, 404 when
+    /// the library is gone or thumbnails are switched off.
+    public func thumbnail(path: String, maxPixelSize: Int) async throws -> Data? {
+        guard let resolved = try await resolveLibrary(forPath: path), resolved.innerPath != "/" else {
+            return nil
+        }
+        let size = Self.thumbnailSize(forMaxPixelSize: maxPixelSize)
+        var request = try authenticatedRequest(
+            path: "/api2/repos/\(resolved.repoId)/thumbnail/?\(Self.thumbnailQuery(innerPath: resolved.innerPath, size: size))"
+        )
+        request.httpMethod = "GET"
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudProviderError.invalidResponse
+        }
+        switch http.statusCode {
+        case 200:
+            guard !data.isEmpty, http.mimeType?.hasPrefix("image/") ?? false else { return nil }
+            return data
+        case 400, 403, 404:
+            return nil
+        default:
+            throw Self.mapHTTPError(statusCode: http.statusCode, responseBody: data)
+        }
+    }
+
+    /// Seahub stores each thumbnail on disk under the size it was asked for,
+    /// so a few fixed sizes — 256 is its own default, 512 what its grid view
+    /// uses — let every tile size share them. The caller scales down.
+    static func thumbnailSize(forMaxPixelSize maxPixelSize: Int) -> Int {
+        switch maxPixelSize {
+        case ...256: return 256
+        case ...512: return 512
+        default: return 1024
+        }
+    }
+
+    /// Strictly encoded, so a `&`, `+` or `=` in a file name can't break
+    /// the query apart.
+    static func thumbnailQuery(innerPath: String, size: Int) -> String {
+        "p=\(queryEncoded(innerPath))&size=\(size)"
+    }
+
     // MARK: - Share links
 
     /// Request body for `POST /api/v2.1/share-links/`. Optional fields are
