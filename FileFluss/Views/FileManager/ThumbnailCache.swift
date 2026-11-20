@@ -96,8 +96,11 @@ final class ThumbnailCache {
         generation.waiters += 1
         let image = await withTaskCancellationHandler {
             await generation.task?.value ?? nil
-        } onCancel: { [weak self] in
-            Task { @MainActor in self?.waiterCancelled(generation, key: key) }
+        } onCancel: {
+            // `self` strongly: the cache lives as long as the app. A weak capture is a mutable
+            // box, which Swift 6.3 — the compiler the release is built with — refuses to send
+            // to the main actor ("sending 'self' risks causing data races").
+            Task { @MainActor in self.waiterCancelled(generation, key: key) }
         }
         finish(generation, key: key, image: image)
         return image
