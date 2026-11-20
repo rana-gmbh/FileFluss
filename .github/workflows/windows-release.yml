@@ -1,5 +1,11 @@
-name: Windows Release
+name: Windows Release (bridge only)
 
+# Superseded by release.yml, which releases the Mac and Windows apps together from one vX.Y.Z
+# tag. Kept for one last Windows-only beta (win-vX.Y.Z-beta.N): the betas installed before the
+# joint releases look at win-v* releases only, and that beta brings them the updater that
+# reads v* releases too. Delete this file, and the win-v* rule on the windows-release
+# environment, once it has shipped.
+#
 # Windows releases are tagged win-vX.Y.Z, so this never runs for a macOS v* tag and the
 # macOS release workflow (release.yml, `v*`) never runs for this one. Create the release with:
 #

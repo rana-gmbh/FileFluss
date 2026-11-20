@@ -69,11 +69,13 @@ public sealed class VerifiedInstaller : IDisposable
 /// Asks GitHub for the newest FileFluss for Windows release — the Windows counterpart of
 /// Sparkle's appcast check on macOS, ported from the NetFluss Windows updater.
 ///
-/// <para>Both apps release from the same repository, and the Mac's "latest release" (which
-/// its Sparkle feed, <c>releases/latest/download/appcast.xml</c>, depends on) would hand a
-/// Windows user a macOS DMG whenever the Mac shipped last. Windows releases are tagged
-/// <c>win-vX.Y.Z</c> and created with <c>--latest=false</c>, so the release list is filtered
-/// by that prefix and only a Windows release can ever be offered.</para>
+/// <para>Both apps release from the same repository. Since they ship together, a release is
+/// tagged <c>vX.Y.Z</c> and carries the Mac's DMG and the Windows installers side by side.
+/// Earlier releases were tagged <c>vX.Y</c> for the Mac alone and <c>win-vX.Y.Z</c> for
+/// Windows alone, and both kinds are still in the list. So a <c>win-v</c> release always
+/// counts, and a <c>v</c> release only when it carries Windows files of its version: a
+/// Mac-only "v1.6" would otherwise look newer than "1.6.0-beta.2" and be offered with
+/// nothing to install.</para>
 ///
 /// <para>The checksum is not optional. Sparkle refuses an update without a valid EdDSA
 /// signature; here, an installer whose bytes do not match the hash the release's
@@ -81,7 +83,14 @@ public sealed class VerifiedInstaller : IDisposable
 /// </summary>
 public static class UpdateLookup
 {
-    public const string TagPrefix = "win-v";
+    /// <summary>Releases of the Windows app alone, as the betas before the joint releases were tagged.</summary>
+    public const string WindowsTagPrefix = "win-v";
+
+    /// <summary>Releases of both apps — and, before them, of the Mac app alone.</summary>
+    public const string SharedTagPrefix = "v";
+
+    /// <summary>Longest first: "win-v1.0.0" must not be read as a "v" tag.</summary>
+    private static readonly string[] TagPrefixes = [WindowsTagPrefix, SharedTagPrefix];
 
     public const string ChecksumsFileName = "SHA256SUMS.txt";
 
@@ -155,13 +164,14 @@ public static class UpdateLookup
             }
 
             var tag = String(release, "tag_name");
-            if (tag is null || !tag.StartsWith(TagPrefix, StringComparison.OrdinalIgnoreCase))
+            var prefix = tag is null ? null : TagPrefixOf(tag);
+            if (tag is null || prefix is null)
             {
                 continue;
             }
 
             // The version names a download folder and asset files: digits, letters, '.', '-', '+' only.
-            var version = tag[TagPrefix.Length..];
+            var version = tag[prefix.Length..];
             if (version.Length is 0 or > MaxVersionLength || !version.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '+') ||
                 !IsNewer(version, currentVersion) || (best is not null && !IsNewer(version, best.Version)))
             {
@@ -169,6 +179,11 @@ public static class UpdateLookup
             }
 
             if (!Uri.TryCreate(String(release, "html_url"), UriKind.Absolute, out var page) || !IsInRepository(page, RepositoryPrefix))
+            {
+                continue;
+            }
+
+            if (prefix == SharedTagPrefix && !CarriesWindowsFiles(release, version))
             {
                 continue;
             }
@@ -184,6 +199,54 @@ public static class UpdateLookup
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// The prefix a release's tag starts with, when it is one the Windows app reads: "win-v"
+    /// or "v" followed by a digit. Anything else — "windows-tools", "vintage" — is not a release
+    /// of the app.
+    /// </summary>
+    private static string? TagPrefixOf(string tag)
+    {
+        foreach (var prefix in TagPrefixes)
+        {
+            if (tag.Length > prefix.Length && tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && char.IsAsciiDigit(tag[prefix.Length]))
+            {
+                return prefix;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a release lists an installer or a portable zip of this version, for any
+    /// architecture — what tells a joint release from one the Mac made alone. The architecture
+    /// is left out on purpose: a joint release missing this PC's build behaves like a Windows
+    /// release that does, offered with nothing to install rather than not at all.
+    /// </summary>
+    private static bool CarriesWindowsFiles(JsonElement release, string version)
+    {
+        if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.ValueKind != JsonValueKind.Object || String(asset, "name") is not { } name)
+            {
+                continue;
+            }
+
+            if ((name.StartsWith($"FileFluss-Setup-{version}-", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) ||
+                (name.StartsWith($"FileFluss-{version}-", StringComparison.OrdinalIgnoreCase) && name.EndsWith("-portable.zip", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A version with a pre-release part ("1.6.0-beta.1"); build metadata ("+commit") doesn't count.</summary>

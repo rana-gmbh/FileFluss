@@ -65,8 +65,8 @@ public sealed class AboutWindow : Window
     }
 
     /// <summary>
-    /// Windows releases are tagged <c>win-v*</c> next to the macOS ones; the release list shows
-    /// both, newest first.
+    /// The Mac and Windows apps release together, under one <c>v*</c> tag each time; older
+    /// Windows-only releases are tagged <c>win-v*</c>. The list shows them all, newest first.
     /// </summary>
     public const string ReleasesUrl = "https://github.com/rana-gmbh/FileFluss/releases";
 

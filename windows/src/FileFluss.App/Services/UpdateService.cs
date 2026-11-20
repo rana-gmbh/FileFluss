@@ -21,7 +21,8 @@ namespace FileFluss.App.Services;
 
 /// <summary>
 /// In-app updates — the Windows counterpart of the macOS <c>AppUpdater</c> (Sparkle 2), ported
-/// from the NetFluss Windows updater. Asks GitHub for the newest <c>win-v*</c> release; for a
+/// from the NetFluss Windows updater. Asks GitHub for the newest release carrying a Windows
+/// build (see <see cref="FileFluss.Core.Updates.UpdateLookup"/>); for a
 /// copy installed by the setup it downloads this architecture's installer, checks it against
 /// the release's SHA256SUMS.txt, runs it silently and lets it relaunch FileFluss. A portable
 /// copy (the zip) or a development build is pointed at the release page instead.

@@ -160,6 +160,88 @@ public class UpdateLookupTests
         Assert.Equal("1.6.0", UpdateLookup.Newest(withRelease, "1.6.0-beta.1", "x64")?.Version);
     }
 
+    /// <summary>
+    /// Since the apps ship together, one release under a plain "v" tag carries both. Older
+    /// "v" releases are the Mac's alone, and must not be offered — "1.6" is newer than
+    /// "1.6.0-beta.2", but there is nothing in it to install on Windows.
+    /// </summary>
+    private const string JointReleases = """
+        [
+          { "tag_name": "v1.7.0", "draft": false, "prerelease": false, "body": "Both", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v1.7.0",
+            "assets": [
+              { "name": "FileFluss-v1.7.0.dmg", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-v1.7.0.dmg" },
+              { "name": "FileFluss-1.7.0.zip", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-1.7.0.zip" },
+              { "name": "appcast.xml", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/appcast.xml" },
+              { "name": "FileFluss-1.7.0-x64-portable.zip", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-1.7.0-x64-portable.zip" },
+              { "name": "FileFluss-Setup-1.7.0-x64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-Setup-1.7.0-x64.exe" },
+              { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/SHA256SUMS.txt" }
+            ] },
+          { "tag_name": "v1.7.0-beta.1", "draft": false, "prerelease": true, "body": "Joint beta", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v1.7.0-beta.1",
+            "assets": [
+              { "name": "FileFluss-v1.7.0-beta.1.dmg", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0-beta.1/FileFluss-v1.7.0-beta.1.dmg" },
+              { "name": "FileFluss-Setup-1.7.0-beta.1-x64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0-beta.1/FileFluss-Setup-1.7.0-beta.1-x64.exe" },
+              { "name": "SHA256SUMS.txt", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0-beta.1/SHA256SUMS.txt" }
+            ] },
+          { "tag_name": "win-v1.6.0-beta.2", "draft": false, "prerelease": true, "body": "Windows beta", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.2", "assets": [] },
+          { "tag_name": "v1.6", "draft": false, "prerelease": false, "body": "Mac only", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v1.6",
+            "assets": [
+              { "name": "FileFluss-v1.6.dmg", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.6/FileFluss-v1.6.dmg" },
+              { "name": "FileFluss-1.6.zip", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.6/FileFluss-1.6.zip" },
+              { "name": "appcast.xml", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.6/appcast.xml" }
+            ] }
+        ]
+        """;
+
+    [Fact]
+    public void AJointRelease_IsOfferedWithItsWindowsFiles()
+    {
+        var update = UpdateLookup.Newest(JointReleases, "1.6.0", "x64")!;
+
+        Assert.Equal("1.7.0", update.Version);
+        Assert.Equal("Both", update.ReleaseNotes);
+        Assert.Equal("https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-Setup-1.7.0-x64.exe", update.Installer!.ToString());
+        Assert.Equal("https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/FileFluss-1.7.0-x64-portable.zip", update.Portable!.ToString());
+        Assert.Equal("https://github.com/rana-gmbh/FileFluss/releases/download/v1.7.0/SHA256SUMS.txt", update.Checksums!.ToString());
+    }
+
+    [Fact]
+    public void AMacOnlyRelease_IsNotOffered_EvenWhereItsNumberIsNewer()
+    {
+        const string macOnly = """
+            [{ "tag_name": "v1.6", "draft": false, "prerelease": false, "body": "Mac only", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v1.6",
+               "assets": [{ "name": "FileFluss-v1.6.dmg", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/v1.6/FileFluss-v1.6.dmg" }] }]
+            """;
+
+        Assert.True(UpdateLookup.IsNewer("1.6", "1.6.0-beta.2"));
+        Assert.Null(UpdateLookup.Newest(macOnly, "1.6.0-beta.2", "x64"));
+        Assert.Null(UpdateLookup.Newest(macOnly, "1.5.0", "x64"));
+    }
+
+    [Fact]
+    public void BetaTesters_MoveFromWindowsBetasToJointReleases()
+    {
+        // The next joint beta, then the joint release — never the Mac-only v1.6.
+        Assert.Equal("1.7.0", UpdateLookup.Newest(JointReleases, "1.6.0-beta.2", "x64")?.Version);
+
+        var withoutFinal = JointReleases.Replace("\"tag_name\": \"v1.7.0\", \"draft\": false", "\"tag_name\": \"v1.7.0\", \"draft\": true", StringComparison.Ordinal);
+        Assert.Equal("1.7.0-beta.1", UpdateLookup.Newest(withoutFinal, "1.6.0-beta.2", "x64")?.Version);
+
+        // A final-release build still never sees betas.
+        Assert.Null(UpdateLookup.Newest(withoutFinal, "1.6.0", "x64"));
+    }
+
+    [Fact]
+    public void TagsThatMerelyStartWithV_AreIgnored()
+    {
+        const string json = """
+            [{ "tag_name": "vintage", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/vintage", "assets": [
+                { "name": "FileFluss-Setup-intage-x64.exe", "browser_download_url": "https://github.com/rana-gmbh/FileFluss/releases/download/vintage/FileFluss-Setup-intage-x64.exe" }
+            ] },
+             { "tag_name": "v", "html_url": "https://github.com/rana-gmbh/FileFluss/releases/tag/v", "assets": [] }]
+            """;
+        Assert.Null(UpdateLookup.Newest(json, "1.0.0", "x64"));
+    }
+
     [Fact]
     public void ChecksumsAreReadInSha256sumFormat()
     {

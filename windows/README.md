@@ -110,11 +110,14 @@ satellite assemblies, SQLite's native `e_sqlite3.dll` and the stamped version. F
 signed build, set `FILEFLUSS_SIGN_PFX` and `FILEFLUSS_SIGN_PASSWORD` to Authenticode-sign
 with a .pfx; unsigned builds work, but SmartScreen warns on first run.
 
-Releases are cut by tag; `.github/workflows/windows-release.yml` does the rest (tests, Inno
-Setup, signing, upload). A beta is tagged `win-vX.Y.Z-beta.N` and becomes a GitHub pre-release:
+Releases are cut by tag, **together with the Mac app**: pushing `vX.Y.Z` runs
+`.github/workflows/release.yml`, whose Windows job does the tests, Inno Setup and signing,
+while the Mac job builds the DMG; the release is only published once both have succeeded, as
+one GitHub release with both apps' files. A beta is tagged `vX.Y.Z-beta.N` and becomes a
+GitHub pre-release:
 
 ```
-git tag win-v1.0.0 && git push origin win-v1.0.0
+git tag v1.7.0 && git push origin v1.7.0
 ```
 
 **Code signing** uses Azure Artifact Signing (account `ranagmbh`, certificate profile
@@ -127,21 +130,25 @@ signature isn't valid), the workflow signs the installers, and `-Stage Checksums
 `SHA256SUMS.txt` over the signed files. The workflow logs in to Azure with GitHub's OIDC
 token, so no Azure secret is stored: it needs the repository variables `AZURE_CLIENT_ID` and
 `AZURE_TENANT_ID`, and runs in the `windows-release` environment, whose federated credential
-the Azure app registration trusts; restrict that environment to `win-v*` tags. Without the
-variables, releases are built unsigned.
+the Azure app registration trusts; restrict that environment to the release tags (`v*`, and
+`win-v*` while the bridge below exists). Without the variables, releases are built unsigned.
 
-or create the release first:
+The in-app updater reads the joint `v*` releases by their Windows files — a `v*` release
+without them is an older Mac-only one and is skipped — and still reads the older Windows-only
+`win-v*` releases.
+
+**The bridge.** The betas installed before the joint releases look at `win-v*` releases
+only, so they would never see a `v*` one. One last Windows-only beta, cut with the old
+`.github/workflows/windows-release.yml`, carries the new updater to them:
 
 ```
-gh release create win-v1.0.0 --title "FileFluss for Windows 1.0.0" --latest=false --notes "…"
+git tag win-v1.7.0-beta.1 && git push origin win-v1.7.0-beta.1
 ```
 
-**`--latest=false` is not optional.** The macOS app's Sparkle feed is
+That workflow creates its release with `--latest=false` — the macOS app's Sparkle feed is
 `releases/latest/download/appcast.xml`, so a Windows release marked "latest" would cut every
-Mac off from updates. The workflow creates its releases with `--latest=false` and moves
-"latest" back to the newest macOS release if it finds it on a Windows one. Windows tags are
-always `win-vX.Y.Z`: a plain `v*` tag starts the macOS release instead, and the in-app
-updater only ever looks at `win-v*` releases.
+Mac off from updates — and moves "latest" back if it finds it on a Windows one. Once that
+beta is out, delete `windows-release.yml` and the `win-v*` rule on the environment.
 
 ## Projects
 

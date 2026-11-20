@@ -55,7 +55,13 @@ Never mention Claude or AI in commit messages or Co-Authored-By lines. All commi
 
 ## Releases
 
-Releases are triggered by pushing a `v*` tag. `.github/workflows/release.yml` builds, notarizes, and publishes the DMG, then computes its SHA-256 and pushes a cask bump to the **separate tap repo** `rana-gmbh/homebrew-filefluss` (this is the repo Homebrew actually reads when users run `brew tap rana-gmbh/filefluss`). The cask file does **not** live in this repo.
+**The Mac app and the Windows app are released together, from one tag.** Pushing `vX.Y.Z` (or `vX.Y.Z-beta.N`, `-alpha.N`, `-rc.N`; anything else is refused) runs `.github/workflows/release.yml`: the Mac job builds, notarizes and packages the DMG plus Sparkle's ZIP and `appcast.xml`, the Windows job tests, builds and signs the installers and portable zips, and only when both succeed does the publish job create **one** GitHub release with all of it and a single `SHA256SUMS.txt`. It is created as a draft and published once complete, so no one — Sparkle included — ever sees half a release. If one platform fails, nothing is published; fix it and re-run the failed jobs. A hyphenated version is a pre-release: not "latest", no tap bump.
+
+`RELEASE_NOTES.md` is the release body (and what Sparkle shows), so it covers both apps; say which platform a feature is on when they differ. Always three version numbers: the Windows build stamps them into its executables.
+
+The publish job then computes the DMG's SHA-256 and pushes a cask bump to the **separate tap repo** `rana-gmbh/homebrew-filefluss` (this is the repo Homebrew actually reads when users run `brew tap rana-gmbh/filefluss`). The cask file does **not** live in this repo.
+
+The Windows job signs through the `windows-release` environment, whose tag rules must allow `v*` (and `win-v*` while `windows-release.yml` is still around).
 
 The workflow's tap-update step needs a secret named `HOMEBREW_TAP_TOKEN` — a fine-grained PAT scoped to `rana-gmbh/homebrew-filefluss` with `contents: write`. Without it the step fails; with it, every tagged release lands a matching cask commit automatically.
 
@@ -98,6 +104,8 @@ dotnet run --project windows/tools/StringsToResx                        # after 
 powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0     # installers, portable zips, SHA256SUMS.txt
 ```
 
-**Windows releases are tagged `win-vX.Y.Z` and must be created with `--latest=false`.** The macOS Sparkle feed is `releases/latest/download/appcast.xml`, so a Windows release marked "latest" cuts every Mac off from updates. `windows-release.yml` (triggered by `win-v*`) creates the release with `--latest=false` and moves "latest" back to the newest macOS release if needed; a plain `v*` tag is always the macOS release. The Windows in-app updater (`UpdateLookup` / `UpdateService`) only looks at `win-v*` releases and installs nothing it cannot match against the release's `SHA256SUMS.txt`.
+**Windows is released together with the Mac, under the same `vX.Y.Z` tag** — see Releases above. The Windows in-app updater (`UpdateLookup` / `UpdateService`) offers `v*` releases that carry Windows files (older `v*` releases are the Mac's alone and are skipped) as well as the older Windows-only `win-v*` ones, and installs nothing it cannot match against the release's `SHA256SUMS.txt`.
+
+`windows-release.yml` (`win-v*` tags) is kept for one thing only: a last Windows-only beta that carries the updater which understands `v*` releases to the betas installed before the joint releases, which look at `win-v*` releases alone. A `win-v*` release must be created with `--latest=false` — the macOS Sparkle feed is `releases/latest/download/appcast.xml` — and that workflow does so. Delete it, and the `win-v*` rule on the `windows-release` environment, once that beta has shipped.
 
 Commits to the Windows port follow the same rule as everywhere else: never mention Claude or AI in commit messages or Co-Authored-By lines. All commits are authored by Robert Rudolph from Rana GmbH.

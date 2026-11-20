@@ -1,4 +1,24 @@
-name: Build, Notarize & Release
+name: Release
+
+# One tag, one release, both apps. Pushing vX.Y.Z (or vX.Y.Z-beta.N, -alpha.N, -rc.N) builds the
+# Mac app and the Windows app from the same commit, in parallel, and only when both have
+# succeeded publishes them together as one GitHub release:
+#
+#   mac       build, sign, notarize; the DMG for people, the ZIP and appcast.xml for Sparkle
+#   windows   test, build, sign with Azure Artifact Signing; installers and portable zips
+#   publish   checks both sets against their checksums, creates the release as a draft with
+#             every file, then publishes it — so nobody, Sparkle included, ever sees a release
+#             with only half its files — and bumps the Homebrew tap for a stable release
+#
+# If one platform fails, nothing is published; fix it and use "Re-run failed jobs". The
+# release notes are RELEASE_NOTES.md, covering both apps.
+#
+# The Mac's Sparkle feed is releases/latest/download/appcast.xml, so a stable release must be
+# "latest", which a joint release always is. The Windows updater reads these releases too
+# (UpdateLookup), recognising them by their Windows files.
+#
+# Windows-only releases (win-v*) are made by windows-release.yml, which remains only to get
+# one last beta out to the Windows betas installed today: they look for win-v* releases alone.
 
 on:
   push:
@@ -8,27 +28,47 @@ on:
 permissions:
   contents: write
 
-jobs:
-  build-notarize-release:
-    runs-on: macos-26
-    timeout-minutes: 30
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      prerelease: ${{ steps.read.outputs.prerelease }}
     steps:
-      - name: Classify release (stable vs prerelease)
-        id: release_kind
+      - name: Read the version from the tag
+        id: read
         run: |
-          # Tags containing a hyphen (e.g. v1.2-rc1, v1.2-beta1) are treated
-          # as prereleases: not promoted to "latest", and the Homebrew tap is
-          # NOT updated so brew upgrade --cask filefluss continues to install
-          # the previous stable build until the bare-version tag is pushed.
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $GITHUB_REF_NAME -> prerelease"
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Three numbers, because the Windows build stamps them into its executables, and an
+          # optional -alpha.N / -beta.N / -rc.N, which both updaters order correctly.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::Tag must be vX.Y.Z or vX.Y.Z-beta.N (or -alpha.N, -rc.N), got $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # A pre-release is not promoted to "latest" — Sparkle's feed stays on the last
+          # stable release — and the Homebrew tap is left alone, so brew keeps installing the
+          # previous stable build until the bare-version tag is pushed.
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $GITHUB_REF_NAME -> $VERSION, prerelease"
           else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $GITHUB_REF_NAME -> stable"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $GITHUB_REF_NAME -> $VERSION, stable"
           fi
 
+  mac:
+    needs: version
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APP_VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
       - name: Checkout
         # Full history: the build number below is the commit count, and
         # Sparkle decides "is this newer" by comparing CFBundleVersion. A
@@ -43,13 +83,11 @@ jobs:
 
       - name: Stamp version and build number
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           BUILD="$(git rev-list --count HEAD)"
           PLIST=FileFluss/Resources/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST"
-          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Version $VERSION, build $BUILD"
+          echo "Version $APP_VERSION, build $BUILD"
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -297,25 +335,232 @@ jobs:
             || { echo "::error::appcast.xml does not point at FileFluss-${APP_VERSION}.zip"; exit 1; }
           echo "APPCAST_PATH=$WORK/appcast.xml" >> $GITHUB_ENV
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+      - name: Hand the Mac files to the publish job
+        run: |
+          OUT="$RUNNER_TEMP/mac-release"
+          mkdir -p "$OUT"
+          cp "$DMG_PATH" "$ZIP_PATH" "$APPCAST_PATH" "$OUT/"
+          # Hashed here, where the files were made, and checked again after the hand-over.
+          (cd "$OUT" && shasum -a 256 * > "$RUNNER_TEMP/mac.sha256" && mv "$RUNNER_TEMP/mac.sha256" .)
+          cat "$OUT/mac.sha256"
+          echo "MAC_OUT=$OUT" >> $GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
-            ${{ env.DMG_PATH }}
-            ${{ env.ZIP_PATH }}
-            ${{ env.APPCAST_PATH }}
-          body_path: RELEASE_NOTES.md
-          prerelease: ${{ steps.release_kind.outputs.is_prerelease }}
-          make_latest: ${{ steps.release_kind.outputs.is_prerelease == 'false' && 'true' || 'false' }}
-          name: FileFluss ${{ github.ref_name }}
+          name: mac
+          path: ${{ env.MAC_OUT }}
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 45
+    # The Azure app registration trusts this environment, not individual tags, so its
+    # federated credential never has to change. The environment is restricted to the release
+    # tags (Settings → Environments → windows-release: v* and win-v*), so no branch can sign.
+    environment: windows-release
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      # Code signing with Azure Artifact Signing, as Rana GmbH, once the variables
+      # AZURE_CLIENT_ID and AZURE_TENANT_ID are set (identifiers, not secrets). Without them,
+      # releases are built unsigned.
+      HAS_AZURE_SIGNING: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' }}
+      SIGNING_ENDPOINT: https://neu.codesigning.azure.net/
+      SIGNING_ACCOUNT: ranagmbh
+      SIGNING_PROFILE: rana-public
+
+    permissions:
+      contents: read
+      # Signing logs in to Azure with GitHub's OIDC token: no Azure secret is stored here.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Verify generated resources are current
+        run: dotnet run --project windows/tools/StringsToResx --configuration Release -- --check
+
+      - name: Test
+        run: dotnet test windows/FileFluss.sln --configuration Release
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      # Code signing in two rounds, because an installer has to be built from executables that
+      # are already signed: first FileFluss's own exe and DLLs, then the installers. Each round
+      # signs the files gathered under windows/artifacts/sign in place and hands them on through
+      # windows/artifacts/signed, where build-release.ps1 checks that each one carries a valid
+      # signature before using it. Windows PowerShell 5.1, the shell the script is verified with.
+      - name: Publish
+        shell: powershell
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Publish
+
+      # A login per round: the GitHub token behind it is short-lived, and packaging takes minutes.
+      - name: Azure login for the executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          # The app may only sign: it has a role on the signing account, none on the subscription.
+          allow-no-subscriptions: true
+
+      - name: Sign the executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\windows\artifacts\sign\binaries
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FileFluss
+          description-url: https://github.com/rana-gmbh/FileFluss
+          exclude-environment-credential: true
+          exclude-azure-cli-credential: false
+
+      - name: Hand on the signed executables
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force windows/artifacts/signed | Out-Null
+          Copy-Item windows/artifacts/sign/binaries windows/artifacts/signed/binaries -Recurse -Force
+
+      # -RequireInstaller: a release must never ship without its installers, which the in-app
+      # updater depends on.
+      - name: Package
+        shell: powershell
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Package -RequireInstaller
+
+      - name: Azure login for the installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign the installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\windows\artifacts\sign\installers
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FileFluss Setup
+          description-url: https://github.com/rana-gmbh/FileFluss
+          exclude-environment-credential: true
+          exclude-azure-cli-credential: false
+
+      - name: Hand on the signed installers
+        if: env.HAS_AZURE_SIGNING == 'true'
+        shell: pwsh
+        run: Copy-Item windows/artifacts/sign/installers windows/artifacts/signed/installers -Recurse -Force
+
+      - name: Checksums
+        shell: powershell
+        run: ./windows/Packaging/build-release.ps1 -Version $env:VERSION -Stage Checksums
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: windows/artifacts/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [version, mac, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Checkout
+        # For RELEASE_NOTES.md.
+        uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac
+          path: dist/mac
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist/windows
+
+      - name: Check and gather every file
+        run: |
+          set -euo pipefail
+          # Each platform hashed its files where it made them. Checking those hashes here
+          # catches anything that changed on the way, before it reaches a release.
+          tr -d '\r' < dist/windows/SHA256SUMS.txt > dist/windows.sha256
+          (cd dist/windows && sha256sum -c ../windows.sha256)
+          (cd dist/mac && sha256sum -c mac.sha256)
+
+          mkdir -p dist/release
+          cp dist/mac/* dist/windows/* dist/release/
+          rm dist/release/mac.sha256 dist/release/SHA256SUMS.txt
+
+          # What Sparkle, the Windows updater and the Homebrew tap each look for by name.
+          for file in "FileFluss-${GITHUB_REF_NAME}.dmg" "FileFluss-${VERSION}.zip" appcast.xml \
+                      "FileFluss-Setup-${VERSION}-x64.exe" "FileFluss-Setup-${VERSION}-arm64.exe" \
+                      "FileFluss-${VERSION}-x64-portable.zip" "FileFluss-${VERSION}-arm64-portable.zip"; do
+            test -f "dist/release/$file" || { echo "::error::$file is missing"; exit 1; }
+          done
+
+          # One checksum list for the whole release. The Windows updater reads only its own
+          # lines from it.
+          cat dist/mac/mac.sha256 dist/windows.sha256 | sort -k2 > dist/release/SHA256SUMS.txt
+          cat dist/release/SHA256SUMS.txt
+
+      - name: Publish the release
+        run: |
+          set -euo pipefail
+          if [ "$PRERELEASE" = true ]; then
+            LATEST=--latest=false
+            PRE=--prerelease
+          else
+            LATEST=--latest
+            PRE=--prerelease=false
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # Created by hand before the tag was pushed: fill it in and keep its notes.
+            gh release upload "$GITHUB_REF_NAME" dist/release/* --clobber
+          else
+            # A draft first, with every file, then published in one step.
+            gh release create "$GITHUB_REF_NAME" dist/release/* \
+              --draft --verify-tag \
+              --title "FileFluss ${GITHUB_REF_NAME}" \
+              --notes-file RELEASE_NOTES.md
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false "$PRE" "$LATEST"
 
       - name: Update Homebrew tap cask
-        if: steps.release_kind.outputs.is_prerelease == 'false'
+        if: needs.version.outputs.prerelease == 'false'
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          SHA256=$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')
-          VERSION="${GITHUB_REF_NAME#v}"
+          SHA256=$(sha256sum "dist/release/FileFluss-${GITHUB_REF_NAME}.dmg" | awk '{print $1}')
 
           TAP_DIR="$RUNNER_TEMP/homebrew-filefluss"
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/rana-gmbh/homebrew-filefluss.git" "$TAP_DIR"
@@ -324,8 +569,9 @@ jobs:
           git config user.name "Robert Rudolph"
           git config user.email "robert.rudolph@mailbox.org"
 
-          sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/filefluss.rb
-          sed -i '' -E "s/^  sha256 .*/  sha256 \"${SHA256}\"/" Casks/filefluss.rb
+          # GNU sed on this runner: -i takes no separate suffix argument, unlike macOS's.
+          sed -i -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/filefluss.rb
+          sed -i -E "s/^  sha256 .*/  sha256 \"${SHA256}\"/" Casks/filefluss.rb
 
           if git diff --quiet Casks/filefluss.rb; then
             echo "Tap cask already up to date"

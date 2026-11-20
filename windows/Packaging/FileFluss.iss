@@ -1,7 +1,7 @@
 ; FileFluss for Windows — installer.
 ;
 ; Built by windows/Packaging/build-release.ps1, which passes:
-;   /DAppVersion=1.2.3      the version (from the win-vX.Y.Z tag; may be 1.2.3-beta.1)
+;   /DAppVersion=1.2.3      the version (from the vX.Y.Z tag; may be 1.2.3-beta.1)
 ;   /DNumericVersion=1.2.3  the same without a pre-release suffix (file-version fields are numbers only)
 ;   /DArch=x64|arm64        the architecture of the published files
 ;   /DSource=<folder>       the self-contained publish output
