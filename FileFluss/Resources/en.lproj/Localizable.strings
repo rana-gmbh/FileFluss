@@ -1274,3 +1274,9 @@
 "**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." = "**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard.";
 "In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type.";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.";
+
+/* Tags */
+"Tags" = "Tags";
+"Remove All Tags" = "Remove All Tags";
+"Tags couldn't be changed" = "Tags couldn't be changed";
+"The tags of “%@” couldn't be changed: %@" = "The tags of “%@” couldn't be changed: %@";

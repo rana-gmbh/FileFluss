@@ -72,6 +72,12 @@ struct NativeCloudFileList: NSViewRepresentable {
     var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
     /// Right-click → Open With: the selection and the application chosen.
     var onOpenWith: (([CloudFileItem], URL) -> Void)?
+    /// The tags of the items that have any, by path. Arrives after the
+    /// listing, so rows are drawn first and gain their dots a moment later.
+    var tags: [String: [FileTag]] = [:]
+    /// Right-click → Tags: the items and what to do to their tags. Nil
+    /// where tags aren't on offer.
+    var onChangeTags: (([CloudFileItem], TagChange) -> Void)?
     /// Bumped by AppState after a navigation that should keep keyboard focus in
     /// this panel; drives `updateNSView` to re-take first responder even when
     /// the table was rebuilt by the navigation.
@@ -220,6 +226,9 @@ struct NativeCloudFileList: NSViewRepresentable {
         coordinator.onExtractHere = onExtractHere
         coordinator.onExtractToOtherPanel = onExtractToOtherPanel
         coordinator.onOpenWith = onOpenWith
+        coordinator.onChangeTags = onChangeTags
+        let tagsChanged = coordinator.tags != tags
+        coordinator.tags = tags
         coordinator.canDelete = canDelete
         coordinator.shareCapabilities = shareCapabilities
         coordinator.onCreateShareLink = onCreateShareLink
@@ -253,6 +262,9 @@ struct NativeCloudFileList: NSViewRepresentable {
                 location: currentPath,
                 focusToken: focusToken
             )
+            if tagsChanged, !(itemsChanged || extensionPrefChanged) {
+                coordinator.refreshVisibleTags()
+            }
             return
         }
         guard let tableView = coordinator.tableView else { return }
@@ -262,6 +274,10 @@ struct NativeCloudFileList: NSViewRepresentable {
             // Items changing may shift the longest filename — re-floor
             // the Name column so Auto Resize stays accurate.
             coordinator.applyNameColumnAutoResize()
+        } else if tagsChanged {
+            // Tags arrive after the rows. Only the rows on screen need
+            // touching, and nothing is reloaded for it.
+            coordinator.refreshVisibleTags()
         }
 
         let currentNSSelection = Set(tableView.selectedRowIndexes.compactMap { idx -> String? in
@@ -439,6 +455,8 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
     var onExtractHere: ((CloudFileItem) -> Void)?
     var onExtractToOtherPanel: (([CloudFileItem]) -> Void)?
     var onOpenWith: (([CloudFileItem], URL) -> Void)?
+    var onChangeTags: (([CloudFileItem], TagChange) -> Void)?
+    var tags: [String: [FileTag]] = [:]
     let archivePromiseDelegate = ArchiveFilePromiseDelegate()
     var canDelete = true
     var shareCapabilities: ShareLinkCapabilities = .unsupported
@@ -940,6 +958,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             menu.addItem(.separator())
         }
 
+        // Tags are FileFluss's own record for a cloud item, so they need
+        // nothing from the account — only a real item to belong to.
+        if onChangeTags != nil, !containsImmovable {
+            menu.addItem(TagMenu.item(
+                selection: contextItems.map { ($0.id, tags[$0.path] ?? []) },
+                target: self, action: #selector(handleChangeTags(_:))
+            ))
+            menu.addItem(.separator())
+        }
+
         // Rename — only for single, renamable selection (not on read-only devices)
         if contextItems.count == 1, contextItems[0].role == .normal, !isReadOnly {
             let renameItem = NSMenuItem(title: L10n.text("Rename"), action: #selector(handleRename(_:)), keyEquivalent: "")
@@ -1023,6 +1051,57 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             // A collection view reports only selections the user made.
             gallerySelectionDidChange()
         }
+    }
+
+    @objc func handleChangeTags(_ sender: NSMenuItem) {
+        guard let payload = sender.representedObject as? TagMenuPayload else { return }
+        let ids = Set(payload.itemIDs)
+        let affected = items.filter { ids.contains($0.id) }
+        guard !affected.isEmpty else { return }
+        onChangeTags?(affected, payload.change)
+    }
+
+    /// Redraws the dots and folder colours of what is on screen, after the
+    /// tags changed and nothing else did.
+    func refreshVisibleTags() {
+        if let tableView {
+            let column = tableView.column(withIdentifier: .cloudNameColumn)
+            guard column >= 0 else { return }
+            let rows = tableView.rows(in: tableView.visibleRect)
+            guard rows.length > 0 else { return }
+            for row in rows.location..<(rows.location + rows.length) where row < items.count {
+                guard let cell = tableView.view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView else { continue }
+                applyTags(to: cell, item: items[row])
+            }
+        } else if let galleryView {
+            for case let tile as FileGalleryItem in galleryView.visibleItems() {
+                guard let id = tile.representedID, let item = items.first(where: { $0.id == id }) else { continue }
+                applyTags(to: tile, item: item)
+            }
+        }
+    }
+
+    /// Whether the row is drawn as an ordinary folder, which is what takes
+    /// a tag's colour. A shared drive keeps its drive glyph.
+    private func showsFolderIcon(_ item: CloudFileItem) -> Bool {
+        item.isDirectory && item.symbolIconOverride == nil
+    }
+
+    private func applyTags(to cell: NSTableCellView, item: CloudFileItem) {
+        let itemTags = tags[item.path] ?? []
+        TagDotsView.find(in: cell)?.colors = itemTags.dotColors
+        if showsFolderIcon(item) {
+            cell.imageView?.image = FileTypeIcon.folderIcon(tint: itemTags.folderTint)
+        }
+    }
+
+    func applyTags(to tile: FileGalleryItem, item: CloudFileItem) {
+        let itemTags = tags[item.path] ?? []
+        let size = (galleryMetrics ?? FileGalleryMetrics()).thumbnailSize
+        tile.showTags(
+            itemTags.dotColors,
+            folderIcon: showsFolderIcon(item) ? FileTypeIcon.folderIcon(pointSize: size, tint: itemTags.folderTint) : nil
+        )
     }
 
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
@@ -1413,14 +1492,16 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
                 imageView.widthAnchor.constraint(equalToConstant: 18),
                 imageView.heightAnchor.constraint(equalToConstant: 18),
                 textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
-                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
                 textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 badge.trailingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 2),
                 badge.bottomAnchor.constraint(equalTo: imageView.bottomAnchor, constant: 2),
                 badge.widthAnchor.constraint(equalToConstant: 11),
                 badge.heightAnchor.constraint(equalToConstant: 11),
-            ])
+            ] + TagDotsView.add(to: cell, after: textField))
         }
+
+        let itemTags = tags[item.path] ?? []
+        TagDotsView.find(in: cell)?.colors = itemTags.dotColors
 
         cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
@@ -1433,7 +1514,7 @@ class CloudTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegat
             cell.imageView?.image = symbolImage
             cell.imageView?.contentTintColor = .secondaryLabelColor
         } else if item.isDirectory {
-            cell.imageView?.image = FileTypeIcon.folderIcon()
+            cell.imageView?.image = FileTypeIcon.folderIcon(tint: itemTags.folderTint)
             cell.imageView?.contentTintColor = nil
         } else {
             cell.imageView?.image = FreeFileIcon.icon(forFilename: item.name)

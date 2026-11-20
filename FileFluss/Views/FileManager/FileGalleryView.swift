@@ -1,4 +1,5 @@
 import AppKit
+import FileFlussCore
 import QuickLookUI
 
 // The gallery is the second way a panel can show a folder: a grid of tiles
@@ -415,10 +416,12 @@ final class FileGalleryItem: NSCollectionViewItem {
         icon: NSImage,
         iconTint: NSColor? = nil,
         badge: (image: NSImage, tint: NSColor)? = nil,
+        tagColors: [TagColor] = [],
         metrics: FileGalleryMetrics
     ) {
         representedID = id
         tile.metrics = metrics
+        tile.tagDots.colors = tagColors
         tile.label.stringValue = name
         tile.toolTip = toolTip
         tile.imageView.image = icon
@@ -433,6 +436,18 @@ final class FileGalleryItem: NSCollectionViewItem {
     func showThumbnail(_ image: NSImage) {
         tile.imageView.contentTintColor = nil
         tile.imageView.image = image
+    }
+
+    /// Updates a tile already on screen when its tags change: the dots,
+    /// and for a folder the icon in its new colour.
+    func showTags(_ colors: [TagColor], folderIcon: NSImage?) {
+        if tile.tagDots.colors != colors {
+            tile.tagDots.colors = colors
+            tile.needsLayout = true
+        }
+        if let folderIcon {
+            tile.imageView.image = folderIcon
+        }
     }
 
     func updateAppearance() {
@@ -453,6 +468,8 @@ final class FileGalleryTileView: NSView {
     let labelBackground = NSView()
     let label = NSTextField(wrappingLabelWithString: "")
     let badgeView = NSImageView()
+    /// The item's tags, before its name as in Finder's icon view.
+    let tagDots = TagDotsView()
 
     var metrics = FileGalleryMetrics() {
         didSet {
@@ -500,6 +517,7 @@ final class FileGalleryTileView: NSView {
         addSubview(labelBackground)
         addSubview(label)
         addSubview(badgeView)
+        addSubview(tagDots)
     }
 
     required init?(coder: NSCoder) {
@@ -538,19 +556,34 @@ final class FileGalleryTileView: NSView {
 
         let hPad: CGFloat = FileGalleryMetrics.pillHorizontalPadding
         let vPad: CGFloat = FileGalleryMetrics.pillVerticalPadding
-        let maxTextWidth: CGFloat = max(0, bounds.width - 2 * hPad - 2)
+        // The dots take their room out of the name's, inside the same pill.
+        let dotsWidth: CGFloat = TagDotsView.width(for: tagDots.colors.count)
+        let dotsRoom: CGFloat = dotsWidth > 0 ? dotsWidth + 4 : 0
+        let maxTextWidth: CGFloat = max(0, bounds.width - 2 * hPad - 2 - dotsRoom)
         let maxTextHeight: CGFloat = m.lineHeight * CGFloat(FileGalleryMetrics.maximumLabelLines)
         let measureBounds = NSRect(x: 0, y: 0, width: maxTextWidth, height: .greatestFiniteMagnitude)
         let measured: NSSize = label.cell?.cellSize(forBounds: measureBounds) ?? .zero
         let textWidth: CGFloat = min(ceil(measured.width), maxTextWidth)
         let textHeight: CGFloat = min(ceil(measured.height), maxTextHeight)
-        let pillWidth: CGFloat = textWidth + 2 * hPad
+        let pillWidth: CGFloat = textWidth + 2 * hPad + dotsRoom
         let pillHeight: CGFloat = textHeight + 2 * vPad
         let pillX: CGFloat = ((bounds.width - pillWidth) / 2).rounded(.down)
         let pillY: CGFloat = box.maxY + FileGalleryMetrics.labelGap
         let pill = NSRect(x: pillX, y: pillY, width: pillWidth, height: pillHeight)
         labelBackground.frame = pill
-        label.frame = pill.insetBy(dx: hPad, dy: vPad)
+        label.frame = NSRect(
+            x: pill.minX + hPad + dotsRoom,
+            y: pill.minY + vPad,
+            width: textWidth,
+            height: textHeight
+        )
+        // Level with the first line of the name.
+        tagDots.frame = NSRect(
+            x: pill.minX + hPad,
+            y: pill.minY + vPad + ((m.lineHeight - TagDotsView.diameter) / 2).rounded(.down),
+            width: dotsWidth,
+            height: TagDotsView.diameter
+        )
     }
 
     func apply(selected: Bool, emphasized: Bool, dropTarget: Bool) {

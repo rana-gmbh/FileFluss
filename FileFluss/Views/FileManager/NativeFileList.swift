@@ -61,6 +61,11 @@ struct NativeFileList: NSViewRepresentable {
     /// Rows or tiles. Fixed for the life of the view: the panel gives the
     /// list an `.id` of the mode, so switching builds the other kind afresh.
     var viewMode: FileViewMode = .list
+    /// The tags of the items that have any, by item ID. Arrives after the
+    /// listing, so rows are drawn first and gain their dots a moment later.
+    var tags: [String: [FileTag]] = [:]
+    /// Right-click → Tags: the items and what to do to their tags.
+    var onChangeTags: (([FileItem], TagChange) -> Void)?
 
     func makeCoordinator() -> FileTableCoordinator {
         FileTableCoordinator()
@@ -219,7 +224,10 @@ struct NativeFileList: NSViewRepresentable {
         coordinator.onExtractToOtherPanel = onExtractToOtherPanel
         coordinator.onPromisedFilesReceived = onPromisedFilesReceived
         coordinator.onOpenWith = onOpenWith
+        coordinator.onChangeTags = onChangeTags
         coordinator.selectedIDs = _selectedIDs
+        let tagsChanged = coordinator.tags != tags
+        coordinator.tags = tags
 
         // Update data. Diff in a single pass — comparing via `.map(\.id) != …`
         // three times allocates six arrays per refresh on large directories.
@@ -246,6 +254,9 @@ struct NativeFileList: NSViewRepresentable {
                 location: currentDirectory.path,
                 focusToken: focusToken
             )
+            if tagsChanged, !(itemsChanged || extensionPrefChanged) {
+                coordinator.refreshVisibleTags()
+            }
             return
         }
         guard let tableView = coordinator.tableView else { return }
@@ -255,6 +266,10 @@ struct NativeFileList: NSViewRepresentable {
             // Items changing may shift the longest filename — re-floor
             // the Name column so Auto Resize stays accurate.
             coordinator.applyNameColumnAutoResize()
+        } else if tagsChanged {
+            // Tags arrive after the rows. Only the rows on screen need
+            // touching, and nothing is reloaded for it.
+            coordinator.refreshVisibleTags()
         }
 
         // Sync selection from SwiftUI → NSTableView (only if they differ).
@@ -462,6 +477,8 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
     var onPromisedFilesReceived: ((Error?) -> Void)?
     /// Right-click → Open With: the selection and the application chosen.
     var onOpenWith: (([FileItem], URL) -> Void)?
+    var onChangeTags: (([FileItem], TagChange) -> Void)?
+    var tags: [String: [FileTag]] = [:]
     var archiveMode = false
     var archiveDragPlan: ArchiveDragPlan?
     let archivePromiseDelegate = ArchiveFilePromiseDelegate()
@@ -905,6 +922,12 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         menu.addItem(.separator())
 
+        menu.addItem(TagMenu.item(
+            selection: contextItems.map { ($0.id, tags[$0.id] ?? []) },
+            target: self, action: #selector(handleChangeTags(_:))
+        ))
+        menu.addItem(.separator())
+
         // Rename — only for single selection
         if contextItems.count == 1 {
             let renameItem = NSMenuItem(title: L10n.text("Rename"), action: #selector(handleRename(_:)), keyEquivalent: "")
@@ -964,6 +987,53 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
             // user made, so a change made here is passed on by hand.
             gallerySelectionDidChange()
         }
+    }
+
+    @objc func handleChangeTags(_ sender: NSMenuItem) {
+        guard let payload = sender.representedObject as? TagMenuPayload else { return }
+        let ids = Set(payload.itemIDs)
+        let affected = items.filter { ids.contains($0.id) }
+        guard !affected.isEmpty else { return }
+        onChangeTags?(affected, payload.change)
+    }
+
+    /// Redraws the dots and folder colours of what is on screen, after the
+    /// tags changed and nothing else did.
+    func refreshVisibleTags() {
+        if let tableView {
+            let column = tableView.column(withIdentifier: .nameColumn)
+            guard column >= 0 else { return }
+            let rows = tableView.rows(in: tableView.visibleRect)
+            guard rows.length > 0 else { return }
+            for row in rows.location..<(rows.location + rows.length) where row < items.count {
+                guard let cell = tableView.view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView else { continue }
+                applyTags(to: cell, item: items[row])
+            }
+        } else if let galleryView {
+            for case let tile as FileGalleryItem in galleryView.visibleItems() {
+                guard let id = tile.representedID, let item = items.first(where: { $0.id == id }) else { continue }
+                applyTags(to: tile, item: item)
+            }
+        }
+    }
+
+    private func applyTags(to cell: NSTableCellView, item: FileItem) {
+        let itemTags = tags[item.id] ?? []
+        TagDotsView.find(in: cell)?.colors = itemTags.dotColors
+        // A folder shows its tag in its colour too. A file's icon may be a
+        // thumbnail by now, which stays as it is.
+        if item.isDirectory {
+            cell.imageView?.image = FileTypeIcon.folderIcon(tint: itemTags.folderTint)
+        }
+    }
+
+    func applyTags(to tile: FileGalleryItem, item: FileItem) {
+        let itemTags = tags[item.id] ?? []
+        let size = (galleryMetrics ?? FileGalleryMetrics()).thumbnailSize
+        tile.showTags(
+            itemTags.dotColors,
+            folderIcon: item.isDirectory ? FileTypeIcon.folderIcon(pointSize: size, tint: itemTags.folderTint) : nil
+        )
     }
 
     @objc func handleCopyToOtherPanel(_ sender: NSMenuItem) {
@@ -1381,17 +1451,18 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
                 imageView.widthAnchor.constraint(equalToConstant: 18),
                 imageView.heightAnchor.constraint(equalToConstant: 18),
                 textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
-                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
                 textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
+            ] + TagDotsView.add(to: cell, after: textField))
         }
 
         cell.textField?.stringValue = displayedName(for: item)
         cell.textField?.textColor = .labelColor
         cell.textField?.font = FileListRowSizePrefs.current.systemFont
 
+        let itemTags = tags[item.id] ?? []
+        TagDotsView.find(in: cell)?.colors = itemTags.dotColors
         let baseIcon: NSImage = item.isDirectory
-            ? FileTypeIcon.folderIcon()
+            ? FileTypeIcon.folderIcon(tint: itemTags.folderTint)
             : FileTypeIcon.icon(for: item.contentType)
         cell.imageView?.contentTintColor = nil
 

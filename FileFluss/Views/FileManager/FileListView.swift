@@ -830,8 +830,13 @@ struct FileListView: View {
                     onOpenWith: { items, app in
                         Task { await fm.open(items, withApplication: app) }
                     },
-                    viewMode: appState.viewMode(for: panelSide)
+                    viewMode: appState.viewMode(for: panelSide),
+                    tags: fm.tags,
+                    onChangeTags: { items, change in
+                        fm.changeTags(of: items, change)
+                    }
                 )
+                .modifier(LocalTagSupport(fm: fm))
                 // A list and a gallery are different AppKit views; a new
                 // identity builds the other one when the mode changes.
                 .id(appState.viewMode(for: panelSide))
@@ -952,5 +957,34 @@ extension FileListView {
                 await appState.refreshAllPanels()
             }
         }
+    }
+}
+
+/// What a local panel needs around its list for tags, kept out of the
+/// panel's own modifier chain, which is as long as the compiler will take.
+private struct LocalTagSupport: ViewModifier {
+    let fm: FileManagerViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                L10n.text("Tags couldn't be changed"),
+                isPresented: Binding(
+                    get: { fm.tagError != nil },
+                    set: { if !$0 { fm.tagError = nil } }
+                ),
+                presenting: fm.tagError
+            ) { _ in
+                Button(L10n.text("OK"), role: .cancel) { fm.tagError = nil }
+            } message: { message in
+                Text(message)
+            }
+            // A tag given in Finder is on the file but not yet on screen
+            // here. Coming back to FileFluss is when that would be noticed,
+            // so that is when the tags are read again — it costs nothing in
+            // between.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                fm.reloadTags()
+            }
     }
 }

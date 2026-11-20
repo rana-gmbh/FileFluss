@@ -98,6 +98,7 @@ extension CloudTableCoordinator: NSCollectionViewDataSource, NSCollectionViewDel
         let metrics = galleryMetrics ?? FileGalleryMetrics()
         let iconSize = metrics.thumbnailSize
 
+        let itemTags = tags[item.path] ?? []
         let icon: NSImage
         var tint: NSColor?
         if let symbol = item.symbolIconOverride,
@@ -108,7 +109,7 @@ extension CloudTableCoordinator: NSCollectionViewDataSource, NSCollectionViewDel
             icon = symbolImage
             tint = .secondaryLabelColor
         } else if item.isDirectory {
-            icon = FileTypeIcon.folderIcon(pointSize: iconSize)
+            icon = FileTypeIcon.folderIcon(pointSize: iconSize, tint: itemTags.folderTint)
         } else {
             icon = FileTypeIcon.icon(forFilename: item.name, pointSize: iconSize)
         }
@@ -134,6 +135,7 @@ extension CloudTableCoordinator: NSCollectionViewDataSource, NSCollectionViewDel
             icon: icon,
             iconTint: tint,
             badge: badge,
+            tagColors: itemTags.dotColors,
             metrics: metrics
         )
     }

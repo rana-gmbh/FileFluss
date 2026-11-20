@@ -107,6 +107,11 @@ enum FileListNameColumn {
     /// the local/cloud list row layout.
     static let iconAndPaddingWidth: CGFloat = 32
 
+    /// Room after the name for its tag dots — up to three, overlapping —
+    /// so that with Auto Resize on, the longest name isn't the one that
+    /// gets shortened when it is given a tag.
+    static let tagDotsWidth: CGFloat = 26
+
     /// Resize the Name column to fill whatever width is left after the
     /// other visible columns and intercell spacing. When `floor` is
     /// provided (Auto Resize preference is on, callers compute it from
@@ -151,6 +156,6 @@ enum FileListNameColumn {
             let w = (name as NSString).size(withAttributes: attrs).width
             if w > widest { widest = w }
         }
-        return widest + iconAndPaddingWidth
+        return widest + iconAndPaddingWidth + tagDotsWidth
     }
 }
