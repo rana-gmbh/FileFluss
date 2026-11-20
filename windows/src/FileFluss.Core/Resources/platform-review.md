@@ -31,6 +31,7 @@ were left alone and want a human decision.
 | `en` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **Double‑click** any file. Word documents open in Word, PDFs in your PDF viewer, images in Photos, and so on. |
 | `en` | `Are you sure you want to move "%@" to the Trash?` | windows override | Are you sure you want to move "%@" to the Recycle Bin? |
 | `en` | `Are you sure you want to move %d items to the Trash?` | windows override | Are you sure you want to move %d items to the Recycle Bin? |
+| `en` | `iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.` | windows override | iCloud Drive isn't available. Check that iCloud for Windows is signed in and has iCloud Drive turned on. |
 | `en` | `Could not mount in Finder` | windows override | Could not map as a network drive |
 | `en` | `Reveal in Finder` | windows override | Show in Explorer |
 | `en` | `Open this account as a drive in Finder` | windows override | Map this account as a network drive |
@@ -296,6 +297,8 @@ were left alone and want a human decision.
 | `en` | `Search index error: %@` | windows override | Search index error: %@ |
 | `en` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field. |
 | `en` | `Filen API error` | windows override | Filen API error |
+| `en` | `View` | windows override | View |
+| `en` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+Plus** and **Ctrl+Minus** make the thumbnails bigger and smaller, as they do with the rows of the list. |
 | `de` | `System Default follows the language selected in macOS.` | windows override | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
 | `de` | `Search all sources (⌘F)` | windows override | Alle Quellen durchsuchen (Strg+F) |
 | `de` | `Open System Settings…` | windows override | Windows-Einstellungen öffnen … |
@@ -317,6 +320,7 @@ were left alone and want a human decision.
 | `de` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **Doppelklick** auf eine beliebige Datei. Word-Dokumente öffnen sich in Word, PDFs in deinem PDF-Viewer, Bilder in der Fotos-App usw. |
 | `de` | `Are you sure you want to move "%@" to the Trash?` | windows override | Möchtest du „%@“ wirklich in den Papierkorb verschieben? |
 | `de` | `Are you sure you want to move %d items to the Trash?` | windows override | Möchtest du %d Objekte wirklich in den Papierkorb verschieben? |
+| `de` | `iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.` | windows override | iCloud Drive ist nicht verfügbar. Prüfe, ob iCloud für Windows angemeldet und iCloud Drive eingeschaltet ist. |
 | `de` | `Could not mount in Finder` | windows override | Konnte nicht als Netzlaufwerk verbunden werden |
 | `de` | `Reveal in Finder` | windows override | Im Explorer anzeigen |
 | `de` | `Open this account as a drive in Finder` | windows override | Dieses Konto als Netzlaufwerk verbinden |
@@ -579,6 +583,8 @@ were left alone and want a human decision.
 | `de` | `Search index error: %@` | windows override | Fehler im Suchindex: %@ |
 | `de` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | Die S3-Endpunkt-URL ist ungültig (Host: „%@“). Prüfe das Feld „Endpunkt-URL“. |
 | `de` | `Filen API error` | windows override | Filen-API-Fehler |
+| `de` | `View` | windows override | Ansicht |
+| `de` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Strg+Plus** und **Strg+Minus** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste. |
 | `zh-Hans` | `System Default follows the language selected in macOS.` | windows override | “跟随系统”将使用 Windows 中设置的语言。 |
 | `zh-Hans` | `Search all sources (⌘F)` | windows override | 搜索所有来源（Ctrl+F） |
 | `zh-Hans` | `Open System Settings…` | windows override | 打开 Windows 设置… |
@@ -602,6 +608,7 @@ were left alone and want a human decision.
 | `zh-Hans` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **双击** 任意文件。Word 文档会在 Word 中打开，PDF 在你的 PDF 阅读器中打开，图像在“照片”应用中打开，依此类推。 |
 | `zh-Hans` | `Are you sure you want to move "%@" to the Trash?` | windows override | 确定要将“%@”移到回收站吗？ |
 | `zh-Hans` | `Are you sure you want to move %d items to the Trash?` | windows override | 确定要将 %d 个项目移到回收站吗？ |
+| `zh-Hans` | `iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.` | windows override | iCloud 云盘不可用。请检查 Windows 版 iCloud 是否已登录并已打开 iCloud 云盘。 |
 | `zh-Hans` | `Could not mount in Finder` | windows override | 无法映射为网络驱动器 |
 | `zh-Hans` | `Reveal in Finder` | windows override | 在文件资源管理器中显示 |
 | `zh-Hans` | `Open this account as a drive in Finder` | windows override | 将此账户映射为网络驱动器 |
@@ -877,6 +884,8 @@ were left alone and want a human decision.
 | `zh-Hans` | `Search index error: %@` | windows override | 搜索索引错误：%@ |
 | `zh-Hans` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 端点 URL 无效（主机：“%@”）。请检查“端点 URL”字段。 |
 | `zh-Hans` | `Filen API error` | windows override | Filen API 错误 |
+| `zh-Hans` | `View` | windows override | 查看 |
+| `zh-Hans` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+加号** 和 **Ctrl+减号** 可放大和缩小缩略图，与列表中的行一样。 |
 | `zh-Hant` | `System Default follows the language selected in macOS.` | windows override | 「跟隨系統」會使用 Windows 中設定的語言。 |
 | `zh-Hant` | `Search all sources (⌘F)` | windows override | 搜尋所有來源（Ctrl+F） |
 | `zh-Hant` | `Open System Settings…` | windows override | 開啟 Windows 設定… |
@@ -901,6 +910,7 @@ were left alone and want a human decision.
 | `zh-Hant` | `**Double‑click** any file. Word documents open in Word, PDFs in Preview, images in your image viewer, and so on.` | windows override | **按兩下** 任意檔案。Word 文件會在 Word 中開啟，PDF 在你的 PDF 檢視器中開啟，影像在「相片」應用程式中開啟，依此類推。 |
 | `zh-Hant` | `Are you sure you want to move "%@" to the Trash?` | windows override | 確定要將「%@」移到資源回收筒嗎？ |
 | `zh-Hant` | `Are you sure you want to move %d items to the Trash?` | windows override | 確定要將 %d 個項目移到資源回收筒嗎？ |
+| `zh-Hant` | `iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.` | windows override | iCloud 雲碟無法使用。請檢查 Windows 版 iCloud 是否已登入並已開啟 iCloud 雲碟。 |
 | `zh-Hant` | `Could not mount in Finder` | windows override | 無法連線為網路磁碟機 |
 | `zh-Hant` | `Reveal in Finder` | windows override | 在檔案總管中顯示 |
 | `zh-Hant` | `Open this account as a drive in Finder` | windows override | 將此帳戶連線為網路磁碟機 |
@@ -1176,3 +1186,5 @@ were left alone and want a human decision.
 | `zh-Hant` | `Search index error: %@` | windows override | 搜尋索引錯誤：%@ |
 | `zh-Hant` | `S3 endpoint URL is invalid (host: "%@"). Double-check the Endpoint URL field.` | windows override | S3 端點 URL 無效（主機：「%@」）。請檢查「端點 URL」欄位。 |
 | `zh-Hant` | `Filen API error` | windows override | Filen API 錯誤 |
+| `zh-Hant` | `View` | windows override | 檢視 |
+| `zh-Hant` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+加號** 和 **Ctrl+減號** 可放大和縮小縮覽圖，與列表中的列一樣。 |

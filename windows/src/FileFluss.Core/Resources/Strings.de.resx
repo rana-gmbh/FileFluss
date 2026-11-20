@@ -875,8 +875,26 @@
   <data name="Open Settings…" xml:space="preserve">
     <value>Einstellungen öffnen …</value>
   </data>
-  <data name="Open Settings to Re-Connect…" xml:space="preserve">
-    <value>Einstellungen zum erneuten Verbinden öffnen …</value>
+  <data name="iCloud Drive isn&apos;t available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." xml:space="preserve">
+    <value>iCloud Drive ist nicht verfügbar. Prüfe, ob iCloud für Windows angemeldet und iCloud Drive eingeschaltet ist.</value>
+  </data>
+  <data name="FileFluss couldn&apos;t use the saved sign-in for this account. Reconnect it to see your files again." xml:space="preserve">
+    <value>FileFluss konnte die gespeicherte Anmeldung für dieses Konto nicht verwenden. Verbinde es erneut, um deine Dateien wieder zu sehen.</value>
+  </data>
+  <data name="Reconnect…" xml:space="preserve">
+    <value>Erneut verbinden …</value>
+  </data>
+  <data name="Open iCloud Settings…" xml:space="preserve">
+    <value>iCloud-Einstellungen öffnen …</value>
+  </data>
+  <data name="Your browser opens so you can sign in to {0} again." xml:space="preserve">
+    <value>Dein Browser öffnet sich, damit du dich erneut bei {0} anmelden kannst.</value>
+  </data>
+  <data name="Enter your {0} sign-in details again. Nothing else about the account changes." xml:space="preserve">
+    <value>Gib deine Anmeldedaten für {0} erneut ein. Sonst ändert sich nichts am Konto.</value>
+  </data>
+  <data name="{0} can&apos;t be signed in again from here. Remove the account in Settings and add it again." xml:space="preserve">
+    <value>Bei {0} kannst du dich hier nicht erneut anmelden. Entferne das Konto in den Einstellungen und füge es erneut hinzu.</value>
   </data>
   <data name="Could not download file" xml:space="preserve">
     <value>Datei konnte nicht geladen werden</value>
@@ -1631,9 +1649,6 @@
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in your keychain." xml:space="preserve">
     <value>Jottacloud bietet keine öffentliche API, daher verwendet FileFluss dieselbe Schnittstelle wie das offizielle Kommandozeilen-Tool. Das Token wird gegen eine Anmeldung eingetauscht, die verschlüsselt im Windows-Anmeldedatenspeicher abgelegt wird.</value>
   </data>
-  <data name="To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." xml:space="preserve">
-    <value>Um Jottacloud mit einem neuen persönlichen Login-Token neu zu verbinden, entfernen Sie dieses Konto und fügen Sie es erneut hinzu.</value>
-  </data>
   <data name="Open my.pcloud.com" xml:space="preserve">
     <value>my.pcloud.com öffnen</value>
   </data>
@@ -1769,6 +1784,15 @@
   <data name="Edit {0}" xml:space="preserve">
     <value>{0} bearbeiten</value>
   </data>
+  <data name="Reconnect {0}" xml:space="preserve">
+    <value>{0} erneut verbinden</value>
+  </data>
+  <data name="FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are." xml:space="preserve">
+    <value>FileFluss kann sich nicht mehr bei diesem Konto anmelden. Melde dich unten erneut an – deine Ordner, Sync-Regeln und Favoriten bleiben unverändert.</value>
+  </data>
+  <data name="Reconnect" xml:space="preserve">
+    <value>Erneut verbinden</value>
+  </data>
   <data name="Endpoint URL" xml:space="preserve">
     <value>Endpunkt-URL</value>
   </data>
@@ -1811,8 +1835,8 @@
   <data name="Site URL" xml:space="preserve">
     <value>Site-URL</value>
   </data>
-  <data name="TeraBox signs in with a QR code scanned in the TeraBox app — there&apos;s nothing to edit here. To reconnect, remove this account and add it again." xml:space="preserve">
-    <value>TeraBox meldet sich mit einem in der TeraBox-App gescannten QR-Code an — hier gibt es nichts zu bearbeiten. Zum erneuten Verbinden entferne dieses Konto und füge es erneut hinzu.</value>
+  <data name="TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app." xml:space="preserve">
+    <value>TeraBox meldet sich mit einem QR-Code an. Klicke auf „Neu autorisieren“, um einen neuen Code zu erhalten, und scanne ihn dann mit der TeraBox-App.</value>
   </data>
   <data name="That doesn&apos;t look like a PEM private key." xml:space="preserve">
     <value>Das sieht nicht nach einem privaten PEM-Schlüssel aus.</value>
@@ -2537,9 +2561,6 @@
   <data name="FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." xml:space="preserve">
     <value>FileFluss liest nur von GitHub. Du kannst Repositories durchsuchen, einzelne Dateien herausziehen, und jedes Repository bietet ein Snapshot-Archiv seines Standard-Branches, das du in ein anderes Konto kopieren kannst.</value>
   </data>
-  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
-    <value>Um ein anderes Personal Access Token zu verwenden, entferne dieses Konto und füge es erneut hinzu.</value>
-  </data>
   <data name="Compress" xml:space="preserve">
     <value>Komprimieren</value>
   </data>
@@ -2673,9 +2694,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." xml:space="preserve">
     <value>Gib dem Token die Berechtigung „All“ oder Schreibzugriff auf Files, Folders und Sharing. Es wird verschlüsselt im Windows-Anmeldedatenspeicher abgelegt.</value>
-  </data>
-  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
-    <value>Um Drime mit einem anderen Token oder Konto zu verbinden, entferne dieses Konto und füge es erneut hinzu.</value>
   </data>
   <data name="Drime didn&apos;t accept this token. Check that it was copied completely and hasn&apos;t been deleted." xml:space="preserve">
     <value>Drime hat dieses Token nicht akzeptiert. Prüfe, ob es vollständig kopiert wurde und nicht gelöscht ist.</value>
@@ -3523,14 +3541,59 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   <data name="Filen API error" xml:space="preserve">
     <value>Filen-API-Fehler</value>
   </data>
+  <data name="Click Connect to sign in with your pCloud account. Your browser will open for authentication." xml:space="preserve">
+    <value>Klicke auf „Verbinden“, um dich mit deinem pCloud-Konto anzumelden. Dein Browser öffnet sich zur Authentifizierung.</value>
+  </data>
+  <data name="pCloud didn&apos;t issue a token." xml:space="preserve">
+    <value>pCloud hat kein Token ausgestellt.</value>
+  </data>
+  <data name="The sign-in needs a free local port, and all of them are in use by other apps." xml:space="preserve">
+    <value>Die Anmeldung braucht einen freien lokalen Port, aber alle sind von anderen Apps belegt.</value>
+  </data>
+  <data name="as List" xml:space="preserve">
+    <value>als Liste</value>
+  </data>
+  <data name="as Gallery" xml:space="preserve">
+    <value>als Galerie</value>
+  </data>
+  <data name="View as List" xml:space="preserve">
+    <value>Als Liste anzeigen</value>
+  </data>
+  <data name="View as Gallery" xml:space="preserve">
+    <value>Als Galerie anzeigen</value>
+  </data>
+  <data name="List" xml:space="preserve">
+    <value>Liste</value>
+  </data>
+  <data name="Gallery" xml:space="preserve">
+    <value>Galerie</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>Ansicht</value>
+  </data>
+  <data name="Show this panel as a list or as a gallery" xml:space="preserve">
+    <value>Diesen Bereich als Liste oder als Galerie anzeigen</value>
+  </data>
+  <data name="List or gallery" xml:space="preserve">
+    <value>Liste oder Galerie</value>
+  </data>
+  <data name="The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice." xml:space="preserve">
+    <value>Der Schalter am rechten Ende jeder Pfadleiste zeigt einen Bereich als **Liste** oder als **Galerie** mit Miniaturbildern. Jeder Bereich merkt sich seine Wahl.</value>
+  </data>
+  <data name="**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." xml:space="preserve">
+    <value>**Darstellung → als Liste** und **Darstellung → als Galerie** schalten den aktiven Bereich über das Menü oder die Tastatur um.</value>
+  </data>
+  <data name="In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." xml:space="preserve">
+    <value>In der Galerie zeigen lokale Bilder, Videos, PDFs und Dokumente eine Vorschau; Cloud-Dateien zeigen das Symbol ihres Dateityps.</value>
+  </data>
+  <data name="**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." xml:space="preserve">
+    <value>**Strg+Plus** und **Strg+Minus** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste.</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
   </data>
   <data name="Edit" xml:space="preserve">
     <value>Bearbeiten</value>
-  </data>
-  <data name="View" xml:space="preserve">
-    <value>Ansicht</value>
   </data>
   <data name="Help" xml:space="preserve">
     <value>Hilfe</value>
@@ -4121,5 +4184,11 @@ Dem neuen Schlüssel vertrauen?</value>
   </data>
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>Testkonten wiederherstellen …</value>
+  </data>
+  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
+    <value>Um ein anderes Personal Access Token zu verwenden, entferne dieses Konto und füge es erneut hinzu.</value>
+  </data>
+  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
+    <value>Um Drime mit einem anderen Token oder Konto zu verbinden, entferne dieses Konto und füge es erneut hinzu.</value>
   </data>
 </root>

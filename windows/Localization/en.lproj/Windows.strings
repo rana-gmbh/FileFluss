@@ -633,3 +633,13 @@
 /* Debug builds only: test accounts kept apart from the release app. */
 "Save Test Accounts…" = "Save Test Accounts…";
 "Restore Test Accounts…" = "Restore Test Accounts…";
+
+/* Until the Windows port takes a new token in the credentials sheet, as the Mac does since
+   it learned to reconnect an account, these accounts still have to be removed and added again. */
+"To use a different personal access token, remove this account and add it again." = "To use a different personal access token, remove this account and add it again.";
+"To connect Drime with a different token or account, remove this account and add it again." = "To connect Drime with a different token or account, remove this account and add it again.";
+
+/* Mac wording from the account reconnecting and the gallery view, which the Windows port
+   doesn't have yet — worded for Windows for when it does. */
+"iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud Drive isn't available. Check that iCloud for Windows is signed in and has iCloud Drive turned on.";
+"**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**Ctrl+Plus** and **Ctrl+Minus** make the thumbnails bigger and smaller, as they do with the rows of the list.";

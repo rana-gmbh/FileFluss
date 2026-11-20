@@ -623,3 +623,13 @@
 /* Debug builds only: test accounts kept apart from the release app. */
 "Save Test Accounts…" = "Testkonten sichern …";
 "Restore Test Accounts…" = "Testkonten wiederherstellen …";
+
+/* Until the Windows port takes a new token in the credentials sheet, as the Mac does since
+   it learned to reconnect an account, these accounts still have to be removed and added again. */
+"To use a different personal access token, remove this account and add it again." = "Um ein anderes Personal Access Token zu verwenden, entferne dieses Konto und füge es erneut hinzu.";
+"To connect Drime with a different token or account, remove this account and add it again." = "Um Drime mit einem anderen Token oder Konto zu verbinden, entferne dieses Konto und füge es erneut hinzu.";
+
+/* Mac wording from the account reconnecting and the gallery view, which the Windows port
+   doesn't have yet — worded for Windows for when it does. */
+"iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud Drive ist nicht verfügbar. Prüfe, ob iCloud für Windows angemeldet und iCloud Drive eingeschaltet ist.";
+"**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**Strg+Plus** und **Strg+Minus** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste.";

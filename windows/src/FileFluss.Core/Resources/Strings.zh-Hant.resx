@@ -875,8 +875,26 @@
   <data name="Open Settings…" xml:space="preserve">
     <value>打開設定…</value>
   </data>
-  <data name="Open Settings to Re-Connect…" xml:space="preserve">
-    <value>打開設定以重新連接…</value>
+  <data name="iCloud Drive isn&apos;t available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." xml:space="preserve">
+    <value>iCloud 雲碟無法使用。請檢查 Windows 版 iCloud 是否已登入並已開啟 iCloud 雲碟。</value>
+  </data>
+  <data name="FileFluss couldn&apos;t use the saved sign-in for this account. Reconnect it to see your files again." xml:space="preserve">
+    <value>FileFluss 無法使用此帳戶已儲存的登入資訊。請重新連接，以便再次檢視你的檔案。</value>
+  </data>
+  <data name="Reconnect…" xml:space="preserve">
+    <value>重新連接…</value>
+  </data>
+  <data name="Open iCloud Settings…" xml:space="preserve">
+    <value>打開 iCloud 設定…</value>
+  </data>
+  <data name="Your browser opens so you can sign in to {0} again." xml:space="preserve">
+    <value>瀏覽器將打開，以便你重新登入 {0}。</value>
+  </data>
+  <data name="Enter your {0} sign-in details again. Nothing else about the account changes." xml:space="preserve">
+    <value>請重新輸入你的 {0} 登入資訊。帳戶的其他設定保持不變。</value>
+  </data>
+  <data name="{0} can&apos;t be signed in again from here. Remove the account in Settings and add it again." xml:space="preserve">
+    <value>無法在此處重新登入 {0}。請在設定中移除該帳戶，然後重新加入。</value>
   </data>
   <data name="Could not download file" xml:space="preserve">
     <value>無法下載檔案</value>
@@ -1631,9 +1649,6 @@
   <data name="Jottacloud has no public API, so FileFluss uses the same interface as the official command-line tool. The token is exchanged for a login that&apos;s stored in your keychain." xml:space="preserve">
     <value>Jottacloud 沒有公開 API，因此 FileFluss 使用與官方命令列工具相同的介面。權杖將被兌換為登入憑證，並加密儲存在 Windows 認證存放區中。</value>
   </data>
-  <data name="To reconnect Jottacloud with a new Personal Login Token, remove this account and add it again." xml:space="preserve">
-    <value>若要使用新的個人登入權杖重新連線 Jottacloud，請移除此帳戶並重新新增。</value>
-  </data>
   <data name="Open my.pcloud.com" xml:space="preserve">
     <value>打開 my.pcloud.com</value>
   </data>
@@ -1769,6 +1784,15 @@
   <data name="Edit {0}" xml:space="preserve">
     <value>編輯 {0}</value>
   </data>
+  <data name="Reconnect {0}" xml:space="preserve">
+    <value>重新連接 {0}</value>
+  </data>
+  <data name="FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are." xml:space="preserve">
+    <value>FileFluss 無法再登入此帳戶。請在下方重新登入——你的檔案夾、同步規則和個人收藏都將保持不變。</value>
+  </data>
+  <data name="Reconnect" xml:space="preserve">
+    <value>重新連接</value>
+  </data>
   <data name="Endpoint URL" xml:space="preserve">
     <value>端點 URL</value>
   </data>
@@ -1811,8 +1835,8 @@
   <data name="Site URL" xml:space="preserve">
     <value>網站 URL</value>
   </data>
-  <data name="TeraBox signs in with a QR code scanned in the TeraBox app — there&apos;s nothing to edit here. To reconnect, remove this account and add it again." xml:space="preserve">
-    <value>TeraBox 透過在 TeraBox 應用程式中掃描 QR 碼登入——此處無可編輯內容。若要重新連接，請移除此帳戶並重新加入。</value>
+  <data name="TeraBox signs in with a QR code. Click Re-authorize for a new code, then scan it with the TeraBox app." xml:space="preserve">
+    <value>TeraBox 使用 QR 碼登入。點按「重新授權」取得新的 QR 碼，然後用 TeraBox App 掃描。</value>
   </data>
   <data name="That doesn&apos;t look like a PEM private key." xml:space="preserve">
     <value>這看起來不像 PEM 私鑰。</value>
@@ -2537,9 +2561,6 @@
   <data name="FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account." xml:space="preserve">
     <value>FileFluss 只會從 GitHub 讀取。你可以瀏覽儲存庫、取出單一檔案，每個儲存庫也提供其預設分支的快照封存，可複製到其他帳戶。</value>
   </data>
-  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
-    <value>若要改用其他個人存取權杖，請移除此帳戶後重新新增。</value>
-  </data>
   <data name="Compress" xml:space="preserve">
     <value>壓縮</value>
   </data>
@@ -2673,9 +2694,6 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   </data>
   <data name="Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain." xml:space="preserve">
     <value>請為權杖授予「All」權限，或授予 Files、Folders 和 Sharing 的寫入權限。權杖會加密儲存在 Windows 認證存放區中。</value>
-  </data>
-  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
-    <value>要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。</value>
   </data>
   <data name="Drime didn&apos;t accept this token. Check that it was copied completely and hasn&apos;t been deleted." xml:space="preserve">
     <value>Drime 未接受此權杖。請檢查它是否已完整複製且未被刪除。</value>
@@ -3523,14 +3541,59 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   <data name="Filen API error" xml:space="preserve">
     <value>Filen API 錯誤</value>
   </data>
+  <data name="Click Connect to sign in with your pCloud account. Your browser will open for authentication." xml:space="preserve">
+    <value>點按「連接」以登入你的 pCloud 帳戶。你的瀏覽器將打開以進行驗證。</value>
+  </data>
+  <data name="pCloud didn&apos;t issue a token." xml:space="preserve">
+    <value>pCloud 未簽發權杖。</value>
+  </data>
+  <data name="The sign-in needs a free local port, and all of them are in use by other apps." xml:space="preserve">
+    <value>登入需要一個閒置的本機連接埠，但所有連接埠都已被其他 App 佔用。</value>
+  </data>
+  <data name="as List" xml:space="preserve">
+    <value>以列表顯示</value>
+  </data>
+  <data name="as Gallery" xml:space="preserve">
+    <value>以圖庫顯示</value>
+  </data>
+  <data name="View as List" xml:space="preserve">
+    <value>以列表顯示</value>
+  </data>
+  <data name="View as Gallery" xml:space="preserve">
+    <value>以圖庫顯示</value>
+  </data>
+  <data name="List" xml:space="preserve">
+    <value>列表</value>
+  </data>
+  <data name="Gallery" xml:space="preserve">
+    <value>圖庫</value>
+  </data>
+  <data name="View" xml:space="preserve">
+    <value>檢視</value>
+  </data>
+  <data name="Show this panel as a list or as a gallery" xml:space="preserve">
+    <value>將此面板顯示為列表或圖庫</value>
+  </data>
+  <data name="List or gallery" xml:space="preserve">
+    <value>列表或圖庫</value>
+  </data>
+  <data name="The switch at the right end of each path bar shows a panel as a **list** or as a **gallery** of thumbnails. Each panel remembers its choice." xml:space="preserve">
+    <value>每個路徑列右端的切換按鈕可將面板顯示為**列表**或縮覽圖**圖庫**。每個面板都會記住自己的選擇。</value>
+  </data>
+  <data name="**View → as List** and **View → as Gallery** switch the active panel from the menu or keyboard." xml:space="preserve">
+    <value>**顯示方式 → 以列表顯示**和**顯示方式 → 以圖庫顯示**可透過選單或鍵盤切換作用中的面板。</value>
+  </data>
+  <data name="In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." xml:space="preserve">
+    <value>在圖庫中，本機影像、影片、PDF 和文件會顯示預覽；雲端檔案顯示其檔案類型的圖示。</value>
+  </data>
+  <data name="**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." xml:space="preserve">
+    <value>**Ctrl+加號** 和 **Ctrl+減號** 可放大和縮小縮覽圖，與列表中的列一樣。</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>檔案</value>
   </data>
   <data name="Edit" xml:space="preserve">
     <value>編輯</value>
-  </data>
-  <data name="View" xml:space="preserve">
-    <value>檢視</value>
   </data>
   <data name="Help" xml:space="preserve">
     <value>說明</value>
@@ -4121,5 +4184,11 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   </data>
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>還原測試帳戶…</value>
+  </data>
+  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
+    <value>若要改用其他個人存取權杖，請移除此帳戶後重新新增。</value>
+  </data>
+  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
+    <value>要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。</value>
   </data>
 </root>
