@@ -112,6 +112,13 @@ public sealed record ConnectSpec(IReadOnlyList<ConnectMode> Modes)
     /// </summary>
     public bool SupportsInlineReauthentication
         => Modes.Count == 1 && Modes[0].OpensBrowser && Modes[0].Fields.All(f => !f.HasValue);
+
+    /// <summary>
+    /// The mode that signs in through the browser with nothing to type, when there is one: what
+    /// "Sign In Again" runs from a panel or the sidebar without opening the account's form,
+    /// even when the form also offers modes that need typing.
+    /// </summary>
+    public ConnectMode? BrowserOnlyMode => Modes.FirstOrDefault(m => m.OpensBrowser && m.Fields.All(f => !f.HasValue));
 }
 
 /// <summary>What the user entered, keyed by <see cref="ConnectField.Key"/>.</summary>

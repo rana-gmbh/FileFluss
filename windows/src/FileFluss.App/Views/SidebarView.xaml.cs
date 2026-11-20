@@ -319,6 +319,7 @@ public partial class SidebarView : UserControl
                 AddDriveIndexItems(menu, offlineDrive, isOnline: false);
                 break;
             case SidebarEntryKind.Account when entry.Account is { } account:
+                AddReconnectItem(menu, account);
                 menu.Items.Add(new Separator());
                 menu.Items.Add(ContextMenus.Item(L("Edit…"), Glyphs.Settings, null, () => AccountDialog.Edit(Window.GetWindow(this), Main.Services, account.Id)));
                 menu.Items.Add(ContextMenus.Item(L("Rename…"), Glyphs.Rename, null, () =>
@@ -376,6 +377,31 @@ public partial class SidebarView : UserControl
         menu.PlacementTarget = list;
         menu.IsOpen = true;
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// macOS: an account with a grey dot — its sign-in stopped working, or none could be read at
+    /// launch — offers Sign In Again (the provider's page in the browser) or Reconnect… (its
+    /// form), for every type that can be signed in again from here.
+    /// </summary>
+    private void AddReconnectItem(ContextMenu menu, CloudAccount account)
+    {
+        if (account.IsOfflineMode || Main.Services.Accounts.IsSignedIn(account))
+        {
+            return;
+        }
+
+        var title = account.ProviderType.ReconnectMethod() switch
+        {
+            ReconnectMethod.Browser => L("Sign In Again"),
+            ReconnectMethod.Credentials => L("Reconnect…"),
+            _ => null,
+        };
+        if (title is not null)
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(ContextMenus.Item(title, Glyphs.Person, null, () => Reauthentication.Reconnect(Window.GetWindow(this), Main, account.Id)));
+        }
     }
 
     /// <summary>

@@ -3,6 +3,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Security;
 
 namespace FileFluss.Native;
@@ -73,6 +74,13 @@ public sealed class DpapiCredentialStore : ICredentialStore
             {
                 // Written by another Windows account or a reinstalled profile, truncated, or
                 // locked away: unreadable, so treat as absent; the account asks to sign in again.
+                // Logged, as macOS logs a keychain read that fails for any reason but a missing
+                // item: otherwise nothing tells unreadable credentials from deleted ones. The
+                // kind of failure only — neither the contents nor the file's path.
+                SupportLogger.Shared.Log(
+                    $"Credential read for {key} failed ({e.GetType().Name}, 0x{e.HResult:X8})",
+                    CredentialStoreExtensions.LogCategory,
+                    LogLevel.Error);
                 return null;
             }
         }

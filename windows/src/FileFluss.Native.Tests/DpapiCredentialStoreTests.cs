@@ -3,6 +3,8 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using FileFluss.Core.Diagnostics;
+using FileFluss.Core.Security;
 
 namespace FileFluss.Native.Tests;
 
@@ -44,6 +46,27 @@ public sealed class DpapiCredentialStoreTests : IDisposable
 
         File.WriteAllBytes(file, []);
         Assert.Null(store.Load("box.1"));
+    }
+
+    /// <summary>macOS logs a keychain read that fails for any reason but a missing item: unreadable is not deleted.</summary>
+    [Fact]
+    public void AnUnreadableSecretIsLoggedWithoutItsContentsOrPath()
+    {
+        var store = new DpapiCredentialStore(_directory);
+        var key = "box." + Guid.NewGuid().ToString("N");
+        var missing = "box." + Guid.NewGuid().ToString("N");
+        store.Save(key, Encoding.UTF8.GetBytes("very-secret"));
+        File.WriteAllBytes(Assert.Single(Directory.GetFiles(_directory)), [0xDE, 0xAD]);
+        var since = DateTimeOffset.Now.AddSeconds(-1);
+
+        Assert.Null(store.Load(key));
+        Assert.Null(store.Load(missing));
+
+        var entry = Assert.Single(SupportLogger.Shared.Snapshot(since), e => e.Message.Contains(key, StringComparison.Ordinal));
+        Assert.Equal((LogLevel.Error, CredentialStoreExtensions.LogCategory), (entry.Level, entry.Category));
+        Assert.Contains(nameof(System.Security.Cryptography.CryptographicException), entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(_directory, entry.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(SupportLogger.Shared.Snapshot(since), e => e.Message.Contains(missing, StringComparison.Ordinal));
     }
 
     [Fact]

@@ -4182,10 +4182,4 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>恢复测试帐户…</value>
   </data>
-  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
-    <value>要使用其他个人访问令牌，请移除此账户并重新添加。</value>
-  </data>
-  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
-    <value>要使用其他令牌或账户连接 Drime，请移除此账户后重新添加。</value>
-  </data>
 </root>

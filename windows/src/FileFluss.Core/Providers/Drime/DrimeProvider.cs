@@ -55,28 +55,19 @@ public sealed class DrimeProvider : CloudProvider
     // MARK: - Connecting
 
     /// <summary>
-    /// Add: the macOS token form (browser sign-in is not offered while there is no client ID).
-    /// Edit: macOS offers nothing to change — a different token or account means removing
-    /// the account and adding it again — so the form is that hint alone, and saving it keeps
-    /// the stored token.
+    /// The macOS token form, for adding and editing alike (browser sign-in is not offered while
+    /// there is no client ID): a revoked token is replaced here, which used to mean removing
+    /// the account and adding it again (macOS: reconnecting an account).
     /// </summary>
-    public override ConnectSpec ConnectSpec => IsAuthenticated
-        ? new ConnectSpec(ConnectField.Info("To connect Drime with a different token or account, remove this account and add it again."))
-        : new ConnectSpec(
-            ConnectField.Info("Create a personal access token in your Drime account under Settings → Developers, then paste it below."),
-            ConnectField.Link("Open Drime token settings", DrimeApiClient.TokenSettingsUrl),
-            new ConnectField(TokenKey, ConnectFieldKind.Password, "Personal Access Token"),
-            ConnectField.Info("Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain."));
+    public override ConnectSpec ConnectSpec { get; } = new(
+        ConnectField.Info("Create a personal access token in your Drime account under Settings → Developers, then paste it below."),
+        ConnectField.Link("Open Drime token settings", DrimeApiClient.TokenSettingsUrl),
+        new ConnectField(TokenKey, ConnectFieldKind.Password, "Personal Access Token"),
+        ConnectField.Info("Give the token the “All” permission, or write access to Files, Folders and Sharing. It is stored in your keychain."));
 
     public override async Task<ConnectResult> ConnectAsync(ConnectValues values, IConnectPrompt prompt, CancellationToken cancellationToken = default)
     {
         var token = values.GetTrimmed(TokenKey);
-        if (token.Length == 0 && _client is { } existing)
-        {
-            // The edit form has no token field: saving it changes nothing.
-            return new ConnectResult(Label(existing.Credentials));
-        }
-
         var credentials = await DrimeApiClient.ValidatePersonalTokenAsync(_http, token, cancellationToken).ConfigureAwait(false);
         Credentials.Save(CredentialKey, credentials);
         _client = CreateClient(credentials);

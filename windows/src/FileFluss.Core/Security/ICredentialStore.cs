@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Text.Json;
+using FileFluss.Core.Diagnostics;
 
 namespace FileFluss.Core.Security;
 
@@ -21,6 +22,9 @@ public interface ICredentialStore
 
 public static class CredentialStoreExtensions
 {
+    /// <summary>Support-log category of credentials that are saved but can't be read — the macOS "Keychain".</summary>
+    public const string LogCategory = "Credentials";
+
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
     /// <summary>Stores <paramref name="value"/> as JSON.</summary>
@@ -41,8 +45,12 @@ public static class CredentialStoreExtensions
         {
             return JsonSerializer.Deserialize<T>(data, Options);
         }
-        catch (JsonException)
+        catch (JsonException e)
         {
+            // Something is saved, yet the account will look signed out: the support log is the
+            // only place that tells the two apart (macOS logs failed keychain reads the same
+            // way). Where the JSON broke, never what it holds.
+            SupportLogger.Shared.Log($"Stored credentials for {key} couldn't be decoded (JSON error at {e.Path ?? "$"})", LogCategory, LogLevel.Error);
             return null;
         }
     }

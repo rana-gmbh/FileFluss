@@ -54,17 +54,15 @@ public sealed class GitHubProvider : CloudProvider
     // MARK: - Connecting
 
     /// <summary>
-    /// Add: the macOS token form. Edit: macOS offers nothing to change — a different token
-    /// means removing the account and adding it again — so the form is that hint alone, and
-    /// saving it keeps the stored token.
+    /// The macOS token form, for adding and editing alike: a revoked or expired token is
+    /// replaced here, which used to mean removing the account and adding it again (macOS:
+    /// reconnecting an account).
     /// </summary>
-    public override ConnectSpec ConnectSpec => IsAuthenticated
-        ? new ConnectSpec(ConnectField.Info("To use a different personal access token, remove this account and add it again."))
-        : new ConnectSpec(
-            ConnectField.Info("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories."),
-            ConnectField.Link("Open GitHub token settings", TokenSettingsUrl),
-            new ConnectField(TokenKey, ConnectFieldKind.Password, "Personal Access Token"),
-            ConnectField.Info("FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account."));
+    public override ConnectSpec ConnectSpec { get; } = new(
+        ConnectField.Info("Create a personal access token on GitHub, then paste it below. A fine-grained token needs read access to Contents and Metadata; a classic token needs the repo scope to see private repositories."),
+        ConnectField.Link("Open GitHub token settings", TokenSettingsUrl),
+        new ConnectField(TokenKey, ConnectFieldKind.Password, "Personal Access Token"),
+        ConnectField.Info("FileFluss only reads from GitHub. Repositories can be browsed, single files pulled out, and each repository offers a snapshot archive of its default branch to copy to another account."));
 
     /// <summary>
     /// Verifies the pasted token against <c>/user</c> and stores it; the login names the
@@ -73,12 +71,6 @@ public sealed class GitHubProvider : CloudProvider
     public override async Task<ConnectResult> ConnectAsync(ConnectValues values, IConnectPrompt prompt, CancellationToken cancellationToken = default)
     {
         var token = values.GetTrimmed(TokenKey);
-        if (token.Length == 0 && _client is { } existing)
-        {
-            // The edit form has no token field: saving it changes nothing.
-            return new ConnectResult(existing.Login);
-        }
-
         if (token.Length == 0)
         {
             throw CloudProviderException.InvalidCredentials();

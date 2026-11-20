@@ -41,6 +41,13 @@ public sealed class AccountDialog : Window, IConnectPrompt
     private ProgressBar? _busy;
     private CancellationTokenSource? _connecting;
 
+    /// <summary>
+    /// Opened from a panel or the sidebar because the account's sign-in stopped working, rather
+    /// than to change it (macOS <c>isReconnecting</c>). Same form; the wording says what it's
+    /// for, and Reconnect needs no edit — the saved details may be fine and only need trying again.
+    /// </summary>
+    private bool _reconnecting;
+
     private AccountDialog(AppServices services, Guid? editingId)
     {
         _services = services;
@@ -88,6 +95,24 @@ public sealed class AccountDialog : Window, IConnectPrompt
         }
 
         var dialog = new AccountDialog(services, accountId) { Owner = MessageDialog.OwnerOrMain(owner) };
+        dialog.ShowForm(account.ProviderType);
+        return dialog.ShowDialog() == true;
+    }
+
+    /// <summary>The form for an account whose sign-in stopped working. True when it is signed in again.</summary>
+    public static bool Reconnect(Window? owner, AppServices services, Guid accountId)
+    {
+        if (services.Accounts.Find(accountId) is not { } account)
+        {
+            return false;
+        }
+
+        var dialog = new AccountDialog(services, accountId)
+        {
+            Owner = MessageDialog.OwnerOrMain(owner),
+            Title = L("Reconnect {0}", account.DisplayName),
+            _reconnecting = true,
+        };
         dialog.ShowForm(account.ProviderType);
         return dialog.ShowDialog() == true;
     }
@@ -246,8 +271,21 @@ public sealed class AccountDialog : Window, IConnectPrompt
             header.Children.Add(new Image { Source = logo, Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
         }
 
-        header.Children.Add(new TextBlock { Text = L("Sign in to {0}", type.DisplayName()), FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var heading = _reconnecting && _services.Accounts.Find(_editingId!.Value) is { } account
+            ? L("Reconnect {0}", account.DisplayName)
+            : L("Sign in to {0}", type.DisplayName());
+        header.Children.Add(new TextBlock { Text = heading, FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 420 });
         root.Children.Add(header);
+        if (_reconnecting)
+        {
+            root.Children.Add(new TextBlock
+            {
+                Text = L("FileFluss can no longer sign in to this account. Sign in again below — your folders, sync rules and favorites stay as they are."),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, -6, 0, 14),
+            });
+        }
 
         if (_spec!.Modes.Count > 1)
         {
@@ -309,6 +347,11 @@ public sealed class AccountDialog : Window, IConnectPrompt
         if (TryFindResource("AccentButtonStyle") is Style accent)
         {
             _connect.Style = accent;
+        }
+
+        if (_reconnecting && !_mode.OpensBrowser)
+        {
+            _connect.Content = L("Reconnect");
         }
 
         _connect.Click += async (_, _) => await ConnectAsync();

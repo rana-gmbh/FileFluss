@@ -58,6 +58,8 @@ public sealed class PanelViewModel : Observable
     private IReadOnlyList<FileRowViewModel> _selection = [];
     private PanelLocation _location = PanelLocation.Local(string.Empty);
     private FileProvider? _provider;
+    private FileProvider? _loadedProvider;
+    private int _restoringSignIn;
     private Type? _lastProviderType;
     private bool _isLoading;
     private string? _error;
@@ -101,12 +103,33 @@ public sealed class PanelViewModel : Observable
                 {
                     _provider = provider;
                     OnOfflineStateChanged();
+
+                    // A panel reading the saved sign-in again lists with it itself.
+                    if (_restoringSignIn == 0)
+                    {
+                        await LoadAsync([], quiet: false);
+                    }
+                }
+                else if (provider is CloudProvider && !ReferenceEquals(provider, _loadedProvider) && _restoringSignIn == 0)
+                {
+                    // Signed in again — from this panel's banner, the other panel's, the
+                    // sidebar or Settings: every panel showing the account lists with the new
+                    // sign-in (macOS reloadCloudPanels), not only the one that asked for it.
+                    _provider = provider;
                     await LoadAsync([], quiet: false);
                 }
 
                 OnPropertyChanged(nameof(Account));
                 OnPropertyChanged(nameof(Breadcrumbs));
                 OnPropertyChanged(nameof(Title));
+                OnReconnectStateChanged();
+            }
+        };
+        services.Accounts.ReconnectStateChanged += (_, id) =>
+        {
+            if (_location.AccountId == id)
+            {
+                OnReconnectStateChanged();
             }
         };
     }
@@ -250,11 +273,77 @@ public sealed class PanelViewModel : Observable
         }
     }
 
-    /// <summary>The account's credentials stopped working — the panel offers "Sign In Again".</summary>
+    /// <summary>
+    /// The account's credentials stopped working, or none could be read — the panel shows
+    /// Sign-In Required with the way back for this kind of account.
+    /// </summary>
     public bool NeedsReauthentication
     {
         get => _needsReauthentication;
-        private set => Set(ref _needsReauthentication, value);
+        private set
+        {
+            if (Set(ref _needsReauthentication, value))
+            {
+                OnReconnectStateChanged();
+            }
+        }
+    }
+
+    // MARK: - Reconnecting (macOS cloudErrorBanner / reconnectControls)
+
+    /// <summary>The banner's main button: the provider's page, the account's form, iCloud for Windows or Settings.</summary>
+    public string ReconnectButtonText => Account?.ProviderType.ReconnectMethod() switch
+    {
+        ReconnectMethod.Browser => L("Sign In Again"),
+        ReconnectMethod.SystemSettings => L("Open iCloud Settings…"),
+        ReconnectMethod.AddAgain => L("Open Settings…"),
+        _ => L("Reconnect…"),
+    };
+
+    /// <summary>
+    /// What the main button does, in a line under it while it is offered. Empty for iCloud,
+    /// whose message already says it.
+    /// </summary>
+    public string ReconnectCaption
+    {
+        get
+        {
+            if (!ShowsReconnectButtons || Account is not { } account)
+            {
+                return string.Empty;
+            }
+
+            var name = account.ProviderType.DisplayName();
+            return account.ProviderType.ReconnectMethod() switch
+            {
+                ReconnectMethod.Browser => L("Your browser opens so you can sign in to {0} again.", name),
+                ReconnectMethod.Credentials => L("Enter your {0} sign-in details again. Nothing else about the account changes.", name),
+                ReconnectMethod.AddAgain => L("{0} can't be signed in again from here. Remove the account in Settings and add it again.", name),
+                _ => string.Empty,
+            };
+        }
+    }
+
+    /// <summary>A browser sign-in for this account is being waited on — started here, in the other panel or from the sidebar.</summary>
+    public bool IsWaitingForBrowserSignIn => NeedsReauthentication && _location.AccountId is { } id && _services.Accounts.BrowserReconnectAccountId == id;
+
+    /// <summary>The main button and Try Again beside it, unless a browser sign-in is being waited on.</summary>
+    public bool ShowsReconnectButtons => NeedsReauthentication && !IsWaitingForBrowserSignIn;
+
+    /// <summary>Why the last browser sign-in failed, shown in red under the buttons until the next attempt. Empty when none did.</summary>
+    public string ReconnectFailure => NeedsReauthentication && _location.AccountId is { } id ? _services.Accounts.ReconnectFailure(id) ?? string.Empty : string.Empty;
+
+    /// <summary>A listing error offers Retry; a sign-in problem has Try Again beside the way back instead.</summary>
+    public bool ShowsRetry => !NeedsReauthentication;
+
+    private void OnReconnectStateChanged()
+    {
+        OnPropertyChanged(nameof(ReconnectButtonText));
+        OnPropertyChanged(nameof(ReconnectCaption));
+        OnPropertyChanged(nameof(IsWaitingForBrowserSignIn));
+        OnPropertyChanged(nameof(ShowsReconnectButtons));
+        OnPropertyChanged(nameof(ReconnectFailure));
+        OnPropertyChanged(nameof(ShowsRetry));
     }
 
     // MARK: - View options
@@ -647,13 +736,61 @@ public sealed class PanelViewModel : Observable
         var ct = _loadCancellation.Token;
         var location = _location;
         var provider = _provider;
+        _loadedProvider = provider;
 
         if (provider is null)
         {
-            Error = IsCloud ? L("Cloud account not connected") : null;
-            NeedsReauthentication = IsCloud && Account is { IsConnected: false } && !(Account?.IsOfflineMode ?? false);
-            ClearRows();
-            return;
+            if (!IsCloud || location.AccountId is not { } accountId || Account is not { IsOfflineMode: false } account)
+            {
+                // Local panels always have a provider; this is an account removed meanwhile.
+                NeedsReauthentication = false;
+                Error = IsCloud ? L("Cloud account not connected") : null;
+                ClearRows();
+                IsLoading = false;
+                return;
+            }
+
+            // The saved sign-in may only have been unreadable at launch: read it again before
+            // giving up (macOS restoreSavedSignIn), so such an account comes back by itself.
+            if (!quiet)
+            {
+                IsLoading = true;
+            }
+
+            bool restored;
+            _restoringSignIn++;
+            try
+            {
+                restored = await _services.Accounts.RestoreSavedSignInAsync(accountId);
+            }
+            finally
+            {
+                _restoringSignIn--;
+            }
+
+            if (generation != _loadGeneration)
+            {
+                return;
+            }
+
+            provider = restored ? _services.ProviderFor(location) : null;
+            if (provider is null)
+            {
+                // Nothing saved that works. "Not connected" with only Retry left people stuck:
+                // trying again can't conjure up credentials. As a sign-in problem the panel
+                // offers the way back for this kind of account instead.
+                ClearRows();
+                NeedsReauthentication = true;
+                Error = account.ProviderType == CloudProviderType.ICloud
+                    ? L("iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on.")
+                    : L("FileFluss couldn't use the saved sign-in for this account. Reconnect it to see your files again.");
+                _services.Accounts.MarkNeedsReauthentication(accountId);
+                IsLoading = false;
+                return;
+            }
+
+            _provider = _loadedProvider = provider;
+            OnPropertyChanged(nameof(Provider));
         }
 
         if (!quiet)
@@ -1196,12 +1333,16 @@ public sealed class PanelViewModel : Observable
 
     public FileRowViewModel? RowNamed(string name) => _allRows.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The account's provider failed sign-in; after re-auth the panel reloads.</summary>
-    public async Task ReloadAfterReauthenticationAsync()
+    /// <summary>
+    /// Retry, and Try Again beside the way back: the provider as it is now, then the folder
+    /// listed again — reading the saved sign-in afresh when the account has none, since it may
+    /// only have been unreadable for a moment.
+    /// </summary>
+    public async Task RetryAsync()
     {
         _provider = _services.ProviderFor(_location);
         OnPropertyChanged(nameof(Provider));
-        await LoadAsync([], quiet: false);
+        await LoadAsync(null, quiet: false);
     }
 
     /// <summary>A removed or disconnected account: the provider is gone, refresh the error state.</summary>

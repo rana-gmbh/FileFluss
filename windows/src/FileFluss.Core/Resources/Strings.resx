@@ -4182,10 +4182,4 @@ Trust the new key?</value>
   <data name="Restore Test Accounts…" xml:space="preserve">
     <value>Restore Test Accounts…</value>
   </data>
-  <data name="To use a different personal access token, remove this account and add it again." xml:space="preserve">
-    <value>To use a different personal access token, remove this account and add it again.</value>
-  </data>
-  <data name="To connect Drime with a different token or account, remove this account and add it again." xml:space="preserve">
-    <value>To connect Drime with a different token or account, remove this account and add it again.</value>
-  </data>
 </root>

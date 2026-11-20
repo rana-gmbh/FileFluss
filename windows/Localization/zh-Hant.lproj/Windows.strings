@@ -641,11 +641,6 @@
 "Save Test Accounts…" = "儲存測試帳戶…";
 "Restore Test Accounts…" = "還原測試帳戶…";
 
-/* Until the Windows port takes a new token in the credentials sheet, as the Mac does since
-   it learned to reconnect an account, these accounts still have to be removed and added again. */
-"To use a different personal access token, remove this account and add it again." = "若要改用其他個人存取權杖，請移除此帳戶後重新新增。";
-"To connect Drime with a different token or account, remove this account and add it again." = "要使用其他權杖或帳號連接 Drime，請移除此帳號後重新加入。";
-
 /* Mac wording from the account reconnecting and the gallery view, which the Windows port
    doesn't have yet — worded for Windows for when it does. */
 "iCloud Drive isn't available. Check that this Mac is signed in to iCloud with iCloud Drive turned on." = "iCloud 雲碟無法使用。請檢查 Windows 版 iCloud 是否已登入並已開啟 iCloud 雲碟。";

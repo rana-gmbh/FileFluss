@@ -206,7 +206,7 @@ public sealed class DrimeProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task TheConnectFormMatchesTheMacSheetAndEditingKeepsTheToken()
+    public async Task TheConnectFormMatchesTheMacSheetAndEditingTakesANewToken()
     {
         using (var fresh = new DrimeProvider(_id, _store, _http))
         {
@@ -218,12 +218,20 @@ public sealed class DrimeProviderTests : IDisposable
             Assert.Equal(("token", ConnectFieldKind.Password, "Personal Access Token"), (token.Key, token.Kind, token.Label));
         }
 
+        // A revoked token is replaced in the account's form (macOS: reconnecting an account),
+        // rather than by removing the account and adding it again.
         using var provider = Connected();
-        Assert.Equal(
-            "To connect Drime with a different token or account, remove this account and add it again.",
-            Assert.Single(provider.ConnectSpec.Modes.Single().Fields).Label);
-        Assert.Equal("ana@example.com", (await provider.ConnectAsync(ConnectValues.Empty(), new ScriptedConnectPrompt())).AccountLabel);
-        Assert.Empty(_http.Requests);
+        var edit = Assert.Single(Assert.Single(provider.ConnectSpec.Modes).Fields, f => f.HasValue);
+        Assert.Equal(("token", ConnectFieldKind.Password, true), (edit.Key, edit.Kind, edit.Required));
+
+        _http.OnJson(HttpMethod.Get, Api + "/users/me", """{"user":{"id":7,"email":"ana@example.com","display_name":"Ana Novak"}}""");
+        var result = await provider.ConnectAsync(new ConnectValues("default", new Dictionary<string, string> { ["token"] = "13|fresh" }), new ScriptedConnectPrompt());
+        Assert.Equal("ana@example.com", result.AccountLabel);
+        Assert.Equal("13|fresh", _store.Load<DrimeCredentials>($"drime.{_id}")!.AccessToken);
+        Assert.Equal("Bearer 13|fresh", Assert.Single(_http.Requests).Header("Authorization"));
+
+        // An empty field is no token, and doesn't quietly keep the old one either.
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty(), new ScriptedConnectPrompt()));
     }
 
     // MARK: - Listing

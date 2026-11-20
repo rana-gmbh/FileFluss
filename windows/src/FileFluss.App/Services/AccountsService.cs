@@ -114,8 +114,10 @@ public sealed class AccountsService : Observable
 
         foreach (var (account, provider) in restored)
         {
-            // Removed while its provider was being made: nothing to reconnect.
-            if (Find(account.Id) is not { } current)
+            // Removed while its provider was being made: nothing to reconnect. Signed in or
+            // restored meanwhile (a panel reading its saved sign-in again during startup): the
+            // provider already there is at least as fresh as this one.
+            if (Find(account.Id) is not { } current || _hub.Get(account.Id) is not null)
             {
                 provider.Dispose();
                 continue;
@@ -124,6 +126,65 @@ public sealed class AccountsService : Observable
             _hub.Register(account.Id, provider);
             Replace(current with { IsConnected = true });
             _ = RefreshLabelAsync(account.Id, provider);
+        }
+    }
+
+    private readonly Dictionary<Guid, Task<bool>> _restoring = [];
+
+    /// <summary>
+    /// Reads the sign-in saved for one account again and puts it back to work, for an account
+    /// that has no provider this session (macOS <c>restoreSavedSignIn</c>).
+    ///
+    /// <para>That happens when the saved credentials couldn't be read at launch — a file
+    /// locked by a backup or virus scanner, a profile still being restored — and nothing ever
+    /// tried again, so the account stayed "not connected" until the next launch although
+    /// nothing about it had changed. Both panels asking at once share one attempt. True when
+    /// the account has a provider afterwards.</para>
+    /// </summary>
+    public Task<bool> RestoreSavedSignInAsync(Guid id)
+    {
+        if (_hub.Get(id) is not null)
+        {
+            return Task.FromResult(true);
+        }
+
+        if (Find(id) is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        if (_restoring.TryGetValue(id, out var running))
+        {
+            return running;
+        }
+
+        var restore = RestoreCoreAsync(id);
+        if (!restore.IsCompleted)
+        {
+            _restoring[id] = restore;
+        }
+
+        return restore;
+    }
+
+    private async Task<bool> RestoreCoreAsync(Guid id)
+    {
+        try
+        {
+            await ReconnectSavedAccountsAsync(new HashSet<Guid> { id });
+            if (_hub.Get(id) is null)
+            {
+                return false;
+            }
+
+            // Credentials to try count as signed in, as at launch; the panel flags the account
+            // again if the provider turns them down.
+            MarkSignInWorks(id);
+            return true;
+        }
+        finally
+        {
+            _restoring.Remove(id);
         }
     }
 
@@ -176,6 +237,11 @@ public sealed class AccountsService : Observable
 
         _hub.Register(id, provider);
         _needingSignIn.Remove(id);
+        if (_reconnectFailures.Remove(id))
+        {
+            ReconnectStateChanged?.Invoke(this, id);
+        }
+
         var name = result.DisplayName ?? (string.IsNullOrWhiteSpace(result.AccountLabel) ? account.DisplayName : CloudAccount.ComposeDisplayName(account.ProviderType, result.AccountLabel));
         Replace(account with
         {
@@ -305,6 +371,128 @@ public sealed class AccountsService : Observable
 
     /// <summary>What the status dot shows: connected, not offline, and the sign-in still works.</summary>
     public bool IsSignedIn(CloudAccount account) => account.IsConnected && !account.IsOfflineMode && !_needingSignIn.Contains(account.Id);
+
+    // MARK: - Reconnecting (macOS AppState.reconnect)
+
+    private readonly Dictionary<Guid, string> _reconnectFailures = [];
+    private CancellationTokenSource? _browserReconnect;
+
+    /// <summary>
+    /// The account waiting on a browser sign-in started from a panel or the sidebar, so every
+    /// panel showing it says so and offers Cancel. One at a time: two loopback sign-ins would
+    /// race for the browser's attention.
+    /// </summary>
+    public Guid? BrowserReconnectAccountId { get; private set; }
+
+    /// <summary>Why the last browser sign-in for an account failed, shown under the panel's Sign In Again until the next attempt.</summary>
+    public string? ReconnectFailure(Guid id) => _reconnectFailures.GetValueOrDefault(id);
+
+    /// <summary>Raised when a browser sign-in starts or ends, or a failure is shown or cleared.</summary>
+    public event EventHandler<Guid>? ReconnectStateChanged;
+
+    /// <summary>
+    /// Signs an account in again on the provider's own page in the browser — nothing to type,
+    /// so no form opens. Every panel showing the account lists again once it worked (through
+    /// <see cref="Update"/>). False when the provider has no such sign-in: the caller opens the
+    /// account's form instead.
+    /// </summary>
+    public bool ReconnectInBrowser(Guid id)
+    {
+        if (BrowserReconnectAccountId is not null)
+        {
+            // Already waiting (for this account or another): Cancel comes first.
+            return true;
+        }
+
+        if (Find(id) is not { } account)
+        {
+            return true;
+        }
+
+        CloudProvider provider;
+        try
+        {
+            provider = CreateProvider(account.ProviderType, id);
+        }
+        catch (Exception e)
+        {
+            // Not available in this version, or its stored settings couldn't be read back.
+            _reconnectFailures[id] = e is NotSupportedException ? Core.Localization.L("This account type isn't available in this version.") : e.Message;
+            ReconnectStateChanged?.Invoke(this, id);
+            return true;
+        }
+
+        if (provider.ConnectSpec.BrowserOnlyMode is not { } mode)
+        {
+            provider.Dispose();
+            return false;
+        }
+
+        var attempt = _browserReconnect = new CancellationTokenSource();
+        BrowserReconnectAccountId = id;
+        _reconnectFailures.Remove(id);
+        ReconnectStateChanged?.Invoke(this, id);
+        _ = RunBrowserReconnectAsync(id, provider, mode, attempt);
+        return true;
+    }
+
+    private async Task RunBrowserReconnectAsync(Guid id, CloudProvider provider, ConnectMode mode, CancellationTokenSource attempt)
+    {
+        string? failure = null;
+        try
+        {
+            // A sign-in that completes although Cancel was pressed meanwhile is kept, as on
+            // macOS: its tokens are saved already, and the old provider can't use them.
+            var result = await provider.ConnectAsync(ConnectValues.Empty(mode.Id), SilentConnectPrompt.Instance, attempt.Token);
+            if (!Update(id, provider, result))
+            {
+                // The account was removed while signing in.
+                provider.Dispose();
+            }
+        }
+        catch (Exception e) when (e is OperationCanceledException || e is CloudProviderException { Kind: CloudErrorKind.Cancelled })
+        {
+            // Cancel in a panel, or the browser flow given up: nothing to report.
+            provider.Dispose();
+        }
+        catch (Exception e)
+        {
+            provider.Dispose();
+            failure = e.Message;
+            SupportLogger.Shared.Log($"Signing in to {provider.ProviderType.DisplayName()} again failed: {e.Message}", "Accounts", LogLevel.Error);
+        }
+        finally
+        {
+            // A cancelled attempt no longer drives the panels: Cancel already reset them.
+            if (ReferenceEquals(_browserReconnect, attempt))
+            {
+                _browserReconnect = null;
+                BrowserReconnectAccountId = null;
+                if (failure is not null)
+                {
+                    _reconnectFailures[id] = failure;
+                }
+
+                ReconnectStateChanged?.Invoke(this, id);
+            }
+
+            attempt.Dispose();
+        }
+    }
+
+    /// <summary>Ends the browser sign-in being waited on — its loopback listener stops, the panels offer Sign In Again again.</summary>
+    public void CancelBrowserReconnect()
+    {
+        if (_browserReconnect is not { } attempt || BrowserReconnectAccountId is not { } id)
+        {
+            return;
+        }
+
+        _browserReconnect = null;
+        BrowserReconnectAccountId = null;
+        attempt.Cancel();
+        ReconnectStateChanged?.Invoke(this, id);
+    }
 
     /// <summary>Re-registers a provider after an inline re-authentication from the panel banner.</summary>
     public void MarkConnected(Guid id, CloudProvider provider)

@@ -631,54 +631,30 @@ public partial class PanelView : UserControl
         }
     }
 
-    private CancellationTokenSource? _signingIn;
-
     /// <summary>
-    /// "Sign In Again". While the browser sign-in waits, the same button reads "Cancel Sign-In"
-    /// and ends it (macOS 1.6: any sign-in can be cancelled) — instead of waiting out the
-    /// five-minute timeout, or starting a second sign-in on top of the first.
+    /// The banner's main button: whatever gets this kind of account signed in again (macOS
+    /// reconnectControls) — the provider's page in the browser, the account's form, iCloud for
+    /// Windows, or Settings for an account that has to be added again.
     /// </summary>
-    private async void OnReauthenticate(object sender, RoutedEventArgs e)
+    private void OnReconnect(object sender, RoutedEventArgs e)
     {
-        if (_signingIn is { } running)
+        if (Vm?.Account is { } account)
         {
-            running.Cancel();
-            return;
-        }
-
-        if (Vm is not { } vm)
-        {
-            return;
-        }
-
-        var owner = Window.GetWindow(this);
-        using var signingIn = _signingIn = new CancellationTokenSource();
-        // SetCurrentValue keeps the {u:Loc} binding, which follows a change of language.
-        ReauthButton.SetCurrentValue(ContentControl.ContentProperty, L("Cancel Sign-In"));
-        try
-        {
-            await Reauthentication.RunAsync(owner, Main.Services, vm, signingIn.Token);
-        }
-        catch (Exception failure) when (failure is not OperationCanceledException)
-        {
-            TaskFailures.ShowFailure(failure, L("Sign In Again"), owner);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            _signingIn = null;
-            System.Windows.Data.BindingOperations.GetBindingExpression(ReauthButton, ContentControl.ContentProperty)?.UpdateTarget();
+            Reauthentication.Reconnect(Window.GetWindow(this), Main, account.Id);
         }
     }
+
+    /// <summary>
+    /// Stops the browser sign-in instead of waiting out its five-minute timeout — in both panels
+    /// when both show the account, since they share it (macOS 1.6: any sign-in can be cancelled).
+    /// </summary>
+    private void OnCancelReconnect(object sender, RoutedEventArgs e) => Main.Services.Accounts.CancelBrowserReconnect();
 
     private async void OnRetry(object sender, RoutedEventArgs e)
     {
         if (Vm is { } vm)
         {
-            vm.ProviderInvalidated();
-            await vm.RefreshAsync();
+            await vm.RetryAsync();
         }
     }
 

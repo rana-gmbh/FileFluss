@@ -253,7 +253,7 @@ public sealed class GitHubProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task TheConnectFormMatchesTheMacSheetAndEditingKeepsTheToken()
+    public async Task TheConnectFormMatchesTheMacSheetAndEditingTakesANewToken()
     {
         using (var fresh = new GitHubProvider(_id, _store, _http))
         {
@@ -264,13 +264,21 @@ public sealed class GitHubProviderTests : IDisposable
             Assert.Equal(("token", ConnectFieldKind.Password, "Personal Access Token"), (token.Key, token.Kind, token.Label));
         }
 
+        // A revoked token is replaced in the account's form (macOS: reconnecting an account),
+        // rather than by removing the account and adding it again.
         using var provider = Connected();
-        var edit = Assert.Single(provider.ConnectSpec.Modes.Single().Fields);
-        Assert.Equal("To use a different personal access token, remove this account and add it again.", edit.Label);
+        var edit = Assert.Single(provider.ConnectSpec.Modes.Single().Fields, f => f.HasValue);
+        Assert.Equal(("token", ConnectFieldKind.Password, true), (edit.Key, edit.Kind, edit.Required));
 
-        var result = await provider.ConnectAsync(ConnectValues.Empty(), new ScriptedConnectPrompt());
+        _http.OnJson(HttpMethod.Get, Api + "/user", """{"login":"robert","id":1}""");
+        var result = await provider.ConnectAsync(
+            new ConnectValues("default", new Dictionary<string, string> { ["token"] = "ghp_fresh" }), new ScriptedConnectPrompt());
         Assert.Equal("robert", result.AccountLabel);
-        Assert.Empty(_http.Requests);
+        Assert.Equal("ghp_fresh", _store.Load<GitHubCredentials>($"github.{_id}")!.Token);
+        Assert.Equal("Bearer ghp_fresh", Assert.Single(_http.Requests).Header("Authorization"));
+
+        // An empty field is no token, and doesn't quietly keep the old one either.
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(ConnectValues.Empty(), new ScriptedConnectPrompt()));
     }
 
     // MARK: - Listing
