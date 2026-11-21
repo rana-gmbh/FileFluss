@@ -634,11 +634,19 @@ public actor SFTPAPIClient {
     /// nothing else: a Windows-style server's rows don't look like `ls -l` at
     /// all, so with no parsed rows, any line left over means an unknown format.
     /// `sftp` also prints its own prompt lines, so it can't make that claim.
-    public static func validateListing(output: String, itemCount: Int, everyLineIsARow: Bool) throws {
+    ///
+    /// `alsoUnderstood` names rows the caller parsed another way — FTP's
+    /// Windows-style rows — so they don't count as unexplained.
+    public static func validateListing(
+        output: String,
+        itemCount: Int,
+        everyLineIsARow: Bool,
+        alsoUnderstood: (String) -> Bool = { _ in false }
+    ) throws {
         var unexplainedLine = false
         for raw in output.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty, parseListingLine(line) == nil else { continue }
+            guard !line.isEmpty, parseListingLine(line) == nil, !alsoUnderstood(line) else { continue }
             let isSelfOrParent = line.hasSuffix(" .") || line.hasSuffix(" ..")
                 || line.hasSuffix("/.") || line.hasSuffix("/..")
             if isListingRow(line), "-dl".contains(line.first ?? " "), !isSelfOrParent {
@@ -682,6 +690,28 @@ public actor SFTPAPIClient {
     )
     private static let isoListingRegex = try? NSRegularExpression(
         pattern: "^(\(permsClass))\\s+\(linkCount)\\s+(\\S+)\\s+(\\S+)\\s+(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
+    )
+
+    /// The month abbreviations `monthNumber` knows, for the patterns below.
+    private static let monthAlternatives = "Jan|Feb|Mar|Mär|Mrz|Apr|May|Mai|Jun|Jul|Aug|Sept|Sep|Oct|Okt|Nov|Dec|Dez"
+
+    /// Fallbacks for servers that leave fields out of the row. RFC 959
+    /// doesn't fix the format of `LIST`, and small servers trim it: no group
+    /// column (issue #70 — OpenHASP's FTP server on an ESP32 board sends
+    /// `-rw-rw-r--  1  UserName  775  Nov 21 12:41  config.json`), no owner
+    /// either, or no link count. These patterns anchor on what every such
+    /// row has — the permissions first, the size right before the date, the
+    /// name after it — and pass over up to three fields in between, as few
+    /// as fit. The day may come before the month (`21 Nov`). Tried only
+    /// after the strict patterns, so a row that parses today parses the same.
+    private static let flexibleListingRegex = try? NSRegularExpression(
+        pattern: "^(\(permsClass))\\s+(?:\\S+\\s+){0,3}?(\\d+)\\s+"
+            + "(?:(\(monthAlternatives))\\.?\\s+(\\d{1,2})|(\\d{1,2})\\.?\\s+(\(monthAlternatives))\\.?)"
+            + "\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?|\\d{4})\\s+(.+)$",
+        options: [.caseInsensitive]
+    )
+    private static let flexibleISOListingRegex = try? NSRegularExpression(
+        pattern: "^(\(permsClass))\\s+(?:\\S+\\s+){0,3}?(\\d+)\\s+(\\d{4}-\\d{2}-\\d{2})(?:\\s+(\\d{2}:\\d{2}(?::\\d{2})?))?\\s+(.+)$"
     )
 
     /// Parses one line of an SFTP server's long-form directory listing.
@@ -757,6 +787,50 @@ public actor SFTPAPIClient {
                     name: name
                 )
             }
+        }
+
+        return parseTrimmedListingLine(trimmed, range: range)
+    }
+
+    /// The fallbacks for rows with fields left out (see
+    /// `flexibleListingRegex`).
+    private static func parseTrimmedListingLine(_ trimmed: String, range: NSRange) -> ParsedListingLine? {
+        func text(_ match: NSTextCheckingResult, _ group: Int) -> String? {
+            Range(match.range(at: group), in: trimmed).map { String(trimmed[$0]) }
+        }
+
+        if let regex = Self.flexibleListingRegex,
+           let match = regex.firstMatch(in: trimmed, range: range),
+           let perms = text(match, 1),
+           let sizeText = text(match, 2),
+           let month = text(match, 3) ?? text(match, 6),
+           let day = text(match, 4) ?? text(match, 5),
+           let timeOrYear = text(match, 7),
+           let rawName = text(match, 8),
+           let name = Self.cleanupListingName(rawName: rawName, perms: perms) {
+            return ParsedListingLine(
+                perms: perms,
+                size: Int64(sizeText) ?? 0,
+                isDirectory: perms.first == "d",
+                modDate: Self.parseDate(month: month, day: day, timeOrYear: timeOrYear),
+                name: name
+            )
+        }
+
+        if let regex = Self.flexibleISOListingRegex,
+           let match = regex.firstMatch(in: trimmed, range: range),
+           let perms = text(match, 1),
+           let sizeText = text(match, 2),
+           let date = text(match, 3),
+           let rawName = text(match, 5),
+           let name = Self.cleanupListingName(rawName: rawName, perms: perms) {
+            return ParsedListingLine(
+                perms: perms,
+                size: Int64(sizeText) ?? 0,
+                isDirectory: perms.first == "d",
+                modDate: Self.parseISODate(date: date, time: text(match, 4)),
+                name: name
+            )
         }
 
         return nil
@@ -844,7 +918,8 @@ public actor SFTPAPIClient {
     /// locale (`Mär`, `Mrz`, `Okt`, `Dez`). `Mai` happens to match the
     /// English `May` semantically so we get it for free.
     private static func monthNumber(for token: String) -> Int? {
-        switch token {
+        // Any case: a few small servers write "NOV" or "nov".
+        switch token.prefix(1).uppercased() + token.dropFirst().lowercased() {
         case "Jan": return 1
         case "Feb": return 2
         case "Mar", "Mär", "Mrz": return 3
