@@ -1890,6 +1890,9 @@ final class AppState {
     }
 
     init() {
+        // Before the panels list anything: a tag Finder gave reads as grey
+        // unless its colour can be told from its name, renamed or not.
+        FinderTags.registerSystemNames(SystemTagNames.standard)
         self.leftFileManager = FileManagerViewModel()
         self.rightFileManager = FileManagerViewModel()
         self.syncManager = SyncViewModel()
