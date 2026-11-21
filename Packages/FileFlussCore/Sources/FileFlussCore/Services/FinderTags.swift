@@ -22,15 +22,79 @@ public enum FinderTags {
     // MARK: - Encoding
 
     /// `"Red\n6"` → Red, red. A missing or unknown index means no colour.
+    ///
+    /// A standard colour tag takes its colour from its name, whatever index
+    /// is stored with it. Finder on macOS 27 writes every tag with index 1
+    /// (grey) — `"Green\n1"` — and keeps the real colour in its iCloud tag
+    /// store, which other apps can't read; Finder itself resolves the colour
+    /// by the tag's name. Read by index, a tag given in Finder showed as a
+    /// grey dot. Any other tag keeps the index stored with it.
     public static func decode(_ raw: String) -> FileTag? {
         let parts = raw.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
         guard let first = parts.first, !first.isEmpty else { return nil }
+        let name = String(first)
+        if let standard = standardColor(named: name) {
+            return FileTag(name: name, color: standard)
+        }
         var color = TagColor.none
         if parts.count == 2, let index = Int(parts[1]), let known = TagColor(rawValue: index) {
             color = known
         }
-        return FileTag(name: String(first), color: color)
+        return FileTag(name: name, color: color)
     }
+
+    // MARK: - Standard colour tags
+
+    /// The colour of a standard colour tag, by its name, or nil for any other
+    /// tag. Knows the names this Mac gives the seven tags (see
+    /// `registerSystemNames`, which follows the system language and the
+    /// user's renames) and the standard names in the common languages, since
+    /// a file can carry tags given on a Mac set to another language.
+    public static func standardColor(named name: String) -> TagColor? {
+        let key = normalized(name)
+        if let color = systemNames.withLock({ $0[key] }) {
+            return color
+        }
+        return localizedStandardNames[key]
+    }
+
+    /// Records the names this Mac gives the seven colour tags (from
+    /// `NSWorkspace.fileLabels`), so a renamed standard tag still gets its
+    /// colour. Called by the app at launch.
+    public static func registerSystemNames(_ tags: [FileTag]) {
+        let table = Dictionary(
+            tags.filter { $0.color != .none && !$0.name.isEmpty }.map { (normalized($0.name), $0.color) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        systemNames.withLock { $0 = table }
+    }
+
+    /// Case and Unicode form don't matter: a name can arrive decomposed
+    /// ("Gru\u{308}n") from another file system.
+    private static func normalized(_ name: String) -> String {
+        name.precomposedStringWithCanonicalMapping.lowercased()
+    }
+
+    private static let systemNames = TagNameTable()
+
+    /// Finder's standard names for the seven colour tags in English, German,
+    /// French, Spanish, Italian, Dutch, Japanese and Chinese.
+    private static let localizedStandardNames: [String: TagColor] = {
+        let names: [TagColor: [String]] = [
+            .red: ["Red", "Rot", "Rouge", "Rojo", "Rosso", "Rood", "レッド", "红色", "紅色"],
+            .orange: ["Orange", "Naranja", "Arancione", "Oranje", "オレンジ", "橙色"],
+            .yellow: ["Yellow", "Gelb", "Jaune", "Amarillo", "Giallo", "Geel", "イエロー", "黄色", "黃色"],
+            .green: ["Green", "Grün", "Vert", "Verde", "Groen", "グリーン", "绿色", "綠色"],
+            .blue: ["Blue", "Blau", "Bleu", "Azul", "Blu", "Blauw", "ブルー", "蓝色", "藍色"],
+            .purple: ["Purple", "Lila", "Violet", "Morado", "Viola", "Paars", "パープル", "紫色"],
+            .gray: ["Gray", "Grey", "Grau", "Gris", "Grigio", "Grijs", "グレイ", "灰色"],
+        ]
+        var table: [String: TagColor] = [:]
+        for (color, list) in names {
+            for name in list { table[normalized(name)] = color }
+        }
+        return table
+    }()
 
     public static func encode(_ tag: FileTag) -> String {
         "\(tag.name)\n\(tag.color.rawValue)"
@@ -162,4 +226,17 @@ public enum FinderTags {
         qos: .userInitiated,
         attributes: .concurrent
     )
+}
+
+/// The system's names for the colour tags: set at launch on the main thread,
+/// read on the tag queue while folders are listed.
+final class TagNameTable: @unchecked Sendable {
+    private let lock = NSLock()
+    private var table: [String: TagColor] = [:]
+
+    func withLock<T>(_ body: (inout [String: TagColor]) -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&table)
+    }
 }

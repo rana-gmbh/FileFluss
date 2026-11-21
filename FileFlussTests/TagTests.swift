@@ -789,3 +789,77 @@ struct TagPanelTests {
         #expect(plainRep.colorAt(x: 0, y: 0)?.alphaComponent == redRep.colorAt(x: 0, y: 0)?.alphaComponent)
     }
 }
+
+// MARK: - Tags given in Finder
+
+/// Finder on macOS 27 writes every tag with colour index 1 (grey) and keeps
+/// the real colour in its iCloud tag store; it tells a standard tag's colour
+/// by its name. FileFluss has to do the same, or a tag given in Finder shows
+/// as a grey dot.
+@Suite("Tags given in Finder", .serialized)
+@MainActor
+struct FinderWrittenTagTests {
+
+    @Test("a standard tag takes the colour of its name, not the grey index Finder stores")
+    func standardNamesWin() {
+        #expect(FinderTags.decode("Green\n1") == FileTag(name: "Green", color: .green))
+        #expect(FinderTags.decode("Red\n1") == FileTag(name: "Red", color: .red))
+        #expect(FinderTags.decode("Blue\n1") == FileTag(name: "Blue", color: .blue))
+        #expect(FinderTags.decode("Orange\n1") == FileTag(name: "Orange", color: .orange))
+        // Without any index too.
+        #expect(FinderTags.decode("Yellow") == FileTag(name: "Yellow", color: .yellow))
+        // Grey stays grey.
+        #expect(FinderTags.decode("Gray\n1") == FileTag(name: "Gray", color: .gray))
+    }
+
+    @Test("tags given on a Mac in another language get their colour too")
+    func otherLanguages() {
+        #expect(FinderTags.decode("Rot\n1")?.color == .red)
+        #expect(FinderTags.decode("Gelb\n1")?.color == .yellow)
+        #expect(FinderTags.decode("Grün\n1")?.color == .green)
+        #expect(FinderTags.decode("Lila\n1")?.color == .purple)
+        #expect(FinderTags.decode("绿色\n1")?.color == .green)
+        #expect(FinderTags.decode("綠色\n1")?.color == .green)
+        #expect(FinderTags.decode("Vert\n1")?.color == .green)
+    }
+
+    @Test("case and Unicode form don't matter")
+    func normalisation() {
+        #expect(FinderTags.decode("green\n1")?.color == .green)
+        // "Grün" with the umlaut as a separate combining mark.
+        #expect(FinderTags.decode("Gru\u{0308}n\n1")?.color == .green)
+    }
+
+    @Test("a tag of the user's own keeps the colour stored with it")
+    func ownTagsKeepTheirIndex() {
+        #expect(FinderTags.decode("money\n1") == FileTag(name: "money", color: .gray))
+        #expect(FinderTags.decode("Projekt X\n3") == project)
+        #expect(FinderTags.decode("Steuer 2026") == plain)
+    }
+
+    @Test("a standard tag the user renamed gets its colour from the system's names")
+    func renamedStandardTag() {
+        defer { FinderTags.registerSystemNames(SystemTagNames.standard) }
+        #expect(FinderTags.decode("Wichtig\n1")?.color == .gray)
+
+        FinderTags.registerSystemNames([FileTag(name: "Wichtig", color: .red), FileTag(name: "Green", color: .green)])
+
+        #expect(FinderTags.decode("Wichtig\n1")?.color == .red)
+        // The built-in names still count.
+        #expect(FinderTags.decode("Blue\n1")?.color == .blue)
+    }
+
+    @Test("a file tagged the way Finder does it reads with its colours")
+    func fileTaggedByFinder() throws {
+        let scratch = Scratch()
+        let file = scratch.file("Antwortschreiben.pdf")
+        let raw = try PropertyListSerialization.data(fromPropertyList: ["Green\n1", "Red\n1", "money\n1"], format: .binary, options: 0)
+        let status = raw.withUnsafeBytes { setxattr(file.path, "com.apple.metadata:_kMDItemUserTags", $0.baseAddress, raw.count, 0, 0) }
+        try #require(status == 0)
+
+        let tags = FinderTags.read(at: file)
+
+        #expect(tags == [green, red, FileTag(name: "money", color: .gray)])
+        #expect(tags.dotColors == [.green, .red, .gray])
+    }
+}
