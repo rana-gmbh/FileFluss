@@ -330,12 +330,26 @@ public actor FTPAPIClient {
 
     // MARK: - Listing parse
 
-    /// FTP `LIST` output is the server's directory listing — almost always
-    /// Unix `ls -l` style, which the SFTP client already parses robustly.
+    /// FTP `LIST` output is the server's directory listing — usually Unix
+    /// `ls -l` style, which the SFTP client already parses, and otherwise the
+    /// MS-DOS style of IIS and other Windows servers (`parseWindowsListingLine`).
     private func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
+        try Self.parseListing(output: output, basePath: basePath)
+    }
+
+    static func parseListing(output: String, basePath: String) throws -> [CloudFileItem] {
         var items: [CloudFileItem] = []
         for line in output.components(separatedBy: "\n") {
-            guard let parsed = SFTPAPIClient.parseListingLine(line) else { continue }
+            guard let parsed = SFTPAPIClient.parseListingLine(line) ?? parseWindowsListingLine(line) else {
+                // A Windows-style row nobody could read would leave the
+                // folder looking emptier than it is — and Mirror deletes
+                // what a folder seems to lack. `validateListing` catches the
+                // Unix-style ones.
+                if looksLikeWindowsListingRow(line) {
+                    throw CloudProviderError.unreadableListing
+                }
+                continue
+            }
             let itemPath = basePath == "/" ? "/\(parsed.name)" : "\(basePath)/\(parsed.name)"
             items.append(CloudFileItem(
                 id: parsed.isDirectory ? "d\(itemPath.hashValue)" : "f\(itemPath.hashValue)",
@@ -350,8 +364,70 @@ public actor FTPAPIClient {
         if items.isEmpty, SFTPAPIClient.outputLooksLikeListing(output) {
             ftpLog.error("[FTP] Folder \(basePath, privacy: .public) parsed 0 items from listing-shaped output; unrecognised format. Sample: \(output.prefix(500), privacy: .public)")
         }
-        try SFTPAPIClient.validateListing(output: output, itemCount: items.count, everyLineIsARow: true)
+        try SFTPAPIClient.validateListing(
+            output: output,
+            itemCount: items.count,
+            everyLineIsARow: true,
+            alsoUnderstood: { parseWindowsListingLine($0) != nil }
+        )
         return items
+    }
+
+    // MARK: - Windows-style listings
+
+    /// `11-21-26  12:41PM       <DIR>          Photos` or
+    /// `11-21-26  12:41PM                  775 config.json`: the MS-DOS
+    /// style IIS and other Windows FTP servers send. Some write a
+    /// four-digit year or a 24-hour time.
+    private static let windowsListingRegex = try? NSRegularExpression(
+        pattern: #"^(\d{1,2})-(\d{1,2})-(\d{4}|\d{2})\s+(\d{1,2}):(\d{2})\s*([AaPp][Mm])?\s+(<DIR>|\d+)\s+(.+)$"#
+    )
+
+    /// A row that starts like a Windows-style listing row: a date.
+    private static let windowsRowStartRegex = try? NSRegularExpression(pattern: #"^\d{1,2}-\d{1,2}-\d{2,4}\s"#)
+
+    /// One row of a Windows-style listing, or nil if the line isn't one.
+    static func parseWindowsListingLine(_ line: String) -> SFTPAPIClient.ParsedListingLine? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard let regex = windowsListingRegex,
+              let match = regex.firstMatch(in: trimmed, range: range) else { return nil }
+        func text(_ group: Int) -> String? {
+            Range(match.range(at: group), in: trimmed).map { String(trimmed[$0]) }
+        }
+        guard let month = text(1).flatMap(Int.init), let day = text(2).flatMap(Int.init),
+              let yearText = text(3), var year = Int(yearText),
+              var hour = text(4).flatMap(Int.init), let minute = text(5).flatMap(Int.init),
+              let sizeOrDir = text(7), let name = text(8),
+              (1...12).contains(month), (1...31).contains(day), name != ".", name != ".." else {
+            return nil
+        }
+        if yearText.count == 2 {
+            // As Windows itself reads two-digit years.
+            year += year < 70 ? 2000 : 1900
+        }
+        if let meridiem = text(6)?.uppercased() {
+            guard (1...12).contains(hour) else { return nil }
+            if meridiem == "AM", hour == 12 { hour = 0 }
+            if meridiem == "PM", hour != 12 { hour += 12 }
+        }
+        let date = Calendar.current.date(from: DateComponents(
+            year: year, month: month, day: day, hour: hour, minute: minute
+        )) ?? .distantPast
+        let isDirectory = sizeOrDir.uppercased() == "<DIR>"
+        return SFTPAPIClient.ParsedListingLine(
+            perms: isDirectory ? "d" : "-",
+            size: isDirectory ? 0 : Int64(sizeOrDir) ?? 0,
+            isDirectory: isDirectory,
+            modDate: date,
+            name: name
+        )
+    }
+
+    static func looksLikeWindowsListingRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let regex = windowsRowStartRegex else { return false }
+        return regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
     }
 }
 #endif

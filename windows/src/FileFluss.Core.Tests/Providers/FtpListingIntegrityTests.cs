@@ -30,6 +30,29 @@ public sealed class FtpListingIntegrityTests
         Assert.Equal(["Photos", "a.txt"], entries.Select(e => e.Name).Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// Issue #70: OpenHASP's FTP server on an ESP32 board leaves out the group column and
+    /// separates the fields with tabs. RFC 959 doesn't fix the format of LIST, and the macOS
+    /// parser refused these rows; FluentFTP's reads them, and this keeps it that way.
+    /// </summary>
+    [Fact]
+    public async Task RowsWithoutAGroupColumnAreRead()
+    {
+        const string listing =
+            "-rw-rw-r--\t1\tUserName\t775\tNov 21 12:41\tconfig.json\r\n" +
+            "-rw-rw-r--\t1\tUserName\t76\tJan 01  1970\toffline.cmd\r\n" +
+            "-rw-rw-r--\t1\tUserName\t73\tJan 01  1970\tonline.cmd\r\n" +
+            "-rw-rw-r--\t1\tUserName\t20388\tNov 21 11:50\tpages.jsonl\r\n" +
+            "drwxrwxr-x\t1\tUserName\t0\tNov 21 12:41\tpages\r\n";
+
+        var entries = (await ListAsync(listing)).OrderBy(e => e.Name, StringComparer.Ordinal).ToList();
+
+        Assert.Equal(["config.json", "offline.cmd", "online.cmd", "pages", "pages.jsonl"], entries.Select(e => e.Name));
+        Assert.Equal([775L, 76L, 73L, 20388L], entries.Where(e => e.Kind == FtpEntryKind.File).Select(e => e.Size));
+        Assert.Equal(FtpEntryKind.Directory, entries.Single(e => e.Name == "pages").Kind);
+        Assert.Equal(new DateTime(1970, 1, 1), entries.Single(e => e.Name == "offline.cmd").Modified.Date);
+    }
+
     [Fact]
     public async Task ARowTheParserDroppedFailsTheListing()
     {
