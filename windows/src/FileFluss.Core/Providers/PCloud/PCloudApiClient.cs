@@ -2,7 +2,6 @@
 
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using FileFluss.Core.Diagnostics;
 using FileFluss.Core.IO;
@@ -285,20 +284,11 @@ internal sealed class PCloudApiClient
             parameters.Add(("ctime", created.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
         }
 
-        var file = ProgressStreamContent.FromFile(localPath, onBytes);
-        file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
-        {
-            Name = "\"file\"",
-            // pCloud names the file from the query parameter; this is only the part's label,
-            // and a quote would make the header invalid.
-            FileName = $"\"{fileName.Replace('"', '_').Replace('\\', '_')}\"",
-        };
-        // .NET quotes the boundary parameter; macOS sends it bare, which is what pCloud has
-        // been seen to accept. A GUID is a valid token either way.
-        var boundary = Guid.NewGuid().ToString();
-        using var content = new MultipartFormDataContent(boundary);
-        content.Headers.ContentType!.Parameters.Single(p => p.Name == "boundary").Value = boundary;
-        content.Add(file);
+        // pCloud names the file after the part's filename, not the query parameter, and takes
+        // the RFC 2047 word .NET's MultipartFormDataContent writes for a non-ASCII name
+        // literally: "Brückenstr.docx" landed as "=?utf-8?B?…?=". Raw UTF-8 in the quotes, the
+        // same body as macOS.
+        using var content = new MultipartFileContent(localPath, "file", fileName, "application/octet-stream", onBytes);
         using var request = new HttpRequestMessage(HttpMethod.Post, ApiUri("uploadfile", parameters)) { Content = content };
         using var response = await _http.SendTransferAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)

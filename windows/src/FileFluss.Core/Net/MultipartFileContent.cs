@@ -2,18 +2,19 @@
 
 using System.Net;
 using System.Text;
-using FileFluss.Core.Net;
+using FileFluss.Core.Providers;
 
-namespace FileFluss.Core.Providers.WordPress;
+namespace FileFluss.Core.Net;
 
 /// <summary>
 /// A <c>multipart/form-data</c> body with exactly one file part, streamed from disk.
 ///
 /// <para>Written by hand rather than with <see cref="MultipartFormDataContent"/> for two
 /// reasons: the part header must carry the file name as raw UTF-8 in
-/// <c>filename="…"</c> (PHP ignores RFC 2231 <c>filename*</c> and MIME-encoded words, which is
-/// what .NET emits for non-ASCII names, so "Grüße.jpg" would arrive as garbage), and progress
-/// must count file bytes only — the macOS body is the same shape.</para>
+/// <c>filename="…"</c> (WordPress's PHP and pCloud ignore RFC 2231 <c>filename*</c> and
+/// take MIME-encoded words literally, which is what .NET emits for non-ASCII names, so
+/// "Grüße.jpg" would arrive as "=?utf-8?B?…?="), and progress must count file bytes only — the
+/// macOS body is the same shape.</para>
 /// </summary>
 internal sealed class MultipartFileContent : HttpContent
 {

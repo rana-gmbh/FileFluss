@@ -255,6 +255,25 @@ public sealed class PCloudProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task NonAsciiNamesGoInTheFilePartAsRawUtf8()
+    {
+        // pCloud names the file after the part's filename and keeps an RFC 2047 word literally:
+        // .NET's MultipartFormDataContent turned this into "=?utf-8?B?…?=" on the server.
+        const string name = "20240917 Leihvertrag EBK Brückenstr 47 EG Goethestraße.docx";
+        var local = TempFile(10);
+        _http.OnJson(HttpMethod.Post, "/uploadfile", $$"""{ "result": 0, "metadata": [ { "name": "{{name}}" } ] }""");
+        using var provider = Provider();
+
+        await provider.UploadFileAsync(local, "/Docs/" + name);
+
+        var request = Call("uploadfile");
+        Assert.Contains($"name=\"file\"; filename=\"{name}\"", request.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("=?utf-8?", request.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("filename*", request.Body, StringComparison.Ordinal);
+        Assert.Equal(name, Query(request)["filename"]);
+    }
+
+    [Fact]
     public async Task UploadsAsOneStreamedMultipartPart()
     {
         var local = TempFile(5000);
