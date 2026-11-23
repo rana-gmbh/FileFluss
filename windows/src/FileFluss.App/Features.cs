@@ -134,7 +134,9 @@ internal static class Features
             L("Drives other than the Windows drive and cloud accounts can be indexed for offline search. Open one in the active panel and try again."));
     }
 
-    private static void OpenArgument(MainViewModel vm, string[] args)
+    private static void OpenArgument(MainViewModel vm, string[] args) => _ = OpenArgumentAsync(vm, args);
+
+    private static async Task OpenArgumentAsync(MainViewModel vm, string[] args)
     {
         var path = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         if (path is null)
@@ -153,13 +155,23 @@ internal static class Features
             return;
         }
 
-        if (Directory.Exists(path))
+        try
         {
-            _ = vm.ActivePanel.NavigateAsync(PanelLocation.Local(path));
+            // Asked off the UI thread: an offline "\\server\share" takes the SMB timeout to answer.
+            var target = path;
+            var kind = await Task.Run(() => TypedPath.Probe(target));
+            if (kind == TypedPathKind.Folder)
+            {
+                await vm.ActivePanel.NavigateAsync(PanelLocation.Local(path));
+            }
+            else if (kind == TypedPathKind.File)
+            {
+                await vm.ActivePanel.NavigateAsync(PanelLocation.Local(Path.GetDirectoryName(path)!), Path.GetFileName(path));
+            }
         }
-        else if (File.Exists(path))
+        catch (Exception e)
         {
-            _ = vm.ActivePanel.NavigateAsync(PanelLocation.Local(Path.GetDirectoryName(path)!), Path.GetFileName(path));
+            SupportLogger.Shared.Log($"Couldn't open the command-line path \"{path}\": {e.Message}", "App", LogLevel.Notice);
         }
     }
 }

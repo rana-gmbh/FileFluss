@@ -561,10 +561,14 @@ public partial class PanelView : UserControl
 
     private void OnPathEditorLostFocus(object sender, KeyboardFocusChangedEventArgs e) => EndEditPath();
 
+    /// <summary>Counts "Go to Folder" requests, so a slow answer for an older one is dropped.</summary>
+    private int _goToAttempt;
+
     /// <summary>
-    /// "Go to Folder": cloud panels stay in the cloud (absolute, or relative to the current
-    /// folder); local panels expand %VARIABLES% and resolve relative paths. A file path opens
-    /// its folder with the file selected.
+    /// "Go to Folder": a path naming this PC ("C:\…", "\\server\share", %VARIABLES%, "~") goes
+    /// there from any panel; anything else stays in a cloud panel's account or an archive
+    /// (absolute, or relative to the current folder). Local panels resolve relative paths. A
+    /// file path opens its folder with the file selected.
     /// </summary>
     public async Task GoToTypedPathAsync(PanelViewModel vm, string text)
     {
@@ -573,8 +577,7 @@ public partial class PanelView : UserControl
             return;
         }
 
-        // Inside an archive a typed "C:\…" or "%USERPROFILE%" means this PC, anything else the archive.
-        if (!vm.IsLocal && !(vm.IsArchive && (text.Contains('%') || (Path.IsPathRooted(text) && !text.StartsWith('/')))))
+        if (!vm.IsLocal && !TypedPath.NamesThisPc(text))
         {
             var target = text.StartsWith('/') ? text : Core.IO.CloudPath.Combine(vm.CurrentPath, text);
             await vm.NavigateAsync(vm.Location with { Path = Core.IO.CloudPath.Normalize(target) });
@@ -582,37 +585,32 @@ public partial class PanelView : UserControl
             return;
         }
 
-        var expanded = Environment.ExpandEnvironmentVariables(text.Trim('"'));
-        if (expanded.StartsWith('~'))
+        var attempt = ++_goToAttempt;
+        var from = vm.Location;
+        var path = TypedPath.ResolveLocal(text, vm.IsLocal ? vm.CurrentPath : string.Empty);
+
+        // Whether it exists is asked off the UI thread: an offline "\\server\share" takes the
+        // SMB timeout (20–60 s) to answer, which froze the whole app.
+        var kind = path is null ? TypedPathKind.None : await Task.Run(() => TypedPath.Probe(path));
+
+        // Another path typed, or the panel moved on, while the disk was answering.
+        if (attempt != _goToAttempt || vm.Location != from)
         {
-            expanded = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + expanded[1..];
+            return;
         }
 
-        try
+        switch (kind)
         {
-            if (!Path.IsPathRooted(expanded) && vm.CurrentPath.Length > 0)
-            {
-                expanded = Path.GetFullPath(Path.Combine(vm.CurrentPath, expanded));
-            }
-        }
-        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // Typed characters no path can hold ("a:b:c", "<x>"): there is no such folder.
-            expanded = string.Empty;
-        }
-
-        if (expanded.Length > 0 && Directory.Exists(expanded))
-        {
-            await vm.NavigateAsync(PanelLocation.Local(expanded));
-            FocusList();
-        }
-        else if (expanded.Length > 0 && File.Exists(expanded))
-        {
-            await vm.NavigateAsync(PanelLocation.Local(Path.GetDirectoryName(expanded)!), Path.GetFileName(expanded));
-        }
-        else
-        {
-            MessageDialog.Error(Window.GetWindow(this), L("Go to Folder…"), L("The folder \"{0}\" can't be found.", text));
+            case TypedPathKind.Folder:
+                await vm.NavigateAsync(PanelLocation.Local(path!));
+                FocusList();
+                break;
+            case TypedPathKind.File:
+                await vm.NavigateAsync(PanelLocation.Local(Path.GetDirectoryName(path!)!), Path.GetFileName(path!));
+                break;
+            default:
+                MessageDialog.Error(Window.GetWindow(this), L("Go to Folder…"), L("The folder \"{0}\" can't be found.", text));
+                break;
         }
     }
 
