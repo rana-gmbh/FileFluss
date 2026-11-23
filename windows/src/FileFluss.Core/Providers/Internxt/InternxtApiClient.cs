@@ -433,9 +433,12 @@ internal sealed class InternxtApiClient
     }
 
     /// <summary>
-    /// Renames the freshly registered replacement to its real name. The old entry's delete can
-    /// take a moment to propagate (409 meanwhile), so a few tries; if it never works the file is
-    /// still there under its temporary name, which the error says.
+    /// Renames the freshly registered replacement to its real name. Drive is only eventually
+    /// consistent, both ways round: the old entry's delete can take a moment to propagate (409
+    /// meanwhile), and the entry created a second ago can still be unknown to the rename
+    /// endpoint (404 "File not found"). Both settle within seconds, so both are retried with a
+    /// growing pause (≈9 s in all); if it never works the file is still there under its
+    /// temporary name.
     /// </summary>
     private async Task TakeNameAsync(string uuid, string plainName, CancellationToken cancellationToken)
     {
@@ -447,9 +450,9 @@ internal sealed class InternxtApiClient
                 await DriveSendAsync($"/files/{uuid}/meta", HttpMethod.Put, body, cancellationToken).ConfigureAwait(false);
                 return;
             }
-            catch (CloudProviderException e) when (attempt < 4 && e.Kind is CloudErrorKind.ServerError or CloudErrorKind.RateLimited or CloudErrorKind.NetworkError)
+            catch (CloudProviderException e) when (attempt < 6 && e.Kind is CloudErrorKind.ServerError or CloudErrorKind.RateLimited or CloudErrorKind.NetworkError or CloudErrorKind.NotFound)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(RetryDelayUnit * attempt, cancellationToken).ConfigureAwait(false);
             }
         }
     }

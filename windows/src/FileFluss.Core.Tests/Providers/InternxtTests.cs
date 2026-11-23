@@ -534,6 +534,23 @@ public class InternxtProviderTests
     }
 
     [Fact]
+    public async Task AReplacementTheRenameCannotSeeYetIsRetriedUntilItTakesTheName()
+    {
+        // Drive's rename endpoint can answer 404 for the entry created a moment earlier; the
+        // version test left "report.fileflusspart-….pdf" behind that way.
+        using var h = WithRoute(HttpMethod.Put, "/drive/files/new-file-uuid/meta", call => call <= 2
+            ? new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{\"message\":\"File not found\",\"statusCode\":404}") }
+            : null);
+        using var temp = new TempDirectory();
+
+        await h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 45)), "/report.pdf");
+
+        var renames = h.Capture.Matching(HttpMethod.Put, "/drive/files/new-file-uuid/meta").ToList();
+        Assert.Equal(3, renames.Count);
+        Assert.Equal("{\"plainName\":\"report\"}", Encoding.UTF8.GetString(renames[^1].Body));
+    }
+
+    [Fact]
     public async Task RegisteringTheUploadIsRetriedThroughAGatewayHiccup()
     {
         using var h = WithRoute(HttpMethod.Post, "/drive/files", call => call == 1 ? new HttpResponseMessage(HttpStatusCode.BadGateway) : null);
