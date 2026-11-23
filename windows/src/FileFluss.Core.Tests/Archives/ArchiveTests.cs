@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using FileFluss.Core.Archives;
+using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Tests.Support;
@@ -607,6 +608,37 @@ public sealed class ArchiveTests : IDisposable
 
         Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
         Assert.Equal("c", cloud.Read("/dest/tree/b/c.txt"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FilesCopiedOutOfAnArchiveAreMarkedOnlyWhenTheArchiveIs(bool archiveMarked)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var archive = Zip(archiveMarked ? "marked.zip" : "local.zip", ("doc.txt", "d"));
+        if (archiveMarked)
+        {
+            Assert.True(MarkOfTheWeb.Apply(archive));
+        }
+
+        var provider = new ArchiveProvider(archive, ArchiveFormat.Zip, Path.GetFileName(archive));
+        var target = Path.Combine(_root, "out-" + archiveMarked);
+        Directory.CreateDirectory(target);
+        var items = await provider.ListDirectoryAsync("/");
+
+        var request = new TransferRequest(provider, items, LocalFileProvider.Shared, target, false);
+        var progress = TransferEngine.CreateProgress(request, PanelSide.Right);
+        await TransferEngine.RunAsync(request, progress);
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        var copied = Path.Combine(target, "doc.txt");
+        Assert.Equal("d", await File.ReadAllTextAsync(copied));
+        Assert.Equal(archiveMarked ? 3 : (int?)null, MarkOfTheWeb.Zone(copied));
     }
 
     [Fact]

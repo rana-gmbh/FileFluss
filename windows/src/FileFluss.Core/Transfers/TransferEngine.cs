@@ -1157,8 +1157,14 @@ public static class TransferEngine
 
             // Whatever comes down from an account came from someone else's server, as a
             // browser download does: SmartScreen and Protected View check it when opened
-            // (macOS 1.6 quarantines every download for Gatekeeper the same way).
-            MarkOfTheWeb.Apply(landed);
+            // (macOS 1.6 quarantines every download for Gatekeeper the same way). An archive
+            // panel is no server: its files carry the mark only when the archive itself does,
+            // which the archive provider has already applied — as Extract does. Marking every
+            // file out of a local, unmarked zip opened Office documents in Protected View.
+            if (source is not Archives.ArchiveProvider)
+            {
+                MarkOfTheWeb.Apply(landed);
+            }
         }
         else if (ReferenceEquals(source, destination) && await TryServerSideFileCopyAsync(source, item, targetPath, ct).ConfigureAwait(false))
         {
