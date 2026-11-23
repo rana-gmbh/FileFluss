@@ -467,7 +467,14 @@ public sealed class LocalFileProvider : FileProvider
 
     public static void DeletePermanently(string path)
     {
-        if (Directory.Exists(path))
+        if (Directory.Exists(path) && new DirectoryInfo(path).LinkTarget is not null)
+        {
+            // A junction or symbolic link to a folder: only the link goes. Walking it first to
+            // clear read-only flags reached into the folder it points to and changed files
+            // there (Directory.Delete itself already removed just the link).
+            Directory.Delete(path, recursive: false);
+        }
+        else if (Directory.Exists(path))
         {
             // Clear read-only flags first — Directory.Delete refuses read-only files.
             foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
