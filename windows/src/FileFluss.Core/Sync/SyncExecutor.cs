@@ -307,9 +307,12 @@ public static class SyncExecutor
 
         // Deleting a folder takes everything in it, so only the top-most items are deleted;
         // their descendants share the outcome. One call instead of one per file, and a local
-        // folder lands in the Recycle Bin whole, restorable in one piece.
-        var folders = deletes.Where(o => o.IsDirectory).Select(o => o.RelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var covered = new Dictionary<string, List<SyncOperation>>(StringComparer.OrdinalIgnoreCase);
+        // folder lands in the Recycle Bin whole, restorable in one piece. Compared exactly:
+        // every path comes from the destination's own listing, a child's under its folder's
+        // spelling. Ignoring case filed "docs/extra.txt" under an extra "Docs/" on a
+        // case-sensitive cloud and reported it deleted when "docs/" (kept) still held it.
+        var folders = deletes.Where(o => o.IsDirectory).Select(o => o.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var covered = new Dictionary<string, List<SyncOperation>>(StringComparer.Ordinal);
         var roots = new List<SyncOperation>();
         foreach (var op in deletes)
         {

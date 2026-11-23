@@ -146,6 +146,30 @@ public sealed class SyncExecutorTests : IDisposable
     }
 
     [Fact]
+    public async Task MirrorOnACaseSensitiveCloudDeletesExtrasWhoseFolderDiffersOnlyByCase()
+    {
+        // "Docs/" is extra and goes; "docs/" is kept but its "extra.txt" goes too. Grouping the
+        // deletes while ignoring case filed "docs/extra.txt" under "Docs/" and reported it
+        // deleted with it, though "docs/" still held it.
+        var cloud = new MemoryCloudProvider();
+        cloud.AddFile("/Src/docs/keep.txt", "k", DateTimeOffset.FromUnixTimeSeconds(5_000));
+        cloud.AddFile("/Dst/docs/keep.txt", "k", DateTimeOffset.FromUnixTimeSeconds(5_000));
+        cloud.AddFile("/Dst/docs/extra.txt", "x");
+        cloud.AddFile("/Dst/Docs/other.txt", "o");
+
+        var source = new SyncEndpoint(cloud, "/Src");
+        var destination = new SyncEndpoint(cloud, "/Dst");
+        var plan = await PlanAsync(source, destination, SyncMode.Mirror);
+        var progress = await RunAsync(plan, source, destination);
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        Assert.False(cloud.Exists("/Dst/docs/extra.txt"));
+        Assert.False(cloud.Exists("/Dst/Docs"));
+        Assert.Equal("k", cloud.Read("/Dst/docs/keep.txt"));
+        Assert.True((await PlanAsync(source, destination, SyncMode.Mirror)).IsEmpty);
+    }
+
+    [Fact]
     public async Task MirrorLocalToCloudMakesTheDestinationMatchAndIsIdempotent()
     {
         var sourceDir = LocalDir("mirror-src");
