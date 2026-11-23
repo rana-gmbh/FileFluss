@@ -112,10 +112,85 @@ public sealed class LocalFileProvider : FileProvider
             return known.Label;
         }
 
-        var label = ReadDriveLabel(rootPath);
+        var label = DriveLabelReader(rootPath);
         DriveLabels[rootPath] = (label, now);
         return label;
     }
+
+    /// <summary>
+    /// Raised (on a thread-pool thread) with a drive's root once a label refreshed in the
+    /// background differs from what <see cref="CachedDriveLabel"/> handed out before.
+    /// </summary>
+    public static event EventHandler<string>? DriveLabelChanged;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> RefreshingDriveLabels = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Test seam: reads a drive's label from the volume (normally <see cref="ReadDriveLabel"/>).</summary>
+    internal static Func<string, string> DriveLabelReader { get; set; } = ReadDriveLabel;
+
+    /// <summary>
+    /// A drive's name for the UI thread, which must never wait for the volume: a mapped drive
+    /// whose server is gone takes 20–60 s to say so, and the path bar and window title asked on
+    /// every navigation. Answers with the remembered label — even an old one — or, before the
+    /// drive was ever asked, its letter ("Z:"), and refreshes on the thread pool;
+    /// <see cref="DriveLabelChanged"/> tells when a better name has arrived.
+    /// </summary>
+    public static string CachedDriveLabel(string rootPath)
+    {
+        if (DriveLabels.TryGetValue(rootPath, out var known))
+        {
+            if (Environment.TickCount64 - known.At >= DriveLabelLifetimeMs)
+            {
+                RefreshDriveLabel(rootPath, known.Label);
+            }
+
+            return known.Label;
+        }
+
+        var letter = rootPath.TrimEnd('\\', '/');
+        RefreshDriveLabel(rootPath, letter);
+        return letter;
+    }
+
+    /// <summary>A folder's name for display without touching the disk: a drive root's is <see cref="CachedDriveLabel"/>.</summary>
+    public static string DisplayName(string path)
+    {
+        if (path.Length == 0)
+        {
+            return Localization.L("This PC");
+        }
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+        return name.Length > 0 ? name : CachedDriveLabel(path);
+    }
+
+    private static void RefreshDriveLabel(string rootPath, string shown)
+    {
+        if (!RefreshingDriveLabels.TryAdd(rootPath, 0))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var label = DriveLabelReader(rootPath);
+                DriveLabels[rootPath] = (label, Environment.TickCount64);
+                if (!string.Equals(label, shown, StringComparison.Ordinal))
+                {
+                    DriveLabelChanged?.Invoke(null, rootPath);
+                }
+            }
+            finally
+            {
+                RefreshingDriveLabels.TryRemove(rootPath, out _);
+            }
+        });
+    }
+
+    /// <summary>Forgets every remembered drive name (tests).</summary>
+    internal static void ForgetDriveLabels() => DriveLabels.Clear();
 
     private static string ReadDriveLabel(string rootPath)
     {

@@ -490,7 +490,7 @@ public sealed partial class StorageAnalysisWindow : Window
         }
 
         var isDrive = string.Equals(Path.GetPathRoot(normalized), normalized, StringComparison.OrdinalIgnoreCase);
-        var title = isDrive ? LocalFileProvider.DriveLabel(normalized) : normalized;
+        var title = isDrive ? LocalFileProvider.CachedDriveLabel(normalized) : normalized;
         return new SourceOption(StorageScanSource.ForLocal(normalized), title, "local:" + normalized.ToUpperInvariant());
     }
 

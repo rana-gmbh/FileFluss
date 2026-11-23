@@ -132,6 +132,19 @@ public sealed class PanelViewModel : Observable
                 OnReconnectStateChanged();
             }
         };
+
+        // The path bar and title show a drive's remembered name and never wait for the volume;
+        // when a fresher one has been read in the background, show it.
+        LocalFileProvider.DriveLabelChanged += (_, root) => Application.Current?.Dispatcher.BeginInvoke(() => OnDriveLabelChanged(root), DispatcherPriority.Background);
+    }
+
+    internal void OnDriveLabelChanged(string root)
+    {
+        if (IsLocal && CurrentPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(Breadcrumbs));
+        }
     }
 
     public PanelSide Side { get; }
@@ -192,6 +205,10 @@ public sealed class PanelViewModel : Observable
         : IsCloud && _provider.IsRoot(CurrentPath) ? Account?.DisplayName ?? string.Empty
         : _location.IsOfflineDrive && _provider.IsRoot(CurrentPath) ? OfflineDriveName
         : _location.IsArchive && _provider.IsRoot(CurrentPath) ? _location.ArchiveName
+
+        // A drive root's name comes from the volume, which an unreachable network drive
+        // takes up to a minute to answer: the UI only ever shows the remembered one.
+        : _provider is LocalFileProvider ? LocalFileProvider.DisplayName(CurrentPath)
         : _provider.GetName(CurrentPath);
 
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => BuildBreadcrumbs();
@@ -673,12 +690,21 @@ public sealed class PanelViewModel : Observable
             return Task.CompletedTask;
         }
 
-        var child = _provider.GetName(CurrentPath);
         var parent = _provider.GetParentPath(CurrentPath);
         var location = _location with { Path = parent };
+
         // Coming back up selects the folder we came from, like Explorer.
-        return NavigateCoreAsync(location, addToHistory: true, [IsLocal && parent.Length == 0 ? CurrentPath : child]);
+        return NavigateCoreAsync(location, addToHistory: true, [RowNameOf(CurrentPath)]);
     }
+
+    /// <summary>
+    /// The name a folder's row has in its parent's listing, which is what selection matches
+    /// on. A drive's row in This PC carries its label; the remembered one is used, so going up
+    /// from or back past "Z:\" never waits for the volume (an unreachable network drive: up to
+    /// a minute). This PC's listing remembers the same labels as it reads them.
+    /// </summary>
+    private string RowNameOf(string path)
+        => _provider is LocalFileProvider ? LocalFileProvider.DisplayName(path) : _provider!.GetName(path);
 
     public Task GoBackAsync()
     {
@@ -711,7 +737,13 @@ public sealed class PanelViewModel : Observable
             return [];
         }
 
-        return _provider.GetParentPath(from.Path) == _history[_historyIndex].Path ? [_provider.GetName(from.Path)] : [];
+        var parent = _provider.GetParentPath(from.Path);
+        if (parent != _history[_historyIndex].Path)
+        {
+            return [];
+        }
+
+        return [RowNameOf(from.Path)];
     }
 
     public Task JumpToRootAsync()
@@ -1510,7 +1542,7 @@ public sealed class PanelViewModel : Observable
                 chain.Reverse();
                 foreach (var folder in chain)
                 {
-                    segments.Add((LocalFileProvider.Shared.GetName(folder), PanelLocation.Local(folder)));
+                    segments.Add((LocalFileProvider.DisplayName(folder), PanelLocation.Local(folder)));
                 }
             }
         }
