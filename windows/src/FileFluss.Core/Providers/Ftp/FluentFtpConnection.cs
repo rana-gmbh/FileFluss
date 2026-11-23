@@ -50,6 +50,22 @@ internal sealed class FluentFtpConnection : IFtpConnection
     /// <summary>Connects and logs in. Passive mode (EPSV, then PASV), as curl does by default.</summary>
     public static async Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, CancellationToken cancellationToken)
     {
+        var client = CreateClient(credentials);
+        try
+        {
+            await client.Connect(cancellationToken).ConfigureAwait(false);
+            return new FluentFtpConnection(client);
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The configured, not yet connected client.</summary>
+    internal static AsyncFtpClient CreateClient(FtpCredentials credentials)
+    {
         var config = new FtpConfig
         {
             EncryptionMode = credentials.UseTls ? FtpEncryptionMode.Explicit : FtpEncryptionMode.None,
@@ -64,17 +80,15 @@ internal sealed class FluentFtpConnection : IFtpConnection
             DataConnectionReadTimeout = 60_000,
         };
 
-        var client = new AsyncFtpClient(credentials.Host, credentials.Username, credentials.Password, credentials.Port, config);
-        try
+        var client = new AsyncFtpClient(credentials.Host, credentials.Username, credentials.Password, credentials.Port, config)
         {
-            await client.Connect(cancellationToken).ConfigureAwait(false);
-            return new FluentFtpConnection(client);
-        }
-        catch
-        {
-            client.Dispose();
-            throw;
-        }
+            // FluentFTP talks ASCII unless the server lists UTF8 in FEAT, so on servers that
+            // don't (many NAS, router and camera servers) "Grüße.txt" listed as "Gr??e.txt" and
+            // uploads created that name. macOS (curl) always sends the path as UTF-8 bytes; a
+            // set encoding wins over FEAT detection.
+            Encoding = System.Text.Encoding.UTF8,
+        };
+        return client;
     }
 
     public async Task<string> GetWorkingDirectoryAsync(CancellationToken cancellationToken)
