@@ -585,6 +585,68 @@ public sealed class QnapProviderTests : IDisposable
         Assert.Equal("b.txt", Param(rename.Uri, "dest_name"));
     }
 
+    /// <summary>
+    /// mode=0 overwrites: the old file at the destination exists from the start, so "it's
+    /// there" proved nothing — QTS was still copying when FileFluss went on.
+    /// </summary>
+    [Fact]
+    public async Task AnOverwritingCopyWaitsUntilTheNewFileHasLanded()
+    {
+        FuncJson("copy", "{\"status\":1}");
+        FuncJson("rename", "{\"status\":1}");
+        var destinationStats = 0;
+        Func("stat", request =>
+        {
+            var folder = Param(request.RequestUri!, "path");
+            if (folder == "/Public")
+            {
+                return FakeHttpHandler.Json("""{"status":1,"datas":[{"exist":1,"isfolder":0,"filesize":"5000","epochmt":1736244000}]}""");
+            }
+
+            // The old b.txt (and a.txt, the copy's name) until the copy has run for a while.
+            destinationStats++;
+            return Calls("copy").Any() && destinationStats > 4
+                ? FakeHttpHandler.Json("""{"status":1,"datas":[{"exist":1,"isfolder":0,"filesize":"5000","epochmt":1736250000}]}""")
+                : FakeHttpHandler.Json("""{"status":1,"datas":[{"exist":1,"isfolder":0,"filesize":"100","epochmt":1700000000}]}""");
+        });
+        using var provider = Connected();
+
+        await provider.CopyItemAsync("/Public/a.txt", "/Backup/a.txt");
+
+        Assert.True(destinationStats > 4, $"returned after {destinationStats} destination checks");
+    }
+
+    [Fact]
+    public async Task ACopyThatNeverLandsIsAnErrorNotASuccess()
+    {
+        FuncJson("copy", "{\"status\":1}");
+        Func("stat", request => Param(request.RequestUri!, "path") == "/Public"
+            ? FakeHttpHandler.Json("""{"status":1,"datas":[{"exist":1,"isfolder":0,"filesize":"5000","epochmt":1736244000}]}""")
+            : FakeHttpHandler.Json("""{"status":1,"datas":[{"exist":0}]}"""));
+        using var provider = Connected();
+        provider.LandingBaseTimeout = TimeSpan.FromMilliseconds(50);
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync("/Public/a.txt", "/Backup/a.txt"));
+
+        Assert.Equal(CloudErrorKind.ServerError, error.Kind);
+        Assert.Equal(504, error.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(5000, 1736244000, false, 0, 0L, 5000, 1736244000, true)]        // nothing there before, arrived whole
+    [InlineData(5000, 1736244000, false, 0, 0L, 100, 1736244000, false)]        // still being written
+    [InlineData(5000, 1736244000, true, 100, 1700000000L, 100, 1700000000, false)]   // the old file still
+    [InlineData(5000, 1736244000, true, 5000, 1700000000L, 5000, 1700000000, false)] // same size, unchanged
+    [InlineData(5000, 1736244000, true, 5000, 1700000000L, 5000, 1736250000, true)]  // same size, rewritten
+    [InlineData(5000, 1736244000, true, 5000, 1736244000L, 5000, 1736244000, true)]  // already the same file
+    public void LandingMeansTheNewFileIsThere(long sourceSize, long sourceDate, bool existedBefore, long beforeSize, long beforeDate, long landedSize, long landedDate, bool expected)
+    {
+        static CloudFileItem File(long size, long date) => new("/x", "x", "/x", false, size, DateTimeOffset.FromUnixTimeSeconds(date));
+        var before = existedBefore ? File(beforeSize, beforeDate) : null;
+
+        Assert.Equal(expected, FileFluss.Core.Providers.Qnap.QnapApiClient.HasLanded(File(sourceSize, sourceDate), before, File(landedSize, landedDate)));
+    }
+
     [Fact]
     public async Task KeepBothInTheSameFolderIsLeftToTheCaller()
     {

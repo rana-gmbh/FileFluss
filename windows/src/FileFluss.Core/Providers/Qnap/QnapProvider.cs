@@ -65,6 +65,22 @@ public sealed class QnapProvider : CloudProvider
         SupportsExpiry = true,
     };
 
+    /// <summary>Test seam: how long a copy/move may take to land before it counts as failed (plus time per 10 MB).</summary>
+    internal TimeSpan? LandingBaseTimeout
+    {
+        get => _landingBaseTimeout;
+        set
+        {
+            _landingBaseTimeout = value;
+            if (value is { } timeout && Volatile.Read(ref _client) is { } client)
+            {
+                client.LandingBaseTimeout = timeout;
+            }
+        }
+    }
+
+    private TimeSpan? _landingBaseTimeout;
+
     /// <summary>Test seam: shortens the copy/move landing poll.</summary>
     internal TimeSpan? PollInterval
     {
@@ -315,6 +331,11 @@ public sealed class QnapProvider : CloudProvider
         if (PollInterval is { } interval)
         {
             client.PollInterval = interval;
+        }
+
+        if (LandingBaseTimeout is { } landing)
+        {
+            client.LandingBaseTimeout = landing;
         }
 
         return client;

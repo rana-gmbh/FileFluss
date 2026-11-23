@@ -566,6 +566,15 @@ internal sealed class QnapApiClient
     {
         var (parent, name) = Split(path);
         var folder = CleanPath(destinationFolder);
+        var destination = Join(folder, name);
+
+        // What "landed" means: the source as it is, and whatever already sits at the destination
+        // (mode=0 overwrites it) — that one existing told nothing, so it has to change first.
+        // Either can be unknown (a stat QTS doesn't answer as expected): then the destination
+        // only has to appear, as before.
+        var source = await TryGetFileInfoAsync(path, cancellationToken).ConfigureAwait(false);
+        var before = await TryGetFileInfoAsync(destination, cancellationToken).ConfigureAwait(false);
+
         await CallAsync(move ? "move" : "copy",
         [
             ("source_file", name),
@@ -575,21 +584,80 @@ internal sealed class QnapApiClient
             ("mode", "0"),
         ], path, cancellationToken).ConfigureAwait(false);
 
-        // QTS may hand back a process id and finish in the background; the destination has to
-        // exist before a follow-up rename can find it.
-        var destination = Join(folder, name);
-        for (var i = 0; i < 120; i++)
+        // QTS may finish in the background. Wait until the copy is there — at the source's size,
+        // and changed if something was there before — for a time that grows with the file:
+        // reporting success after a minute either way (as before) let a follow-up rename or the
+        // size check run against a copy still being written, or against the old file.
+        var deadline = DateTimeOffset.UtcNow + LandingTimeout(source);
+        while (true)
         {
             try
             {
-                await GetFileInfoAsync(destination, cancellationToken).ConfigureAwait(false);
-                return;
+                var landed = await GetFileInfoAsync(destination, cancellationToken).ConfigureAwait(false);
+                if (HasLanded(source, before, landed))
+                {
+                    return;
+                }
             }
-            catch (CloudProviderException)
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
             {
-                await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
             }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                SupportLogger.Shared.Log($"[QNAP] {(move ? "move" : "copy")} of {path} to {folder} didn't finish in time", Category, LogLevel.Error);
+                throw CloudProviderException.ServerError(504);
+            }
+
+            await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>A minute, plus a second for every 10 MB (a NAS copying within its own disks).</summary>
+    internal TimeSpan LandingTimeout(CloudFileItem? source)
+        => LandingBaseTimeout + TimeSpan.FromSeconds(source is { IsDirectory: false } file ? file.Size / 10_000_000.0 : 0);
+
+    private async Task<CloudFileItem?> TryGetFileInfoAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetFileInfoAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CloudProviderException e) when (e.Kind is not CloudErrorKind.Cancelled)
+        {
+            return null;
+        }
+    }
+
+    internal TimeSpan LandingBaseTimeout { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Whether a server-side copy or move has arrived: the item is there, a file at the
+    /// source's size, and — if something was at the destination before — changed since, unless
+    /// that already was the same file (same size and date).
+    /// </summary>
+    internal static bool HasLanded(CloudFileItem? source, CloudFileItem? before, CloudFileItem landed)
+    {
+        if (source is null)
+        {
+            return true;
+        }
+
+        if (source.IsDirectory)
+        {
+            return landed.IsDirectory;
+        }
+
+        if (landed.IsDirectory || landed.Size != source.Size)
+        {
+            return false;
+        }
+
+        return before is null ||
+               before.IsDirectory ||
+               before.Size != landed.Size ||
+               before.ModificationDate != landed.ModificationDate ||
+               (before.Size == source.Size && before.ModificationDate == source.ModificationDate);
     }
 
     public Task SetModificationDateAsync(string path, DateTimeOffset date, CancellationToken cancellationToken)
