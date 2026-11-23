@@ -277,4 +277,42 @@ public sealed class TransferEngineTests : IDisposable
         Assert.Equal("a (3).txt", TransferEngine.UniqueName("a.txt", taken));
         Assert.Equal("folder", TransferEngine.UniqueName("folder", taken));
     }
+
+    [Fact]
+    public async Task LocalCopiesKeepNamesTheDiskAlreadyHolds()
+    {
+        // A leading space and a 234-character name are legal on NTFS; copying a file, or a
+        // folder holding them, used to trim and cut them as if they came off a server.
+        var longName = new string('x', 230) + ".txt";
+        var source = LocalDir("legal-src");
+        var target = LocalDir("legal-dst");
+        await File.WriteAllTextAsync(Path.Combine(source, " notes.txt"), "notes");
+        Directory.CreateDirectory(Path.Combine(source, " folder"));
+        await File.WriteAllTextAsync(Path.Combine(source, " folder", longName), "long");
+
+        var items = new[]
+        {
+            await _local.GetFileMetadataAsync(Path.Combine(source, " notes.txt")),
+            await _local.GetFileMetadataAsync(Path.Combine(source, " folder")),
+        };
+        var progress = await Run(new TransferRequest(_local, items, _local, target, IsMove: false));
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        Assert.Equal("notes", await File.ReadAllTextAsync(Path.Combine(target, " notes.txt")));
+        Assert.Equal("long", await File.ReadAllTextAsync(Path.Combine(target, " folder", longName)));
+    }
+
+    [Fact]
+    public async Task DownloadsStillGetNamesTheLocalDiskCanHold()
+    {
+        var cloud = new MemoryCloudProvider();
+        cloud.AddFile("/Docs/ a:b.txt", "x", DateTimeOffset.FromUnixTimeSeconds(1_700_000_000));
+        var target = LocalDir("download-legal");
+        var item = await cloud.GetFileMetadataAsync("/Docs/ a:b.txt");
+
+        var progress = await Run(new TransferRequest(cloud, [item], _local, target, IsMove: false));
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        Assert.Equal("x", await File.ReadAllTextAsync(Path.Combine(target, "a_b.txt")));
+    }
 }

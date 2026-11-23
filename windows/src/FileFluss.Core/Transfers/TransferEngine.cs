@@ -431,8 +431,15 @@ public static class TransferEngine
     private static string TargetNameFor(TransferRequest request, CloudFileItem item)
     {
         var name = request.DestinationNames?.GetValueOrDefault(item.Name) ?? item.Name;
-        return request.Destination.IsLocal ? SafeLocalPath.FileName(name) : name;
+        return NeedsLocalName(request) ? SafeLocalPath.FileName(name) : name;
     }
+
+    /// <summary>
+    /// Whether names must be made legal for the local disk: only those that came off a server.
+    /// A name the local disk already holds is legal there, and "fixing" it anyway renamed files
+    /// on a plain copy (a leading space trimmed, a 234-character name cut to 200).
+    /// </summary>
+    private static bool NeedsLocalName(TransferRequest request) => request.Destination.IsLocal && !request.Source.IsLocal;
 
     private static StringComparer MatcherFor(FileProvider destination) => FileNames.MatchComparer(!destination.IsCaseSensitive);
 
@@ -991,7 +998,7 @@ public static class TransferEngine
                     placedIn[parentPath] = placed;
                 }
 
-                var name = destination.IsLocal ? SafeLocalPath.FileName(entry.Item.Name) : entry.Item.Name;
+                var name = NeedsLocalName(request) ? SafeLocalPath.FileName(entry.Item.Name) : entry.Item.Name;
                 if (!destination.IsLocal && CloudPath.IsTraversalName(name))
                 {
                     // Its children are skipped too: their parent key never gets a created folder.
