@@ -49,6 +49,12 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **Google Drive:** uploading a file that was deleted in the Drive web app works again; it failed until FileFluss was restarted.
 - **Synology Drive** reports a rename that fails after copying or moving, instead of reporting success.
 - **Internxt:** when the old file can't be removed during a replace, FileFluss now says so and leaves the old file as it was.
+- **A folder copy goes on past a subfolder it can't read.** Everything readable is copied, and what was skipped is listed with the reason; a move leaves the skipped parts where they were. One unreadable subfolder used to stop the whole copy before anything was written.
+- **Opening a file never holds the window,** even from a slow network share. Programs and scripts opened from an account mapped as a drive now get Windows' security warning, like any download.
+- **When a folder you're looking at is deleted elsewhere,** the panel moves up to the nearest folder that still exists, and the status bar says "Loading..." while a folder is listed instead of "0 files".
+- **Mirror** replaces a file that stands where the source has a folder (it used to fail on every run), and **Compare** uses Sync's date tolerance, so files on SFTP and FTP no longer all show as different.
+- **Rate limits** are retried once instead of over and over, and reported as rate limits rather than as timeouts. **QNAP** lists very large folders completely and waits properly for server-side copies; **S3** handles object keys containing `./` or `../`.
+- **The support log** names each item a transfer couldn't copy, and why.
 - **Esc closes Quick Look** while you're still in the file list, as on the Mac. It used to work only after clicking into the preview window.
 - **Copying and syncing between local folders keeps names exactly as they are.** A name with a leading space or longer than 200 characters was shortened, and a Mirror then deleted the correctly named copy.
 
