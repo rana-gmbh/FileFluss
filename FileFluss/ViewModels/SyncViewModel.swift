@@ -370,6 +370,7 @@ final class SyncViewModel {
         password: String? = nil,
         privateKey: String? = nil,
         passphrase: String? = nil,
+        useSSHAgent: Bool = false,
         remotePath: String = "/"
     ) async {
         let resolvedRemotePath = remotePath.isEmpty ? "/" : remotePath
@@ -386,6 +387,7 @@ final class SyncViewModel {
                 password: password,
                 privateKey: privateKey,
                 passphrase: passphrase,
+                useSSHAgent: useSSHAgent,
                 remotePath: resolvedRemotePath
             )
             var connectedAccount = account
@@ -1658,30 +1660,23 @@ final class SyncViewModel {
         password: String? = nil,
         privateKey: String? = nil,
         passphrase: String? = nil,
+        useSSHAgent: Bool = false,
         remotePath: String
     ) async {
         authError = nil
         do {
             let resolvedRemote = remotePath.isEmpty ? "/" : remotePath
             let provider = SFTPProvider(accountId: accountId)
-            if let privateKey, !privateKey.isEmpty {
-                try await provider.authenticate(
-                    host: host,
-                    port: port,
-                    username: username,
-                    privateKey: privateKey,
-                    passphrase: passphrase,
-                    remotePath: resolvedRemote
-                )
-            } else {
-                try await provider.authenticate(
-                    host: host,
-                    port: port,
-                    username: username,
-                    password: password ?? "",
-                    remotePath: resolvedRemote
-                )
-            }
+            try await provider.authenticate(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                privateKey: privateKey,
+                passphrase: passphrase,
+                useSSHAgent: useSSHAgent,
+                remotePath: resolvedRemote
+            )
             await syncEngine.registerProvider(for: accountId, provider: provider)
             if let idx = accounts.firstIndex(where: { $0.id == accountId }) {
                 accounts[idx].isConnected = true

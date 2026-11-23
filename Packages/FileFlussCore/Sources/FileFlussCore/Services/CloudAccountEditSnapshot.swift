@@ -14,6 +14,7 @@ public struct CloudAccountEditSnapshot: Sendable {
     public enum SFTPAuth: Sendable {
         case password
         case privateKey
+        case sshAgent
     }
 
     // Common
@@ -87,7 +88,11 @@ public enum CloudAccountEditLoader {
             snap.port = c.port
             snap.username = c.username
             snap.remotePath = c.remotePath
-            snap.sftpAuth = c.authMethod == .privateKey ? .privateKey : .password
+            switch c.authMethod {
+            case .password: snap.sftpAuth = .password
+            case .privateKey: snap.sftpAuth = .privateKey
+            case .sshAgent: snap.sftpAuth = .sshAgent
+            }
             return snap
 
         case .ftp:

@@ -54,7 +54,16 @@ struct AddCloudAccountView: View {
     enum SFTPAuthMethod: String, CaseIterable, Hashable, Identifiable {
         case password = "Password"
         case privateKey = "SSH Key"
+        case sshAgent = "SSH Agent"
         var id: String { rawValue }
+
+        init(_ snapshot: CloudAccountEditSnapshot.SFTPAuth) {
+            switch snapshot {
+            case .password: self = .password
+            case .privateKey: self = .privateKey
+            case .sshAgent: self = .sshAgent
+            }
+        }
     }
     @State private var sftpAuthMethod: SFTPAuthMethod = .password
     @State private var sftpRemotePath = "/"
@@ -740,7 +749,7 @@ struct AddCloudAccountView: View {
 
     private var sftpFields: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LText("Enter your SFTP server details. You can authenticate with either a password or a private SSH key, and pin the panel to a specific remote folder on first open.")
+            LText("Set a remote path to choose where the panel opens. FileFluss verifies the server against OpenSSH known_hosts.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -773,10 +782,10 @@ struct AddCloudAccountView: View {
             .pickerStyle(.segmented)
             .disabled(isAuthenticating)
 
-            if sftpAuthMethod == .privateKey {
-                sftpKeyFields
-            } else {
-                sftpPasswordField
+            switch sftpAuthMethod {
+            case .privateKey: sftpKeyFields
+            case .password: sftpPasswordField
+            case .sshAgent: EmptyView()
             }
         }
     }
@@ -1517,6 +1526,7 @@ struct AddCloudAccountView: View {
             switch sftpAuthMethod {
             case .password: return password.isEmpty
             case .privateKey: return sftpPrivateKeyContents.isEmpty
+            case .sshAgent: return false
             }
         case .wordpress: return serverURL.isEmpty || username.isEmpty || password.isEmpty
         case .koofr: return email.isEmpty || password.isEmpty
@@ -1648,6 +1658,14 @@ struct AddCloudAccountView: View {
                         username: username,
                         privateKey: sftpPrivateKeyContents,
                         passphrase: pass,
+                        remotePath: resolvedRemote
+                    )
+                case .sshAgent:
+                    await appState.syncManager.addSFTPAccount(
+                        host: serverURL,
+                        port: parsedPort,
+                        username: username,
+                        useSSHAgent: true,
                         remotePath: resolvedRemote
                     )
                 }

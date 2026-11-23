@@ -59,6 +59,18 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
 
+On macOS, SFTP requires a trusted OpenSSH host key. Before connecting to a new
+server, get its public host key from your server administrator and add the
+verified key to `~/.ssh/known_hosts`. Use `[host]:port` for a nonstandard port.
+If a key changes, confirm the rotation with the administrator before updating
+the entry. In the account form, use the actual hostname and port. FileFluss
+uses the standard OpenSSH trust files and connects directly, so aliases,
+proxy settings, and custom trust files in `~/.ssh/config` do not apply.
+
+To use a running agent, select **SSH Agent** in the SFTP account form. FileFluss
+uses the agent socket exported as `SSH_AUTH_SOCK`. Load the server's authorized
+key into that agent before connecting.
+
 ### Archives, right in the panel
 
 ![Browsing an archive](Screenshots/FileFluss%20archives.webp)
@@ -285,6 +297,13 @@ FileFluss uses [XcodeGen](https://github.com/yonaskolb/XcodeGen) to generate the
 brew install xcodegen
 xcodegen generate
 xcodebuild build -project FileFluss.xcodeproj -scheme FileFluss -destination 'platform=macOS'
+```
+
+To run the macOS SFTP integration test with a disposable loopback OpenSSH
+server and SSH agent:
+
+```bash
+python3 Packages/FileFlussCore/Tests/Fixtures/run-sftp-tests.py
 ```
 
 ## Credits

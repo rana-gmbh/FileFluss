@@ -28,6 +28,7 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
         password: String? = nil,
         privateKey: String? = nil,
         passphrase: String? = nil,
+        useSSHAgent: Bool = false,
         remotePath: String = "/"
     ) async throws {
         let credentials = try await SFTPAPIClient.authenticate(
@@ -37,10 +38,11 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
             password: password,
             privateKey: privateKey,
             passphrase: passphrase,
+            useSSHAgent: useSSHAgent,
             remotePath: remotePath
         )
-        self.apiClient = SFTPAPIClient(credentials: credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
+        self.apiClient = SFTPAPIClient(credentials: credentials)
         sftpProviderLog.info("[SFTP] Authenticated as \(credentials.username)@\(credentials.host) via \(credentials.authMethod.rawValue)")
     }
 

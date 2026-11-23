@@ -439,19 +439,24 @@ struct EditCloudAccountView: View {
             .pickerStyle(.segmented)
             .disabled(isAuthenticating)
 
-            if sftpAuthMethod == .privateKey {
+            switch sftpAuthMethod {
+            case .privateKey:
                 sftpKeyFields
-            } else {
+            case .password:
                 SecureField(L10n.text("Password"), text: $password)
                     .textFieldStyle(.roundedBorder)
                     .textContentType(.password)
                     .disabled(isAuthenticating)
                     .onSubmit { save() }
+            case .sshAgent:
+                EmptyView()
             }
 
-            LText("Credentials (password or key) are not prefilled and must be re-entered.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            if sftpAuthMethod != .sshAgent {
+                LText("Credentials (password or key) are not prefilled and must be re-entered.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 
@@ -906,7 +911,7 @@ struct EditCloudAccountView: View {
                 || port != "\(initial.port)"
                 || username != initial.username
                 || remotePath != initial.remotePath
-                || sftpAuthMethod.rawValue != (initial.sftpAuth == .privateKey ? "SSH Key" : "Password")
+                || sftpAuthMethod != AddCloudAccountView.SFTPAuthMethod(initial.sftpAuth)
                 || !password.isEmpty
                 || !sftpPrivateKeyContents.isEmpty
                 || !sftpPassphrase.isEmpty
@@ -960,6 +965,7 @@ struct EditCloudAccountView: View {
             switch sftpAuthMethod {
             case .password: return !password.isEmpty
             case .privateKey: return !sftpPrivateKeyContents.isEmpty
+            case .sshAgent: return true
             }
         case .synologyDrive, .qnap, .ugreen, .asustor:
             return !serverURL.isEmpty && !username.isEmpty && !password.isEmpty
@@ -997,7 +1003,7 @@ struct EditCloudAccountView: View {
         if snap.port > 0 { port = "\(snap.port)" }
         if !snap.host.isEmpty { serverURL = snap.host }  // SFTP uses host
         remotePath = snap.remotePath.isEmpty ? "/" : snap.remotePath
-        sftpAuthMethod = snap.sftpAuth == .privateKey ? .privateKey : .password
+        sftpAuthMethod = AddCloudAccountView.SFTPAuthMethod(snap.sftpAuth)
         s3AccessKeyId = snap.s3AccessKeyId
         s3SecretAccessKey = snap.s3SecretAccessKey
         s3Region = snap.s3Region.isEmpty ? s3Region : snap.s3Region
@@ -1084,6 +1090,15 @@ struct EditCloudAccountView: View {
                         username: username,
                         privateKey: sftpPrivateKeyContents,
                         passphrase: pass,
+                        remotePath: resolvedRemote
+                    )
+                case .sshAgent:
+                    await appState.syncManager.updateSFTPAccount(
+                        accountId: id,
+                        host: serverURL,
+                        port: parsedPort,
+                        username: username,
+                        useSSHAgent: true,
                         remotePath: resolvedRemote
                     )
                 }

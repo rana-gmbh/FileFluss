@@ -1,4 +1,5 @@
 #if os(macOS)
+import Darwin
 import Foundation
 import os
 
@@ -8,6 +9,7 @@ public struct SFTPCredentials: Codable, Sendable {
     public enum AuthMethod: String, Codable, Sendable {
         case password
         case privateKey
+        case sshAgent
     }
 
     public let host: String
@@ -60,60 +62,17 @@ public struct SFTPCredentials: Codable, Sendable {
 
 public actor SFTPAPIClient {
     let credentials: SFTPCredentials
-    private let controlPath: String
-    /// SSH_ASKPASS script — echoes the password or the key passphrase.
-    /// nil when auth is .privateKey with no passphrase.
-    private let askPassScriptPath: String?
-    /// Path to the private-key file written for `-i`. nil for password auth.
-    private let privateKeyPath: String?
+    private let knownHostsFile: URL?
+    private lazy var controlDirectory = try? SFTPTemporaryDirectory()
 
     public init(credentials: SFTPCredentials) {
         self.credentials = credentials
-        let id = UUID().uuidString.prefix(8)
-        self.controlPath = NSTemporaryDirectory() + "filefluss-sftp-\(id)"
-
-        // Pick the secret SSH_ASKPASS should echo (password OR key passphrase).
-        let secret: String?
-        switch credentials.authMethod {
-        case .password:
-            secret = credentials.password
-        case .privateKey:
-            // Empty passphrase => key is unencrypted, no askpass needed.
-            secret = (credentials.passphrase?.isEmpty ?? true) ? nil : credentials.passphrase
-        }
-
-        if let secret {
-            let path = NSTemporaryDirectory() + "filefluss-sftp-askpass-\(id)"
-            let escaped = secret.replacingOccurrences(of: "'", with: "'\\''")
-            let script = "#!/bin/sh\necho '\(escaped)'\n"
-            FileManager.default.createFile(atPath: path, contents: Data(script.utf8), attributes: [.posixPermissions: 0o700])
-            self.askPassScriptPath = path
-        } else {
-            self.askPassScriptPath = nil
-        }
-
-        if credentials.authMethod == .privateKey, let key = credentials.privateKey, !key.isEmpty {
-            let path = NSTemporaryDirectory() + "filefluss-sftp-key-\(id)"
-            // Make sure the key ends in a newline; some SSH builds reject otherwise.
-            let body = key.hasSuffix("\n") ? key : (key + "\n")
-            FileManager.default.createFile(atPath: path, contents: Data(body.utf8), attributes: [.posixPermissions: 0o600])
-            self.privateKeyPath = path
-        } else {
-            self.privateKeyPath = nil
-        }
+        self.knownHostsFile = nil
     }
 
-    deinit {
-        // The askpass script contains the account's SSH password (or key
-        // passphrase) in clear text, and the key file the private key
-        // itself. Leaving them in the temp directory downgrades keychain-
-        // protected secrets to files any process running as this user can
-        // read, for as long as the temp directory survives. `deinit` can't
-        // touch actor state, so both paths are captured as plain values.
-        let leftovers = [askPassScriptPath, privateKeyPath].compactMap { $0 }
-        for path in leftovers {
-            try? Foundation.FileManager.default.removeItem(atPath: path)
-        }
+    init(credentials: SFTPCredentials, knownHostsFile: URL) {
+        self.credentials = credentials
+        self.knownHostsFile = knownHostsFile
     }
 
     // MARK: - Authentication
@@ -125,17 +84,23 @@ public actor SFTPAPIClient {
         password: String? = nil,
         privateKey: String? = nil,
         passphrase: String? = nil,
+        useSSHAgent: Bool = false,
         remotePath: String = "/"
     ) async throws -> SFTPCredentials {
-        let authMethod: SFTPCredentials.AuthMethod = (privateKey?.isEmpty == false) ? .privateKey : .password
+        let authMethod: SFTPCredentials.AuthMethod
+        if useSSHAgent {
+            authMethod = .sshAgent
+        } else {
+            authMethod = (privateKey?.isEmpty == false) ? .privateKey : .password
+        }
         let creds = SFTPCredentials(
             host: host,
             port: port,
             username: username,
             authMethod: authMethod,
-            password: password,
-            privateKey: privateKey,
-            passphrase: passphrase,
+            password: authMethod == .password ? password : nil,
+            privateKey: authMethod == .privateKey ? privateKey : nil,
+            passphrase: authMethod == .privateKey ? passphrase : nil,
             remotePath: remotePath
         )
         let client = SFTPAPIClient(credentials: creds)
@@ -365,73 +330,120 @@ public actor SFTPAPIClient {
     // MARK: - Process Execution
 
     private func runBatch(commands: [String]) async throws -> String {
+        try Task.checkCancellation()
+        guard let controlDirectory else { throw CloudProviderError.invalidResponse }
+        let directory = try SFTPTemporaryDirectory()
         let batchContent = commands.joined(separator: "\n") + "\nbye\n"
-        let batchPath = NSTemporaryDirectory() + "filefluss-sftp-batch-\(UUID().uuidString.prefix(8))"
-        defer { try? FileManager.default.removeItem(atPath: batchPath) }
-
-        guard FileManager.default.createFile(atPath: batchPath, contents: Data(batchContent.utf8)) else {
+        let batchPath = directory.url.appendingPathComponent("batch").path
+        guard FileManager.default.createFile(
+            atPath: batchPath,
+            contents: Data(batchContent.utf8),
+            attributes: [.posixPermissions: 0o600]
+        ) else {
             throw CloudProviderError.invalidResponse
+        }
+
+        let destination = try Self.destination(for: credentials)
+        var args = [
+            // Keep authentication and trust on this account's explicit settings.
+            "-F", "/dev/null",
+            "-oStrictHostKeyChecking=yes",
+            "-oUpdateHostKeys=no",
+            "-oForwardAgent=no",
+            "-oAddKeysToAgent=no",
+            "-oControlMaster=auto",
+            "-oControlPath=\(controlDirectory.url.appendingPathComponent("control").path)",
+            "-oControlPersist=600",
+            "-oConnectTimeout=10",
+            "-oServerAliveInterval=15",
+            "-oServerAliveCountMax=4",
+            "-P", "\(credentials.port)",
+        ]
+        if let knownHostsFile {
+            args += ["-oUserKnownHostsFile=\(knownHostsFile.path)", "-oGlobalKnownHostsFile=none"]
+        }
+
+        var environment = ["LC_ALL": "C", "SSH_ASKPASS_REQUIRE": "never"]
+        var executable = "/usr/bin/sftp"
+        var secret: String?
+        var keyData: Data?
+        switch credentials.authMethod {
+        case .password:
+            guard let password = credentials.password, !password.isEmpty else {
+                throw CloudProviderError.notAuthenticated
+            }
+            secret = password
+            args += [
+                "-oBatchMode=no",
+                "-oNumberOfPasswordPrompts=1",
+                "-oIdentityAgent=none",
+                "-oPubkeyAuthentication=no",
+                "-oPreferredAuthentications=password,keyboard-interactive",
+            ]
+        case .privateKey:
+            guard let key = credentials.privateKey, !key.isEmpty else {
+                throw CloudProviderError.notAuthenticated
+            }
+            keyData = Data((key.hasSuffix("\n") ? key : key + "\n").utf8)
+            if let passphrase = credentials.passphrase, !passphrase.isEmpty {
+                secret = passphrase
+            } else {
+                // A key without a saved passphrase must fail without prompting.
+                environment["SSH_ASKPASS"] = "/usr/bin/false"
+                environment["SSH_ASKPASS_REQUIRE"] = "force"
+            }
+            executable = "/usr/bin/ssh-agent"
+            args += Self.agentAuthenticationOptions
+        case .sshAgent:
+            guard let socket = ProcessInfo.processInfo.environment["SSH_AUTH_SOCK"], !socket.isEmpty else {
+                throw CloudProviderError.commandFailed(L10n.text("No SSH agent was found. Start an SSH agent and make its socket available to FileFluss."))
+            }
+            environment["SSH_AUTH_SOCK"] = socket
+            args += Self.agentAuthenticationOptions
+        }
+
+        let askPass: SFTPAskPass?
+        if let secret {
+            askPass = try SFTPAskPass(secret: secret, directory: directory)
+            environment.merge(try SFTPAskPass.environment(directory: directory)) { _, new in new }
+        } else {
+            askPass = nil
+        }
+        defer {
+            withExtendedLifetime(directory) {}
+            withExtendedLifetime(askPass) {}
+        }
+
+        args += ["-b", batchPath, "--", destination]
+        if keyData != nil {
+            // ssh-agent runs the command with its own socket and exits when
+            // the command exits. ssh-add reads the key directly from stdin.
+            args = [
+                "-a", directory.url.appendingPathComponent("agent.sock").path,
+                "-t", "60",
+                "/bin/sh", "-c", """
+                /usr/bin/ssh-add -q -k - 2>/dev/null || exit 42
+                unset SSH_ASKPASS FILEFLUSS_ASKPASS_SOCKET
+                SSH_ASKPASS_REQUIRE=never
+                exec /usr/bin/sftp "$@"
+                """, "filefluss-sftp",
+            ] + args
         }
 
         let cancellation = ProcessCancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
-
-                var args: [String] = [
-                    "-oBatchMode=no",
-                    "-oStrictHostKeyChecking=accept-new",
-                    "-oControlMaster=auto",
-                    "-oControlPath=\(controlPath)",
-                    "-oControlPersist=600",
-                    "-oConnectTimeout=10",
-                    // ConnectTimeout only covers the handshake. These end a
-                    // connection that goes silent later, about a minute on.
-                    "-oServerAliveInterval=15",
-                    "-oServerAliveCountMax=4",
-                    "-P", "\(credentials.port)"
-                ]
-
-                // Auth-method-specific flags: tell sftp exactly which method
-                // to use so it doesn't fall back and prompt the user
-                // interactively when the chosen method fails.
-                switch credentials.authMethod {
-                case .password:
-                    args.append(contentsOf: [
-                        "-oPubkeyAuthentication=no",
-                        "-oPreferredAuthentications=password,keyboard-interactive"
-                    ])
-                case .privateKey:
-                    if let keyPath = privateKeyPath {
-                        args.append(contentsOf: ["-i", keyPath])
-                    }
-                    args.append(contentsOf: [
-                        "-oPasswordAuthentication=no",
-                        "-oPreferredAuthentications=publickey",
-                        "-oIdentitiesOnly=yes"
-                    ])
-                }
-
-                args.append(contentsOf: ["-b", batchPath, "\(credentials.username)@\(credentials.host)"])
+                process.executableURL = URL(fileURLWithPath: executable)
                 process.arguments = args
-
-                var env: [String: String] = [
-                    "DISPLAY": ":0",
-                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                    "HOME": NSHomeDirectory()
-                ]
-                if let askPass = askPassScriptPath {
-                    env["SSH_ASKPASS"] = askPass
-                    env["SSH_ASKPASS_REQUIRE"] = "force"
-                }
-                process.environment = env
+                process.environment = environment
 
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()
+                let keyPipe = keyData.map { _ in Pipe() }
                 process.standardOutput = stdoutPipe
                 process.standardError = stderrPipe
-                process.standardInput = FileHandle.nullDevice
+                process.standardInput = keyPipe as Any? ?? FileHandle.nullDevice
 
                 let stdoutDrain = PipeDrain(stdoutPipe)
                 let stderrDrain = PipeDrain(stderrPipe)
@@ -447,9 +459,8 @@ public actor SFTPAPIClient {
                     // it lands in the user-exportable Support Log on notarized
                     // builds — the os.Logger output never reached that export,
                     // which is why earlier support logs came back empty. No secret
-                    // is logged: the password / key passphrase travels via the
-                    // SSH_ASKPASS script, never in argv, stdout, or stderr. stdout
-                    // is the raw `ls` listing whose exact longname format is what
+                    // is logged: the askpass response goes straight to SSH.
+                    // stdout is the raw `ls` listing whose exact format is what
                     // we need to parse the affected (newer) servers correctly.
                     SupportLogger.shared.log(
                         "cmd: \(commands.joined(separator: " ; ")) @ \(self.credentials.host):\(self.credentials.port) "
@@ -473,8 +484,18 @@ public actor SFTPAPIClient {
                 }
 
                 do {
+                    if let writer = keyPipe?.fileHandleForWriting,
+                       fcntl(writer.fileDescriptor, F_SETNOSIGPIPE, 1) < 0 {
+                        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                    }
                     try process.run()
                     cancellation.started(process)
+                    if let keyData, let writer = keyPipe?.fileHandleForWriting {
+                        DispatchQueue.global(qos: .utility).async {
+                            defer { try? writer.close() }
+                            try? writer.write(contentsOf: keyData)
+                        }
+                    }
                 } catch {
                     // Never started, so nothing will close these; the drains
                     // would otherwise wait on them forever.
@@ -488,16 +509,56 @@ public actor SFTPAPIClient {
         }
     }
 
+    private static let agentAuthenticationOptions = [
+        "-oBatchMode=yes",
+        "-oPreferredAuthentications=publickey",
+        "-oIdentityAgent=SSH_AUTH_SOCK",
+        "-oIdentityFile=none",
+        "-oIdentitiesOnly=no",
+    ]
+
+    static func destination(for credentials: SFTPCredentials) throws -> String {
+        let host = credentials.host
+        let username = credentials.username
+        let invalid = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+        guard (1...65535).contains(credentials.port),
+              !host.isEmpty, !host.hasPrefix("-"), !host.contains("/"), !host.contains("@"),
+              !username.isEmpty, !username.hasPrefix("-"), !username.contains("/"), !username.contains("@"),
+              host.rangeOfCharacter(from: invalid) == nil,
+              username.rangeOfCharacter(from: invalid) == nil else {
+            throw CloudProviderError.commandFailed(L10n.text("Enter a valid SSH hostname, port, and username."))
+        }
+        let address = host.hasPrefix("[") && host.hasSuffix("]") ? String(host.dropFirst().dropLast()) : host
+        guard !address.isEmpty, !address.contains("["), !address.contains("]") else {
+            throw CloudProviderError.commandFailed(L10n.text("Enter a valid SSH hostname, port, and username."))
+        }
+        let sftpHost = address.contains(":") ? "[\(address)]" : address
+        return "\(username)@\(sftpHost)"
+    }
+
     /// Translate an `sftp`/`ssh` failure into a useful CloudProviderError.
     /// We pattern-match the stderr lines openssh actually emits — the exit
     /// code on its own (255 for almost everything ssh-related) is too
     /// coarse to be useful, so the messages drive the dispatch.
-    private static func mapSFTPFailure(exit: Int, stderr: String, combined: String, authMethod: SFTPCredentials.AuthMethod) -> CloudProviderError {
+    static func mapSFTPFailure(exit: Int, stderr: String, combined: String, authMethod: SFTPCredentials.AuthMethod) -> CloudProviderError {
         let lower = combined.lowercased()
+
+        if exit == 42, authMethod == .privateKey {
+            return .commandFailed(L10n.text("OpenSSH could not load the private key. Check its format and passphrase."))
+        }
+        if lower.contains("remote host identification has changed") || lower.contains("revoked host key") {
+            return .commandFailed(L10n.text("The SSH host key changed or was revoked. Verify the server key with your administrator before updating known_hosts."))
+        }
+        if lower.contains("host key verification failed") {
+            return .commandFailed(L10n.text("The SSH host key could not be verified. Verify the server key with your administrator and add the verified key to ~/.ssh/known_hosts."))
+        }
 
         // Auth failures — distinguish password vs key vs passphrase so
         // the user knows which thing to fix.
-        if lower.contains("permission denied (publickey)") {
+        if authMethod == .sshAgent, lower.contains("agent refused operation") {
+            return .commandFailed(L10n.text("SSH agent authentication failed. Check that the agent is unlocked and holds a key authorized by the server."))
+        }
+        if authMethod == .privateKey, lower.contains("permission denied (publickey)") {
             return .commandFailed(L10n.text("SSH key was rejected by the server. Make sure the public key is in the server's ~/.ssh/authorized_keys (or added to the provider's SSH-keys panel for managed services like Hetzner Storage Box)."))
         }
         if lower.contains("permission denied") || lower.contains("authentication failed") {
@@ -506,6 +567,8 @@ public actor SFTPAPIClient {
                 return .commandFailed(L10n.text("SSH authentication failed. Check the username and password."))
             case .privateKey:
                 return .commandFailed(L10n.text("SSH authentication failed. The server may not have your public key authorized, or the passphrase is wrong."))
+            case .sshAgent:
+                return .commandFailed(L10n.text("SSH agent authentication failed. Check that the agent is unlocked and holds a key authorized by the server."))
             }
         }
 
@@ -518,11 +581,6 @@ public actor SFTPAPIClient {
         }
         if lower.contains("incorrect passphrase") || lower.contains("bad passphrase") || lower.contains("could not decrypt") {
             return .commandFailed(L10n.text("Wrong passphrase for the private key."))
-        }
-
-        // Host-key problems.
-        if lower.contains("host key verification failed") {
-            return .commandFailed(L10n.text("Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry."))
         }
 
         // Connection-level issues.

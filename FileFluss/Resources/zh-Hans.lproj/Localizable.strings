@@ -1275,6 +1275,17 @@
 "In the gallery, local images, videos, PDFs and documents show a preview; cloud files show the icon of their file type." = "在画廊中，本地图像、视频、PDF 和文稿会显示预览；云端文件显示其文件类型的图标。";
 "**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list." = "**⌘+** 和 **⌘-** 可放大和缩小缩略图，与列表中的行一样。";
 
+/* SFTP authentication */
+"SSH Agent" = "SSH 代理";
+"Set a remote path to choose where the panel opens. FileFluss verifies the server against OpenSSH known_hosts." = "设置远程路径可选择面板打开的位置。FileFluss 使用 OpenSSH 的 known_hosts 验证服务器。";
+"Enter a valid SSH hostname, port, and username." = "请输入有效的 SSH 主机名、端口和用户名。";
+"No SSH agent was found. Start an SSH agent and make its socket available to FileFluss." = "未找到 SSH 代理。请启动 SSH 代理并让 FileFluss 可以访问其套接字。";
+"OpenSSH could not load the private key. Check its format and passphrase." = "OpenSSH 无法加载私钥。请检查其格式和密码短语。";
+"SSH agent authentication failed. Check that the agent is unlocked and holds a key authorized by the server." = "SSH 代理身份验证失败。请确认代理已解锁，并且包含服务器授权的密钥。";
+"The SSH host key changed or was revoked. Verify the server key with your administrator before updating known_hosts." = "SSH 主机密钥已更改或撤销。请向服务器管理员核实密钥，再更新 known_hosts。";
+"The SSH host key could not be verified. Verify the server key with your administrator and add the verified key to ~/.ssh/known_hosts." = "无法验证 SSH 主机密钥。请向服务器管理员核实密钥，并将已验证的密钥添加到 ~/.ssh/known_hosts。";
+"The SSH password or passphrase cannot be passed to OpenSSH." = "无法将 SSH 密码或密码短语传递给 OpenSSH。";
+
 /* Tags */
 "Tags" = "标签";
 "Remove All Tags" = "移除所有标签";
