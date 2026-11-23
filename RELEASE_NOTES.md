@@ -39,6 +39,7 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **FTP keeps umlauts in file names on every server.** On servers that don't announce UTF-8, "Grüße.txt" was listed as "Gr??e.txt" and uploaded under that name.
 - **Replacing a read-only file works.** It failed and left a `.fileflusspart` file next to it.
 - **Sync keeps both files whose names are one name on the PC,** such as `README.md` and `Readme.md` from a cloud that tells them apart. One used to overwrite the other while Sync still reported success; now the second arrives as `Readme (2).md`, and later runs leave both alone.
+- **Esc closes Quick Look** while you're still in the file list, as on the Mac. It used to work only after clicking into the preview window.
 - **Copying and syncing between local folders keeps names exactly as they are.** A name with a leading space or longer than 200 characters was shortened, and a Mirror then deleted the correctly named copy.
 
 ## Download

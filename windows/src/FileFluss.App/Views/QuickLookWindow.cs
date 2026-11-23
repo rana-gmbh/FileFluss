@@ -104,6 +104,21 @@ public sealed class QuickLookWindow : Window
     private static bool IsQuickLookShortcut(MainViewModel main, KeyEventArgs e)
         => MainWindow.ShortcutFromKey(e) is { } pressed && main.Services.Keyboard.CommandFor(pressed) == Core.Commands.KeyboardCommand.QuickLook;
 
+    /// <summary>
+    /// Closes the preview if one is open. The preview doesn't take focus — the arrow keys keep
+    /// moving the list's selection — so Esc pressed in the list has to reach it from there.
+    /// </summary>
+    public static bool CloseIfOpen()
+    {
+        if (_current is not { } open)
+        {
+            return false;
+        }
+
+        open.Close();
+        return true;
+    }
+
     public static void Toggle(Window owner, MainViewModel main, PanelViewModel panel)
     {
         if (_current is not null)

@@ -138,6 +138,14 @@ public partial class MainWindow : Window, IShell
             return;
         }
 
+        // Esc closes an open preview from the file list too, as on the Mac, before it does
+        // anything else here. (Renaming, the path bar and open menus keep their own Esc.)
+        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && QuickLookWindow.CloseIfOpen())
+        {
+            e.Handled = true;
+            return;
+        }
+
 #if DEBUG
         if (ShortcutFromKey(e) is { Modifiers: not ShortcutModifiers.None } debugPressed)
         {
