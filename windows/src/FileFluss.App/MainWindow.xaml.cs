@@ -601,20 +601,38 @@ public partial class MainWindow : Window, IShell
 
     private void OnCloudAccounts(object sender, RoutedEventArgs e) => ShowSettings("cloud");
 
+    // Checked/Unchecked rather than Click: a screen reader (UI Automation's Toggle) flips
+    // IsChecked without a click, which left the button showing a state nothing had acted on.
+    // UpdateToolbar also sets IsChecked from the panel; that echo finds nothing to change.
     private void OnToggleHidden(object sender, RoutedEventArgs e)
     {
         var panel = _vm.ActivePanel;
-        panel.ShowHiddenFiles = HiddenButton.IsChecked == true;
+        var show = HiddenButton.IsChecked == true;
+        if (panel.ShowHiddenFiles == show)
+        {
+            return;
+        }
+
+        panel.ShowHiddenFiles = show;
         if (!_vm.SinglePaneMode)
         {
-            _vm.OtherPanel.ShowHiddenFiles = panel.ShowHiddenFiles;
+            _vm.OtherPanel.ShowHiddenFiles = show;
         }
     }
 
     private void OnTransfers(object sender, RoutedEventArgs e)
     {
+        var open = TransfersButton.IsChecked == true;
+        if (_transfersPopup is null && !open)
+        {
+            return;
+        }
+
         _transfersPopup ??= TransfersPopup.Create(this, _services.Transfers, TransfersButton);
-        _transfersPopup.IsOpen = TransfersButton.IsChecked == true;
+        if (_transfersPopup.IsOpen != open)
+        {
+            _transfersPopup.IsOpen = open;
+        }
     }
 
     // MARK: - IShell
