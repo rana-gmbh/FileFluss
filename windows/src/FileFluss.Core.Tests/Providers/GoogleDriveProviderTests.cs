@@ -388,6 +388,58 @@ public sealed class GoogleDriveProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task AReplaceOfAFileDeletedOnTheWebCreatesItAgain()
+    {
+        // The id cached from the first upload belongs to a file deleted in the Drive web app
+        // since: its PATCH answers 404. Every later upload to the path used to fail until the
+        // app restarted.
+        var provider = Provider();
+        var local = Path.Combine(_temp, "up.txt");
+        await File.WriteAllTextAsync(local, "hello");
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files?", """{"files":[]}""");
+        var creates = 0;
+        _http.On(HttpMethod.Post, "googleapis.com/upload/drive/v3/files?", (_, _) => FakeHttpHandler.Json(
+            Interlocked.Increment(ref creates) == 1
+                ? """{"id":"old1","name":"up.txt","mimeType":"text/plain"}"""
+                : """{"id":"new2","name":"up.txt","mimeType":"text/plain"}"""));
+        _http.On(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/old1?", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found: old1."}}"""));
+        _http.OnJson(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/new2?", """{"id":"new2","name":"up.txt","mimeType":"text/plain"}""");
+        _http.OnJson(HttpMethod.Patch, "googleapis.com/drive/v3/files/new2?", "{}");
+        await provider.UploadFileAsync(local, "/up.txt");
+
+        await provider.UploadFileAsync(local, "/up.txt");
+
+        Assert.Equal(2, creates);
+        Assert.Equal(2, _http.Requests.Count(r => r.Method == HttpMethod.Get && r.Uri.ToString().Contains("/files?", StringComparison.Ordinal)));
+
+        // The new id is what's cached now: the next replace goes to it.
+        await provider.UploadFileAsync(local, "/up.txt");
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Patch && r.Uri.ToString().Contains("upload/drive/v3/files/new2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AReplaceOfAFileDeletedOnTheWebReplacesTheOneThereNow()
+    {
+        // Deleted and uploaded again elsewhere (another device): the lookup finds the new id.
+        var provider = Provider();
+        var local = Path.Combine(_temp, "up.txt");
+        await File.WriteAllTextAsync(local, "hello");
+        var finds = 0;
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files?", (_, _) => FakeHttpHandler.Json(
+            Interlocked.Increment(ref finds) == 1 ? """{"files":[]}""" : """{"files":[{"id":"other3"}]}"""));
+        _http.OnJson(HttpMethod.Post, "googleapis.com/upload/drive/v3/files?", """{"id":"old1","name":"up.txt","mimeType":"text/plain"}""");
+        _http.On(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/old1?", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found: old1."}}"""));
+        _http.OnJson(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/other3?", """{"id":"other3","name":"up.txt","mimeType":"text/plain"}""");
+        _http.OnJson(HttpMethod.Patch, "googleapis.com/drive/v3/files/other3?", "{}");
+        await provider.UploadFileAsync(local, "/up.txt");
+
+        await provider.UploadFileAsync(local, "/up.txt");
+
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Post);
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Patch && r.Uri.ToString().Contains("upload/drive/v3/files/other3", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SmallUploadRetriesNotFoundWithoutCountingBytesTwice()
     {
         var provider = Provider();

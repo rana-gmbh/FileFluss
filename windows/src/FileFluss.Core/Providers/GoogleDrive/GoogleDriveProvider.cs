@@ -472,20 +472,14 @@ public sealed class GoogleDriveProvider : CloudProvider
         // just-uploaded file can miss through index lag, and then the next replace would POST
         // a duplicate. Query only when the file isn't cached at all.
         string? existingId;
-        if (_pathCache.TryGetValue(remotePath, out var cached))
+        var fromCache = _pathCache.TryGetValue(remotePath, out var cached);
+        if (fromCache)
         {
             existingId = cached.Id;
         }
         else
         {
-            try
-            {
-                existingId = await FindFileIdAsync(parent, fileName, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException)
-            {
-                existingId = null;
-            }
+            existingId = await FindExistingIdAsync(parent, fileName, cancellationToken).ConfigureAwait(false);
         }
 
         var modified = new DateTimeOffset(File.GetLastWriteTimeUtc(localPath));
@@ -496,7 +490,21 @@ public sealed class GoogleDriveProvider : CloudProvider
             RetryNotFound = true,
             RetryDelay = RetryDelay,
         };
-        var uploaded = await uploader.UploadAsync(localPath, fileName, parent.Id, existingId, modified, created, onBytes, cancellationToken).ConfigureAwait(false);
+        GoogleDriveFile uploaded;
+        try
+        {
+            uploaded = await uploader.UploadAsync(localPath, fileName, parent.Id, existingId, modified, created, onBytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CloudProviderException e) when (fromCache && existingId is not null && e.Kind == CloudErrorKind.NotFound)
+        {
+            // The cached id is of a file deleted outside FileFluss (in the Drive web app, say):
+            // every replace PATCHed that id and failed until the app restarted. Forget it, ask
+            // Drive what is there now, and upload once more — as a new file if nothing is.
+            SupportLogger.Shared.Log($"Cached file id for {remotePath} is gone; looking the file up again", LogCategory, LogLevel.Notice);
+            _pathCache.TryRemove(remotePath, out _);
+            existingId = await FindExistingIdAsync(parent, fileName, cancellationToken).ConfigureAwait(false);
+            uploaded = await uploader.UploadAsync(localPath, fileName, parent.Id, existingId, modified, created, onBytes, cancellationToken).ConfigureAwait(false);
+        }
 
         // Cache the id so a following replace/delete needn't query (index lag again), in the
         // parent's drive scope.
@@ -513,6 +521,19 @@ public sealed class GoogleDriveProvider : CloudProvider
             {
                 SupportLogger.Shared.Log($"Timestamp PATCH failed: {e.Message}", LogCategory, LogLevel.Notice);
             }
+        }
+    }
+
+    /// <summary>The id of the file an upload replaces, or null to create one (also when the lookup fails).</summary>
+    private async Task<string?> FindExistingIdAsync(CachedFile parent, string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await FindFileIdAsync(parent, name, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CloudProviderException)
+        {
+            return null;
         }
     }
 
