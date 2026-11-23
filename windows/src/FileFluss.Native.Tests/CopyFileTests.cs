@@ -9,7 +9,68 @@ public sealed class CopyFileTests : IDisposable
 
     public CopyFileTests() => Directory.CreateDirectory(_root);
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+
+        Directory.Delete(_root, recursive: true);
+    }
+
+    [Fact]
+    public async Task ReplacingAReadOnlyFileWorksAndKeepsTheSourcesAttributes()
+    {
+        // A read-only file replaced by a read-only one (both sides of a copied folder): the
+        // partial copy inherits the flag and the move onto the read-only target was refused,
+        // which failed the Replace and left "readonly.txt.fileflusspart" behind.
+        var source = Path.Combine(_root, "source.txt");
+        var target = Path.Combine(_root, "readonly.txt");
+        await File.WriteAllTextAsync(source, "new");
+        await File.WriteAllTextAsync(target, "old");
+        File.SetAttributes(source, FileAttributes.ReadOnly);
+        File.SetAttributes(target, FileAttributes.ReadOnly);
+
+        await ShellFileOperations.CopyFileAsync(source, target, null, CancellationToken.None);
+
+        Assert.Equal("new", await File.ReadAllTextAsync(target));
+        Assert.True(File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly));
+        Assert.False(File.Exists(target + ".fileflusspart"));
+    }
+
+    [Fact]
+    public async Task AWritableCopyReplacesAReadOnlyTarget()
+    {
+        var source = Path.Combine(_root, "source.txt");
+        var target = Path.Combine(_root, "target.txt");
+        await File.WriteAllTextAsync(source, "new");
+        await File.WriteAllTextAsync(target, "old");
+        File.SetAttributes(target, FileAttributes.ReadOnly);
+
+        await ShellFileOperations.CopyFileAsync(source, target, null, CancellationToken.None);
+
+        Assert.Equal("new", await File.ReadAllTextAsync(target));
+        Assert.False(File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly));
+        Assert.False(File.Exists(target + ".fileflusspart"));
+    }
+
+    [Fact]
+    public async Task ACopyThatCannotBePutInPlaceLeavesNoPartialFile()
+    {
+        // The target name is taken by a folder: the copy completes, the move into place
+        // fails — and the read-only partial copy must not stay behind.
+        var source = Path.Combine(_root, "source.txt");
+        var target = Path.Combine(_root, "taken");
+        await File.WriteAllTextAsync(source, "data");
+        File.SetAttributes(source, FileAttributes.ReadOnly);
+        Directory.CreateDirectory(target);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => ShellFileOperations.CopyFileAsync(source, target, null, CancellationToken.None));
+
+        Assert.False(File.Exists(target + ".fileflusspart"));
+        Assert.True(Directory.Exists(target));
+    }
 
     [Fact]
     public async Task CopiesBeyondMaxPath()

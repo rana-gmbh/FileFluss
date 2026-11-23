@@ -292,6 +292,50 @@ public sealed class LocalFileProvider : FileProvider
     public override Task UploadFileAsync(string localPath, string remotePath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
         => CopyFileHandler(localPath, remotePath, onBytes, cancellationToken);
 
+    /// <summary>
+    /// Puts a finished staged copy in place of <paramref name="destination"/>. Only called once
+    /// the user chose to replace what's there (or nothing is), so a read-only file in the way
+    /// is cleared and replaced, as Explorer does — the move itself is refused on one ("access
+    /// denied"), which failed every Replace onto a read-only file. The copy keeps its own
+    /// attributes, so a read-only source still lands read-only.
+    /// </summary>
+    public static void MoveIntoPlace(string partial, string destination)
+    {
+        try
+        {
+            File.Move(partial, destination, overwrite: true);
+        }
+        catch (UnauthorizedAccessException) when (File.Exists(destination) && (File.GetAttributes(destination) & FileAttributes.ReadOnly) != 0)
+        {
+            File.SetAttributes(destination, File.GetAttributes(destination) & ~FileAttributes.ReadOnly);
+            File.Move(partial, destination, overwrite: true);
+        }
+    }
+
+    /// <summary>
+    /// Removes a staged copy after a failure, best-effort. CopyFileEx carries a read-only
+    /// source's attribute over to the partial file, and a read-only file can't be deleted.
+    /// </summary>
+    public static void DeletePartial(string partial)
+    {
+        try
+        {
+            if (File.Exists(partial))
+            {
+                var attributes = File.GetAttributes(partial);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                {
+                    File.SetAttributes(partial, attributes & ~FileAttributes.ReadOnly);
+                }
+
+                File.Delete(partial);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     /// <summary>Buffered copy with progress, staged through a partial file and timestamp-preserving.</summary>
     public static async Task StreamCopyAsync(string source, string destination, ByteProgress? onBytes, CancellationToken cancellationToken)
     {
@@ -305,18 +349,11 @@ public sealed class LocalFileProvider : FileProvider
                 await HttpTransfer.CopyAsync(input, output, onBytes, cancellationToken).ConfigureAwait(false);
             }
 
-            File.Move(partial, destination, overwrite: true);
+            MoveIntoPlace(partial, destination);
         }
         catch
         {
-            try
-            {
-                File.Delete(partial);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-
+            DeletePartial(partial);
             throw;
         }
 

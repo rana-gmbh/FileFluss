@@ -209,7 +209,7 @@ public static class ShellFileOperations
             GC.KeepAlive(callback);
             if (!copied)
             {
-                TryDelete(partial);
+                LocalFileProvider.DeletePartial(partial);
                 if (callbackFailure is not null)
                 {
                     System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(callbackFailure).Throw();
@@ -219,7 +219,17 @@ public static class ShellFileOperations
                 throw CloudProviderException.CommandFailed(new System.ComponentModel.Win32Exception(error).Message);
             }
 
-            File.Move(partial, destination, overwrite: true);
+            // The copy is whole; a failure to put it in place mustn't leave it lying beside
+            // the target (a Replace onto a read-only file left "name.fileflusspart" behind).
+            try
+            {
+                LocalFileProvider.MoveIntoPlace(partial, destination);
+            }
+            catch
+            {
+                LocalFileProvider.DeletePartial(partial);
+                throw;
+            }
         }, cancellationToken);
 
     /// <summary>
@@ -239,17 +249,6 @@ public static class ShellFileOperations
         return full.StartsWith(@"\\", StringComparison.Ordinal)
             ? @"\\?\UNC\" + full[2..]
             : @"\\?\" + full;
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
     }
 
     // MARK: - Shell verbs
