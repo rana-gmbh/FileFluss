@@ -27,6 +27,16 @@ namespace FileFluss.Native.VirtualFiles;
 /// is where every other apartment — another process or a shell worker thread in this one —
 /// reaches it through a proxy. Its calls are all quick; the slow part, reading, is the
 /// streams', and they live in the MTA.</para>
+///
+/// <para><b>No mark of the web.</b> Files written by the receiver from these streams carry
+/// no <c>Zone.Identifier</c>, unlike the copies FileFluss downloads and opens itself. Windows
+/// offers the source of a virtual-file drop no way to set one: the file group descriptor has
+/// no zone field, and the shell defines no clipboard format a receiver reads a zone from.
+/// The attachment manager (IAttachmentExecute) is the receiver's to call, not the source's,
+/// and Explorer doesn't call it for a FileContents drop. So a dragged-out or pasted file is
+/// treated like one copied off a network share, with the extension-based checks Windows
+/// applies when it is started. Offering real, marked files (CF_HDROP) instead would mean
+/// downloading everything before the drag even starts — the reason this is virtual.</para>
 /// </summary>
 [ComVisible(true)]
 public sealed class VirtualFileDataObject : ComTypes.IDataObject, IDataObjectAsyncCapability, ICustomQueryInterface

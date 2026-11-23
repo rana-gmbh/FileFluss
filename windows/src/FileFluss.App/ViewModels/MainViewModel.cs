@@ -531,7 +531,7 @@ public sealed partial class MainViewModel : Observable
     /// </summary>
     public async Task<string?> OpenCloudFileAsync(PanelViewModel panel, CloudFileItem item, bool launch = true, CancellationToken cancellationToken = default)
     {
-        if (launch && await MountedPathsAsync(panel, [item]) is [var mounted])
+        if (launch && OpensOnTheDrive(item.Name) && await MountedPathsAsync(panel, [item]) is [var mounted])
         {
             try
             {
@@ -558,8 +558,7 @@ public sealed partial class MainViewModel : Observable
             {
                 // Downloaded from someone's server: SmartScreen and Protected View apply, as to
                 // a browser download. (Quick Look's own preview stays unmarked.)
-                MarkOfTheWeb.Apply(target);
-                await ShellFileOperations.OpenAsync(target);
+                await ShellFileOperations.OpenAsync(MarkedForOpening(target, item.Name));
             }
             catch (Exception e)
             {
@@ -619,13 +618,13 @@ public sealed partial class MainViewModel : Observable
             // Out of a downloaded archive: SmartScreen and Protected View apply.
             if (panel.Location.ArchiveAccountId is not null)
             {
-                foreach (var path in paths)
+                for (var i = 0; i < paths.Count; i++)
                 {
-                    MarkOfTheWeb.Apply(path);
+                    paths[i] = MarkedForOpening(paths[i], Path.GetFileName(paths[i]));
                 }
             }
         }
-        else if (await MountedPathsAsync(panel, items) is { } mounted)
+        else if (items.All(i => OpensOnTheDrive(i.Name)) && await MountedPathsAsync(panel, items) is { } mounted)
         {
             paths.AddRange(mounted);
         }
@@ -641,8 +640,7 @@ public sealed partial class MainViewModel : Observable
 
                 var target = copy.Path;
                 var keptAt = copy.TakeKept();
-                MarkOfTheWeb.Apply(target);
-                paths.Add(target);
+                paths.Add(MarkedForOpening(target, item.Name));
                 if (keptAt is not null)
                 {
                     kept.Add((item.Name, keptAt));
@@ -677,6 +675,54 @@ public sealed partial class MainViewModel : Observable
         {
             ShowKeptEdits(name, path);
         }
+    }
+
+    /// <summary>
+    /// Whether a file of a mapped account is opened where it is, on the account's drive (so a
+    /// save goes back to the server), rather than from a downloaded copy. Not for the types
+    /// Windows counts as dangerous — programs, scripts, shortcuts: the drive is the loopback
+    /// share <c>\\127.0.0.1@port\…</c>, which Windows maps to the Internet zone itself, but
+    /// what it makes of the drive letter mapped onto it can't be relied on, and a file from
+    /// someone else's server must not start without SmartScreen or the "Open File" warning.
+    /// Those open from the cached copy, which carries the mark explicitly. Nobody edits a
+    /// program in place, so nothing is lost by it.
+    /// </summary>
+    internal static bool OpensOnTheDrive(string fileName) => !ShellFileOperations.IsDangerousType(fileName);
+
+    /// <summary>
+    /// The path to hand to an app for a downloaded copy: <paramref name="target"/>, marked as
+    /// coming from the Internet (SmartScreen, Protected View, the "Open File" warning). A copy
+    /// on a volume that can't carry the mark — a custom cache folder on FAT32 or exFAT — opens
+    /// unmarked, as a browser's download there would; for a type Windows counts as dangerous
+    /// a marked copy in the system's own temporary folder is opened instead. (That copy is
+    /// cleaned up with the rest of the cache; an edit saved to it isn't watched for, which for
+    /// programs and scripts is the right trade.)
+    /// </summary>
+    internal static string MarkedForOpening(string target, string fileName)
+    {
+        if (MarkOfTheWeb.Apply(target) || !ShellFileOperations.IsDangerousType(fileName))
+        {
+            return target;
+        }
+
+        try
+        {
+            var folder = Path.Combine(Path.GetTempPath(), "FileFluss-Cache", "open-marked", Guid.NewGuid().ToString("N")[..12]);
+            Directory.CreateDirectory(folder);
+            var marked = Path.Combine(folder, Path.GetFileName(target));
+            File.Copy(target, marked, overwrite: true);
+            if (MarkOfTheWeb.Apply(marked))
+            {
+                SupportLogger.Shared.Log($"open: {fileName} couldn't be marked where it is cached; opening a marked copy from the system's temporary folder", "Open", LogLevel.Notice);
+                return marked;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            SupportLogger.Shared.Log($"open: no marked copy of {fileName} could be made: {e.Message}", "Open", LogLevel.Notice);
+        }
+
+        return target;
     }
 
     /// <summary>

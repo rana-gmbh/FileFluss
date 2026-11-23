@@ -110,7 +110,7 @@ public sealed partial class MainViewModel
             // archive's other downloads.
             if (panel.Location.ArchiveAccountId is not null)
             {
-                MarkOfTheWeb.Apply(path);
+                path = MarkedForOpening(path, item.Name);
             }
 
             await ShellFileOperations.OpenAsync(path);
