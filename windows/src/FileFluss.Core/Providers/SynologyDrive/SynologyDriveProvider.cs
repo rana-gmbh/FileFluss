@@ -258,8 +258,10 @@ public sealed class SynologyDriveProvider : CloudProvider
 
     /// <summary>
     /// CopyMove always lands the item in the destination folder under its <i>source</i> name;
-    /// a different target name is a rename afterwards. As on macOS, a failed rename is not
-    /// reported — the item has arrived, under its old name.
+    /// a different target name is a rename afterwards. A failed rename is reported: the item
+    /// isn't where it was asked to go, and calling that a success had sync and the arrival
+    /// check believe a file was there that wasn't. A copy's stray item is removed first (the
+    /// spot was checked to be free before the copy); a moved item stays where it landed.
     /// </summary>
     private async Task CopyMoveAsync(string path, string newPath, bool removeSource, CancellationToken cancellationToken)
     {
@@ -279,13 +281,27 @@ public sealed class SynologyDriveProvider : CloudProvider
         await client.CopyMoveAsync(path, destinationFolder, removeSource, cancellationToken).ConfigureAwait(false);
         if (destinationName != sourceName)
         {
+            var landed = CombinePath(destinationFolder, sourceName);
             try
             {
-                await client.RenameItemAsync(CombinePath(destinationFolder, sourceName), destinationName, cancellationToken).ConfigureAwait(false);
+                await client.RenameItemAsync(landed, destinationName, cancellationToken).ConfigureAwait(false);
             }
             catch (CloudProviderException e)
             {
                 SupportLogger.Shared.Log($"[Synology] Rename after copy/move failed: {e.Message}", "Synology", LogLevel.Error);
+                if (!removeSource)
+                {
+                    try
+                    {
+                        await client.DeleteItemAsync(landed, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (CloudProviderException cleanup)
+                    {
+                        SupportLogger.Shared.Log($"[Synology] Removing the copy left at {landed} failed: {cleanup.Message}", "Synology", LogLevel.Error);
+                    }
+                }
+
+                throw;
             }
         }
     }

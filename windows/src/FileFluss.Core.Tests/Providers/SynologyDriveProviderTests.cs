@@ -575,6 +575,40 @@ public sealed class SynologyDriveProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task ARenameThatFailsAfterACopyIsAnErrorAndTheStrayCopyGoes()
+    {
+        // The copy lands as /photo/a.txt and should become /photo/b.txt; the rename is refused.
+        // That used to be logged and reported as done, with the copy under the wrong name.
+        Api("SYNO.FileStation.List", "getinfo", _ => Ok("{\"files\":[{\"code\":408,\"path\":\"/photo/a.txt\"}]}"));
+        Api("SYNO.FileStation.CopyMove", "start", _ => Ok("{\"taskid\":\"t\"}"));
+        Api("SYNO.FileStation.CopyMove", "status", _ => Ok("{\"finished\":true}"));
+        Api("SYNO.FileStation.Rename", "rename", _ => Fail(1200));
+        Api("SYNO.FileStation.Delete", "delete", _ => OkEmpty());
+        using var provider = Connected();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync("/home/a.txt", "/photo/b.txt"));
+
+        var delete = Calls("SYNO.FileStation.Delete", "delete").Single();
+        Assert.Equal("/photo/a.txt", Param(delete.Uri, "path"));
+    }
+
+    [Fact]
+    public async Task ARenameThatFailsAfterAMoveIsAnErrorAndTheItemIsKept()
+    {
+        Api("SYNO.FileStation.List", "getinfo", _ => Ok("{\"files\":[{\"code\":408,\"path\":\"/photo/a.txt\"}]}"));
+        Api("SYNO.FileStation.CopyMove", "start", _ => Ok("{\"taskid\":\"t\"}"));
+        Api("SYNO.FileStation.CopyMove", "status", _ => Ok("{\"finished\":true}"));
+        Api("SYNO.FileStation.Rename", "rename", _ => Fail(1200));
+        Api("SYNO.FileStation.Delete", "delete", _ => OkEmpty());
+        using var provider = Connected();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.MoveItemAsync("/home/a.txt", "/photo/b.txt"));
+
+        // The source is gone after a move; the only copy left mustn't be deleted.
+        Assert.Empty(Calls("SYNO.FileStation.Delete", "delete"));
+    }
+
+    [Fact]
     public async Task AFailedCopyMoveTaskIsAnError()
     {
         Api("SYNO.FileStation.CopyMove", "start", _ => Ok("{\"taskid\":\"t\"}"));
