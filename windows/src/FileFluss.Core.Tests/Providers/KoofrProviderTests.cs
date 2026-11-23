@@ -173,6 +173,27 @@ public sealed class KoofrProviderTests : IDisposable
         Assert.Equal(5000, reported);
     }
 
+    /// <summary>
+    /// The part carries the name as raw UTF-8, as macOS sends it — not the RFC 2047 word .NET's
+    /// MultipartFormDataContent writes, which pCloud stored literally ("=?utf-8?B?…?=").
+    /// </summary>
+    [Fact]
+    public async Task NonAsciiNamesGoInTheFilePartAsRawUtf8()
+    {
+        const string name = "Grüße Straße 😀.txt";
+        var local = _temp.File(name, 10, new DateTime(2025, 1, 7, 10, 15, 30, DateTimeKind.Utc));
+        _http.OnJson(HttpMethod.Post, "/content/api/v2/mounts/m-primary/files/put", "{}");
+        using var provider = Connected();
+
+        await provider.UploadFileAsync(local, "/Docs/" + name);
+
+        var request = Assert.Single(_http.Requests);
+        Assert.Contains($"name=\"file\"; filename=\"{name}\"", request.Body);
+        Assert.DoesNotContain("=?utf-8?", request.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("filename*", request.Body);
+        Assert.Contains("filename=Gr%C3%BC%C3%9Fe%20Stra%C3%9Fe%20%F0%9F%98%80.txt", request.Uri.AbsoluteUri);
+    }
+
     [Fact]
     public async Task CreateFolderIsIdempotent()
     {

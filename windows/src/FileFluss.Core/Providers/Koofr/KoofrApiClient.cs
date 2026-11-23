@@ -146,8 +146,10 @@ internal sealed class KoofrApiClient
             url += $"&modified={modified.ToUnixTimeMilliseconds()}";
         }
 
-        using var content = new MultipartFormDataContent(Guid.NewGuid().ToString());
-        content.Add(ProgressStreamContent.FromFile(localPath, onBytes), "file", fileName);
+        // Raw UTF-8 in filename="…", the body macOS sends: .NET's MultipartFormDataContent
+        // writes a non-ASCII name as an RFC 2047 word, which pCloud stored literally. Koofr names
+        // the file from the query parameter, but the part shouldn't carry a mangled name either.
+        using var content = new MultipartFileContent(localPath, "file", fileName, "application/octet-stream", onBytes);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url) { Headers = { Authorization = _auth }, Content = content };
         using var response = await _http.SendTransferAsync(request, cancellationToken).ConfigureAwait(false);
