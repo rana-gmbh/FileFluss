@@ -40,6 +40,8 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **Replacing a read-only file works.** It failed and left a `.fileflusspart` file next to it.
 - **Sync keeps both files whose names are one name on the PC,** such as `README.md` and `Readme.md` from a cloud that tells them apart. One used to overwrite the other while Sync still reported success; now the second arrives as `Readme (2).md`, and later runs leave both alone.
 - **Updates are installed only when they carry Rana GmbH's code signature,** in addition to matching the release's checksums, as Sparkle requires its signature on the Mac.
+- **"Allow self-signed certificate" now trusts a NAS's certificate on first use, not every certificate.** If it changes later, FileFluss refuses to connect and, when you edit the account, shows the old and new fingerprints and asks before trusting the new one. New accounts turn the option on only for local addresses (such as `192.168.…` or `nas.local`); existing accounts keep their setting. This covers QNAP, Synology Drive, NAS WebDAV, Seafile and FTPS.
+- **A new SFTP account shows the server's key fingerprint and asks before trusting it.** No password is sent until you confirm.
 - **A network drive or share that has gone offline no longer freezes FileFluss.** Showing a mapped drive's name in the path bar or title, or typing a path to an offline server, could block the window for up to a minute.
 - **A local path typed into a cloud panel's path bar opens on this PC.** `C:\…`, `\\server\share` and `%USERPROFILE%` used to be looked up inside the cloud account.
 - **The Compare window stays responsive with thousands of selected items,** also after copying them.
