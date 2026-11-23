@@ -178,4 +178,124 @@ public class SyncPlannerTests
         Assert.Equal(Transfers.TransferOperation.SyncingNewer, SyncMode.Newer.ToTransferOperation());
         Assert.Equal(Transfers.TransferOperation.Adding, SyncMode.Additive.ToTransferOperation());
     }
+
+    // MARK: - Names the local disk already holds
+
+    private static readonly string LongName = new string('x', 230) + ".txt";
+
+    [Fact]
+    public void LocalToLocalKeepsNamesTheDiskAlreadyHolds()
+    {
+        // A leading space and a 234-character name are legal on NTFS. "Fixing" them planned a
+        // copy under another name and the deletion of the correctly named file.
+        SyncEntry[] side = [File(" notes.txt", 5), File(LongName, 7), Folder(" folder"), File(" folder/" + LongName, 9)];
+
+        var plan = Plan(side, side, SyncMode.Mirror, sourceIsCloud: false, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.True(plan.IsEmpty, string.Join(", ", plan.Operations.Select(o => $"{o.Kind} {o.RelativePath} → {o.DestinationRelativePath}")));
+    }
+
+    [Fact]
+    public void LocalToLocalAddsUnderTheSourcesOwnName()
+    {
+        var plan = Plan([File(" notes.txt", 5), File(LongName, 7)], [], SyncMode.Mirror, sourceIsCloud: false, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal([" notes.txt", LongName], plan.Operations.Select(o => o.DestinationRelativePath).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void CloudToLocalStillMakesServerNamesLegal()
+    {
+        var plan = Plan([File(" notes.txt", 5), File("a:b.txt", 1)], [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal(["a_b.txt", "notes.txt"], plan.Operations.Select(o => o.DestinationRelativePath).Order(StringComparer.Ordinal));
+    }
+
+    // MARK: - Source names that collide on the destination
+
+    private static string Ops(SyncPlan plan)
+        => string.Join(", ", plan.Operations.Select(o => $"{o.Kind} {o.RelativePath} → {o.DestinationRelativePath}"));
+
+    [Fact]
+    public void CaseVariantsOntoTheLocalDiskBothArriveAndARerunPlansNothing()
+    {
+        SyncEntry[] source = [File("README.md", 5), File("Readme.md", 6)];
+
+        var plan = Plan(source, [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal(2, plan.FilesToAdd);
+        var kept = Assert.Single(plan.Operations, o => o.RelativePath == "README.md");
+        Assert.Equal((SyncOperationKind.Add, "README.md", false), (kept.Kind, kept.DestinationRelativePath, kept.IsCollisionRename));
+        var renamed = Assert.Single(plan.Operations, o => o.RelativePath == "Readme.md");
+        Assert.Equal((SyncOperationKind.AddRenamed, "Readme (2).md", true), (renamed.Kind, renamed.DestinationRelativePath, renamed.IsCollisionRename));
+
+        var rerun = Plan(source, [File("README.md", 5), File("Readme (2).md", 6)], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+        Assert.True(rerun.IsEmpty, Ops(rerun));
+    }
+
+    [Fact]
+    public void AChangedCollidingFileReplacesItsOwnCopyNotTheOther()
+    {
+        SyncEntry[] source = [File("README.md", 5), File("Readme.md", 60, T(9_000))];
+
+        var plan = Plan(source, [File("README.md", 5), File("Readme (2).md", 6)], SyncMode.Newer, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        var replace = Assert.Single(plan.Operations);
+        Assert.Equal((SyncOperationKind.Replace, "Readme.md", "Readme (2).md", true), (replace.Kind, replace.RelativePath, replace.DestinationRelativePath, replace.IsCollisionRename));
+    }
+
+    [Fact]
+    public void NfcAndNfdSpellingsOfOneNameBothArriveAndMirrorDeletesNeither()
+    {
+        var nfd = "Café.txt";
+        var nfc = "Café.txt";
+        SyncEntry[] source = [File(nfc, 5), File(nfd, 6)];
+
+        var plan = Plan(source, [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal(2, plan.FilesToAdd);
+        Assert.Single(plan.Operations, o => o.IsCollisionRename && o.DestinationRelativePath == "Café (2).txt");
+
+        // What a first run leaves: the name, and the "(2)". The next mirror keeps both.
+        var rerun = Plan(source, [File(nfd, 6), File("Café (2).txt", 5)], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+        Assert.True(rerun.IsEmpty, Ops(rerun));
+    }
+
+    [Fact]
+    public void ARenamedCollidingFolderTakesItsContentsAlong()
+    {
+        SyncEntry[] source = [Folder("Docs"), File("Docs/a.txt", 1), Folder("docs"), File("docs/a.txt", 2)];
+
+        var plan = Plan(source, [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal(
+            ["Docs", "Docs/a.txt", "docs (2)", "docs (2)/a.txt"],
+            plan.Operations.Select(o => o.DestinationRelativePath).Order(StringComparer.Ordinal));
+        Assert.All(plan.Operations.Where(o => o.IsDirectory), o => Assert.Equal(SyncOperationKind.Add, o.Kind));
+
+        var rerun = Plan(source, [Folder("Docs"), File("Docs/a.txt", 1), Folder("docs (2)"), File("docs (2)/a.txt", 2)], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+        Assert.True(rerun.IsEmpty, Ops(rerun));
+    }
+
+    [Fact]
+    public void ACollisionNameNeverTakesAnotherSourceItemsName()
+    {
+        // "Readme (2).md" is a real source file, so the colliding "Readme.md" becomes "(3)".
+        SyncEntry[] source = [File("README.md", 5), File("Readme (2).md", 7), File("Readme.md", 6)];
+
+        var plan = Plan(source, [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: false, ignoreCase: true);
+
+        Assert.Equal(
+            ["README.md", "Readme (2).md", "Readme (3).md"],
+            plan.Operations.Select(o => o.DestinationRelativePath).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void CaseVariantsOntoACaseSensitiveCloudKeepTheirNames()
+    {
+        var plan = Plan([File("README.md", 5), File("Readme.md", 6)], [], SyncMode.Mirror, sourceIsCloud: true, destinationIsCloud: true, ignoreCase: false);
+
+        Assert.DoesNotContain(plan.Operations, o => o.IsCollisionRename);
+        Assert.Equal(["README.md", "Readme.md"], plan.Operations.Select(o => o.DestinationRelativePath).Order(StringComparer.Ordinal));
+    }
 }

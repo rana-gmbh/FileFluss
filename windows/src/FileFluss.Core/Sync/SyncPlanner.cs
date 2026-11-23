@@ -129,11 +129,14 @@ public static class SyncPlanner
         var tolerance = dateTolerance ?? ModificationDateTolerance;
 
         // Names match regardless of Unicode form (a Mac's NFD "Café" is the PC's NFC one), and —
-        // when the files land on the local disk — under the name they actually get there:
-        // "a:b" from a server arrives as "a_b", and matching the raw name would make every
-        // mirror download the file again and then delete the copy as "extra".
+        // when files from a server land on the local disk — under the name they actually get
+        // there: "a:b" arrives as "a_b", and matching the raw name would make every mirror
+        // download the file again and then delete the copy as "extra". A name the local disk
+        // already holds is legal there and stays as it is: "fixing" it anyway (a leading space
+        // trimmed, a long name cut to 200) made a local → local mirror delete the correctly
+        // named copy and write a renamed one.
         var comparer = FileNames.MatchComparer(ignoreCase);
-        var sanitizeSource = !destinationIsCloud;
+        var sanitizeSource = sourceIsCloud && !destinationIsCloud;
         string KeyOf(string sourceRelativePath) => sanitizeSource ? LocalKey(sourceRelativePath) : sourceRelativePath;
         string SourceKey(SyncEntry entry) => KeyOf(entry.RelativePath);
 
@@ -185,47 +188,79 @@ public static class SyncPlanner
             destinationMap[entry.RelativePath] = entry;
         }
 
-        var sourceMap = new Dictionary<string, SyncEntry>(sourceEntries.Count, comparer);
-        foreach (var entry in sourceEntries)
+        // Ordinal order puts a folder before everything inside it, so folders are created
+        // before their children — and decides which of two colliding names keeps the name.
+        var sorted = sourceEntries.OrderBy(e => e.RelativePath, StringComparer.Ordinal).ToList();
+
+        // Where each source item lands (its key on the destination side), by source path. Two
+        // source names can be one name on the destination: "README.md" and "Readme.md" from a
+        // case-sensitive server onto NTFS, a Mac's NFD "Café" beside an NFC one, "a:b" beside
+        // "a_b". Only one of them can have it; copying both there overwrote one with the other
+        // and still said "Synced", and the engine's "(2)" for the other was deleted as "extra"
+        // by the next mirror, which then wrote a "(3)". So the first in ordinal order keeps the
+        // name and each later one gets "name (2)" — picked from the source's names alone, so
+        // every run picks the same name and finds the copy already there. A renamed folder
+        // takes its contents along.
+        var targetOf = new Dictionary<string, string>(sorted.Count, StringComparer.Ordinal);
+        var targets = new HashSet<string>(sorted.Count, comparer);
+        var collisions = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string>? naturalKeys = null;
+        foreach (var entry in sorted)
         {
-            sourceMap[SourceKey(entry)] = entry;
+            var slash = entry.RelativePath.LastIndexOf('/');
+            var name = entry.RelativePath[(slash + 1)..];
+            var parentTarget = slash < 0
+                ? string.Empty
+                : targetOf.TryGetValue(entry.RelativePath[..slash], out var parent) ? parent : KeyOf(entry.RelativePath[..slash]);
+            var leaf = sanitizeSource ? SafeLocalPath.FileName(name) : name;
+            var target = parentTarget.Length == 0 ? leaf : parentTarget + "/" + leaf;
+            if (!targets.Add(target))
+            {
+                naturalKeys ??= new HashSet<string>(sorted.Select(SourceKey), comparer);
+                var taken = new HashSet<string>(naturalKeys, comparer);
+                taken.UnionWith(targets);
+                target = UniqueName(target, taken);
+                targets.Add(target);
+                collisions.Add(entry.RelativePath);
+            }
+
+            targetOf[entry.RelativePath] = target;
         }
 
-        // Where a source path lands: folders that already exist keep the destination's own
-        // spelling (its case and Unicode form — otherwise a file would go to a folder that isn't
-        // there), new components are named as the destination will name them.
-        string DestinationPathFor(string sourceRelativePath)
+        // Where a target lands: folders that already exist keep the destination's own spelling
+        // (its case and Unicode form — otherwise a file would go to a folder that isn't there),
+        // new components are named as the destination will name them.
+        string DestinationPathFor(string target)
         {
-            var parts = sourceRelativePath.Split('/');
+            var parts = target.Split('/');
             var landed = string.Empty;
             for (var i = 0; i < parts.Length; i++)
             {
-                if (destinationMap.TryGetValue(KeyOf(string.Join('/', parts, 0, i + 1)), out var match))
+                if (destinationMap.TryGetValue(string.Join('/', parts, 0, i + 1), out var match))
                 {
                     landed = match.RelativePath;
                     continue;
                 }
 
-                var name = sanitizeSource ? SafeLocalPath.FileName(parts[i]) : parts[i];
-                landed = landed.Length == 0 ? name : landed + "/" + name;
+                landed = landed.Length == 0 ? parts[i] : landed + "/" + parts[i];
             }
 
             return landed;
         }
 
         // Names a renamed copy must not take: anything on either side, and earlier renames.
-        HashSet<string>? taken = null;
+        HashSet<string>? additiveTaken = null;
 
         var operations = new List<SyncOperation>();
         int adds = 0, replaces = 0, deletes = 0, folderAdds = 0, folderDeletes = 0, typeClashes = 0;
         long bytesMoved = 0;
         long netDelta = 0;
 
-        // Ordinal order puts a folder before everything inside it, so folders are created
-        // before their children.
-        foreach (var entry in sourceEntries.OrderBy(e => e.RelativePath, StringComparer.Ordinal))
+        foreach (var entry in sorted)
         {
-            if (destinationMap.TryGetValue(SourceKey(entry), out var existing))
+            var target = targetOf[entry.RelativePath];
+            var renamed = collisions.Contains(entry.RelativePath);
+            if (destinationMap.TryGetValue(target, out var existing))
             {
                 // On both sides. A folder already exists; its contents are planned one by one.
                 if (entry.IsDirectory)
@@ -241,7 +276,7 @@ public static class SyncPlanner
                             continue;
                         }
 
-                        operations.Add(Replace(entry, existing.RelativePath));
+                        operations.Add(Replace(entry, existing.RelativePath, renamed));
                         replaces++;
                         bytesMoved += entry.Size;
                         netDelta += entry.Size - existing.Size;
@@ -258,7 +293,7 @@ public static class SyncPlanner
 
                         if (entry.ModificationDate - existing.ModificationDate > tolerance)
                         {
-                            operations.Add(Replace(entry, existing.RelativePath));
+                            operations.Add(Replace(entry, existing.RelativePath, renamed));
                             replaces++;
                             bytesMoved += entry.Size;
                             netDelta += entry.Size - existing.Size;
@@ -267,14 +302,14 @@ public static class SyncPlanner
                         break;
 
                     case SyncMode.Additive:
-                        if (taken is null)
+                        if (additiveTaken is null)
                         {
-                            taken = new HashSet<string>(destinationMap.Keys, comparer);
-                            taken.UnionWith(sourceMap.Keys);
+                            additiveTaken = new HashSet<string>(destinationMap.Keys, comparer);
+                            additiveTaken.UnionWith(targets);
                         }
 
-                        var unique = UniqueName(DestinationPathFor(entry.RelativePath), taken);
-                        taken.Add(unique);
+                        var unique = UniqueName(DestinationPathFor(target), additiveTaken);
+                        additiveTaken.Add(unique);
                         operations.Add(new SyncOperation(SyncOperationKind.AddRenamed, entry.RelativePath, false, entry.Size)
                         {
                             DestinationRelativePath = unique,
@@ -288,10 +323,14 @@ public static class SyncPlanner
             }
             else
             {
-                operations.Add(new SyncOperation(SyncOperationKind.Add, entry.RelativePath, entry.IsDirectory, entry.Size)
+                // A renamed file is an add under another name; a renamed folder is still just
+                // created (at its new path), and its contents follow it there.
+                var kind = renamed && !entry.IsDirectory ? SyncOperationKind.AddRenamed : SyncOperationKind.Add;
+                operations.Add(new SyncOperation(kind, entry.RelativePath, entry.IsDirectory, entry.Size)
                 {
-                    DestinationRelativePath = DestinationPathFor(entry.RelativePath),
+                    DestinationRelativePath = DestinationPathFor(target),
                     SourceModificationDate = entry.ModificationDate,
+                    IsCollisionRename = renamed,
                 });
                 if (entry.IsDirectory)
                 {
@@ -311,7 +350,7 @@ public static class SyncPlanner
         {
             // Extra items on the destination go, deepest first so children precede their parents.
             var extra = destinationEntries
-                .Where(e => !sourceMap.ContainsKey(e.RelativePath))
+                .Where(e => !targets.Contains(e.RelativePath))
                 .OrderByDescending(e => e.RelativePath.Length)
                 .ThenBy(e => e.RelativePath, StringComparer.Ordinal);
             foreach (var entry in extra)
@@ -366,11 +405,12 @@ public static class SyncPlanner
     internal static string LocalKey(string relativePath)
         => string.Join('/', relativePath.Split('/').Select(SafeLocalPath.FileName));
 
-    private static SyncOperation Replace(SyncEntry entry, string destinationRelativePath)
+    private static SyncOperation Replace(SyncEntry entry, string destinationRelativePath, bool collisionRename)
         => new(SyncOperationKind.Replace, entry.RelativePath, false, entry.Size)
         {
             DestinationRelativePath = destinationRelativePath,
             SourceModificationDate = entry.ModificationDate,
+            IsCollisionRename = collisionRename,
         };
 
     /// <summary>Same size and a modification date within the tolerance: treated as the same file.</summary>

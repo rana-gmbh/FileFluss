@@ -167,7 +167,9 @@ public static class SyncExecutor
                 byName[name] = op;
                 var path = source.Resolve(op.RelativePath);
                 items.Add(new CloudFileItem(path, name, path, isDirectory: false, op.Bytes, op.SourceModificationDate));
-                if (op.Kind == SyncOperationKind.AddRenamed)
+                // A collision rename travels as a rename on a replace too: by its own name the
+                // engine would find, and overwrite, the other file that kept the name.
+                if (op.Kind == SyncOperationKind.AddRenamed || op.IsCollisionRename)
                 {
                     (renames ??= new Dictionary<string, string>(StringComparer.Ordinal))[name] = NameOf(op.DestinationRelativePath);
                 }

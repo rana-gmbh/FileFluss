@@ -120,8 +120,19 @@ public enum SyncOperationKind
 /// <param name="Bytes">The file's size; 0 for folders.</param>
 public sealed record SyncOperation(SyncOperationKind Kind, string RelativePath, bool IsDirectory, long Bytes)
 {
-    /// <summary>Where it lands on the destination; differs from <see cref="RelativePath"/> only for <see cref="SyncOperationKind.AddRenamed"/>.</summary>
+    /// <summary>
+    /// Where it lands on the destination: the destination's own spelling of an existing path,
+    /// a name made legal on the local disk, or a new name (<see cref="SyncOperationKind.AddRenamed"/>,
+    /// <see cref="IsCollisionRename"/>).
+    /// </summary>
     public string DestinationRelativePath { get; init; } = RelativePath;
+
+    /// <summary>
+    /// Another source item takes this one's name on the destination ("README.md" beside
+    /// "Readme.md" onto a disk that ignores case), so it lands as "name (2)" — on every run,
+    /// so a replace goes to that copy and not to the other file.
+    /// </summary>
+    public bool IsCollisionRename { get; init; }
 
     /// <summary>The source's "Date modified", stamped on the copy so the next run sees the two as identical.</summary>
     public DateTimeOffset SourceModificationDate { get; init; } = CloudFileItem.UnknownDate;

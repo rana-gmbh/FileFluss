@@ -355,4 +355,88 @@ public sealed class SyncExecutorTests : IDisposable
         Assert.Equal(Path.Combine(_root, "x", "y.txt"), new SyncEndpoint(_local, _root).Resolve("x/y.txt"));
         Assert.Equal("/A/x/y.txt", new SyncEndpoint(cloud, "/A").Resolve("x/y.txt"));
     }
+
+    // MARK: - Names
+
+    [Fact]
+    public async Task LocalToLocalMirrorKeepsNamesTheDiskAlreadyHolds()
+    {
+        var longName = new string('x', 230) + ".txt";
+        var stamp = new DateTime(2024, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var sourceDir = LocalDir("names-src");
+        var targetDir = LocalDir("names-dst");
+        WriteFile(Path.Combine(sourceDir, " notes.txt"), "notes", stamp);
+        WriteFile(Path.Combine(sourceDir, longName), "long", stamp);
+        var source = new SyncEndpoint(_local, sourceDir);
+        var destination = new SyncEndpoint(_local, targetDir);
+
+        var first = await RunAsync(await PlanAsync(source, destination, SyncMode.Mirror), source, destination);
+
+        Assert.True(first.CompletedCleanly, first.CompletionSummary);
+        Assert.Equal([" notes.txt", longName], Directory.GetFiles(targetDir).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+
+        var second = await PlanAsync(source, destination, SyncMode.Mirror);
+        Assert.True(second.IsEmpty, string.Join(", ", second.Operations.Select(o => $"{o.Kind} {o.RelativePath}")));
+    }
+
+    [Fact]
+    public async Task CaseVariantsFromACloudBothArriveOnTheLocalDisk()
+    {
+        // A case-sensitive server holds both. Copying both to NTFS overwrote one with the
+        // other and still reported "Synced".
+        var cloud = new MemoryCloudProvider();
+        var stamp = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+        cloud.AddFile("/Src/README.md", "upper", stamp);
+        cloud.AddFile("/Src/Readme.md", "lower", stamp);
+        var target = LocalDir("case-collision");
+        var source = new SyncEndpoint(cloud, "/Src");
+        var destination = new SyncEndpoint(_local, target);
+
+        var first = await RunAsync(await PlanAsync(source, destination, SyncMode.Mirror), source, destination);
+
+        Assert.True(first.CompletedCleanly, first.CompletionSummary);
+        Assert.Equal("upper", File.ReadAllText(Path.Combine(target, "README.md")));
+        Assert.Equal("lower", File.ReadAllText(Path.Combine(target, "Readme (2).md")));
+        Assert.Equal(2, Directory.GetFiles(target).Length);
+
+        var second = await PlanAsync(source, destination, SyncMode.Mirror);
+        Assert.True(second.IsEmpty, string.Join(", ", second.Operations.Select(o => $"{o.Kind} {o.RelativePath}")));
+
+        // A newer "Readme.md" replaces its own copy, never the file that kept the name.
+        cloud.AddFile("/Src/Readme.md", "lower, edited", stamp.AddHours(1));
+        var third = await RunAsync(await PlanAsync(source, destination, SyncMode.Newer), source, destination);
+
+        Assert.True(third.CompletedCleanly, third.CompletionSummary);
+        Assert.Equal("upper", File.ReadAllText(Path.Combine(target, "README.md")));
+        Assert.Equal("lower, edited", File.ReadAllText(Path.Combine(target, "Readme (2).md")));
+        Assert.Equal(2, Directory.GetFiles(target).Length);
+    }
+
+    [Fact]
+    public async Task NfcAndNfdSpellingsFromACloudBothArriveAndStay()
+    {
+        // The engine used to write the second as "Café (2)", which the next mirror deleted as
+        // "extra" while writing a "(3)" — every run.
+        var cloud = new MemoryCloudProvider();
+        var stamp = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+        cloud.AddFile("/Src/Café.txt", "nfd", stamp);
+        cloud.AddFile("/Src/Café.txt", "nfc", stamp);
+        var target = LocalDir("nfc-collision");
+        var source = new SyncEndpoint(cloud, "/Src");
+        var destination = new SyncEndpoint(_local, target);
+
+        var first = await RunAsync(await PlanAsync(source, destination, SyncMode.Mirror), source, destination);
+
+        Assert.True(first.CompletedCleanly, first.CompletionSummary);
+        Assert.Equal(["nfc", "nfd"], Directory.GetFiles(target).Select(File.ReadAllText).Order(StringComparer.Ordinal));
+
+        for (var run = 0; run < 2; run++)
+        {
+            var again = await PlanAsync(source, destination, SyncMode.Mirror);
+            Assert.True(again.IsEmpty, string.Join(", ", again.Operations.Select(o => $"{o.Kind} {o.RelativePath} → {o.DestinationRelativePath}")));
+            await RunAsync(again, source, destination);
+        }
+
+        Assert.Equal(2, Directory.GetFiles(target).Length);
+    }
 }
