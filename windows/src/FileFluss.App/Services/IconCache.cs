@@ -413,8 +413,13 @@ public static class IconCache
     /// <c>CreateBitmapSourceFromHBitmap</c> drops the alpha, which paints transparent PNGs
     /// and icons on black — so copy the pixels ourselves. Opaque formats (JPEG) come back with
     /// an all-zero alpha channel and are read as BGR. Null when the handle is not a 32-bit DIB.
+    ///
+    /// <para>The rows are fetched with <c>GetDIBits</c> into a top-down (negative height)
+    /// header, so GDI does the orienting. Reading <c>bmBits</c> and guessing the order from
+    /// <c>dsBmih.biHeight</c> drew every thumbnail upside down: the header GetObject reports
+    /// doesn't say which way round the shell actually filled the section.</para>
     /// </summary>
-    private static BitmapSource? FromDibSection(nint bitmap)
+    internal static BitmapSource? FromDibSection(nint bitmap)
     {
         if (GetObject(bitmap, Marshal.SizeOf<DibSection>(), out var dib) == 0 ||
             dib.Bitmap.Bits == 0 || dib.Bitmap.BitsPixel != 32 || dib.Bitmap.Width <= 0 || dib.Bitmap.Height <= 0)
@@ -424,13 +429,32 @@ public static class IconCache
 
         var width = dib.Bitmap.Width;
         var height = dib.Bitmap.Height;
-        var stride = dib.Bitmap.WidthBytes;
+        var stride = width * 4;
         var pixels = new byte[stride * height];
-        var bottomUp = dib.Header.Height > 0;
-        for (var row = 0; row < height; row++)
+        var info = new BitmapInfo
         {
-            var sourceRow = bottomUp ? height - 1 - row : row;
-            Marshal.Copy(dib.Bitmap.Bits + (sourceRow * stride), pixels, row * stride, stride);
+            Header = new BitmapInfoHeader
+            {
+                Size = (uint)Marshal.SizeOf<BitmapInfoHeader>(),
+                Width = width,
+                Height = -height, // top-down
+                Planes = 1,
+                BitCount = 32,
+                Compression = 0, // BI_RGB
+            },
+        };
+
+        var screen = GetDC(0);
+        try
+        {
+            if (GetDIBits(screen, bitmap, 0, (uint)height, pixels, ref info, 0) != height)
+            {
+                return null;
+            }
+        }
+        finally
+        {
+            ReleaseDC(0, screen);
         }
 
         var hasAlpha = false;
@@ -448,6 +472,15 @@ public static class IconCache
 
     [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
     private static extern int GetObject(nint handle, int size, out DibSection dib);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetDIBits(nint dc, nint bitmap, uint start, uint lines, [Out] byte[] bits, ref BitmapInfo info, uint usage);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetDC(nint window);
+
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(nint window, nint dc);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeBitmap
@@ -475,6 +508,17 @@ public static class IconCache
         public int YPelsPerMeter;
         public uint ClrUsed;
         public uint ClrImportant;
+    }
+
+    /// <summary>BITMAPINFO with room for the three BI_BITFIELDS masks GDI may write after the header.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        public BitmapInfoHeader Header;
+        public uint Mask0;
+        public uint Mask1;
+        public uint Mask2;
+        public uint Mask3;
     }
 
     [StructLayout(LayoutKind.Sequential)]
