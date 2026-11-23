@@ -188,63 +188,162 @@ public sealed class QuickLookWindow : Window
         else if (!_panel.IsLocal)
         {
             ShowFacts(row, L("Loading preview…"));
-            path = await _main.OpenCloudFileAsync(_panel, item, launch: false);
+
+            // The token stops the download once Quick Look moves on — unless an "open" of the
+            // same file is waiting for it too (MainViewModel shares the download).
+            path = await _main.OpenCloudFileAsync(_panel, item, launch: false, cts.Token);
             if (cts.IsCancellationRequested || _closed)
             {
                 return;
             }
         }
 
-        if (path is null || !File.Exists(path))
+        if (path is null)
         {
             ShowFacts(row, null);
             return;
         }
 
-        var extension = Path.GetExtension(path).TrimStart('.');
+        // Everything that touches the file (whether it's there, decoding a photo, reading a text
+        // file) runs off the UI thread: on a share or a slow disk each of these used to stall
+        // the arrow keys. Only the result is put on screen, and only if it's still wanted.
+        var box = DecodeBox();
+        var preview = await Task.Run(() => Prepare(path, box));
+        if (cts.IsCancellationRequested || _closed)
+        {
+            return;
+        }
+
         try
         {
-            if (ImageExtensions.Contains(extension))
+            switch (preview)
             {
-                ShowImage(path);
-            }
-            else if (MediaExtensions.Contains(extension))
-            {
-                ShowMedia(path);
-            }
-            else if (TextExtensions.Contains(extension) || (extension.Length == 0 && LooksLikeText(path)))
-            {
-                ShowText(path);
-            }
-            else if (PreviewHandlerHost.CanPreview(path))
-            {
-                _handlerHost ??= new PreviewHandlerHost();
-                _content.Content = _handlerHost;
-                _handlerHost.Show(path);
-            }
-            else
-            {
-                ShowFacts(row, null);
+                case ImagePreview image:
+                    _content.Content = new Image { Source = image.Bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(8) };
+                    break;
+                case TextPreview text:
+                    ShowText(text.Text);
+                    break;
+                case MediaPreview:
+                    ShowMedia(path);
+                    break;
+                case HandlerPreview:
+                    // Preview handlers are COM objects living on this (STA) thread.
+                    _handlerHost ??= new PreviewHandlerHost();
+                    _content.Content = _handlerHost;
+                    _handlerHost.Show(path);
+                    break;
+                default:
+                    ShowFacts(row, null);
+                    break;
             }
         }
-        catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or FileFormatException or
-                                       ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or OverflowException)
+        catch (Exception e) when (IsUnpreviewable(e))
         {
-            // Decoders and players reject damaged or exotic files in all of these ways.
             ShowFacts(row, null);
         }
     }
 
-    private void ShowImage(string path)
+    /// <summary>Decoders and players reject damaged or exotic files in all of these ways.</summary>
+    private static bool IsUnpreviewable(Exception e)
+        => e is IOException or NotSupportedException or UnauthorizedAccessException or FileFormatException or
+                ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or OverflowException;
+
+    private abstract record Preview;
+
+    private sealed record ImagePreview(BitmapSource Bitmap) : Preview;
+
+    private sealed record TextPreview(string Text) : Preview;
+
+    private sealed record MediaPreview : Preview;
+
+    private sealed record HandlerPreview : Preview;
+
+    private sealed record FactsPreview : Preview;
+
+    /// <summary>
+    /// The largest size, in device pixels, a photo is decoded to: the window as it is (at least
+    /// 1600 × 1200, so making it bigger afterwards stays sharp) at the screen's scale. A 40 MP
+    /// photo decoded in full took seconds and hundreds of MB to show in an 800-pixel window.
+    /// </summary>
+    private Size DecodeBox()
     {
+        var scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var width = Math.Max(ActualWidth > 0 ? ActualWidth : Width, 1600);
+        var height = Math.Max(ActualHeight > 0 ? ActualHeight : Height, 1200);
+        return new Size(width * scale, height * scale);
+    }
+
+    /// <summary>What to show for <paramref name="path"/>, worked out on a background thread.</summary>
+    private static Preview Prepare(string path, Size box)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return new FactsPreview();
+            }
+
+            var extension = Path.GetExtension(path).TrimStart('.');
+            if (ImageExtensions.Contains(extension))
+            {
+                return new ImagePreview(DecodeImage(path, box));
+            }
+
+            if (MediaExtensions.Contains(extension))
+            {
+                return new MediaPreview();
+            }
+
+            if (TextExtensions.Contains(extension) || (extension.Length == 0 && LooksLikeText(path)))
+            {
+                return new TextPreview(ReadText(path));
+            }
+
+            return PreviewHandlerHost.CanPreview(path) ? new HandlerPreview() : new FactsPreview();
+        }
+        catch (Exception e) when (IsUnpreviewable(e))
+        {
+            return new FactsPreview();
+        }
+    }
+
+    /// <summary>A frozen bitmap no larger than <paramref name="box"/>, so it can cross to the UI thread.</summary>
+    internal static BitmapSource DecodeImage(string path, Size box)
+    {
+        using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        // The header alone says how big the picture is; the pixels are decoded once, at the size
+        // they'll be shown.
+        var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+        int pixelWidth = frame.PixelWidth, pixelHeight = frame.PixelHeight;
+        stream.Position = 0;
+
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-        image.UriSource = new Uri(path);
+        var fit = Math.Min(box.Width / Math.Max(1, pixelWidth), box.Height / Math.Max(1, pixelHeight));
+        if (fit < 1)
+        {
+            // One side only, so the aspect ratio is kept.
+            image.DecodePixelWidth = Math.Max(1, (int)Math.Round(pixelWidth * fit));
+        }
+
+        image.StreamSource = stream;
         image.EndInit();
         image.Freeze();
-        _content.Content = new Image { Source = image, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(8) };
+        return image;
+    }
+
+    private static string ReadText(string path)
+    {
+        const int limit = 512 * 1024;
+        using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var buffer = new char[limit];
+        var read = reader.ReadBlock(buffer, 0, limit);
+        return new string(buffer, 0, read);
     }
 
     private void ShowMedia(string path)
@@ -254,18 +353,8 @@ public sealed class QuickLookWindow : Window
         media.Play();
     }
 
-    private void ShowText(string path)
+    private void ShowText(string text)
     {
-        const int limit = 512 * 1024;
-        string text;
-        using (var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-        using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
-        {
-            var buffer = new char[limit];
-            var read = reader.ReadBlock(buffer, 0, limit);
-            text = new string(buffer, 0, read);
-        }
-
         _content.Content = new TextBox
         {
             Text = text,
