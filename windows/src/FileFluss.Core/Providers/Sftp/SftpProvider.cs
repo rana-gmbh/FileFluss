@@ -896,6 +896,14 @@ public sealed class SftpProvider : CloudProvider
 
         var source = CloudPath.Normalize(path);
         var target = CloudPath.Normalize(newPath);
+
+        // A name the remote shell might read differently from how it's quoted goes through the
+        // client instead (for this item only; the shell stays in use for others).
+        if (!IsSafeForShellCopy(source) || !IsSafeForShellCopy(target))
+        {
+            throw CloudProviderException.NotImplemented();
+        }
+
         await RunAsync<bool>(source, async transport =>
         {
             if (await ExistsAsync(transport, target, cancellationToken).ConfigureAwait(false))
@@ -983,6 +991,28 @@ public sealed class SftpProvider : CloudProvider
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Whether <see cref="ShellQuote"/> means the same path to every login shell the command
+    /// may run under. POSIX single quotes leave everything but the quote alone, but the account's
+    /// shell decides: in fish a backslash still escapes inside single quotes (a name ending in
+    /// "\" would close nothing, and what follows would run as a command), csh may expand "!"
+    /// there, and control characters (line breaks above all) end a command line in any of them.
+    /// Such names — rare, and possibly planted in a shared folder — are copied through the
+    /// client. (Normalised paths can't hold a backslash today; this doesn't rely on that.)
+    /// </summary>
+    internal static bool IsSafeForShellCopy(string path)
+    {
+        foreach (var c in path)
+        {
+            if (c is '\\' or '!' || char.IsControl(c))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>POSIX single quotes: nothing inside is special except the quote itself.</summary>

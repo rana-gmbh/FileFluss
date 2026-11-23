@@ -917,6 +917,40 @@ public class SftpProviderTests
         Assert.Contains("Disk quota exceeded", error.Message);
     }
 
+    /// <summary>
+    /// A name csh ("!") or any shell (line break) might read past its quotes never reaches the
+    /// shell: the copy goes through the client, and the shell stays in use for ordinary names.
+    /// (A backslash, which fish honours inside single quotes, can't get this far: paths are
+    /// normalised with "\" as a separator first — the check below still refuses one.)
+    /// </summary>
+    [Theory]
+    [InlineData("/home/u/bang!name")]
+    [InlineData("/home/u/line\nbreak")]
+    [InlineData("/home/u/tab\tname")]
+    public async Task RiskyNamesAreCopiedThroughTheClientNotTheShell(string name)
+    {
+        _server.Tree.File(name, "x").File("/home/u/plain.txt", "p");
+        using var provider = Signed();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync(name, "/home/u/copy"));
+        var reverse = await Assert.ThrowsAsync<CloudProviderException>(() => provider.CopyItemAsync("/home/u/plain.txt", name + "2"));
+
+        Assert.Equal(CloudErrorKind.NotImplemented, error.Kind);
+        Assert.Equal(CloudErrorKind.NotImplemented, reverse.Kind);
+        Assert.Empty(_server.Commands);
+
+        await provider.CopyItemAsync("/home/u/plain.txt", "/home/u/plain copy.txt");
+        Assert.Equal(["command -v cp", "cp -Rp -- '/home/u/plain.txt' '/home/u/plain copy.txt'"], _server.Commands);
+    }
+
+    [Theory]
+    [InlineData("/home/u/it's a dir", true)]
+    [InlineData("/home/u/Grüße $HOME `x` \"q\" *?.txt", true)]
+    [InlineData("/home/u/a\\b", false)]
+    [InlineData("/home/u/a!b", false)]
+    [InlineData("/home/u/a\u0001b", false)]
+    public void ShellCopyNameCheck(string path, bool safe) => Assert.Equal(safe, SftpProvider.IsSafeForShellCopy(path));
+
     [Fact]
     public void ShellQuotingSurvivesQuotesAndDashes()
     {
