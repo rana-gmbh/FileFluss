@@ -984,6 +984,24 @@ public sealed class PanelViewModel : Observable
                 return;
             }
 
+            // The local folder on screen was deleted (or moved) outside FileFluss, noticed by
+            // the folder watch: go up to the nearest folder that still exists, as Explorer does,
+            // rather than leave "Item not found" in its place. Only for a refresh the panel did
+            // by itself — a path the user typed or a Retry still says what's wrong.
+            if (quiet && location.IsLocal && e is CloudProviderException { Kind: CloudErrorKind.NotFound }
+                && await NearestExistingFolderAsync(location.Path) is { } ancestor
+                && generation == _loadGeneration && _location == location)
+            {
+                SupportLogger.Shared.Log($"{location.Path} is gone; showing {ancestor}", "Panel", LogLevel.Notice);
+                await NavigateCoreAsync(PanelLocation.Local(ancestor), addToHistory: true, []);
+                return;
+            }
+
+            if (generation != _loadGeneration)
+            {
+                return;
+            }
+
             SupportLogger.Shared.Log($"Listing {location.Path} failed: {e.Message}", "Panel", LogLevel.Error);
             ClearRows();
             Error = e.Message;
@@ -1001,6 +1019,29 @@ public sealed class PanelViewModel : Observable
             }
         }
     }
+
+    /// <summary>
+    /// The closest parent of <paramref name="path"/> that exists, or null (a drive or share that
+    /// has gone altogether). Asks the disk, so on the thread pool: a dropped share answers slowly.
+    /// </summary>
+    internal static Task<string?> NearestExistingFolderAsync(string path) => Task.Run(() =>
+    {
+        try
+        {
+            for (var folder = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(path)); folder is not null; folder = Path.GetDirectoryName(folder))
+            {
+                if (Directory.Exists(folder))
+                {
+                    return folder;
+                }
+            }
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
+    });
 
     // MARK: - Tags
 
