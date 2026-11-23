@@ -140,6 +140,7 @@ public sealed class CompareSession : INotifyPropertyChanged
     private IReadOnlyList<SyncEntry> _leftEntries = [];
     private IReadOnlyList<SyncEntry> _rightEntries = [];
     private bool _ignoreCase;
+    private TimeSpan _dateTolerance = SyncPlanner.ModificationDateTolerance;
     private FolderComparisonResult? _result;
     private CompareTreeNode? _tree;
     private HashSet<CompareTreeNode> _visible = [];
@@ -306,7 +307,7 @@ public sealed class CompareSession : INotifyPropertyChanged
                 _compareDates = value;
                 if (_leftEntries.Count > 0 || _rightEntries.Count > 0)
                 {
-                    SetResultLocked(FolderComparison.Compare(_leftEntries, _rightEntries, value, _ignoreCase));
+                    SetResultLocked(FolderComparison.Compare(_leftEntries, _rightEntries, value, _ignoreCase, _dateTolerance));
                 }
             }
 
@@ -427,7 +428,10 @@ public sealed class CompareSession : INotifyPropertyChanged
                 _leftEntries = leftEntries;
                 _rightEntries = rightEntries;
                 _ignoreCase = !left.IsCloud || !right.IsCloud;
-                SetResultLocked(FolderComparison.Compare(leftEntries, rightEntries, _compareDates, _ignoreCase));
+
+                // The tolerance a sync between these two sides uses, so Compare and Sync agree.
+                _dateTolerance = SyncPlanner.DateToleranceFor(left, right);
+                SetResultLocked(FolderComparison.Compare(leftEntries, rightEntries, _compareDates, _ignoreCase, _dateTolerance));
             }
             else if (error is not null)
             {

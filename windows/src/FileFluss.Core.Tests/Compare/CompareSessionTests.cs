@@ -46,6 +46,38 @@ public sealed class CompareSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task CompareDateUsesTheSyncsMinuteToleranceForSftp()
+    {
+        // SFTP listings show minutes at best; Sync allows a minute there, and Compare used two
+        // seconds, so with Compare Date on every SFTP file showed as different.
+        var local = new MemoryCloudProvider();
+        var sftp = new MemoryCloudProvider(FileFluss.Core.Models.CloudProviderType.Sftp);
+        local.AddFile("/R/report.txt", "same", Stamp);
+        sftp.AddFile("/R/report.txt", "same", Stamp.AddSeconds(-40));
+        var session = new CompareSession { CompareDates = true };
+
+        await session.CompareAsync(new SyncEndpoint(local, "/R"), new SyncEndpoint(sftp, "/R"));
+
+        Assert.Equal((1, 0), (session.Result!.IdenticalCount, session.Result.DiffersCount));
+        Assert.Null(session.Result.Entries.Single().NewerSide);
+    }
+
+    [Fact]
+    public async Task CompareDateKeepsTwoSecondsBetweenOtherServices()
+    {
+        var left = new MemoryCloudProvider();
+        var right = new MemoryCloudProvider();
+        left.AddFile("/R/report.txt", "same", Stamp);
+        right.AddFile("/R/report.txt", "same", Stamp.AddSeconds(-40));
+        var session = new CompareSession { CompareDates = true };
+
+        await session.CompareAsync(new SyncEndpoint(left, "/R"), new SyncEndpoint(right, "/R"));
+
+        Assert.Equal(1, session.Result!.DiffersCount);
+        Assert.Equal(CompareSide.Left, session.Result.Entries.Single().NewerSide);
+    }
+
+    [Fact]
     public async Task ComparingShowsDifferencesByDefault()
     {
         var (left, right) = TwoSides();

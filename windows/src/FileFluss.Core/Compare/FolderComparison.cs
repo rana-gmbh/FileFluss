@@ -42,6 +42,9 @@ public sealed record FolderCompareEntry(
     DateTimeOffset? RightCreated,
     bool DateDiffersOnly)
 {
+    /// <summary>How far apart the two dates may be and still mean the same moment (a minute for SFTP and FTP listings).</summary>
+    public TimeSpan DateTolerance { get; init; } = SyncPlanner.ModificationDateTolerance;
+
     public string Id => RelativePath;
 
     public string Name
@@ -58,7 +61,7 @@ public sealed record FolderCompareEntry(
     {
         get
         {
-            if (LeftDate is not { } left || RightDate is not { } right || (left - right).Duration() <= SyncPlanner.ModificationDateTolerance)
+            if (LeftDate is not { } left || RightDate is not { } right || (left - right).Duration() <= DateTolerance)
             {
                 return null;
             }
@@ -164,15 +167,22 @@ public static class FolderComparison
     /// <summary>
     /// Compares two enumerated trees. Folders on both sides are identical (their contents are
     /// compared entry by entry); files differ by size, and — with <paramref name="compareDates"/>
-    /// — by a modification date outside the 2-second tolerance.
+    /// — by a modification date outside <paramref name="dateTolerance"/>.
     /// </summary>
     /// <param name="ignoreCase">Match names case-insensitively; pass true when either side is the local disk.</param>
+    /// <param name="dateTolerance">
+    /// The sync's tolerance for these two sides (<see cref="SyncPlanner.DateToleranceFor"/>): two
+    /// seconds, a minute where SFTP or FTP is involved. Compare always used two seconds, so with
+    /// Compare Date on every SFTP file showed as different while Sync saw nothing to do.
+    /// </param>
     public static FolderComparisonResult Compare(
         IReadOnlyList<SyncEntry> left,
         IReadOnlyList<SyncEntry> right,
         bool compareDates = false,
-        bool ignoreCase = false)
+        bool ignoreCase = false,
+        TimeSpan? dateTolerance = null)
     {
+        var tolerance = dateTolerance ?? SyncPlanner.ModificationDateTolerance;
         // Unicode-form-insensitive too: a folder written by a Mac (NFD) and its copy on a PC
         // (NFC) hold the same names, and would otherwise compare as two lists of one-sided files.
         var comparer = IO.FileNames.MatchComparer(ignoreCase);
@@ -200,13 +210,13 @@ public static class FolderComparison
             {
                 entries.Add(new FolderCompareEntry(
                     a!.RelativePath, a.IsDirectory, FolderCompareStatus.OnlyLeft,
-                    a.Size, null, Known(a.ModificationDate), null, a.CreationDate, null, false));
+                    a.Size, null, Known(a.ModificationDate), null, a.CreationDate, null, false) { DateTolerance = tolerance });
             }
             else if (!hasLeft && hasRight)
             {
                 entries.Add(new FolderCompareEntry(
                     b!.RelativePath, b.IsDirectory, FolderCompareStatus.OnlyRight,
-                    null, b.Size, null, Known(b.ModificationDate), null, b.CreationDate, false));
+                    null, b.Size, null, Known(b.ModificationDate), null, b.CreationDate, false) { DateTolerance = tolerance });
             }
             else if (hasLeft && hasRight)
             {
@@ -223,7 +233,7 @@ public static class FolderComparison
                     {
                         status = FolderCompareStatus.Differs;
                     }
-                    else if (compareDates && (a.ModificationDate - b.ModificationDate).Duration() > SyncPlanner.ModificationDateTolerance)
+                    else if (compareDates && (a.ModificationDate - b.ModificationDate).Duration() > tolerance)
                     {
                         status = FolderCompareStatus.Differs;
                         dateOnly = true;
@@ -232,7 +242,7 @@ public static class FolderComparison
 
                 entries.Add(new FolderCompareEntry(
                     a.RelativePath, a.IsDirectory, status,
-                    a.Size, b!.Size, Known(a.ModificationDate), Known(b.ModificationDate), a.CreationDate, b.CreationDate, dateOnly));
+                    a.Size, b!.Size, Known(a.ModificationDate), Known(b.ModificationDate), a.CreationDate, b.CreationDate, dateOnly) { DateTolerance = tolerance });
             }
         }
 
