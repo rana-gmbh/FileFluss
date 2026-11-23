@@ -43,15 +43,17 @@ public sealed class CompareSelectionTests
     [Fact]
     public void ADeepFolderOfTwentyThousandSelectedRowsIsQuick()
     {
-        // Select all over 2,000 folders of 10 files each: every check against every folder
-        // was 20k × 2k string comparisons, which hung the Compare window.
+        // Select all over 20,000 folders of 10 files each. Checking every entry against every
+        // folder is 220k × 20k string comparisons — minutes on any machine — while the
+        // ancestor lookup takes well under a second, so the limit below holds even on a slow
+        // CI runner and still tells the two apart.
         var nodes = new List<Node>();
-        for (var f = 0; f < 2_000; f++)
+        for (var f = 0; f < 20_000; f++)
         {
-            nodes.Add(new($"root/folder {f:0000}", true));
+            nodes.Add(new($"root/folder {f:00000}", true));
             for (var i = 0; i < 10; i++)
             {
-                nodes.Add(new($"root/folder {f:0000}/file {i}.txt", false));
+                nodes.Add(new($"root/folder {f:00000}/file {i}.txt", false));
             }
         }
 
@@ -59,8 +61,8 @@ public sealed class CompareSelectionTests
         var topmost = CompareSelection.Topmost(nodes, n => n.Path, n => n.IsDirectory);
         watch.Stop();
 
-        Assert.Equal(2_000, topmost.Count);
+        Assert.Equal(20_000, topmost.Count);
         Assert.All(topmost, n => Assert.True(n.IsDirectory));
-        Assert.True(watch.Elapsed < TimeSpan.FromMilliseconds(250), $"took {watch.ElapsedMilliseconds} ms");
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.ElapsedMilliseconds} ms");
     }
 }

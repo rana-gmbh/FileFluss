@@ -48,7 +48,8 @@ public sealed class DriveLabelCacheTests : IDisposable
 
             Assert.Equal("Q:", first);
             Assert.Equal("Q:", display);
-            Assert.True(watch.ElapsedMilliseconds < 1000, $"took {watch.ElapsedMilliseconds} ms");
+            // The read is held for 10 s: anything well below that proves the call didn't wait for it.
+            Assert.True(watch.ElapsedMilliseconds < 5000, $"took {watch.ElapsedMilliseconds} ms");
 
             release.Set();
             Assert.Equal(@"Q:\", await changed.Task.WaitAsync(TimeSpan.FromSeconds(10)));
