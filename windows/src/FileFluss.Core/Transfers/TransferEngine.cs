@@ -123,6 +123,29 @@ public static class TransferEngine
         {
             progress.Complete();
             SupportLogger.Shared.Log($"Transfer end: {progress.CompletionSummary}", "Transfer");
+            LogFailures(progress);
+        }
+    }
+
+    /// <summary>At most this many failed items are written to the support log, one line each.</summary>
+    internal const int LoggedFailureLimit = 50;
+
+    /// <summary>
+    /// Which items failed and why: the summary alone ("Copied 6 of 8 — 1 failed") left a support
+    /// case with nothing to go on. Capped, so a transfer with thousands of failures doesn't fill
+    /// the log; the logger masks anything that looks like a credential.
+    /// </summary>
+    internal static void LogFailures(TransferProgress progress)
+    {
+        var failures = progress.Results.Where(r => r.Status == TransferItemStatus.Failed).ToList();
+        foreach (var failure in failures.Take(LoggedFailureLimit))
+        {
+            SupportLogger.Shared.Log($"Transfer item failed: {failure.Name} — {failure.ErrorMessage}", "Transfer", LogLevel.Error);
+        }
+
+        if (failures.Count > LoggedFailureLimit)
+        {
+            SupportLogger.Shared.Log($"Transfer item failed: +{failures.Count - LoggedFailureLimit} more", "Transfer", LogLevel.Error);
         }
     }
 

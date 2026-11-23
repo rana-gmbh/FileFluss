@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
+using FileFluss.Core.Diagnostics;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Tests.Support;
@@ -36,6 +37,42 @@ public sealed class TransferEngineTests : IDisposable
 
     private static ConflictResolver Always(ConflictChoice choice, bool applyToAll = false)
         => (_, _) => Task.FromResult(new ConflictResolution(choice, applyToAll));
+
+    [Fact]
+    public async Task AFailedItemIsNamedInTheSupportLogWithItsReason()
+    {
+        var source = LocalDir("loop-" + Guid.NewGuid().ToString("N")[..8]);
+        var inside = Path.Combine(source, "inside");
+        Directory.CreateDirectory(inside);
+        var since = DateTimeOffset.Now.AddSeconds(-1);
+
+        // A folder copied into itself fails with a reason, and nothing is copied.
+        var item = await _local.GetFileMetadataAsync(source);
+        var progress = await Run(new TransferRequest(_local, [item], _local, inside, IsMove: false));
+
+        Assert.Equal(1, progress.FailureCount);
+        var lines = SupportLogger.Shared.Snapshot(since).Select(e => e.Message).ToList();
+        Assert.Contains(lines, m => m.StartsWith("Transfer item failed: " + item.Name + " — ", StringComparison.Ordinal) && m.Length > ("Transfer item failed: " + item.Name + " — ").Length);
+    }
+
+    [Fact]
+    public void FailedItemsInTheLogAreCapped()
+    {
+        var marker = "cap-" + Guid.NewGuid().ToString("N")[..8];
+        var request = new TransferRequest(_local, [], _local, _root, IsMove: false);
+        var progress = TransferEngine.CreateProgress(request, PanelSide.Right);
+        for (var i = 0; i < TransferEngine.LoggedFailureLimit + 25; i++)
+        {
+            progress.RecordFailure($"{marker}-{i}.txt", "disk full");
+        }
+
+        var since = DateTimeOffset.Now.AddSeconds(-1);
+        TransferEngine.LogFailures(progress);
+
+        var lines = SupportLogger.Shared.Snapshot(since).Select(e => e.Message).Where(m => m.StartsWith("Transfer item failed: ", StringComparison.Ordinal)).ToList();
+        Assert.Equal(TransferEngine.LoggedFailureLimit, lines.Count(m => m.Contains(marker, StringComparison.Ordinal)));
+        Assert.Contains("Transfer item failed: +25 more", lines);
+    }
 
     [Fact]
     public async Task LocalToLocalCopiesTreesAndKeepsDates()
