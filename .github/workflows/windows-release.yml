@@ -73,8 +73,10 @@ jobs:
       - name: Test
         run: dotnet test windows/FileFluss.sln --configuration Release
 
+      # Pinned: Inno Setup 7 is out, and an unpinned install would build the next release
+      # with a compiler the .iss script has never been tested against. Raise it deliberately.
       - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
+        run: choco install innosetup --version 6.7.1 --allow-downgrade --no-progress -y
 
       # Code signing in two rounds, because an installer has to be built from executables that
       # are already signed: first FileFluss's own exe and DLLs, then the installers. Each round
