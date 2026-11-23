@@ -39,6 +39,16 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **FTP keeps umlauts in file names on every server.** On servers that don't announce UTF-8, "Grüße.txt" was listed as "Gr??e.txt" and uploaded under that name.
 - **Replacing a read-only file works.** It failed and left a `.fileflusspart` file next to it.
 - **Sync keeps both files whose names are one name on the PC,** such as `README.md` and `Readme.md` from a cloud that tells them apart. One used to overwrite the other while Sync still reported success; now the second arrives as `Readme (2).md`, and later runs leave both alone.
+- **Updates are installed only when they carry Rana GmbH's code signature,** in addition to matching the release's checksums, as Sparkle requires its signature on the Mac.
+- **A network drive or share that has gone offline no longer freezes FileFluss.** Showing a mapped drive's name in the path bar or title, or typing a path to an offline server, could block the window for up to a minute.
+- **A local path typed into a cloud panel's path bar opens on this PC.** `C:\…`, `\\server\share` and `%USERPROFILE%` used to be looked up inside the cloud account.
+- **The Compare window stays responsive with thousands of selected items,** also after copying them.
+- **Quick Look is smoother.** Large photos are prepared in the background, and arrowing past cloud files stops their downloads instead of fetching every one.
+- **Opening the same cloud file twice** (a second double-click, or Enter after Quick Look) waits for the download already running instead of failing with "file in use".
+- **Tags are safe when their file can't be read** at launch (for example while a virus scanner holds it). They used to be replaced with an empty set.
+- **Google Drive:** uploading a file that was deleted in the Drive web app works again; it failed until FileFluss was restarted.
+- **Synology Drive** reports a rename that fails after copying or moving, instead of reporting success.
+- **Internxt:** when the old file can't be removed during a replace, FileFluss now says so and leaves the old file as it was.
 - **Esc closes Quick Look** while you're still in the file list, as on the Mac. It used to work only after clicking into the preview window.
 - **Copying and syncing between local folders keeps names exactly as they are.** A name with a leading space or longer than 200 characters was shortened, and a Mirror then deleted the correctly named copy.
 
