@@ -28,10 +28,10 @@
       outside the ANSI code page. Tarballs, GZip and ZIP writing stay on .NET's own classes.
   -->
   <ItemGroup>
-    <PackageReference Include="SharpCompress" Version="0.50.7" />
-    <PackageReference Include="SSH.NET" Version="2026.0.0" />
-    <PackageReference Include="FluentFTP" Version="55.0.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="SharpCompress" Version="0.50.11" />
+    <PackageReference Include="SSH.NET" Version="2026.0.1" />
+    <PackageReference Include="FluentFTP" Version="55.1.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
   </ItemGroup>
 
 </Project>
