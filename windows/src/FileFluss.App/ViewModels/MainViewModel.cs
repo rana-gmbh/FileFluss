@@ -1013,12 +1013,21 @@ public sealed partial class MainViewModel : Observable
         OnPropertyChanged(nameof(IsCheckingSpace));
         try
         {
-            foreach (var item in items)
+            // On the thread pool, as a panel's listing is: a provider's first steps run
+            // synchronously (credentials, a token refresh, an SSH handshake) and must not hold
+            // the window while the HUD is meant to be showing.
+            var token = cancellation.Token;
+            needed = await Task.Run(async () =>
             {
-                needed += item.IsDirectory ? await source.FolderSizeAsync(item.Path, cancellation.Token) : item.Size;
-            }
+                long sum = 0;
+                foreach (var item in items)
+                {
+                    sum += item.IsDirectory ? await source.FolderSizeAsync(item.Path, token).ConfigureAwait(false) : item.Size;
+                }
 
-            free = await target.AvailableSpaceAsync(destination.Path, cancellation.Token);
+                return sum;
+            }, token);
+            free = await Task.Run(() => target.AvailableSpaceAsync(destination.Path, token), token);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
