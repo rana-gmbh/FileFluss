@@ -24,11 +24,32 @@ internal sealed class WebDavMetadataCache(StringComparer nameComparer, TimeSpan 
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Listing> _listings = new(StringComparer.Ordinal);
 
+    /// <summary>Counts invalidations; a listing fetched across one is stale before it lands.</summary>
+    private long _generation;
+
     private sealed record Listing(Dictionary<string, CloudFileItem> Children, DateTimeOffset Fetched);
 
     public TimeSpan Lifetime { get; } = lifetime;
 
-    public void Store(string folder, IEnumerable<CloudFileItem> children)
+    /// <summary>
+    /// Taken before fetching a listing and handed to <see cref="Store"/>: a PROPFIND that
+    /// started before a write (an Office save while Explorer lists the folder) used to land
+    /// after that write's invalidation and answer from the old view for the whole lifetime —
+    /// the new file 404ed, a MOVE over it skipped the delete.
+    /// </summary>
+    public long Generation
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _generation;
+            }
+        }
+    }
+
+    /// <summary>Remembers a listing — unless something was invalidated since <paramref name="generation"/> was taken.</summary>
+    public void Store(string folder, IEnumerable<CloudFileItem> children, long generation)
     {
         var map = new Dictionary<string, CloudFileItem>(nameComparer);
         foreach (var child in children)
@@ -38,6 +59,11 @@ internal sealed class WebDavMetadataCache(StringComparer nameComparer, TimeSpan 
 
         lock (_gate)
         {
+            if (generation != _generation)
+            {
+                return;
+            }
+
             _listings[folder] = new Listing(map, DateTimeOffset.UtcNow);
         }
     }
@@ -80,6 +106,7 @@ internal sealed class WebDavMetadataCache(StringComparer nameComparer, TimeSpan 
     {
         lock (_gate)
         {
+            _generation++;
             _listings.Remove(CloudPath.Parent(path));
         }
     }
@@ -89,6 +116,7 @@ internal sealed class WebDavMetadataCache(StringComparer nameComparer, TimeSpan 
     {
         lock (_gate)
         {
+            _generation++;
             _listings.Remove(CloudPath.Parent(path));
             foreach (var key in _listings.Keys.Where(k => CloudPath.IsWithin(k, path)).ToList())
             {
@@ -101,6 +129,7 @@ internal sealed class WebDavMetadataCache(StringComparer nameComparer, TimeSpan 
     {
         lock (_gate)
         {
+            _generation++;
             _listings.Clear();
         }
     }

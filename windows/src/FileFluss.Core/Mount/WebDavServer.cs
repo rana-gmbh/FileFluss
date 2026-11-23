@@ -1269,8 +1269,10 @@ public sealed class WebDavServer : IAsyncDisposable
             return cached;
         }
 
+        // Taken before asking: a write that lands while the listing is on its way makes it stale.
+        var generation = _metadata.Generation;
         var children = await _provider.ListDirectoryAsync(folder, cancellationToken).ConfigureAwait(false);
-        _metadata.Store(folder, children);
+        _metadata.Store(folder, children, generation);
         return children;
     }
 
