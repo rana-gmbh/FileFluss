@@ -77,6 +77,9 @@ public sealed class MemoryCloudProvider : CloudProvider
 
     public HashSet<string> FailingUploads { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Folders whose listing fails as an unreadable folder's would (no permission).</summary>
+    public HashSet<string> UnlistableFolders { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Names whose upload "succeeds" but stores only half the bytes — a server that lost the tail.</summary>
     public HashSet<string> TruncatingUploads { get; } = new(StringComparer.Ordinal);
 
@@ -145,6 +148,11 @@ public sealed class MemoryCloudProvider : CloudProvider
         if (!_nodes.TryGetValue(normalized, out var node) || !node.IsDirectory)
         {
             throw CloudProviderException.NotFound(path);
+        }
+
+        if (UnlistableFolders.Contains(normalized))
+        {
+            throw CloudProviderException.CommandFailed($"You don't have permission to open \"{CloudPath.Name(normalized)}\".");
         }
 
         IReadOnlyList<CloudFileItem> children = _nodes

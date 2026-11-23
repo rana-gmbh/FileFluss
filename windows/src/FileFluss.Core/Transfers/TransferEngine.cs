@@ -258,7 +258,23 @@ public static class TransferEngine
 
             if (item.IsDirectory)
             {
-                plan.Tree = await WalkAsync(source, item, ct).ConfigureAwait(false);
+                try
+                {
+                    plan.Tree = await WalkAsync(source, item, plan.Unreadable, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception e)
+                {
+                    // This folder can't be read at all: it fails on its own, the other items
+                    // still go (it used to end the whole transfer before anything was written).
+                    plan.WalkFailure = Describe(e);
+                    plan.Tree = [];
+                    SupportLogger.Shared.Log($"Transfer: {item.Path} can't be read: {e.Message}", "Transfer", LogLevel.Error);
+                }
+
                 totalFiles += plan.Tree.Count(e => !e.Item.IsDirectory);
                 expectedBytes += plan.Tree.Where(e => !e.Item.IsDirectory).Sum(e => Math.Max(0, e.Item.Size));
             }
@@ -297,6 +313,12 @@ public static class TransferEngine
                 var targetPath = destination.CombinePath(request.DestinationPath, plan.TargetName);
                 try
                 {
+                    if (plan.WalkFailure is { } unreadableFolder)
+                    {
+                        progress.RecordFailure(plan.Item.Name, unreadableFolder);
+                        continue;
+                    }
+
                     if (UsesServerSide(request, plan) && await TryServerSideAsync(request, plan, targetPath, ct).ConfigureAwait(false))
                     {
                         CarryTagsServerSide(request, plan, targetPath);
@@ -307,8 +329,11 @@ public static class TransferEngine
                     if (plan.Tree is null && plan.Item.IsDirectory)
                     {
                         // Server-side failed over to a byte copy; the tree wasn't walked yet.
-                        plan.Tree = await WalkAsync(source, plan.Item, ct).ConfigureAwait(false);
+                        plan.Tree = await WalkAsync(source, plan.Item, plan.Unreadable, ct).ConfigureAwait(false);
                     }
+
+                    // What couldn't be read is reported now, whatever becomes of the rest.
+                    RecordUnreadable(request, progress, plan);
 
                     if (progress.IsCloudToCloud || (!source.IsLocal && !destination.IsLocal))
                     {
@@ -1379,6 +1404,12 @@ public static class TransferEngine
         var item = plan.Item;
         if (!source.IsLocal)
         {
+            if (plan.Unreadable.Count > 0 && plan.Tree is { } walked)
+            {
+                await DeletePartlyMovedAsync(source, walked, plan.Unreadable, arrivals, ct).ConfigureAwait(false);
+                return;
+            }
+
             await source.DeleteItemAsync(item.Path, ct).ConfigureAwait(false);
             return;
         }
@@ -1419,6 +1450,46 @@ public static class TransferEngine
         }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// A moved account folder of which some subfolders couldn't be read: deleting the folder
+    /// would take them along uncopied. Each subfolder whose whole tree was read goes in one
+    /// call; files sitting in a folder that also holds an unreadable part go one by one, and
+    /// only if they arrived. The unreadable folders and every folder above them stay.
+    /// </summary>
+    private static async Task DeletePartlyMovedAsync(FileProvider source, List<TreeEntry> tree, List<(string Key, string Reason)> unreadable, IReadOnlyList<Arrival> arrivals, CancellationToken ct)
+    {
+        // An unreadable folder and all its ancestors are incomplete ("" is the moved folder).
+        var incomplete = new HashSet<string>(StringComparer.Ordinal) { string.Empty };
+        foreach (var (key, _) in unreadable)
+        {
+            var current = key;
+            while (current.Length > 0)
+            {
+                incomplete.Add(current);
+                var slash = current.LastIndexOf('/');
+                current = slash >= 0 ? current[..slash] : string.Empty;
+            }
+        }
+
+        var arrived = new HashSet<string>(arrivals.Select(a => a.SourcePath), StringComparer.Ordinal);
+        foreach (var entry in tree.Where(e => incomplete.Contains(e.ParentKey)))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (entry.Item.IsDirectory ? incomplete.Contains(entry.Key) : !arrived.Contains(entry.Item.Path))
+            {
+                continue;
+            }
+
+            try
+            {
+                await source.DeleteItemAsync(entry.Item.Path, ct).ConfigureAwait(false);
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+            {
+            }
+        }
+    }
+
     private static void TryRemoveEmptyDirectory(CloudFileItem folder)
     {
         try
@@ -1452,31 +1523,88 @@ public static class TransferEngine
 
         /// <summary>Folders and files beneath a top-level folder, parents before children.</summary>
         public List<TreeEntry>? Tree { get; set; }
+
+        /// <summary>
+        /// Subfolders that couldn't be listed (relative key, reason): left out of the copy and
+        /// reported as failed, and — in a move — left at the source with their parents.
+        /// </summary>
+        public List<(string Key, string Reason)> Unreadable { get; } = [];
+
+        /// <summary>Why the top-level folder itself couldn't be listed; the item then fails on its own.</summary>
+        public string? WalkFailure { get; set; }
     }
 
-    private static async Task<List<TreeEntry>> WalkAsync(FileProvider provider, CloudFileItem root, CancellationToken ct)
+    /// <summary>
+    /// The tree beneath <paramref name="root"/>. A subfolder that can't be listed (no
+    /// permission, a listing the server refuses) is recorded in <paramref name="unreadable"/>
+    /// and left out — never read as empty — so the rest still copies; one unreadable folder
+    /// deep in a tree used to fail the whole transfer before anything was written. The root's
+    /// own listing failing throws: there is nothing to copy then.
+    ///
+    /// <para>Only transfers walk like this. Sync enumerates on its own and still refuses to
+    /// plan when a folder can't be read (a Mirror must never take "unreadable" for "empty").</para>
+    /// </summary>
+    private static async Task<List<TreeEntry>> WalkAsync(FileProvider provider, CloudFileItem root, List<(string Key, string Reason)> unreadable, CancellationToken ct)
     {
         var entries = new List<TreeEntry>();
-        var pending = new Queue<(string Path, string Key)>();
-        pending.Enqueue((root.Path, string.Empty));
+        HashSet<TreeEntry>? leftOut = null;
+        var pending = new Queue<(string Path, string Key, TreeEntry? Entry)>();
+        pending.Enqueue((root.Path, string.Empty, null));
         while (pending.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
-            var (path, key) = pending.Dequeue();
-            foreach (var child in await provider.ListDirectoryAsync(path, ct).ConfigureAwait(false))
+            var (path, key, folderEntry) = pending.Dequeue();
+            IReadOnlyList<CloudFileItem> children;
+            if (folderEntry is null)
+            {
+                children = await provider.ListDirectoryAsync(path, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                try
+                {
+                    children = await provider.ListDirectoryAsync(path, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception e)
+                {
+                    // Not created empty at the destination, and not counted.
+                    unreadable.Add((key, Describe(e)));
+                    (leftOut ??= []).Add(folderEntry);
+                    SupportLogger.Shared.Log($"Transfer: {path} can't be read and is left out: {e.Message}", "Transfer", LogLevel.Notice);
+                    continue;
+                }
+            }
+
+            foreach (var child in children)
             {
                 // Junctions and symlinked folders are copied as what they point to only one
                 // level deep — following them recursively can loop forever.
                 var childKey = key.Length == 0 ? child.Name : key + "/" + child.Name;
-                entries.Add(new TreeEntry(child, childKey, key));
+                var entry = new TreeEntry(child, childKey, key);
+                entries.Add(entry);
                 if (child.IsDirectory && !(provider.IsLocal && child.IsSymlink))
                 {
-                    pending.Enqueue((child.Path, childKey));
+                    pending.Enqueue((child.Path, childKey, entry));
                 }
             }
         }
 
-        return entries;
+        return leftOut is null ? entries : entries.Where(e => !leftOut.Contains(e)).ToList();
+    }
+
+    /// <summary>Each unreadable part of a folder as its own failed item ("Folder\Sub\Locked"), with its reason.</summary>
+    private static void RecordUnreadable(TransferRequest request, TransferProgress progress, ItemPlan plan)
+    {
+        foreach (var (key, reason) in plan.Unreadable)
+        {
+            var relative = request.Source.IsLocal ? key.Replace('/', Path.DirectorySeparatorChar) : key;
+            var separator = request.Source.IsLocal ? Path.DirectorySeparatorChar : '/';
+            progress.RecordFailure(plan.Item.Name + separator + relative, reason);
+        }
     }
 
     private static async Task<IReadOnlyList<CloudFileItem>> ListOrEmptyAsync(FileProvider provider, string path, CancellationToken ct)

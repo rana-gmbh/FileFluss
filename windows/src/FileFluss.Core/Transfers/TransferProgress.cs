@@ -279,7 +279,20 @@ public sealed class TransferProgress : INotifyPropertyChanged
     /// source after a move: a batch can end with failures, skips or a cancellation.
     /// </summary>
     public IReadOnlySet<string> SucceededNames
-        => Results.Where(r => r.Status == TransferItemStatus.Succeeded).Select(r => r.Name).ToHashSet();
+    {
+        get
+        {
+            // A folder that arrived without a part that couldn't be read ("Folder\Locked"
+            // failed) didn't arrive whole.
+            var results = Results;
+            var failed = results.Where(r => r.Status == TransferItemStatus.Failed).Select(r => r.Name).ToList();
+            return results
+                .Where(r => r.Status == TransferItemStatus.Succeeded &&
+                            !failed.Any(f => f.StartsWith(r.Name + "/", StringComparison.Ordinal) || f.StartsWith(r.Name + "\\", StringComparison.Ordinal)))
+                .Select(r => r.Name)
+                .ToHashSet();
+        }
+    }
 
     /// <summary>Every attempted item succeeded and nothing was skipped or cancelled.</summary>
     public bool CompletedCleanly => !HasErrors && !IsCancelled && SkippedCount == 0;
