@@ -96,6 +96,7 @@ public sealed class TransferCenter : Observable
         progress.Completed += (_, _) => _pump.Dispatcher.BeginInvoke(() =>
         {
             Reorder();
+            TrimFinished();
             try
             {
                 onFinished?.Invoke(progress);
@@ -146,6 +147,26 @@ public sealed class TransferCenter : Observable
         if (!any)
         {
             _pump.Stop();
+        }
+    }
+
+    /// <summary>Finished transfers kept in the list; older ones drop off as new ones finish.</summary>
+    public const int FinishedLimit = 100;
+
+    /// <summary>
+    /// Keeps the newest <see cref="FinishedLimit"/> finished transfers. The list only ever
+    /// shrank through "Clear", and every finished transfer holds a result per file: over a
+    /// long session that grew without end, and so did every pass the popup, the sidebars and
+    /// the toolbar make over it. Running transfers are never dropped; a details window still
+    /// showing a dropped one keeps its own reference and goes on working.
+    /// </summary>
+    private void TrimFinished()
+    {
+        // All is newest first (Reorder), so what's past the limit is the oldest.
+        var finished = All.Where(t => !t.IsRunning).Skip(FinishedLimit).ToList();
+        foreach (var old in finished)
+        {
+            All.Remove(old);
         }
     }
 
