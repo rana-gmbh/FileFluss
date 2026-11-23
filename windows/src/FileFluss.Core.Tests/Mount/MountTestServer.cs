@@ -46,9 +46,10 @@ internal sealed class MountTestServer : IAsyncDisposable
         Action<MemoryCloudProvider>? seed = null,
         string mountRoot = "/",
         bool replacesInPlace = false,
-        long cacheBytes = 10 * 1024 * 1024)
+        long cacheBytes = 10 * 1024 * 1024,
+        bool caseSensitive = true)
     {
-        var provider = new MemoryCloudProvider();
+        var provider = new MemoryCloudProvider(caseSensitive: caseSensitive);
         provider.AddFile("/hello.txt", "hi");
         provider.AddFolder("/folder");
         provider.AddFile("/folder/inside.txt", "nested");

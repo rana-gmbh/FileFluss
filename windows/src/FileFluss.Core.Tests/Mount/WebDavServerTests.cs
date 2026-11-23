@@ -537,6 +537,19 @@ public sealed class WebDavServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CopyOntoACaseVariantOfItselfIsRefusedAndTheSourceStays()
+    {
+        // On a store that folds case, "/HELLO.txt" is "/hello.txt": Overwrite: T used to
+        // delete it as the existing destination, and the copy then failed for want of a source.
+        await using var t = await MountTestServer.StartAsync(caseSensitive: false);
+
+        var (response, _) = await t.SendAsync("COPY", t.In("/hello.txt"), H(("Destination", t.Url(t.In("/HELLO.txt")).AbsoluteUri), ("Overwrite", "T")));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("hi", t.Provider.Read("/hello.txt"));
+    }
+
+    [Fact]
     public async Task MoveFallsBackToCopyAndDeleteForFolders()
     {
         _t.Provider.SupportsServerSide = false;

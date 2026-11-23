@@ -1058,7 +1058,16 @@ public sealed class WebDavServer : IAsyncDisposable
             return DavResponse.Empty(409);
         }
 
-        var caseOnlyRename = move && _provider.NameComparer.Equals(destination.ProviderPath, source.ProviderPath);
+        var sameItem = _provider.NameComparer.Equals(destination.ProviderPath, source.ProviderPath);
+        if (sameItem && !move)
+        {
+            // A COPY onto a case variant of itself, on a store that folds case: the
+            // "existing destination" is the source, and Overwrite would delete it before the
+            // copy then failed for want of a source.
+            return DavResponse.Empty(403);
+        }
+
+        var caseOnlyRename = move && sameItem;
         var existing = caseOnlyRename ? null : await FindAsync(destination.ProviderPath, cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {

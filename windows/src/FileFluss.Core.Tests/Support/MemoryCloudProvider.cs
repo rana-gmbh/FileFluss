@@ -15,18 +15,24 @@ namespace FileFluss.Core.Tests.Support;
 /// </summary>
 public sealed class MemoryCloudProvider : CloudProvider
 {
-    private readonly ConcurrentDictionary<string, Node> _nodes = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Node> _nodes;
+    private readonly bool _caseSensitive;
 
-    public MemoryCloudProvider(CloudProviderType type = CloudProviderType.WebDav)
+    /// <param name="caseSensitive">False stands in for a store that folds case (Windows shares, OneDrive): "/A.txt" finds "/a.txt".</param>
+    public MemoryCloudProvider(CloudProviderType type = CloudProviderType.WebDav, bool caseSensitive = true)
         : base(Guid.NewGuid(), new MemoryCredentialStore())
     {
         ProviderType = type;
+        _caseSensitive = caseSensitive;
+        _nodes = new ConcurrentDictionary<string, Node>(caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
         _nodes["/"] = new Node(true, [], DateTimeOffset.Now);
     }
 
     private sealed record Node(bool IsDirectory, byte[] Content, DateTimeOffset Modified);
 
     public override CloudProviderType ProviderType { get; }
+
+    public override bool IsCaseSensitive => _caseSensitive;
 
     protected override string CredentialKeyPrefix => "memory";
 
