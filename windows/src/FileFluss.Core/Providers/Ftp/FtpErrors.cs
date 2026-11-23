@@ -15,6 +15,12 @@ internal static class FtpErrors
 {
     public static CloudProviderException Map(Exception error, string? path)
     {
+        // A self-signed certificate other than the pinned one: said as such, not as a TLS failure.
+        if (CloudProviderException.FindCertificateChange(error) is { } changed)
+        {
+            return error as CloudProviderException ?? CloudProviderException.CertificateChanged(changed);
+        }
+
         var e = Unwrap(error);
         switch (e)
         {

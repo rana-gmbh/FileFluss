@@ -2,6 +2,7 @@
 
 using System.Net.Sockets;
 using FileFluss.Core.Models;
+using FileFluss.Core.Net;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Providers.Ftp;
 using FileFluss.Core.Security;
@@ -39,7 +40,7 @@ internal sealed class FakeFtpServer
     /// <summary>Refuse STOR of "*.fileflusspart" outright (a server with a name filter).</summary>
     public bool RefuseStagingNames { get; set; }
 
-    public Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, CancellationToken cancellationToken)
+    public Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, SelfSignedTrust? trust, CancellationToken cancellationToken)
     {
         LastCredentials = credentials;
         if (OnConnect(credentials) is { } failure)
@@ -636,7 +637,7 @@ public class FtpProviderTests
     [Fact]
     public async Task PoolOpensOneConnectionPerConcurrentOperationUpToTheLimit()
     {
-        using var pool = new FtpConnectionPool(ct => _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, ct), limit: 2);
+        using var pool = new FtpConnectionPool(ct => _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, null, ct), limit: 2);
 
         var first = await pool.LeaseAsync(CancellationToken.None);
         var second = await pool.LeaseAsync(CancellationToken.None);
@@ -660,7 +661,7 @@ public class FtpProviderTests
         using var pool = new FtpConnectionPool(ct =>
             Interlocked.Increment(ref attempts) == 2
                 ? throw new FtpCommandException("421", "Too many connections (1) from this IP")
-                : _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, ct), limit: 3);
+                : _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, null, ct), limit: 3);
 
         var first = await pool.LeaseAsync(CancellationToken.None);
         var waiting = pool.LeaseAsync(CancellationToken.None);
@@ -675,7 +676,7 @@ public class FtpProviderTests
     [Fact]
     public async Task CancelledWaiterDoesNotSwallowAConnection()
     {
-        using var pool = new FtpConnectionPool(ct => _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, ct), limit: 1);
+        using var pool = new FtpConnectionPool(ct => _server.ConnectAsync(new FtpCredentials { Host = "h", Username = "u" }, null, ct), limit: 1);
         var first = await pool.LeaseAsync(CancellationToken.None);
         using var cancel = new CancellationTokenSource();
         var waiting = pool.LeaseAsync(cancel.Token);

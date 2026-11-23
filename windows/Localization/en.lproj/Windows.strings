@@ -384,6 +384,13 @@
 "Host key changed" = "Host key changed";
 "Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key.";
 "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?";
+"Trust this server?" = "Trust this server?";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?";
+
+/* Self-signed certificates (trust on first use) */
+"Certificate changed" = "Certificate changed";
+"Certificate verification failed — the server's certificate changed. If you expected this, edit the account and connect again to accept the new certificate." = "Certificate verification failed — the server's certificate changed. If you expected this, edit the account and connect again to accept the new certificate.";
+"The certificate of %@ has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new certificate?" = "The certificate of %@ has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new certificate?";
 
 /* Seafile */
 "Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." = "Cannot delete a Seafile library from FileFluss. Use the Seafile web UI.";

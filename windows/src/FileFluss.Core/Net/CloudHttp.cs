@@ -29,11 +29,12 @@ public static class CloudHttp
         $"FileFluss/{typeof(CloudHttp).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "1.0"} (Windows)";
 
     /// <summary>
-    /// A client for one provider instance. <paramref name="trustedSelfSignedHost"/> accepts an
-    /// invalid certificate for exactly that host and no other — the macOS "Allow self-signed
-    /// certificate" option, whose trust is scoped to the host the user typed.
+    /// A client for one provider instance. <paramref name="selfSigned"/> is the "Allow
+    /// self-signed certificate" option: a certificate that doesn't validate is accepted for
+    /// exactly the host the user typed and no other, and only while it is the one pinned for
+    /// that account (trust on first use, <see cref="SelfSignedTrust"/>).
     /// </summary>
-    public static HttpClient Create(string? trustedSelfSignedHost = null, bool allowAutoRedirect = true, CookieContainer? cookies = null)
+    public static HttpClient Create(SelfSignedTrust? selfSigned = null, bool allowAutoRedirect = true, CookieContainer? cookies = null)
     {
         var handler = new SocketsHttpHandler
         {
@@ -50,16 +51,14 @@ public static class CloudHttp
             ConnectCallback = ConnectWithKeepAliveAsync,
         };
 
-        if (!string.IsNullOrEmpty(trustedSelfSignedHost))
+        if (selfSigned is not null)
         {
             handler.SslOptions = new SslClientAuthenticationOptions
             {
                 // The sender is the SslStream for the connection being validated, so the
                 // exemption applies to that one host name and never to a redirect elsewhere.
-                RemoteCertificateValidationCallback = (sender, _, _, errors) =>
-                    errors == SslPolicyErrors.None ||
-                    (sender is SslStream stream &&
-                     string.Equals(stream.TargetHostName, trustedSelfSignedHost, StringComparison.OrdinalIgnoreCase)),
+                RemoteCertificateValidationCallback = (sender, certificate, _, errors) =>
+                    selfSigned.Validate((sender as SslStream)?.TargetHostName, certificate, errors),
             };
         }
 

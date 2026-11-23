@@ -42,7 +42,7 @@ public sealed class SynologyDriveProvider : CloudProvider
         _handler = handler;
         if (credentials.Load<SynologyDriveCredentials>(CredentialKey) is { } stored)
         {
-            _client = CreateClient(stored);
+            _client = CreateClient(stored, SelfSignedTrustFor(SynologyDriveApiClient.HostFrom(stored.ServerUrl), stored.AllowSelfSignedCertificate), out _);
         }
     }
 
@@ -94,7 +94,7 @@ public sealed class SynologyDriveProvider : CloudProvider
         new ConnectField(AllowSelfSignedKey, ConnectFieldKind.Checkbox, "Allow self-signed certificate")
         {
             Required = false,
-            DefaultValue = "true",
+            DefaultFollowsAddress = true,
             Help = "Most home Synology NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).",
         });
 
@@ -122,37 +122,42 @@ public sealed class SynologyDriveProvider : CloudProvider
             serverUrl,
             username,
             values.Get(PasswordKey),
-            values.GetBool(AllowSelfSignedKey, fallback: true),
+            values.GetBool(AllowSelfSignedKey, fallback: CredentialScope.IsLocalAddress(serverUrl)),
             $"{username}@{SynologyDriveApiClient.HostFrom(serverUrl)}",
             reusableDeviceId);
 
-        var client = CreateClient(credentials, out var http);
-        try
+        var client = await ConnectTrustingAsync(SynologyDriveApiClient.HostFrom(serverUrl), credentials.AllowSelfSignedCertificate, prompt, async trust =>
         {
-            var failure = await client.TryLoginAsync(otp, cancellationToken).ConfigureAwait(false);
-            if (failure == 403 && otp.Length == 0)
+            var attempt = CreateClient(credentials, trust, out var http);
+            try
             {
-                var code = SynologyDriveApiClient.NormalizeOtp(await prompt.RequestCodeAsync(
-                    CloudProviderType.SynologyDrive.DisplayName(),
-                    Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
-                    cancellationToken).ConfigureAwait(false));
-                if (code.Length > 0)
+                var failure = await attempt.TryLoginAsync(otp, cancellationToken).ConfigureAwait(false);
+                if (failure == 403 && otp.Length == 0)
                 {
-                    failure = await client.TryLoginAsync(code, cancellationToken).ConfigureAwait(false);
+                    var code = SynologyDriveApiClient.NormalizeOtp(await prompt.RequestCodeAsync(
+                        CloudProviderType.SynologyDrive.DisplayName(),
+                        Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
+                        cancellationToken).ConfigureAwait(false));
+                    if (code.Length > 0)
+                    {
+                        failure = await attempt.TryLoginAsync(code, cancellationToken).ConfigureAwait(false);
+                    }
                 }
-            }
 
-            if (failure is { } authError)
-            {
-                throw SynologyDriveApiClient.MapAuthError(authError);
+                if (failure is { } authError)
+                {
+                    throw SynologyDriveApiClient.MapAuthError(authError);
+                }
+
+                return attempt;
             }
-        }
-        catch
-        {
-            // Stored credentials and the live client stay as they were.
-            ReleaseHttpClient(http);
-            throw;
-        }
+            catch
+            {
+                // Stored credentials and the live client stay as they were.
+                ReleaseHttpClient(http);
+                throw;
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         // The logged-in client's credentials carry the device token its OTP login obtained.
         // Keep that client too: it already holds the session, so the first listing doesn't
@@ -328,13 +333,11 @@ public sealed class SynologyDriveProvider : CloudProvider
     /// An HttpClient per credential set: with "Allow self-signed certificate" on, an invalid
     /// certificate is accepted for the NAS host the user typed and no other.
     /// </summary>
-    private SynologyDriveApiClient CreateClient(SynologyDriveCredentials credentials) => CreateClient(credentials, out _);
-
-    private SynologyDriveApiClient CreateClient(SynologyDriveCredentials credentials, out HttpClient http)
+    private SynologyDriveApiClient CreateClient(SynologyDriveCredentials credentials, SelfSignedTrust? trust, out HttpClient http)
     {
         http = _handler is not null
             ? new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan }
-            : CloudHttp.Create(trustedSelfSignedHost: credentials.AllowSelfSignedCertificate ? SynologyDriveApiClient.HostFrom(credentials.ServerUrl) : null);
+            : CloudHttp.Create(selfSigned: trust);
         lock (_clientsGate)
         {
             _httpClients.Add(http);

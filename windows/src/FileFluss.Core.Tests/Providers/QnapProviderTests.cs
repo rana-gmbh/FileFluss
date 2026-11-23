@@ -129,7 +129,8 @@ public sealed class QnapProviderTests : IDisposable
         Assert.Equal(ConnectFieldKind.OneTimeCode, fields["securityCode"].Kind);
         Assert.False(fields["securityCode"].Required);
         Assert.Equal("2-step verification code (only if it's on)", fields["securityCode"].Label);
-        Assert.Equal("true", fields["allowSelfSigned"].DefaultValue);
+        Assert.Null(fields["allowSelfSigned"].DefaultValue);
+        Assert.True(fields["allowSelfSigned"].DefaultFollowsAddress);
         Assert.True(provider.ShareLinkCapabilities.CanCreate);
         Assert.True(provider.ShareLinkCapabilities.CanQueryExisting);
         Assert.False(provider.ShareLinkCapabilities.CanUpdate);

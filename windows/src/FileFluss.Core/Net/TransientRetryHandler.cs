@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using System.Net;
+using FileFluss.Core.Providers;
 
 namespace FileFluss.Core.Net;
 
@@ -93,7 +94,8 @@ public sealed class TransientRetryHandler : DelegatingHandler
             {
                 response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
-            catch (HttpRequestException) when (attempt < MaxAttempts && IsReadOnly(request) && CanReplay(request) && !cancellationToken.IsCancellationRequested)
+            catch (HttpRequestException e) when (attempt < MaxAttempts && IsReadOnly(request) && CanReplay(request) && !cancellationToken.IsCancellationRequested &&
+                                                 CloudProviderException.FindCertificateChange(e) is null)
             {
                 var backoff = _backoff(attempt);
                 waited += backoff;

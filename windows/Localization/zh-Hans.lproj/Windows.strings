@@ -396,6 +396,13 @@
 "Host key changed" = "主机密钥已更改";
 "Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "主机密钥验证失败——服务器的主机密钥已更改。如果这在你的预料之中，请编辑账户并重新连接以接受新密钥。";
 "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "自上次连接以来，%@ 的 SSH 主机密钥已更改。服务器重新安装后会出现这种情况——也可能是有人在拦截连接。\n\n之前：%@\n现在：%@\n\n要信任新密钥吗？";
+"Trust this server?" = "要信任此服务器吗？";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "这是首次连接到 %@。请确认此 SSH 主机密钥指纹属于该服务器——你的服务商或管理员可以帮你核实：\n\n%@\n\n要信任此密钥并连接吗？";
+
+/* Self-signed certificates (trust on first use) */
+"Certificate changed" = "证书已更改";
+"Certificate verification failed — the server's certificate changed. If you expected this, edit the account and connect again to accept the new certificate." = "证书验证失败——服务器的证书已更改。如果这在你的预料之中，请编辑账户并重新连接以接受新证书。";
+"The certificate of %@ has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new certificate?" = "自上次连接以来，%@ 的证书已更改。服务器换了新证书时会出现这种情况——也可能是有人在拦截连接。\n\n之前：%@\n现在：%@\n\n要信任新证书吗？";
 
 /* Seafile */
 "Cannot delete a Seafile library from FileFluss. Use the Seafile web UI." = "无法在 FileFluss 中删除 Seafile 资料库。请使用 Seafile 网页界面。";

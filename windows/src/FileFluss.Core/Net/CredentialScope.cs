@@ -58,12 +58,60 @@ public static class CredentialScope
             return true;
         }
 
+        return !IsPrivateIPv4(ip);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="address"/> (a URL or a bare host name) is on this PC or the local
+    /// network: localhost, ".local" and other single-label names, private, loopback and
+    /// link-local IPv4, and IPv6 loopback, link-local and unique-local addresses. Decides the
+    /// default of "Allow self-signed certificate": a home NAS reached at 192.168.1.20 usually
+    /// has a self-signed certificate; one reached by a public name should have a real one, and
+    /// accepting a self-signed certificate there would let a network in between present its own.
+    /// </summary>
+    public static bool IsLocalAddress(string address)
+    {
+        var trimmed = address.Trim();
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        var host = Uri.TryCreate(trimmed.Contains("://", StringComparison.Ordinal) ? trimmed : "https://" + trimmed, UriKind.Absolute, out var uri)
+            ? uri.IdnHost
+            : trimmed;
+        host = host.Trim('[', ']').TrimEnd('.').ToLowerInvariant();
+        if (host.Length == 0)
+        {
+            return false;
+        }
+
+        if (IPAddress.TryParse(host, out var ip))
+        {
+            if (ip.IsIPv4MappedToIPv6)
+            {
+                ip = ip.MapToIPv4();
+            }
+
+            return ip.AddressFamily == AddressFamily.InterNetwork
+                ? IsPrivateIPv4(ip)
+                : IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal || ip.IsIPv6UniqueLocal;
+        }
+
+        return host == "localhost" ||
+               host.EndsWith(".local", StringComparison.Ordinal) ||
+               host.EndsWith(".localhost", StringComparison.Ordinal) ||
+               !host.Contains('.');
+    }
+
+    private static bool IsPrivateIPv4(IPAddress ip)
+    {
         var octets = ip.GetAddressBytes();
         return (octets[0], octets[1]) switch
         {
-            (10, _) or (127, _) or (192, 168) or (169, 254) => false,
-            (172, >= 16 and <= 31) => false,
-            _ => true,
+            (10, _) or (127, _) or (192, 168) or (169, 254) => true,
+            (172, >= 16 and <= 31) => true,
+            _ => false,
         };
     }
 }

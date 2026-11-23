@@ -63,8 +63,44 @@ public sealed class CloudProviderException : Exception
     public static CloudProviderException NotImplemented()
         => new(CloudErrorKind.NotImplemented, Localization.L("This feature is not yet implemented."));
 
+    /// <summary>
+    /// A transport failure. A self-signed certificate that differs from the one trusted before
+    /// (<see cref="Net.CertificateChangedException"/>, thrown by the TLS check) gets its own
+    /// message instead: "network error" would hide that the connection was refused on purpose.
+    /// </summary>
     public static CloudProviderException Network(Exception inner)
-        => new(CloudErrorKind.NetworkError, Localization.L("Network error: {0}", inner.Message), inner);
+        => FindCertificateChange(inner) is { } changed
+            ? CertificateChanged(changed)
+            : new(CloudErrorKind.NetworkError, Localization.L("Network error: {0}", inner.Message), inner);
+
+    /// <summary>The server's untrusted certificate isn't the one pinned for the account.</summary>
+    public static CloudProviderException CertificateChanged(Exception? inner = null)
+        => new(CloudErrorKind.CommandFailed, Localization.L("Certificate verification failed — the server's certificate changed. If you expected this, edit the account and connect again to accept the new certificate."), inner);
+
+    /// <summary>The certificate change somewhere in <paramref name="error"/>'s chain, if any.</summary>
+    public static Net.CertificateChangedException? FindCertificateChange(Exception? error)
+    {
+        for (var e = error; e is not null; e = e.InnerException)
+        {
+            if (e is Net.CertificateChangedException changed)
+            {
+                return changed;
+            }
+
+            if (e is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                {
+                    if (FindCertificateChange(inner) is { } found)
+                    {
+                        return found;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 
     public static CloudProviderException Unauthorized()
         => new(CloudErrorKind.Unauthorized, Localization.L("Authorization expired. Please sign in again."));

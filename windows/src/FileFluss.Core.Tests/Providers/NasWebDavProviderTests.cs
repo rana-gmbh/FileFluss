@@ -70,7 +70,8 @@ public sealed class NasWebDavProviderTests
         Assert.Equal(["serverUrl", "username", "password", "allowSelfSigned"], fields.Where(f => f.HasValue).Select(f => f.Key));
         Assert.Equal("Server URL (e.g. https://my-nas.local:5006)", fields.Single(f => f.Key == "serverUrl").Placeholder);
         Assert.Equal(ConnectFieldKind.Url, fields.Single(f => f.Key == "serverUrl").Kind);
-        Assert.Equal("true", fields.Single(f => f.Key == "allowSelfSigned").DefaultValue);
+        Assert.Null(fields.Single(f => f.Key == "allowSelfSigned").DefaultValue);
+        Assert.True(fields.Single(f => f.Key == "allowSelfSigned").DefaultFollowsAddress);
         Assert.Contains("5006", fields[0].Label, StringComparison.Ordinal);
         Assert.Contains("9802", asustor.ConnectSpec.Modes.Single().Fields[0].Label, StringComparison.Ordinal);
         Assert.Equal(4_000_000_000, ugreen.MaxUploadFileSize);

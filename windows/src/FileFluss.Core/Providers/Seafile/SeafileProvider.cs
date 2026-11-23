@@ -49,7 +49,7 @@ public sealed class SeafileProvider : CloudProvider
         var stored = Credentials.Load<SeafileCredentials>(CredentialKey);
         if (stored is { ServerUrl.Length: > 0, Token.Length: > 0 })
         {
-            _session = new Session(stored, CreateClient(stored.AllowSelfSignedCertificate ? HostOf(stored.ServerUrl) : null));
+            _session = new Session(stored, CreateClient(SelfSignedTrustFor(HostOf(stored.ServerUrl), stored.AllowSelfSignedCertificate)));
         }
     }
 
@@ -143,31 +143,41 @@ public sealed class SeafileProvider : CloudProvider
 
         // The auth call trusts exactly what the live session will, otherwise a self-signed
         // server would fail the very first request.
-        var http = CreateClient(allowSelfSigned ? host : null);
+        var (http, token) = await ConnectTrustingAsync(host, allowSelfSigned, prompt, async trust =>
+        {
+            var attempt = CreateClient(trust);
+            try
+            {
+                try
+                {
+                    return (attempt, await ObtainTokenAsync(attempt, server, username, password, otp, cancellationToken).ConfigureAwait(false));
+                }
+                catch (CloudProviderException e) when (e.Kind == CloudErrorKind.TwoFactorRequired && otp is null)
+                {
+                    // The account has 2FA but the optional code field was left empty: ask for it
+                    // instead of making the user retype the password.
+                    var code = await prompt.RequestCodeAsync(
+                        Localization.L("Two-factor code (only if enabled)"),
+                        Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
+                        cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(code))
+                    {
+                        throw;
+                    }
+
+                    return (attempt, await ObtainTokenAsync(attempt, server, username, password, code.Trim(), cancellationToken).ConfigureAwait(false));
+                }
+            }
+            catch
+            {
+                attempt.Dispose();
+                throw;
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
         var adopted = false;
         try
         {
-            string token;
-            try
-            {
-                token = await ObtainTokenAsync(http, server, username, password, otp, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.TwoFactorRequired && otp is null)
-            {
-                // The account has 2FA but the optional code field was left empty: ask for it
-                // instead of making the user retype the password.
-                var code = await prompt.RequestCodeAsync(
-                    Localization.L("Two-factor code (only if enabled)"),
-                    Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
-                    cancellationToken).ConfigureAwait(false);
-                if (string.IsNullOrWhiteSpace(code))
-                {
-                    throw;
-                }
-
-                token = await ObtainTokenAsync(http, server, username, password, code.Trim(), cancellationToken).ConfigureAwait(false);
-            }
-
             var credentials = new SeafileCredentials(server, username, token) { AllowSelfSignedCertificate = allowSelfSigned };
             Credentials.Save(CredentialKey, credentials);
             lock (_gate)
@@ -256,9 +266,9 @@ public sealed class SeafileProvider : CloudProvider
     private static string? HostOf(string url)
         => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.Host : null;
 
-    private HttpClient CreateClient(string? trustedSelfSignedHost)
+    private HttpClient CreateClient(SelfSignedTrust? trust)
         => _handler is null
-            ? CloudHttp.Create(trustedSelfSignedHost)
+            ? CloudHttp.Create(selfSigned: trust)
             : new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
 
     // MARK: - Request plumbing

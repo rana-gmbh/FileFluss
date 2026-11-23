@@ -49,6 +49,14 @@ public sealed record ConnectField(string Key, ConnectFieldKind Kind, string Labe
 
     public string? DefaultValue { get; init; }
 
+    /// <summary>
+    /// A checkbox that, on a new account, starts on for an address on this PC or the local
+    /// network and off otherwise (<see cref="Net.CredentialScope.IsLocalAddress"/>), following
+    /// the form's address field until the user ticks or unticks it. "Allow self-signed
+    /// certificate" uses it. An edited account shows what it has.
+    /// </summary>
+    public bool DefaultFollowsAddress { get; init; }
+
     /// <summary>Connect stays disabled until every required field has a value.</summary>
     public bool Required { get; init; } = true;
 

@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
+using FileFluss.Core.Net;
 using FluentFTP;
 using FluentFTP.Exceptions;
 
@@ -47,14 +48,25 @@ internal sealed class FluentFtpConnection : IFtpConnection
 
     public bool CanSetModifiedTime => _client.HasFeature(FtpCapability.MFMT);
 
-    /// <summary>Connects and logs in. Passive mode (EPSV, then PASV), as curl does by default.</summary>
-    public static async Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, CancellationToken cancellationToken)
+    /// <summary>
+    /// Connects and logs in. Passive mode (EPSV, then PASV), as curl does by default. With
+    /// "Accept self-signed certificate", <paramref name="trust"/> decides (trust on first use);
+    /// a certificate that changed since it was pinned fails with <see cref="CertificateChangedException"/>.
+    /// </summary>
+    public static async Task<IFtpConnection> ConnectAsync(FtpCredentials credentials, SelfSignedTrust? trust, CancellationToken cancellationToken)
     {
-        var client = CreateClient(credentials);
+        var client = CreateClient(credentials, trust);
+        var refusalsBefore = trust?.Refusals ?? 0;
         try
         {
             await client.Connect(cancellationToken).ConfigureAwait(false);
             return new FluentFtpConnection(client);
+        }
+        catch (Exception e) when (e is not OperationCanceledException &&
+                                  trust is { Refused: { } presented, Pin: { } pinned } && trust.Refusals != refusalsBefore)
+        {
+            client.Dispose();
+            throw new CertificateChangedException(trust.Host, pinned, presented);
         }
         catch
         {
@@ -64,15 +76,15 @@ internal sealed class FluentFtpConnection : IFtpConnection
     }
 
     /// <summary>The configured, not yet connected client.</summary>
-    internal static AsyncFtpClient CreateClient(FtpCredentials credentials)
+    internal static AsyncFtpClient CreateClient(FtpCredentials credentials, SelfSignedTrust? trust = null)
     {
         var config = new FtpConfig
         {
             EncryptionMode = credentials.UseTls ? FtpEncryptionMode.Explicit : FtpEncryptionMode.None,
 
-            // Without this, FluentFTP aborts on any certificate error (no ValidateCertificate
-            // handler is installed), which is the strict default the toggle relaxes.
-            ValidateAnyCertificate = credentials.UseTls && credentials.AllowInvalidCertificate,
+            // Never every certificate: with the option on, the handler below accepts an
+            // untrusted one only while it is the one pinned for this server.
+            ValidateAnyCertificate = false,
             DataConnectionType = FtpDataConnectionType.AutoPassive,
             ConnectTimeout = 15_000,
             DataConnectionConnectTimeout = 15_000,
@@ -88,6 +100,14 @@ internal sealed class FluentFtpConnection : IFtpConnection
             // set encoding wins over FEAT detection.
             Encoding = System.Text.Encoding.UTF8,
         };
+
+        if (credentials.UseTls && credentials.AllowInvalidCertificate)
+        {
+            // The control and the data connections all present the server's certificate.
+            var check = trust ?? new SelfSignedTrust(credentials.Host, pin: null);
+            client.ValidateCertificate += (_, e) => e.Accept = check.Accepts(credentials.Host, e.Certificate, e.PolicyErrors);
+        }
+
         return client;
     }
 

@@ -39,7 +39,7 @@ public sealed class QnapProvider : CloudProvider
         _handler = handler;
         if (credentials.Load<QnapCredentials>(CredentialKey) is { } stored)
         {
-            _client = CreateClient(stored, out _);
+            _client = CreateClient(stored, SelfSignedTrustFor(QnapApiClient.HostFrom(stored.ServerUrl), stored.AllowSelfSignedCertificate), out _);
             AttachPersistence(_client);
         }
     }
@@ -108,7 +108,7 @@ public sealed class QnapProvider : CloudProvider
         new ConnectField(AllowSelfSignedKey, ConnectFieldKind.Checkbox, "Allow self-signed certificate")
         {
             Required = false,
-            DefaultValue = "true",
+            DefaultFollowsAddress = true,
             Help = "Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).",
         });
 
@@ -137,40 +137,45 @@ public sealed class QnapProvider : CloudProvider
             serverUrl,
             username,
             values.Get(PasswordKey),
-            values.GetBool(AllowSelfSignedKey, fallback: true),
+            values.GetBool(AllowSelfSignedKey, fallback: CredentialScope.IsLocalAddress(serverUrl)),
             $"{username}@{QnapApiClient.HostFrom(serverUrl)}",
             previous?.ClientId ?? Guid.NewGuid().ToString().ToUpperInvariant(),
             Qtoken: null,
             Vtoken: previous?.Vtoken);
 
-        var client = CreateClient(credentials, out var http);
-        try
+        var client = await ConnectTrustingAsync(QnapApiClient.HostFrom(serverUrl), credentials.AllowSelfSignedCertificate, prompt, async trust =>
         {
+            var attempt = CreateClient(credentials, trust, out var http);
             try
             {
-                await client.LoginAsync(code, allowToken: false, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.TwoFactorRequired && code.Length == 0)
-            {
-                var typed = await prompt.RequestCodeAsync(
-                    CloudProviderType.Qnap.DisplayName(),
-                    Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
-                    cancellationToken).ConfigureAwait(false);
-                var second = QnapApiClient.StripWhitespace(typed);
-                if (second.Length == 0)
+                try
                 {
-                    throw;
+                    await attempt.LoginAsync(code, allowToken: false, cancellationToken).ConfigureAwait(false);
+                }
+                catch (CloudProviderException e) when (e.Kind == CloudErrorKind.TwoFactorRequired && code.Length == 0)
+                {
+                    var typed = await prompt.RequestCodeAsync(
+                        CloudProviderType.Qnap.DisplayName(),
+                        Localization.L("Two-factor authentication required. Enter your 6-digit code and try again."),
+                        cancellationToken).ConfigureAwait(false);
+                    var second = QnapApiClient.StripWhitespace(typed);
+                    if (second.Length == 0)
+                    {
+                        throw;
+                    }
+
+                    await attempt.LoginAsync(second, allowToken: false, cancellationToken).ConfigureAwait(false);
                 }
 
-                await client.LoginAsync(second, allowToken: false, cancellationToken).ConfigureAwait(false);
+                return attempt;
             }
-        }
-        catch
-        {
-            // Stored credentials and the live client stay as they were.
-            ReleaseHttpClient(http);
-            throw;
-        }
+            catch
+            {
+                // Stored credentials and the live client stay as they were.
+                ReleaseHttpClient(http);
+                throw;
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         // Keep the client that logged in: it holds the session, and the next login can't
         // repeat a 2-step code.
@@ -317,11 +322,11 @@ public sealed class QnapProvider : CloudProvider
     /// An HttpClient per credential set: with "Allow self-signed certificate" on, an invalid
     /// certificate is accepted for the NAS host the user typed and no other.
     /// </summary>
-    private QnapApiClient CreateClient(QnapCredentials credentials, out HttpClient http)
+    private QnapApiClient CreateClient(QnapCredentials credentials, SelfSignedTrust? trust, out HttpClient http)
     {
         http = _handler is not null
             ? new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan }
-            : CloudHttp.Create(trustedSelfSignedHost: credentials.AllowSelfSignedCertificate ? QnapApiClient.HostFrom(credentials.ServerUrl) : null);
+            : CloudHttp.Create(selfSigned: trust);
         lock (_clientsGate)
         {
             _httpClients.Add(http);

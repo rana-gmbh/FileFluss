@@ -99,7 +99,8 @@ public sealed class SynologyDriveProviderTests : IDisposable
         Assert.Equal(["serverUrl", "username", "password", "otp", "allowSelfSigned"], fields.Keys);
         Assert.Equal(ConnectFieldKind.OneTimeCode, fields["otp"].Kind);
         Assert.False(fields["otp"].Required);
-        Assert.Equal("true", fields["allowSelfSigned"].DefaultValue);
+        Assert.Null(fields["allowSelfSigned"].DefaultValue);
+        Assert.True(fields["allowSelfSigned"].DefaultFollowsAddress);
         Assert.True(provider.ShareLinkCapabilities.CanQueryExisting);
         Assert.True(provider.ShareLinkCapabilities.SupportsPassword);
         Assert.Null(provider.MaxUploadFileSize);

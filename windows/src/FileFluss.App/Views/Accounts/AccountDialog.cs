@@ -31,6 +31,10 @@ public sealed class AccountDialog : Window, IConnectPrompt
     private readonly ContentControl _host = new();
     private readonly Dictionary<string, Func<string>> _readers = [];
     private readonly List<(ConnectField Field, Control Control)> _requiredControls = [];
+
+    /// <summary>The current mode's address field, which a <see cref="ConnectField.DefaultFollowsAddress"/> checkbox follows.</summary>
+    private TextBox? _addressBox;
+
     private CloudProvider? _provider;
     private ConnectSpec? _spec;
     private ConnectMode? _mode;
@@ -310,6 +314,7 @@ public sealed class AccountDialog : Window, IConnectPrompt
 
         _readers.Clear();
         _requiredControls.Clear();
+        _addressBox = null;
         foreach (var field in _mode!.Fields)
         {
             root.Children.Add(BuildField(field, prefill));
@@ -390,6 +395,24 @@ public sealed class AccountDialog : Window, IConnectPrompt
             case ConnectFieldKind.Checkbox:
                 var check = new CheckBox { Content = L(field.Label), IsChecked = bool.TryParse(initial, out var on) && on, Margin = margin, ToolTip = field.Help is null ? null : L(field.Help) };
                 _readers[field.Key] = () => (check.IsChecked == true).ToString();
+                if (field.DefaultFollowsAddress && !prefill.ContainsKey(field.Key) && _addressBox is { } addressField)
+                {
+                    // On a new account the box follows the address — on for a NAS on the local
+                    // network, off for a public name — until the user decides for themselves.
+                    var decided = false;
+                    check.Click += (_, _) => decided = true;
+                    void Follow()
+                    {
+                        if (!decided)
+                        {
+                            check.IsChecked = CredentialScope.IsLocalAddress(addressField.Text);
+                        }
+                    }
+
+                    addressField.TextChanged += (_, _) => Follow();
+                    Follow();
+                }
+
                 return check;
         }
 
@@ -494,6 +517,8 @@ public sealed class AccountDialog : Window, IConnectPrompt
 
         if (field.Kind == ConnectFieldKind.Url && input is TextBox address)
         {
+            _addressBox ??= address;
+
             // macOS 1.6: a password sent to a plain-HTTP address beyond the local network
             // crosses it unencrypted, and nothing said so.
             var plainHttp = new TextBlock

@@ -3990,6 +3990,30 @@ Now: {2}
 
 Trust the new key?</value>
   </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>Trust this server?</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>This is the first connection to {0}. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:
+
+{1}
+
+Trust this key and connect?</value>
+  </data>
+  <data name="Certificate changed" xml:space="preserve">
+    <value>Certificate changed</value>
+  </data>
+  <data name="Certificate verification failed — the server&apos;s certificate changed. If you expected this, edit the account and connect again to accept the new certificate." xml:space="preserve">
+    <value>Certificate verification failed — the server's certificate changed. If you expected this, edit the account and connect again to accept the new certificate.</value>
+  </data>
+  <data name="The certificate of {0} has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new certificate?" xml:space="preserve">
+    <value>The certificate of {0} has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.
+
+Previously: {1}
+Now: {2}
+
+Trust the new certificate?</value>
+  </data>
   <data name="This library is encrypted. Unlock it in the Seafile web interface, then try again." xml:space="preserve">
     <value>This library is encrypted. Unlock it in the Seafile web interface, then try again.</value>
   </data>

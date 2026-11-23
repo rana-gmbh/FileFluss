@@ -40,11 +40,12 @@ public sealed class FtpProvider : CloudProvider
         var stored = Credentials.Load<FtpCredentials>(CredentialKey);
         if (stored is { Host.Length: > 0, Username.Length: > 0 })
         {
-            _session = new Session(stored, _factory);
+            _session = new Session(stored, SelfSignedTrustFor(stored.Host, stored.UseTls && stored.AllowInvalidCertificate), _factory);
         }
     }
 
-    internal delegate Task<IFtpConnection> ConnectionFactory(FtpCredentials credentials, CancellationToken cancellationToken);
+    /// <summary>Opens and logs in one connection; <paramref name="trust"/> decides on an untrusted certificate (null: none is accepted).</summary>
+    internal delegate Task<IFtpConnection> ConnectionFactory(FtpCredentials credentials, SelfSignedTrust? trust, CancellationToken cancellationToken);
 
     public override CloudProviderType ProviderType => CloudProviderType.Ftp;
 
@@ -123,39 +124,46 @@ public sealed class FtpProvider : CloudProvider
             AllowInvalidCertificate = useTls && values.GetBool("allowInvalidCertificate"),
         };
 
-        IFtpConnection connection;
-        try
+        // The whole check runs inside the trusted attempt, so a certificate is only remembered
+        // once the account works.
+        var (session, connection) = await ConnectTrustingAsync(host, credentials.AllowInvalidCertificate, prompt, async trust =>
         {
-            connection = await _factory(credentials, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            throw FtpErrors.Map(e, null);
-        }
-
-        var session = new Session(credentials, _factory);
-        try
-        {
-            session.Home = await HomeOfAsync(connection, cancellationToken).ConfigureAwait(false);
-            var landing = ServerPath(session.Home, credentials.RemotePath);
-            if (!CloudPath.IsRoot(credentials.RemotePath) && !await connection.DirectoryExistsAsync(landing, cancellationToken).ConfigureAwait(false))
+            IFtpConnection opened;
+            try
             {
-                throw CloudProviderException.NotFound(credentials.RemotePath);
+                opened = await _factory(credentials, trust, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                throw FtpErrors.Map(e, null);
             }
 
-            await connection.ListAsync(landing, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception e)
-        {
-            connection.Dispose();
-            session.Dispose();
-            if (e is OperationCanceledException)
+            var candidate = new Session(credentials, trust, _factory);
+            try
             {
-                throw;
+                candidate.Home = await HomeOfAsync(opened, cancellationToken).ConfigureAwait(false);
+                var landing = ServerPath(candidate.Home, credentials.RemotePath);
+                if (!CloudPath.IsRoot(credentials.RemotePath) && !await opened.DirectoryExistsAsync(landing, cancellationToken).ConfigureAwait(false))
+                {
+                    throw CloudProviderException.NotFound(credentials.RemotePath);
+                }
+
+                await opened.ListAsync(landing, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                opened.Dispose();
+                candidate.Dispose();
+                if (e is OperationCanceledException)
+                {
+                    throw;
+                }
+
+                throw FtpErrors.Map(e, credentials.RemotePath);
             }
 
-            throw FtpErrors.Map(e, credentials.RemotePath);
-        }
+            return (candidate, opened);
+        }, cancellationToken).ConfigureAwait(false);
 
         session.Pool.Adopt(connection);
         Credentials.Save(CredentialKey, credentials);
@@ -601,11 +609,11 @@ public sealed class FtpProvider : CloudProvider
     }
 
     /// <summary>Credentials, the pool logged in with them, and the login directory once known.</summary>
-    private sealed class Session(FtpCredentials credentials, ConnectionFactory factory) : IDisposable
+    private sealed class Session(FtpCredentials credentials, SelfSignedTrust? trust, ConnectionFactory factory) : IDisposable
     {
         public FtpCredentials Credentials { get; } = credentials;
 
-        public FtpConnectionPool Pool { get; } = new(ct => factory(credentials, ct));
+        public FtpConnectionPool Pool { get; } = new(ct => factory(credentials, trust, ct));
 
         public string? Home { get; set; }
 

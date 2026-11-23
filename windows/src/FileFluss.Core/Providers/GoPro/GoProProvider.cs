@@ -249,9 +249,10 @@ public sealed class GoProProvider : CloudProvider
             {
                 // The camera presents a self-signed certificate; trust it for this address only,
                 // so nobody else on the network can impersonate the camera and collect the Basic
-                // credentials sent with every request.
+                // credentials sent with every request. The first certificate seen is the one
+                // trusted for as long as this client lives.
                 client = _handler is null
-                    ? CloudHttp.Create(trustedSelfSignedHost: ipAddress)
+                    ? CloudHttp.Create(selfSigned: new SelfSignedTrust(ipAddress, pin: null))
                     : new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
                 _cohnClients[ipAddress] = client;
             }

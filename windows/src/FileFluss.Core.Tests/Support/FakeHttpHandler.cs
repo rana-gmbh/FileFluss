@@ -86,6 +86,9 @@ public sealed class ScriptedConnectPrompt : IConnectPrompt
 
     public bool ConfirmAnswer { get; set; } = true;
 
+    /// <summary>Every yes/no question asked, in order.</summary>
+    public List<(string Title, string Message)> Confirmations { get; } = [];
+
     public void ShowStatus(string? message) => StatusLines.Add(message);
 
     public Task<string?> RequestCodeAsync(string title, string message, CancellationToken cancellationToken)
@@ -94,7 +97,11 @@ public sealed class ScriptedConnectPrompt : IConnectPrompt
     public Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> options, CancellationToken cancellationToken)
         => Task.FromResult(Choices.Count > 0 ? Choices.Dequeue() : 0);
 
-    public Task<bool> ConfirmAsync(string title, string message, CancellationToken cancellationToken) => Task.FromResult(ConfirmAnswer);
+    public Task<bool> ConfirmAsync(string title, string message, CancellationToken cancellationToken)
+    {
+        Confirmations.Add((title, message));
+        return Task.FromResult(ConfirmAnswer);
+    }
 
     public Task ShowImageAsync(byte[] png, string caption, Task until, CancellationToken cancellationToken) => until;
 }

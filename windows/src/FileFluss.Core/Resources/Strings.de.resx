@@ -3990,6 +3990,30 @@ Jetzt: {2}
 
 Dem neuen Schlüssel vertrauen?</value>
   </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>Diesem Server vertrauen?</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>Das ist die erste Verbindung zu {0}. Prüfe, ob dieser Fingerabdruck des SSH-Hostschlüssels zum Server gehört – dein Anbieter oder Administrator kann ihn bestätigen:
+
+{1}
+
+Diesem Schlüssel vertrauen und verbinden?</value>
+  </data>
+  <data name="Certificate changed" xml:space="preserve">
+    <value>Zertifikat geändert</value>
+  </data>
+  <data name="Certificate verification failed — the server&apos;s certificate changed. If you expected this, edit the account and connect again to accept the new certificate." xml:space="preserve">
+    <value>Überprüfung des Zertifikats fehlgeschlagen – das Zertifikat des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um das neue Zertifikat zu akzeptieren.</value>
+  </data>
+  <data name="The certificate of {0} has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new certificate?" xml:space="preserve">
+    <value>Das Zertifikat von {0} hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server ein neues Zertifikat bekommen hat – oder wenn jemand die Verbindung abfängt.
+
+Bisher: {1}
+Jetzt: {2}
+
+Dem neuen Zertifikat vertrauen?</value>
+  </data>
   <data name="This library is encrypted. Unlock it in the Seafile web interface, then try again." xml:space="preserve">
     <value>Diese Bibliothek ist verschlüsselt. Entsperre sie in der Seafile-Weboberfläche und versuche es dann erneut.</value>
   </data>

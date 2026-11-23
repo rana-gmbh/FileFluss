@@ -3990,6 +3990,30 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
 
 要信任新金鑰嗎？</value>
   </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>要信任此伺服器嗎？</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>這是第一次連線到 {0}。請確認此 SSH 主機金鑰指紋屬於該伺服器——你的服務供應商或管理員可以幫你確認：
+
+{1}
+
+要信任此金鑰並連線嗎？</value>
+  </data>
+  <data name="Certificate changed" xml:space="preserve">
+    <value>憑證已變更</value>
+  </data>
+  <data name="Certificate verification failed — the server&apos;s certificate changed. If you expected this, edit the account and connect again to accept the new certificate." xml:space="preserve">
+    <value>憑證驗證失敗——伺服器的憑證已變更。如果這在你的預期之中，請編輯帳戶並重新連線以接受新憑證。</value>
+  </data>
+  <data name="The certificate of {0} has changed since you last connected. This happens when the server got a new certificate — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new certificate?" xml:space="preserve">
+    <value>自上次連線以來，{0} 的憑證已變更。伺服器換了新憑證時會發生這種情況——也可能是有人在攔截連線。
+
+先前：{1}
+現在：{2}
+
+要信任新憑證嗎？</value>
+  </data>
   <data name="This library is encrypted. Unlock it in the Seafile web interface, then try again." xml:space="preserve">
     <value>此資料庫已加密。請在 Seafile 網頁介面中解鎖後再試一次。</value>
   </data>

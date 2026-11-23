@@ -86,6 +86,7 @@ public sealed class FtpListingIntegrityTests
         {
             using var connection = await FluentFtpConnection.ConnectAsync(
                 new FtpCredentials { Host = "127.0.0.1", Port = server.Port, Username = "user", Password = "pass" },
+                trust: null,
                 timeout.Token);
             return await connection.ListAsync("/", timeout.Token);
         }

@@ -95,7 +95,7 @@ public abstract class NasWebDavProvider : WebDavProviderBase
         new ConnectField(AllowSelfSignedKey, ConnectFieldKind.Checkbox, "Allow self-signed certificate")
         {
             Required = false,
-            DefaultValue = "true",
+            DefaultFollowsAddress = true,
             Help = "Most home NAS units use a self-signed certificate. Turn this off only if you've installed a real CA-signed cert (e.g. Let's Encrypt).",
         });
 
@@ -118,30 +118,32 @@ public abstract class NasWebDavProvider : WebDavProviderBase
         var normalized = NormalizeServerUrl(values.GetTrimmed(ServerUrlKey), Brand);
         var username = values.GetTrimmed(UsernameKey);
         var password = values.Get(PasswordKey);
-        var allowSelfSigned = values.GetBool(AllowSelfSignedKey, fallback: true);
+        var allowSelfSigned = values.GetBool(AllowSelfSignedKey, fallback: CredentialScope.IsLocalAddress(normalized));
         var host = HostOf(normalized) ?? Brand.KeychainPrefix;
 
-        var http = CreateHttp(allowSelfSigned ? host : null);
-        WebDavCredentials resolved;
-        try
+        var (http, resolved) = await ConnectTrustingAsync(HostOf(normalized), allowSelfSigned, prompt, async trust =>
         {
-            resolved = await WebDavClient.AuthenticateAsync(http, normalized, username, password, LogCategory, cancellationToken).ConfigureAwait(false);
-        }
-        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NetworkError || (e.Kind == CloudErrorKind.ServerError && e.StatusCode == 0))
-        {
-            // Nothing answered at all: the WebDAV service is off, the port is wrong, or the
-            // certificate was refused. Say which knobs to check rather than "network error".
-            ReleaseHttp(http);
-            throw CloudProviderException.CommandFailed(
-                Localization.L("No WebDAV service answered at {0}. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one.", normalized),
-                e);
-        }
-        catch
-        {
-            // Stored credentials and the live session stay as they were.
-            ReleaseHttp(http);
-            throw;
-        }
+            var attempt = CreateHttp(trust);
+            try
+            {
+                return (attempt, await WebDavClient.AuthenticateAsync(attempt, normalized, username, password, LogCategory, cancellationToken).ConfigureAwait(false));
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NetworkError || (e.Kind == CloudErrorKind.ServerError && e.StatusCode == 0))
+            {
+                // Nothing answered at all: the WebDAV service is off, the port is wrong, or the
+                // certificate was refused. Say which knobs to check rather than "network error".
+                ReleaseHttp(attempt);
+                throw CloudProviderException.CommandFailed(
+                    Localization.L("No WebDAV service answered at {0}. Turn on WebDAV on the NAS, check the port, and allow a self-signed certificate if the NAS uses one.", normalized),
+                    e);
+            }
+            catch
+            {
+                // Stored credentials and the live session stay as they were.
+                ReleaseHttp(attempt);
+                throw;
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         var credentials = new WebDavCredentials(
             resolved.ServerUrl,
@@ -198,18 +200,18 @@ public abstract class NasWebDavProvider : WebDavProviderBase
     // MARK: - Plumbing
 
     private HttpClient CreateHttp(WebDavCredentials credentials)
-        => CreateHttp(credentials.AllowSelfSignedCertificate == true ? HostOf(credentials.ServerUrl) : null);
+        => CreateHttp(SelfSignedTrustFor(HostOf(credentials.ServerUrl), credentials.AllowSelfSignedCertificate == true));
 
     /// <summary>
     /// One HttpClient per credential set: with "Allow self-signed certificate" on, an invalid
     /// certificate is accepted for the NAS host the user typed and no other. Redirects are
     /// followed by <see cref="WebDavHttp"/> so the Authorization header survives them.
     /// </summary>
-    private HttpClient CreateHttp(string? trustedHost)
+    private HttpClient CreateHttp(SelfSignedTrust? trust)
     {
         var http = _handler is not null
             ? new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan }
-            : CloudHttp.Create(trustedSelfSignedHost: trustedHost, allowAutoRedirect: false);
+            : CloudHttp.Create(selfSigned: trust, allowAutoRedirect: false);
         lock (_clientsGate)
         {
             _httpClients.Add(http);
