@@ -291,7 +291,9 @@ internal sealed class QnapApiClient
             var (pageItems, rawCount, total) = ItemsFromListing(body, cleaned);
             items.AddRange(pageItems);
             start += rawCount;
-            if (rawCount < ListPageSize || start >= (total ?? 0))
+            // A short page is the last; so is reaching the total — when the firmware sends one.
+            // Without it, "start >= 0" ended every listing after its first 1,000 rows.
+            if (rawCount < ListPageSize || (total is { } all && start >= all))
             {
                 break;
             }

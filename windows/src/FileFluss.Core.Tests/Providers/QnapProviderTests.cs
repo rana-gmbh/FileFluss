@@ -363,6 +363,25 @@ public sealed class QnapProviderTests : IDisposable
         Assert.Equal("share_root", Param(request.Uri, "node"));
     }
 
+    /// <summary>Firmware that leaves out "total": listings stopped after their first 1,000 rows.</summary>
+    [Fact]
+    public async Task ListingPagesOnWhenTheServerSendsNoTotal()
+    {
+        Func("get_list", request =>
+        {
+            var start = int.Parse(Param(request.RequestUri!, "start")!, System.Globalization.CultureInfo.InvariantCulture);
+            var count = start == 0 ? 1000 : 500;
+            var rows = Enumerable.Range(start, count).Select(i => $$"""{"filename":"f{{i}}.txt","isfolder":0,"filesize":1}""");
+            return FakeHttpHandler.Json($"{{\"datas\":[{string.Join(',', rows)}]}}");
+        });
+        using var provider = Connected();
+
+        var items = await provider.ListDirectoryAsync("/Public");
+
+        Assert.Equal(1500, items.Count);
+        Assert.Equal(["0", "1000"], Calls("get_list").Select(r => Param(r.Uri, "start")));
+    }
+
     [Fact]
     public async Task ListingParsesRowsDropsSystemFoldersAndPages()
     {
