@@ -296,7 +296,7 @@ public class UpdateLookupTests
         using var folder = new TemporaryFolder();
         var reports = new List<double>();
 
-        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, new SynchronousProgress(reports.Add), http))
+        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, Signed, new SynchronousProgress(reports.Add), http))
         {
             Assert.Equal(Path.Combine(folder.Path, "FileFluss-Setup-1.0.2-x64.exe"), verified.Path);
             Assert.Equal(installer, await File.ReadAllBytesAsync(verified.Path));
@@ -311,7 +311,7 @@ public class UpdateLookupTests
         var installer = Encoding.UTF8.GetBytes("the real setup");
         using var folder = new TemporaryFolder();
 
-        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, handler: Release(installer, Sha256(installer))))
+        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, Signed, handler: Release(installer, Sha256(installer))))
         {
             // Another process trying to replace, rename or delete it while the handle is held.
             Assert.ThrowsAny<IOException>(() => File.WriteAllBytes(verified.Path, [1, 2, 3]));
@@ -361,7 +361,7 @@ public class UpdateLookupTests
         var http = Release(Encoding.UTF8.GetBytes("tampered setup"), Sha256(Encoding.UTF8.GetBytes("the real setup")));
         using var folder = new TemporaryFolder();
 
-        await Assert.ThrowsAsync<UpdateVerificationException>(() => UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, handler: http));
+        await Assert.ThrowsAsync<UpdateVerificationException>(() => UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, Signed, handler: http));
 
         Assert.Empty(Directory.GetFiles(folder.Path));
     }
@@ -374,7 +374,7 @@ public class UpdateLookupTests
             .OnBytes(HttpMethod.Get, "FileFluss-Setup-1.0.2-x64.exe", [1, 2, 3]);
         using var folder = new TemporaryFolder();
 
-        await Assert.ThrowsAsync<UpdateVerificationException>(() => UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, handler: http));
+        await Assert.ThrowsAsync<UpdateVerificationException>(() => UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, Signed, handler: http));
 
         Assert.DoesNotContain(http.Requests, r => r.Uri.ToString().EndsWith(".exe", StringComparison.Ordinal));
         Assert.False(Directory.Exists(folder.Path) && Directory.EnumerateFileSystemEntries(folder.Path).Any());
@@ -387,8 +387,72 @@ public class UpdateLookupTests
         using var folder = new TemporaryFolder();
 
         await Assert.ThrowsAsync<UpdateVerificationException>(() =>
-            UpdateLookup.DownloadVerifiedInstallerAsync(update, folder.Path, handler: new FakeHttpHandler()));
+            UpdateLookup.DownloadVerifiedInstallerAsync(update, folder.Path, Signed, handler: new FakeHttpHandler()));
     }
+
+    [Fact]
+    public async Task AnInstallerMatchingItsChecksumButNotSignedByRanaGmbH_IsRefusedAndDeleted()
+    {
+        // Both files of a release replaced: the checksum list then vouches for the wrong
+        // installer, and only the signature check stands in the way.
+        var installer = Encoding.UTF8.GetBytes("a replaced setup");
+        using var folder = new TemporaryFolder();
+
+        var refused = await Assert.ThrowsAsync<UpdateVerificationException>(() =>
+            UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, (_, _) => "it has no signature", handler: Release(installer, Sha256(installer))));
+
+        Assert.Contains("not signed by Rana GmbH", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.GetFiles(folder.Path));
+    }
+
+    [Fact]
+    public async Task TheSignatureIsCheckedOnTheFileThatIsHeldAgainstChanges()
+    {
+        var installer = Encoding.UTF8.GetBytes("the real setup");
+        using var folder = new TemporaryFolder();
+        string? checkedPath = null;
+
+        using (var verified = await UpdateLookup.DownloadVerifiedInstallerAsync(Update, folder.Path, (path, file) =>
+        {
+            // Called with the final name and the handle that blocks writes, renames and deletes.
+            checkedPath = path;
+            Assert.False(file.IsInvalid);
+            Assert.ThrowsAny<IOException>(() => File.WriteAllBytes(path, [1, 2, 3]));
+            Assert.ThrowsAny<IOException>(() => File.Delete(path));
+            return null;
+        }, handler: Release(installer, Sha256(installer))))
+        {
+            Assert.Equal(verified.Path, checkedPath);
+        }
+    }
+
+    [Theory]
+    [InlineData("CN=Rana GmbH, O=Rana GmbH, L=04275 Leipzig, S=Saxony, C=DE", true)]
+    [InlineData("CN=Rana GmbH, O=Rana GmbH, L=Leipzig, C=DE", true)]
+    [InlineData("CN=Rana GmbH Evil, O=Rana GmbH, L=04275 Leipzig, S=Saxony, C=DE", false)]
+    [InlineData("CN=Evil Rana GmbH, O=Rana GmbH, L=04275 Leipzig, C=DE", false)]
+    [InlineData("CN=rana gmbh, O=Rana GmbH, L=04275 Leipzig, C=DE", false)]
+    [InlineData("CN=Rana GmbH, O=Someone Else, L=04275 Leipzig, C=DE", false)]
+    [InlineData("CN=Rana GmbH, L=04275 Leipzig, C=DE", false)]
+    [InlineData("CN=Rana GmbH, O=Rana GmbH, L=Munich, C=DE", false)]
+    [InlineData("CN=Rana GmbH, O=Rana GmbH, L=Not-Leipzig, C=DE", false)]
+    [InlineData("CN=Rana GmbH, O=Rana GmbH, L=04275 Leipzig, C=AT", false)]
+    [InlineData("CN=Rana GmbH, CN=Other, O=Rana GmbH, L=04275 Leipzig, C=DE", false)]
+    [InlineData("CN=Rana GmbH + O=Rana GmbH, L=04275 Leipzig, C=DE", false)]
+    [InlineData("", false)]
+    public void TheSignerPinMatchesRanaGmbHOnly(string subject, bool expected)
+        => Assert.Equal(expected, UpdateSigner.IsExpectedSubject(subject));
+
+    [Theory]
+    [InlineData("CN=Microsoft ID Verified CS EOC CA 04, O=Microsoft Corporation, C=US", true)]
+    [InlineData("CN=Microsoft ID Verified CS AOC CA 02, O=Microsoft Corporation, C=US", true)]
+    [InlineData("CN=Some Other CA, O=Microsoft Corporation, C=US", false)]
+    [InlineData("CN=Evil Microsoft ID Verified CS EOC CA 04, C=US", false)]
+    public void TheIssuerPinAcceptsArtifactSigningCAsOnly(string issuer, bool expected)
+        => Assert.Equal(expected, UpdateSigner.IsExpectedIssuer(issuer));
+
+    /// <summary>Stands in for the Authenticode check in tests about the download itself.</summary>
+    private static string? Signed(string path, Microsoft.Win32.SafeHandles.SafeFileHandle file) => null;
 
     private static readonly AvailableUpdate Update = UpdateLookup.Newest(Releases, "1.0.0", "x64")!;
 

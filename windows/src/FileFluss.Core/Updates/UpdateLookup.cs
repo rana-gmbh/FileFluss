@@ -33,8 +33,11 @@ public sealed class VerifiedInstaller : IDisposable
 
     public string Path { get; }
 
-    /// <summary>Opens <paramref name="path"/> against changes and hashes it through that handle; deletes it and throws on a mismatch.</summary>
-    internal static VerifiedInstaller Open(string path, string expectedSha256)
+    /// <summary>
+    /// Opens <paramref name="path"/> against changes, then hashes it and checks its code signature
+    /// through that handle; deletes it and throws when either fails.
+    /// </summary>
+    internal static VerifiedInstaller Open(string path, string expectedSha256, InstallerSignatureCheck verifySignature)
     {
         var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
         try
@@ -43,6 +46,13 @@ public sealed class VerifiedInstaller : IDisposable
             if (!string.Equals(actual, expectedSha256, StringComparison.Ordinal))
             {
                 throw new UpdateVerificationException($"{System.IO.Path.GetFileName(path)} changed after it was verified.");
+            }
+
+            // Both must hold: the checksum ties the file to the release, the signature to Rana
+            // GmbH (see UpdateSigner) — so replacing a release's files isn't enough to ship code.
+            if (verifySignature(path, hold.SafeFileHandle) is { } refusal)
+            {
+                throw new UpdateVerificationException($"{System.IO.Path.GetFileName(path)} is not signed by {UpdateSigner.PublisherName}: {refusal}");
             }
 
             return new VerifiedInstaller(path, hold);
@@ -79,7 +89,9 @@ public sealed class VerifiedInstaller : IDisposable
 ///
 /// <para>The checksum is not optional. Sparkle refuses an update without a valid EdDSA
 /// signature; here, an installer whose bytes do not match the hash the release's
-/// SHA256SUMS.txt lists for it is deleted, never run.</para>
+/// SHA256SUMS.txt lists for it is deleted, never run — and so is one that matches but
+/// doesn't carry Rana GmbH's Authenticode signature (<see cref="UpdateSigner"/>), because the
+/// checksum list comes from the same release as the installer.</para>
 /// </summary>
 public static class UpdateLookup
 {
@@ -357,10 +369,15 @@ public static class UpdateLookup
     /// result holds the installer open against writes, renames and deletes, and was hashed
     /// again through that handle: the file that gets launched is the file that was checked.
     /// Dispose it once the setup has been started.</para>
+    ///
+    /// <para>Through the same handle, <paramref name="verifySignature"/> must accept the
+    /// installer's code signature (Rana GmbH, see <see cref="UpdateSigner"/>); a file that
+    /// matches its checksum but isn't signed by Rana GmbH is deleted like a mismatch.</para>
     /// </summary>
     public static async Task<VerifiedInstaller> DownloadVerifiedInstallerAsync(
         AvailableUpdate update,
         string folder,
+        InstallerSignatureCheck verifySignature,
         IProgress<double>? progress = null,
         HttpMessageHandler? handler = null,
         CancellationToken cancellation = default)
@@ -422,7 +439,7 @@ public static class UpdateLookup
             }
 
             File.Move(partial, path, overwrite: true);
-            var verified = VerifiedInstaller.Open(path, expected);
+            var verified = VerifiedInstaller.Open(path, expected, verifySignature);
             progress?.Report(1.0);
             return verified;
         }

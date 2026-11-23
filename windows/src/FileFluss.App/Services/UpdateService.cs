@@ -24,7 +24,8 @@ namespace FileFluss.App.Services;
 /// from the NetFluss Windows updater. Asks GitHub for the newest release carrying a Windows
 /// build (see <see cref="FileFluss.Core.Updates.UpdateLookup"/>); for a
 /// copy installed by the setup it downloads this architecture's installer, checks it against
-/// the release's SHA256SUMS.txt, runs it silently and lets it relaunch FileFluss. A portable
+/// the release's SHA256SUMS.txt and for Rana GmbH's Authenticode signature, runs it silently
+/// and lets it relaunch FileFluss. A portable
 /// copy (the zip) or a development build is pointed at the release page instead.
 ///
 /// <para>The automatic check runs at most once a day and honours
@@ -261,6 +262,7 @@ public sealed class UpdateService
             installer = await UpdateLookup.DownloadVerifiedInstallerAsync(
                 update,
                 Path.Combine(DownloadsFolder, update.Version),
+                Native.AuthenticodeVerifier.CheckUpdateInstaller,
                 new Progress<double>(progress.Report),
                 cancellation: progress.Cancellation);
         }
