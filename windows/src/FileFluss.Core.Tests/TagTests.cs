@@ -499,7 +499,14 @@ public sealed class TagTransferTests : IDisposable
         _store = new TagStore(LocalDir("store"));
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        // The store saves on a timer; deleting the folder while that save was writing its
+        // temporary file failed the test now and then on CI ("being used by another
+        // process"). Disposing waits for a save in progress and writes what's pending first.
+        _store.Dispose();
+        Directory.Delete(_root, recursive: true);
+    }
 
     private string LocalDir(string name)
     {

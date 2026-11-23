@@ -151,7 +151,7 @@ public sealed class NativeTagSyncTests : IDisposable
     [Fact]
     public void ARecordWrittenByATransferIsToldApartFromOneTheUserMade()
     {
-        var store = new TagStore(Path.Combine(_root, "store"));
+        using var store = new TagStore(Path.Combine(_root, "store"));
         var scope = TagScope.Account(Guid.NewGuid(), lastingItemIds: true);
         store.SetTags(scope, "/uploaded.txt", [Red]);
         store.SetTags(scope, "/tagged.txt", [Blue], itemId: "id-2");
@@ -172,7 +172,7 @@ public sealed class NativeTagSyncTests : IDisposable
     [Fact]
     public async Task AFolderFromAServiceWithLabelsComesDownTaggedThoughNeverListedInAPanel()
     {
-        var store = new TagStore(Path.Combine(_root, "store"));
+        using var store = new TagStore(Path.Combine(_root, "store"));
         var cloud = new MemoryCloudProvider(CloudProviderType.Mega) { NativeSupport = NativeTagSupport.OneColor };
         cloud.AddFile("/Trip/day1/photo.jpg", "jpg");
         cloud.AddFile("/Trip/notes.txt", "x");
