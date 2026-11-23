@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FileFluss.App.Services;
 using FileFluss.App.ViewModels;
 using FileFluss.App.Views.Dialogs;
@@ -280,7 +281,7 @@ public sealed class CompareWindow : Window
         VirtualizingPanel.SetVirtualizationMode(_list, VirtualizationMode.Recycling);
         VirtualizingPanel.SetScrollUnit(_list, ScrollUnit.Pixel);
         AutomationProperties.SetAutomationId(_list, "CompareList");
-        _list.SelectionChanged += (_, _) => UpdateActions();
+        _list.SelectionChanged += (_, _) => ScheduleUpdateActions();
         _list.PreviewKeyDown += OnListKeyDown;
         _list.MouseDoubleClick += OnListDoubleClick;
         _list.ContextMenuOpening += OnContextMenuOpening;
@@ -612,9 +613,32 @@ public sealed class CompareWindow : Window
 
         _items = new ObservableCollection<CompareRowItem>(next);
         _list.ItemsSource = _items;
-        foreach (var item in _items.Where(i => selected.Contains(i.Path)))
+        if (selected.Count > 0)
         {
-            _list.SelectedItems.Add(item);
+            SelectItems(_list, _items.Where(i => selected.Contains(i.Path)).ToList());
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo? SetSelectedItems =
+        typeof(ListBox).GetMethod("SetSelectedItems", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    /// <summary>
+    /// Replaces the list's selection in one change, so one SelectionChanged follows instead of
+    /// one per row (as <c>PanelView.SelectRows</c> does): restoring 20,000 selected rows after a
+    /// re-compare item by item hung the window.
+    /// </summary>
+    internal static void SelectItems(ListBox list, System.Collections.IList items)
+    {
+        if (SetSelectedItems is not null && items.Count > 1)
+        {
+            SetSelectedItems.Invoke(list, [items]);
+            return;
+        }
+
+        list.SelectedItems.Clear();
+        foreach (var item in items)
+        {
+            list.SelectedItems.Add(item);
         }
     }
 
@@ -731,29 +755,53 @@ public sealed class CompareWindow : Window
 
     /// <summary>The selected entries, leaving out any whose folder is selected too (copying or deleting the folder covers them).</summary>
     private List<CompareTreeNode> TopmostSelection()
-    {
-        var nodes = _list.SelectedItems.Cast<CompareRowItem>().Select(i => i.Row.Node).ToList();
-        var folders = nodes.Where(n => n.IsDirectory).Select(n => n.Path + "/").ToList();
-        return nodes.Where(n => !folders.Any(f => n.Path.StartsWith(f, StringComparison.Ordinal))).ToList();
-    }
+        => CompareSelection.Topmost(_list.SelectedItems.Cast<CompareRowItem>().Select(i => i.Row.Node).ToList());
 
     private bool Writable(PanelSide side) => Side(side) is { UsableEndpoint: { IsOffline: false }, IsReadOnly: false };
 
-    private bool CanCopy(PanelSide destination)
+    private bool CanCopy(PanelSide destination) => CanCopy(destination, TopmostSelection());
+
+    private bool CanCopy(PanelSide destination, List<CompareTreeNode> topmost)
         => !_busy && !_session.IsCalculating && _session.Result is not null &&
            Side(destination.Other())?.UsableEndpoint is not null && Writable(destination) &&
-           TopmostSelection().Any(n => ExistsOn(n, destination.Other()));
+           topmost.Any(n => ExistsOn(n, destination.Other()));
 
-    private bool CanDelete(PanelSide side)
+    private bool CanDelete(PanelSide side) => CanDelete(side, TopmostSelection());
+
+    private bool CanDelete(PanelSide side, List<CompareTreeNode> topmost)
         => !_busy && !_session.IsCalculating && _session.Result is not null && Writable(side) &&
-           TopmostSelection().Any(n => ExistsOn(n, side));
+           topmost.Any(n => ExistsOn(n, side));
+
+    private bool _actionsUpdatePending;
+
+    /// <summary>
+    /// Selection changes come in bursts (Ctrl+A, a re-compare dropping selected rows one by
+    /// one); the buttons follow once the burst is over instead of after every single change.
+    /// </summary>
+    private void ScheduleUpdateActions()
+    {
+        if (_actionsUpdatePending)
+        {
+            return;
+        }
+
+        _actionsUpdatePending = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            _actionsUpdatePending = false;
+            UpdateActions();
+        });
+    }
 
     private void UpdateActions()
     {
         var hasResult = _session.Result is not null;
-        _copyToLeft.IsEnabled = hasResult && CanCopy(PanelSide.Left);
-        _copyToRight.IsEnabled = hasResult && CanCopy(PanelSide.Right);
-        _delete.IsEnabled = hasResult && (CanDelete(PanelSide.Left) || CanDelete(PanelSide.Right));
+
+        // Worked out once for all four checks, not once per check.
+        var topmost = hasResult ? TopmostSelection() : [];
+        _copyToLeft.IsEnabled = hasResult && CanCopy(PanelSide.Left, topmost);
+        _copyToRight.IsEnabled = hasResult && CanCopy(PanelSide.Right, topmost);
+        _delete.IsEnabled = hasResult && (CanDelete(PanelSide.Left, topmost) || CanDelete(PanelSide.Right, topmost));
     }
 
     /// <summary>
