@@ -168,10 +168,74 @@ public sealed class PanelViewModel : Observable
     /// <summary>Showing an offline account or an unplugged drive from the search index.</summary>
     public bool IsOffline => _provider is Core.Search.OfflineIndexProvider;
 
-    /// <summary>The offline view's banner: "Offline view — Dropbox · Read only · Indexed 3 days ago".</summary>
-    public string OfflineBanner => _provider is Core.Search.OfflineIndexProvider offline && _services.Search.Safe(offline.GetInfo) is { } info
-        ? $"{info.Title}  ·  {Core.Search.OfflineSourceInfo.ReadOnlyBadge}  ·  {info.LastIndexedText}"
-        : string.Empty;
+    /// <summary>
+    /// The offline view's banner: "Offline view — Dropbox · Read only · Indexed 3 days ago".
+    /// Read from the search index off the UI thread (<see cref="RefreshOfflineDetails"/>) — a
+    /// database query, waiting behind any indexing that holds the index — and remembered.
+    /// </summary>
+    public string OfflineBanner => _provider is Core.Search.OfflineIndexProvider ? _offlineBanner : string.Empty;
+
+    private string _offlineBanner = string.Empty;
+
+    /// <summary>The unplugged drive's name once read (<see cref="RefreshOfflineDetails"/>); null until then.</summary>
+    private string? _offlineDriveName;
+
+    /// <summary>Bumped per refresh, so a slow read for a place the panel has left never lands.</summary>
+    private int _offlineDetailsGeneration;
+
+    private Core.Search.OfflineIndexProvider? _offlineDetailsProvider;
+    private string? _offlineDetailsDrive;
+
+    /// <summary>
+    /// Reads the offline banner and an unplugged drive's name on the thread pool and announces
+    /// them when they arrive. The drive registry's lock is shared with the writes that record
+    /// mounted drives, and the banner is a database read: neither may stall the UI thread.
+    /// </summary>
+    private void RefreshOfflineDetails()
+    {
+        var generation = ++_offlineDetailsGeneration;
+        var offline = _provider as Core.Search.OfflineIndexProvider;
+        var driveId = _location.IsOfflineDrive ? _location.DriveId : null;
+
+        // Another source: forget the last one's details rather than show them meanwhile. A
+        // subfolder of the same source keeps them, so its name doesn't flicker.
+        if (!ReferenceEquals(offline, _offlineDetailsProvider) || driveId != _offlineDetailsDrive)
+        {
+            (_offlineDetailsProvider, _offlineDetailsDrive) = (offline, driveId);
+            _offlineBanner = string.Empty;
+            _offlineDriveName = null;
+        }
+
+        if (offline is null && driveId is null)
+        {
+            return;
+        }
+
+        var search = _services.Search;
+        _ = Task.Run(() =>
+        {
+            var banner = offline is not null && search.Safe(offline.GetInfo) is { } info
+                ? $"{info.Title}  ·  {Core.Search.OfflineSourceInfo.ReadOnlyBadge}  ·  {info.LastIndexedText}"
+                : string.Empty;
+            var driveName = driveId is not null && search.Drives.Find(driveId) is { } drive ? drive.DisplayName : null;
+            return (banner, driveName);
+        }).ContinueWith(
+            task =>
+            {
+                if (generation != _offlineDetailsGeneration || task.Status != TaskStatus.RanToCompletion)
+                {
+                    return;
+                }
+
+                (_offlineBanner, _offlineDriveName) = task.Result;
+                OnPropertyChanged(nameof(OfflineBanner));
+                OnPropertyChanged(nameof(Title));
+                OnPropertyChanged(nameof(Breadcrumbs));
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            SynchronizationContext.Current is null ? TaskScheduler.Default : TaskScheduler.FromCurrentSynchronizationContext());
+    }
 
     /// <summary>What an empty list says: an offline source with nothing indexed explains how to fix that.</summary>
     public string EmptyText => IsOffline && _provider!.IsRoot(CurrentPath)
@@ -179,10 +243,11 @@ public sealed class PanelViewModel : Observable
         : L("Empty Folder");
 
     /// <summary>An unplugged drive's name, as the drive registry remembers it.</summary>
-    private string OfflineDriveName => _location.DriveId is { } id && _services.Search.Drives.Find(id) is { } drive ? drive.DisplayName : L("Offline Source");
+    private string OfflineDriveName => _offlineDriveName ?? L("Offline Source");
 
     private void OnOfflineStateChanged()
     {
+        RefreshOfflineDetails();
         OnPropertyChanged(nameof(Provider));
         OnPropertyChanged(nameof(IsOffline));
         OnPropertyChanged(nameof(OfflineBanner));
@@ -651,6 +716,7 @@ public sealed class PanelViewModel : Observable
             FilterText = string.Empty;
             NeedsReauthentication = false;
             Watch();
+            RefreshOfflineDetails();
             OnPropertyChanged(nameof(Location));
             OnPropertyChanged(nameof(Provider));
             OnPropertyChanged(nameof(Account));

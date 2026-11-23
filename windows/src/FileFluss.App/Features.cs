@@ -85,14 +85,26 @@ internal static class Features
             };
         }
 
-        services.Accounts.AccountRemoved += (_, id) => search.Safe(() => search.Index.DropIndexedCloudSource(id));
+        // On the thread pool: dropping an index waits for the index's write lock, which a
+        // running indexing job holds, and even a read is a database round trip — neither
+        // belongs on the UI thread that raised these events.
+        services.Accounts.AccountRemoved += (_, id) => _ = Task.Run(() => search.Safe(() => search.Index.DropIndexedCloudSource(id)));
         services.Accounts.AccountChanged += (_, id) =>
         {
             // A renamed account keeps its index under the new name (Index Status, offline results).
-            if (services.Accounts.Find(id) is { } account && search.CloudSource(id) is { } source && source.DisplayName != account.DisplayName)
+            if (services.Accounts.Find(id) is not { } account)
             {
-                search.Safe(() => search.Index.RenameIndexedSource(source.SourceId, account.DisplayName));
+                return;
             }
+
+            var name = account.DisplayName;
+            _ = Task.Run(() =>
+            {
+                if (search.CloudSource(id) is { } source && source.DisplayName != name)
+                {
+                    search.Safe(() => search.Index.RenameIndexedSource(source.SourceId, name));
+                }
+            });
         };
 
         vm.IndexRequested += (_, location) => IndexLocation(window, services, location.ArchiveContainer ?? location);
