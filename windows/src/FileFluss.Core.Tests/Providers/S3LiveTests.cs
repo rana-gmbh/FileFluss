@@ -38,7 +38,8 @@ public sealed class S3LiveTests
 
     public sealed class LiveS3FactAttribute : FactAttribute
     {
-        public LiveS3FactAttribute()
+        public LiveS3FactAttribute([System.Runtime.CompilerServices.CallerFilePath] string? sourceFilePath = null, [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = -1)
+            : base(sourceFilePath, sourceLineNumber)
         {
             if (Live() is null)
             {

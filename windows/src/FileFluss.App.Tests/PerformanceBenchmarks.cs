@@ -7,7 +7,6 @@ using FileFluss.App.ViewModels;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Native;
-using Xunit.Abstractions;
 
 namespace FileFluss.App.Tests;
 

@@ -21,9 +21,9 @@ public sealed class WebDavServerTests : IAsyncLifetime
 
     private MountTestServer _t = null!;
 
-    public async Task InitializeAsync() => _t = await MountTestServer.StartAsync();
+    public async ValueTask InitializeAsync() => _t = await MountTestServer.StartAsync();
 
-    public async Task DisposeAsync() => await _t.DisposeAsync();
+    public async ValueTask DisposeAsync() => await _t.DisposeAsync();
 
     private static Dictionary<string, string> H(params (string Name, string Value)[] headers)
         => headers.ToDictionary(h => h.Name, h => h.Value);

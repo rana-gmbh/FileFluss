@@ -8,7 +8,6 @@ using FileFluss.Core.Tests.Support;
 using FileFluss.Core.VirtualFiles;
 using FileFluss.Native.Tests.Support;
 using FileFluss.Native.VirtualFiles;
-using Xunit.Abstractions;
 using ComTypes = System.Runtime.InteropServices.ComTypes;
 
 namespace FileFluss.Native.Tests;

@@ -13,7 +13,8 @@ namespace FileFluss.Core.Tests.Providers;
 /// </summary>
 internal sealed class RebexLiveFactAttribute : FactAttribute
 {
-    public RebexLiveFactAttribute()
+    public RebexLiveFactAttribute([System.Runtime.CompilerServices.CallerFilePath] string? sourceFilePath = null, [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (Environment.GetEnvironmentVariable("FILEFLUSS_LIVE_TESTS") != "1")
         {
@@ -27,7 +28,7 @@ internal sealed class RebexLiveFactAttribute : FactAttribute
 /// "password"), which speaks SFTP, FTP and explicit FTPS: sign-in, listing and download
 /// through the real SSH.NET and FluentFTP code paths.
 /// </summary>
-public class SftpFtpLiveTests(Xunit.Abstractions.ITestOutputHelper output)
+public class SftpFtpLiveTests(ITestOutputHelper output)
 {
     private const string Host = "test.rebex.net";
 

@@ -19,7 +19,7 @@ public sealed class WebDavRoundTripTests : IAsyncLifetime
     private MountTestServer _t = null!;
     private WebDavProvider _client = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         Directory.CreateDirectory(_local);
         _t = await MountTestServer.StartAsync(p =>
@@ -38,7 +38,7 @@ public sealed class WebDavRoundTripTests : IAsyncLifetime
         await _client.ConnectAsync(values, SilentConnectPrompt.Instance);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _client.Dispose();
         await _t.DisposeAsync();

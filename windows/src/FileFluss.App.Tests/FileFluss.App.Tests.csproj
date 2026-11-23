@@ -10,13 +10,24 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!--
+      xunit.v3 runs through VSTest (xunit.runner.visualstudio) here, so `dotnet test` and the CI's
+      trx logger work as before; on the .NET 10 SDK, Microsoft.Testing.Platform mode would need
+      the new dotnet test experience and different command-line options.
+    -->
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <!--
+      xUnit1051 (xunit.v3) asks every call that takes a CancellationToken to pass
+      TestContext.Current.CancellationToken. These tests are short and bounded by their own
+      timeouts; threading the token through hundreds of call sites adds noise, not safety.
+    -->
+    <NoWarn>$(NoWarn);WPF0001;xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup>

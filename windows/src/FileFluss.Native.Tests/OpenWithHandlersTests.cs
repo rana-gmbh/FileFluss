@@ -1,7 +1,6 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
 using FileFluss.Native.Tests.Support;
-using Xunit.Abstractions;
 
 namespace FileFluss.Native.Tests;
 

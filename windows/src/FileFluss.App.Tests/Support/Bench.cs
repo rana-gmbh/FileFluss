@@ -2,7 +2,6 @@
 
 using System.Diagnostics;
 using System.IO;
-using Xunit.Abstractions;
 
 namespace FileFluss.App.Tests.Support;
 
@@ -13,7 +12,8 @@ namespace FileFluss.App.Tests.Support;
 /// </summary>
 public sealed class BenchFactAttribute : FactAttribute
 {
-    public BenchFactAttribute()
+    public BenchFactAttribute([System.Runtime.CompilerServices.CallerFilePath] string? sourceFilePath = null, [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (Environment.GetEnvironmentVariable("FILEFLUSS_BENCH") != "1")
         {
