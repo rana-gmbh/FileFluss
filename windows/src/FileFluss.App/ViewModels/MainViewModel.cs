@@ -279,9 +279,13 @@ public sealed partial class MainViewModel : Observable
 
     /// <summary>Single-pane mode hides everything that needs a second panel.</summary>
     public bool CanExecute(KeyboardCommand command)
-        => !SinglePaneMode || command is not (KeyboardCommand.OpenInOtherPanel or KeyboardCommand.SwapPanels or
+        // While another app's paste or drop waits for a listing (CloudFileExport keeps the
+        // window responsive then), its OLE call is still on the stack: no command starts in the
+        // middle of it — a shortcut, menu item or toolbar button is simply ignored until it returns.
+        => !CloudFileExport.IsHandingOver &&
+           (!SinglePaneMode || command is not (KeyboardCommand.OpenInOtherPanel or KeyboardCommand.SwapPanels or
             KeyboardCommand.TargetToSource or KeyboardCommand.CompareFolders or KeyboardCommand.SyncPanels or
-            KeyboardCommand.CopyToOtherPanel or KeyboardCommand.MoveToOtherPanel or KeyboardCommand.ToggleActivePanel);
+            KeyboardCommand.CopyToOtherPanel or KeyboardCommand.MoveToOtherPanel or KeyboardCommand.ToggleActivePanel));
 
     /// <summary>Whether a menu shows the command enabled — the macOS menus' <c>.disabled(…)</c> conditions.</summary>
     public bool IsCommandEnabled(KeyboardCommand command)
@@ -486,6 +490,12 @@ public sealed partial class MainViewModel : Observable
     /// <summary>Double-click / Enter: enter folders; open files in their default app (cloud files via the cache).</summary>
     public async Task OpenAsync(PanelViewModel panel, FileRowViewModel row)
     {
+        // Not in the middle of another app's paste or drop (see CanExecute).
+        if (CloudFileExport.IsHandingOver)
+        {
+            return;
+        }
+
         if (row.IsDirectory)
         {
             await panel.NavigateAsync(panel.Location with { Path = row.Path });
@@ -582,7 +592,7 @@ public sealed partial class MainViewModel : Observable
     /// </summary>
     public async Task OpenWithAsync(PanelViewModel panel, IReadOnlyList<CloudFileItem> items, Func<IReadOnlyList<string>, bool> open)
     {
-        if (items.Count == 0)
+        if (items.Count == 0 || CloudFileExport.IsHandingOver)
         {
             return;
         }

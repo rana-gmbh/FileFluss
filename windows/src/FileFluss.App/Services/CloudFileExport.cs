@@ -193,12 +193,34 @@ public sealed class CloudFileExport
         }
     }
 
+    private static int _pumpDepth;
+    private static readonly List<Action> AfterHandOverActions = [];
+
+    /// <summary>
+    /// Whether another app's call is waiting, inside <see cref="WaitPumping"/>, for a listing.
+    /// The window stays responsive meanwhile, but the OLE call is still on the stack: commands,
+    /// opening files and closing the window wait until it has returned.
+    /// </summary>
+    public static bool IsHandingOver => _pumpDepth > 0;
+
+    /// <summary>Runs <paramref name="action"/> once the hand-over has returned (at once when none runs). UI thread only.</summary>
+    public static void AfterHandOver(Action action)
+    {
+        if (_pumpDepth == 0)
+        {
+            action();
+            return;
+        }
+
+        AfterHandOverActions.Add(action);
+    }
+
     /// <summary>
     /// How a call from another app waits on the UI thread for the tree listing (a paste right
     /// after Ctrl+C on a big folder): the window keeps repainting and shows a wait cursor
     /// instead of freezing.
     /// </summary>
-    private static bool WaitPumping(Task task, TimeSpan timeout)
+    internal static bool WaitPumping(Task task, TimeSpan timeout)
     {
         if (task.IsCompleted)
         {
@@ -217,6 +239,7 @@ public sealed class CloudFileExport
         task.ContinueWith(_ => Stop(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         var cursor = Mouse.OverrideCursor;
         Mouse.OverrideCursor = Cursors.Wait;
+        _pumpDepth++;
         try
         {
             Dispatcher.PushFrame(frame);
@@ -229,6 +252,16 @@ public sealed class CloudFileExport
         finally
         {
             Mouse.OverrideCursor = cursor;
+            if (--_pumpDepth == 0 && AfterHandOverActions.Count > 0)
+            {
+                // After the OLE call has returned to the other app, not from inside it.
+                var pending = AfterHandOverActions.ToList();
+                AfterHandOverActions.Clear();
+                foreach (var action in pending)
+                {
+                    dispatcher.BeginInvoke(action);
+                }
+            }
         }
 
         return task.IsCompleted;

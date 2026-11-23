@@ -928,6 +928,15 @@ public partial class MainWindow : Window, IShell
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        // Another app's paste or drop is waiting inside this window for a listing: close once
+        // that call has returned, not from inside it.
+        if (CloudFileExport.IsHandingOver)
+        {
+            e.Cancel = true;
+            CloudFileExport.AfterHandOver(Close);
+            return;
+        }
+
         if (_services.Transfers.HasRunning &&
             !MessageDialog.Confirm(this, L("Transfers are still running"), L("Quitting cancels them. Files already transferred will remain."), L("Quit Anyway"), destructive: true))
         {
