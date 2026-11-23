@@ -468,7 +468,7 @@ internal sealed class InternxtApiClient
                 await DriveSendAsync($"/files/{uuid}/meta", HttpMethod.Put, body, cancellationToken).ConfigureAwait(false);
                 return;
             }
-            catch (CloudProviderException e) when (attempt < 6 && e.Kind is CloudErrorKind.ServerError or CloudErrorKind.RateLimited or CloudErrorKind.NetworkError or CloudErrorKind.NotFound)
+            catch (CloudProviderException e) when (attempt < 6 && !TransientRetryHandler.WasAlreadyRetried(e) && e.Kind is CloudErrorKind.ServerError or CloudErrorKind.RateLimited or CloudErrorKind.NetworkError or CloudErrorKind.NotFound)
             {
                 await Task.Delay(RetryDelayUnit * attempt, cancellationToken).ConfigureAwait(false);
             }
@@ -715,8 +715,9 @@ internal sealed class InternxtApiClient
     }
 
     private static bool IsTransient(CloudProviderException error)
-        => error.Kind == CloudErrorKind.RateLimited ||
-           (error.Kind == CloudErrorKind.ServerError && error.StatusCode is 500 or 502 or 503 or 504);
+        => !TransientRetryHandler.WasAlreadyRetried(error) &&
+           (error.Kind == CloudErrorKind.RateLimited ||
+            (error.Kind == CloudErrorKind.ServerError && error.StatusCode is 500 or 502 or 503 or 504));
 
     // MARK: - HTTP
 
@@ -775,7 +776,7 @@ internal sealed class InternxtApiClient
         var status = (int)response.StatusCode;
         var snippet = Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 300));
         SupportLogger.Shared.Log($"[Internxt] HTTP {status}: {snippet}", "Internxt", LogLevel.Error);
-        throw status switch
+        var error = status switch
         {
             401 => CloudProviderException.Unauthorized(),
             403 => CloudProviderException.NotAuthenticated(),
@@ -783,6 +784,10 @@ internal sealed class InternxtApiClient
             429 => CloudProviderException.RateLimited(),
             _ => CloudProviderException.ServerError(status),
         };
+
+        // Marked when the shared handler already retried it, so RetryingTransientAsync doesn't
+        // go round again (three times its four attempts).
+        throw TransientRetryHandler.MarkAlreadyRetried(error, response);
     }
 
     // MARK: - Helpers

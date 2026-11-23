@@ -908,20 +908,28 @@ internal sealed class BoxApiClient
 
     /// <summary>
     /// Runs <paramref name="operation"/>, retrying transient failures (network errors, 429,
-    /// 5xx) up to four attempts with a doubling backoff from one second. Anything else is
-    /// returned for the caller to map.
+    /// 5xx) up to four attempts with a doubling backoff from one second — or as long as the
+    /// server's Retry-After says (capped), which the upload parts used to ignore and so used
+    /// up their attempts within seconds while Box throttled. Anything else is returned for the
+    /// caller to map. A request the shared retry handler already went round with (a replayable
+    /// one) isn't retried again here.
     /// </summary>
     private async Task<UploadHostResponse> SendWithRetryAsync(Func<Task<UploadHostResponse>> operation, CancellationToken cancellationToken)
     {
         var delay = TimeSpan.FromSeconds(1);
         for (var attempt = 1; ; attempt++)
         {
+            TimeSpan? wait = null;
             try
             {
                 var result = await operation().ConfigureAwait(false);
-                if (attempt < 4 && (result.Status == 429 || result.Status is >= 500 and <= 599))
+                if (attempt < 4 && !result.AlreadyRetried && (result.Status == 429 || result.Status is >= 500 and <= 599))
                 {
                     SupportLogger.Shared.Log($"[Box] Upload request → HTTP {result.Status}, retrying (attempt {attempt})", LogCategory);
+                    if (result.Status is 429 or 503 && result.RetryAfterSeconds is { } seconds)
+                    {
+                        wait = TimeSpan.FromSeconds(Math.Clamp(seconds, 1, MaxRetryAfterSeconds));
+                    }
                 }
                 else
                 {
@@ -934,12 +942,15 @@ internal sealed class BoxApiClient
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            await Delay(delay, cancellationToken).ConfigureAwait(false);
+            await Delay(wait ?? delay, cancellationToken).ConfigureAwait(false);
             delay *= 2;
         }
     }
 
-    private readonly record struct UploadHostResponse(int Status, string Body, double? RetryAfterSeconds);
+    /// <summary>The longest Retry-After an upload request waits out before trying again.</summary>
+    private const double MaxRetryAfterSeconds = 60;
+
+    private readonly record struct UploadHostResponse(int Status, string Body, double? RetryAfterSeconds, bool AlreadyRetried = false);
 
     /// <summary>
     /// Authorized request to upload.box.com: refresh first, and once more on a 401 — a
@@ -966,7 +977,7 @@ internal sealed class BoxApiClient
             $"{method} upload request",
             cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return new UploadHostResponse((int)response.StatusCode, body, response.Headers.RetryAfter?.Delta?.TotalSeconds);
+        return new UploadHostResponse((int)response.StatusCode, body, response.Headers.RetryAfter?.Delta?.TotalSeconds, TransientRetryHandler.AlreadyRetried(response));
     }
 
     /// <summary>

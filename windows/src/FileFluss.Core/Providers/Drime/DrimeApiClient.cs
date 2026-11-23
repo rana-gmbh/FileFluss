@@ -1025,7 +1025,7 @@ internal sealed class DrimeApiClient
             url += "?" + string.Join('&', query.Select(q => $"{CloudHttp.Escape(q.Name)}={CloudHttp.Escape(q.Value)}"));
         }
 
-        async Task<(int Status, string Body)> AttemptAsync(bool forceRefresh)
+        async Task<(int Status, string Body, bool AlreadyRetried)> AttemptAsync(bool forceRefresh)
         {
             var credentials = forceRefresh
                 ? await ForceRefreshAsync(cancellationToken).ConfigureAwait(false)
@@ -1044,19 +1044,19 @@ internal sealed class DrimeApiClient
             }
 
             using var response = await _http.SendApiAsync(request, cancellationToken).ConfigureAwait(false);
-            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+            return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), TransientRetryHandler.AlreadyRetried(response));
         }
 
         var delay = TimeSpan.FromSeconds(1);
         var refreshed = false;
         for (var tries = 1; ; tries++)
         {
-            var (status, text) = await AttemptAsync(false).ConfigureAwait(false);
+            var (status, text, alreadyRetried) = await AttemptAsync(false).ConfigureAwait(false);
             if (status == 401 && Credentials.Kind == DrimeCredentialKind.OAuth && !refreshed)
             {
                 refreshed = true;
                 SupportLogger.Shared.Log($"[Drime] {method} {path} → 401, refreshing and retrying once", LogCategory);
-                (status, text) = await AttemptAsync(true).ConfigureAwait(false);
+                (status, text, alreadyRetried) = await AttemptAsync(true).ConfigureAwait(false);
             }
 
             if (status is >= 200 and < 300)
@@ -1064,7 +1064,9 @@ internal sealed class DrimeApiClient
                 return text;
             }
 
-            var retryable = status == 429 || (method == HttpMethod.Get && RetryableGetStatuses.Contains(status));
+            // The shared handler already went through its rounds for this request; four more here
+            // made one call into sixteen while Drime was rate limiting, prolonging it.
+            var retryable = !alreadyRetried && (status == 429 || (method == HttpMethod.Get && RetryableGetStatuses.Contains(status)));
             if (retryable && tries < MaxAttempts)
             {
                 await Delay(delay, cancellationToken).ConfigureAwait(false);

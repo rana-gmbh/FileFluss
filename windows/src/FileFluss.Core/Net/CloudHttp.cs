@@ -101,6 +101,11 @@ public static class CloudHttp
         {
             return await client.SendAsync(request, completion, timeoutSource.Token).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && TransientRetryHandler.IsWaitingToRetry(request))
+        {
+            // Out of time while waiting out the server's 429/503: it is rate limiting, not gone.
+            throw CloudProviderException.RateLimited();
+        }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw CloudProviderException.Network(new TimeoutException(Localization.L("The request timed out.")));

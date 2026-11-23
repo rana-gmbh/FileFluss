@@ -933,6 +933,38 @@ public sealed class BoxProviderTests : IDisposable
         _http.On(HttpMethod.Put, "/upload_sessions/S1", (request, _) => PartResponse(request.Content!.Headers.ContentRange!));
     }
 
+    /// <summary>
+    /// Box throttling a part: the wait is what Retry-After says, not 1, 2, 4 s — which used up
+    /// a large upload's four attempts in seconds while Box still refused.
+    /// </summary>
+    [Fact]
+    public async Task AThrottledPartWaitsAsLongAsRetryAfterSays()
+    {
+        var local = WriteFile("big.bin", "0123456789");
+        var throttled = 0;
+        _http.On(HttpMethod.Put, "/upload_sessions/S1", (request, _) =>
+        {
+            var range = request.Content!.Headers.ContentRange!;
+            if (range.From == 4 && Interlocked.Increment(ref throttled) <= 2)
+            {
+                var busy = FakeHttpHandler.Json("""{"code":"rate_limit_exceeded"}""", HttpStatusCode.TooManyRequests);
+                busy.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(12));
+                return busy;
+            }
+
+            return PartResponse(range);
+        });
+        _http.OnJson(HttpMethod.Post, "/upload_sessions/S1/commit", """{"total_count":1,"entries":[{"type":"file","id":"900","name":"big.bin"}]}""", HttpStatusCode.Created);
+        _http.OnJson(HttpMethod.Post, "upload.box.com/api/2.0/files/upload_sessions", SessionJson(4), HttpStatusCode.Created);
+        using var provider = Provider();
+        provider.ApiClient!.SinglePutMaxBytes = 4;
+        var delays = RecordDelays(provider.ApiClient);
+
+        await provider.UploadFileAsync(local, "/big.bin");
+
+        Assert.Equal([TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(12)], delays);
+    }
+
     private static HttpResponseMessage PartResponse(System.Net.Http.Headers.ContentRangeHeaderValue range)
         => FakeHttpHandler.Json($"{{\"part\":{{\"part_id\":\"P{range.From}\",\"offset\":{range.From},\"size\":{range.To - range.From + 1},\"sha1\":\"x\"}}}}");
 

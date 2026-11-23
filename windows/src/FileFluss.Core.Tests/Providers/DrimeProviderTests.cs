@@ -293,6 +293,30 @@ public sealed class DrimeProviderTests : IDisposable
         Assert.Equal(3, calls);
     }
 
+    /// <summary>
+    /// With the shared retry handler in front (as in the app), a listing Drime keeps refusing
+    /// goes out four times, not four times four: the provider's loop doesn't start a second
+    /// round for what the handler already retried.
+    /// </summary>
+    [Fact]
+    public async Task ARateLimitIsNotRetriedTwiceOver()
+    {
+        var calls = 0;
+        _http.On(HttpMethod.Get, Api + "/drive/file-entries", (_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return FakeHttpHandler.Json("{}", HttpStatusCode.TooManyRequests);
+        });
+        _store.Save($"drime.{_id}", DrimeCredentials.PersonalToken("drime-token", "ana@example.com", "Ana"));
+        using var provider = new DrimeProvider(_id, _store, new FileFluss.Core.Net.TransientRetryHandler(_http, _ => TimeSpan.Zero));
+        provider.Client!.Delay = (_, _) => Task.CompletedTask;
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/"));
+
+        Assert.Equal(CloudErrorKind.RateLimited, error.Kind);
+        Assert.Equal(FileFluss.Core.Net.TransientRetryHandler.MaxAttempts, calls);
+    }
+
     [Fact]
     public async Task ADeletedPersonalTokenAsksForANewSignIn()
     {

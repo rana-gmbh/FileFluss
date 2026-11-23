@@ -3,6 +3,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using FileFluss.Core.Net;
+using FileFluss.Core.Providers;
 using FileFluss.Core.Tests.Support;
 
 namespace FileFluss.Core.Tests;
@@ -92,6 +93,65 @@ public sealed class TransientRetryHandlerTests
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
         Assert.Single(fake.Requests);
+    }
+
+    /// <summary>A response handed back after retrying says so, for the providers' own loops; others don't.</summary>
+    [Fact]
+    public async Task ResponsesSayWhenTheHandlerAlreadyRetried()
+    {
+        var fake = new FakeHttpHandler()
+            .On(HttpMethod.Get, "/limited", Sequence(HttpStatusCode.TooManyRequests))
+            .On(HttpMethod.Get, "/missing", Sequence(HttpStatusCode.NotFound))
+            .On(HttpMethod.Put, "/stream", Sequence(HttpStatusCode.TooManyRequests));
+        var client = Client(fake);
+
+        using var limited = await client.GetAsync("https://api.example/limited");
+        using var missing = await client.GetAsync("https://api.example/missing");
+        using var streamed = await client.PutAsync("https://api.example/stream", new StreamContent(new MemoryStream([1, 2, 3])));
+
+        Assert.True(TransientRetryHandler.AlreadyRetried(limited));
+        Assert.False(TransientRetryHandler.AlreadyRetried(missing));
+        Assert.False(TransientRetryHandler.AlreadyRetried(streamed)); // never replayed here: the caller's loop owns it
+    }
+
+    /// <summary>All waits together stay under the API timeout; then the 429 is handed back.</summary>
+    [Fact]
+    public async Task WaitingStopsAtTheTotalBudget()
+    {
+        var fake = new FakeHttpHandler().On(HttpMethod.Get, "/list", (_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMilliseconds(600));
+            return response;
+        });
+        using var client = new HttpClient(new TransientRetryHandler(fake, _ => TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(1))) { Timeout = Timeout.InfiniteTimeSpan };
+
+        using var response = await client.GetAsync("https://api.example/list");
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.Equal(2, fake.Requests.Count); // waited 0.6 s once; a second wait would pass 1 s
+        Assert.True(TransientRetryHandler.AlreadyRetried(response));
+    }
+
+    /// <summary>
+    /// Running out of time while waiting out a 429 is the server rate limiting, not a network
+    /// that didn't answer: it used to surface as "The request timed out."
+    /// </summary>
+    [Fact]
+    public async Task ATimeoutDuringARetryWaitIsRateLimited()
+    {
+        var fake = new FakeHttpHandler().On(HttpMethod.Get, "/list", (_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(20));
+            return response;
+        });
+        using var client = Client(fake);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example/list");
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => client.SendApiAsync(request, CancellationToken.None, TimeSpan.FromMilliseconds(300)));
+
+        Assert.Equal(CloudErrorKind.RateLimited, error.Kind);
     }
 
     [Fact]

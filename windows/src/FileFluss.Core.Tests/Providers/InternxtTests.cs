@@ -279,7 +279,7 @@ internal sealed class InternxtTestServer
 
 internal sealed class InternxtHarness : IDisposable
 {
-    public InternxtHarness(bool mutations = true)
+    public InternxtHarness(bool mutations = true, bool sharedRetryHandler = false)
     {
         Server = new InternxtTestServer();
         Fake = Server.CreateHandler();
@@ -292,7 +292,7 @@ internal sealed class InternxtHarness : IDisposable
         Store = new MemoryCredentialStore();
         var id = Guid.NewGuid();
         Store.Save($"internxt.{id}", Server.Credentials());
-        Provider = new InternxtProvider(id, Store, Capture);
+        Provider = new InternxtProvider(id, Store, sharedRetryHandler ? new FileFluss.Core.Net.TransientRetryHandler(Capture, _ => TimeSpan.Zero) : Capture);
         Provider.Client!.RetryDelayUnit = TimeSpan.Zero;
     }
 
@@ -558,6 +558,24 @@ public class InternxtProviderTests
 
         Assert.Single(h.Capture.Matching(HttpMethod.Put, "/drive/files/new-file-uuid/meta"));
         Assert.Empty(h.Capture.Matching(HttpMethod.Delete, "/drive/files/new-file-uuid"));
+    }
+
+    /// <summary>
+    /// With the shared retry handler in front (as in the app), a JSON call Internxt keeps
+    /// answering 503 goes out four times, not three rounds of four.
+    /// </summary>
+    [Fact]
+    public async Task AGatewayFailureTheHandlerRetriedIsNotRetriedAgain()
+    {
+        using var h = new InternxtHarness(mutations: false, sharedRetryHandler: true);
+        h.Fake.On(HttpMethod.Post, "/files/start", (_, _) => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") });
+        h.Server.AddMutationRoutes(h.Fake);
+        using var temp = new TempDirectory();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.UploadFileAsync(temp.File("new.bin", Bytes(10, 46)), "/new.bin"));
+
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(FileFluss.Core.Net.TransientRetryHandler.MaxAttempts, h.Capture.Matching(HttpMethod.Post, "/files/start").Count());
     }
 
     [Fact]
