@@ -31,6 +31,16 @@ When FileFluss can no longer sign in to an account (a locked Keychain or a crede
 
 pCloud stopped letting third-party apps sign in with a password. **Add Account now opens pCloud's sign-in page in your browser**, as it does for Box, and an existing account can be re-authorized from its settings. Accounts added the old way keep working.
 
+## Fixed on Windows
+
+- **Thumbnails are the right way up.** List rows and gallery tiles showed every image upside down.
+- **pCloud keeps umlauts and other non-ASCII characters in file names.** "Brückenstr.docx" was stored as `=?utf-8?B?…?=`.
+- **Replacing a file on Internxt no longer fails now and then.** Internxt can take a moment to recognise a file it has just created; the replacement used to give up and stay under a temporary `.fileflusspart` name.
+- **FTP keeps umlauts in file names on every server.** On servers that don't announce UTF-8, "Grüße.txt" was listed as "Gr??e.txt" and uploaded under that name.
+- **Replacing a read-only file works.** It failed and left a `.fileflusspart` file next to it.
+- **Sync keeps both files whose names are one name on the PC,** such as `README.md` and `Readme.md` from a cloud that tells them apart. One used to overwrite the other while Sync still reported success; now the second arrives as `Readme (2).md`, and later runs leave both alone.
+- **Copying and syncing between local folders keeps names exactly as they are.** A name with a leading space or longer than 200 characters was shortened, and a Mirror then deleted the correctly named copy.
+
 ## Download
 
 | | File |
