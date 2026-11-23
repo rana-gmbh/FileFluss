@@ -107,6 +107,11 @@ internal sealed class SingleFlight<TKey, TResult>
         catch (Exception e)
         {
             flight.Completion.TrySetException(e);
+
+            // Marked as seen: every caller that still waits gets it anyway, but one that failed
+            // after all callers had given up would otherwise end up in the crash log as an
+            // unobserved task exception.
+            _ = flight.Completion.Task.Exception;
         }
         finally
         {
