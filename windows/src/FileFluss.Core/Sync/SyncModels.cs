@@ -134,6 +134,12 @@ public sealed record SyncOperation(SyncOperationKind Kind, string RelativePath, 
     /// </summary>
     public bool IsCollisionRename { get; init; }
 
+    /// <summary>
+    /// A <see cref="SyncOperationKind.Delete"/> of a destination file where the source has a
+    /// folder (Mirror): it runs before the folders are created, not with the extras at the end.
+    /// </summary>
+    public bool ClearsTheWay { get; init; }
+
     /// <summary>The source's "Date modified", stamped on the copy so the next run sees the two as identical.</summary>
     public DateTimeOffset SourceModificationDate { get; init; } = CloudFileItem.UnknownDate;
 
@@ -180,6 +186,12 @@ public sealed record SyncPlan(
     /// promises never to delete (Update newer).
     /// </summary>
     public int TypeClashes { get; init; }
+
+    /// <summary>
+    /// Folders left out, with their contents, because a file of the same name is at the
+    /// destination, in a mode that never deletes (Update newer, Add only).
+    /// </summary>
+    public int FolderTypeClashes { get; init; }
 
     /// <summary>
     /// Mirroring nothing over something. This is what a scan gone wrong looks like far more

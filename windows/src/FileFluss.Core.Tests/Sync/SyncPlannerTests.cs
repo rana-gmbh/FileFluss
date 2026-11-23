@@ -57,6 +57,37 @@ public class SyncPlannerTests
     // MARK: - Plan rules
 
     [Fact]
+    public void MirrorReplacesADestinationFileWithTheSourcesFolder()
+    {
+        // A file "x" at the destination, a folder "x" at the source: skipped as "exists", the
+        // folder's contents were planned beneath a file and failed on every run.
+        var plan = Plan([Folder("x"), File("x/a.txt", 10)], [File("x", 70)], SyncMode.Mirror);
+
+        Assert.Collection(
+            plan.Operations,
+            op => Assert.Equal((SyncOperationKind.Delete, "x", false, true), (op.Kind, op.RelativePath, op.IsDirectory, op.ClearsTheWay)),
+            op => Assert.Equal((SyncOperationKind.Add, "x", true), (op.Kind, op.DestinationRelativePath, op.IsDirectory)),
+            op => Assert.Equal((SyncOperationKind.Add, "x/a.txt", false), (op.Kind, op.DestinationRelativePath, op.IsDirectory)));
+        Assert.Equal((1, 1, 1, 0), (plan.FilesToAdd, plan.FilesToDelete, plan.FoldersToAdd, plan.FoldersToDelete));
+        Assert.Equal(10 - 70, plan.NetDestinationDelta);
+
+        // Once it ran, the next mirror finds nothing to do.
+        Assert.True(Plan([Folder("x"), File("x/a.txt", 10)], [Folder("x"), File("x/a.txt", 10)], SyncMode.Mirror).IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(SyncMode.Newer)]
+    [InlineData(SyncMode.Additive)]
+    public void ModesThatNeverDeleteLeaveAFolderOverAFileAlone(SyncMode mode)
+    {
+        var plan = Plan([Folder("x"), File("x/a.txt", 10), Folder("x/sub"), File("y.txt", 5)], [File("x", 70)], mode);
+
+        Assert.Equal(["y.txt"], plan.Operations.Select(o => o.RelativePath).ToArray());
+        Assert.Equal(1, plan.FolderTypeClashes);
+        Assert.Equal(0, plan.TypeClashes);
+    }
+
+    [Fact]
     public void MirrorCountsAndOrdersOperations()
     {
         var plan = Plan(

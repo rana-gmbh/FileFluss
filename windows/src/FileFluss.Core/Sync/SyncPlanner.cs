@@ -252,12 +252,22 @@ public static class SyncPlanner
         HashSet<string>? additiveTaken = null;
 
         var operations = new List<SyncOperation>();
-        int adds = 0, replaces = 0, deletes = 0, folderAdds = 0, folderDeletes = 0, typeClashes = 0;
+        int adds = 0, replaces = 0, deletes = 0, folderAdds = 0, folderDeletes = 0, typeClashes = 0, folderTypeClashes = 0;
         long bytesMoved = 0;
         long netDelta = 0;
 
+        // Source folders that can't be created because a file of that name is at the
+        // destination, in a mode that never deletes: neither they nor anything in them is
+        // planned (their contents would only fail, on every run).
+        HashSet<string>? blockedFolders = null;
+
         foreach (var entry in sorted)
         {
+            if (blockedFolders is not null && UnderAny(entry.RelativePath, blockedFolders))
+            {
+                continue;
+            }
+
             var target = targetOf[entry.RelativePath];
             var renamed = collisions.Contains(entry.RelativePath);
             if (destinationMap.TryGetValue(target, out var existing))
@@ -265,6 +275,33 @@ public static class SyncPlanner
                 // On both sides. A folder already exists; its contents are planned one by one.
                 if (entry.IsDirectory)
                 {
+                    if (!existing.IsDirectory)
+                    {
+                        // A file at the destination where the source has a folder. Skipping it
+                        // as "exists" planned the folder's contents beneath a file, where they
+                        // failed on every run and the file was never replaced.
+                        if (mode == SyncMode.Mirror)
+                        {
+                            // The file goes first, then the folder is created in its place
+                            // (the executor clears such files before creating folders).
+                            operations.Add(new SyncOperation(SyncOperationKind.Delete, existing.RelativePath, false, existing.Size) { ClearsTheWay = true });
+                            deletes++;
+                            netDelta -= existing.Size;
+                            operations.Add(new SyncOperation(SyncOperationKind.Add, entry.RelativePath, true, 0)
+                            {
+                                DestinationRelativePath = existing.RelativePath,
+                                SourceModificationDate = entry.ModificationDate,
+                                IsCollisionRename = renamed,
+                            });
+                            folderAdds++;
+                        }
+                        else
+                        {
+                            (blockedFolders ??= new HashSet<string>(StringComparer.Ordinal)).Add(entry.RelativePath);
+                            folderTypeClashes++;
+                        }
+                    }
+
                     continue;
                 }
 
@@ -386,6 +423,7 @@ public static class SyncPlanner
             SourceEntryCount = sourceEntries.Count,
             DestinationEntryCount = destinationEntries.Count,
             TypeClashes = typeClashes,
+            FolderTypeClashes = folderTypeClashes,
         };
     }
 
@@ -402,6 +440,20 @@ public static class SyncPlanner
     }
 
     /// <summary>A relative path as the local disk will spell it: each component made legal (<see cref="SafeLocalPath.FileName"/>).</summary>
+    /// <summary>Whether <paramref name="relativePath"/> is inside one of <paramref name="folders"/>.</summary>
+    private static bool UnderAny(string relativePath, HashSet<string> folders)
+    {
+        for (var slash = relativePath.LastIndexOf('/'); slash > 0; slash = relativePath.LastIndexOf('/', slash - 1))
+        {
+            if (folders.Contains(relativePath[..slash]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     internal static string LocalKey(string relativePath)
         => string.Join('/', relativePath.Split('/').Select(SafeLocalPath.FileName));
 

@@ -63,6 +63,7 @@ public static class SyncExecutor
             }
 
             progress.SetPhase(progress.IsCloudToCloud ? TransferPhase.Downloading : TransferPhase.Copying);
+            await ClearTheWayAsync(plan, destination, progress, ct).ConfigureAwait(false);
             await CreateFoldersAsync(plan, destination, progress, ct).ConfigureAwait(false);
             await CopyFilesAsync(plan, source, destination, progress, ct).ConfigureAwait(false);
             await DeleteExtrasAsync(plan, destination, progress, ct).ConfigureAwait(false);
@@ -84,6 +85,42 @@ public static class SyncExecutor
     }
 
     // MARK: - Folders
+
+    /// <summary>
+    /// Deletes destination files that stand where the source has a folder (Mirror), so the
+    /// folder and its contents can be created in their place.
+    /// </summary>
+    private static async Task ClearTheWayAsync(SyncPlan plan, SyncEndpoint destination, TransferProgress progress, CancellationToken ct)
+    {
+        foreach (var op in plan.Operations.Where(o => o is { Kind: SyncOperationKind.Delete, ClearsTheWay: true }))
+        {
+            ct.ThrowIfCancellationRequested();
+            progress.BeginFile(op.DisplayName, 0);
+            try
+            {
+                await destination.Provider.DeleteItemAsync(destination.Resolve(op.RelativePath), ct).ConfigureAwait(false);
+                if (Services.TagScope.For(destination.Provider) is { } tagScope)
+                {
+                    Services.TagStore.Shared.RemoveSubtree(tagScope, destination.Resolve(op.RelativePath));
+                }
+
+                progress.RecordSuccess(op.DisplayName);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+            {
+                progress.RecordSuccess(op.DisplayName);
+            }
+            catch (Exception e)
+            {
+                progress.RecordFailure(op.DisplayName, e.Message);
+                SupportLogger.Shared.Log($"Sync delete of {op.RelativePath} failed: {e.Message}", "Sync", LogLevel.Error);
+            }
+        }
+    }
 
     private static async Task CreateFoldersAsync(SyncPlan plan, SyncEndpoint destination, TransferProgress progress, CancellationToken ct)
     {
@@ -299,7 +336,7 @@ public static class SyncExecutor
 
     private static async Task DeleteExtrasAsync(SyncPlan plan, SyncEndpoint destination, TransferProgress progress, CancellationToken ct)
     {
-        var deletes = plan.Operations.Where(o => o.Kind == SyncOperationKind.Delete).ToList();
+        var deletes = plan.Operations.Where(o => o is { Kind: SyncOperationKind.Delete, ClearsTheWay: false }).ToList();
         if (deletes.Count == 0)
         {
             return;

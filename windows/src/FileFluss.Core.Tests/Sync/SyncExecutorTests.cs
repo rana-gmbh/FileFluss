@@ -146,6 +146,25 @@ public sealed class SyncExecutorTests : IDisposable
     }
 
     [Fact]
+    public async Task MirrorPutsTheSourcesFolderWhereTheDestinationHadAFile()
+    {
+        var sourceDir = LocalDir("folder-src");
+        var stamp = new DateTime(2024, 5, 6, 7, 8, 9, DateTimeKind.Utc);
+        WriteFile(Path.Combine(sourceDir, "x", "a.txt"), "inside", stamp);
+        var targetDir = LocalDir("folder-dst");
+        WriteFile(Path.Combine(targetDir, "x"), "a file in the way");
+
+        var source = new SyncEndpoint(_local, sourceDir);
+        var destination = new SyncEndpoint(_local, targetDir);
+        var progress = await RunAsync(await PlanAsync(source, destination, SyncMode.Mirror), source, destination);
+
+        Assert.True(progress.CompletedCleanly, progress.CompletionSummary);
+        Assert.True(Directory.Exists(Path.Combine(targetDir, "x")));
+        Assert.Equal("inside", File.ReadAllText(Path.Combine(targetDir, "x", "a.txt")));
+        Assert.True((await PlanAsync(source, destination, SyncMode.Mirror)).IsEmpty);
+    }
+
+    [Fact]
     public async Task MirrorOnACaseSensitiveCloudDeletesExtrasWhoseFolderDiffersOnlyByCase()
     {
         // "Docs/" is extra and goes; "docs/" is kept but its "extra.txt" goes too. Grouping the
