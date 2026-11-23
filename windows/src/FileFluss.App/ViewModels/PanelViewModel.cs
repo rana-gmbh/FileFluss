@@ -274,6 +274,8 @@ public sealed class PanelViewModel : Observable
             if (Set(ref _isLoading, value))
             {
                 OnPropertyChanged(nameof(IsEmpty));
+                OnPropertyChanged(nameof(ListingText));
+                OnPropertyChanged(nameof(StatusText));
             }
         }
     }
@@ -469,8 +471,13 @@ public sealed class PanelViewModel : Observable
     /// </summary>
     public string StatusText => StatusBarText.Join(ListingText, SelectionText, QuotaText);
 
-    /// <summary>"3 files, 2 folders — 1.2 MB" for what the list shows.</summary>
-    public string ListingText => StatusBarText.Listing(_listingFiles, _listingFolders, _listingBytes);
+    /// <summary>
+    /// "3 files, 2 folders — 1.2 MB" for what the list shows — "Loading..." while a folder is
+    /// still being listed and nothing is shown yet, rather than a fleeting "0 files, 0 folders".
+    /// </summary>
+    public string ListingText => _isLoading && _listingFiles == 0 && _listingFolders == 0
+        ? L("Loading...")
+        : StatusBarText.Listing(_listingFiles, _listingFolders, _listingBytes);
 
     /// <summary>"Selected: 2 items, 800 KB", "… calculating…" while folder sizes are summed, or empty.</summary>
     public string SelectionText => StatusBarText.Selection(_selection.Count, _selectionSize, _isCalculatingSelectionSize);
@@ -636,7 +643,9 @@ public sealed class PanelViewModel : Observable
 
             // Flip to the destination immediately: path bar, rows and selection reset
             // before the (possibly slow) listing, so the panel never shows one folder's
-            // contents under another folder's path.
+            // contents under another folder's path. Loading from here on (the listing below
+            // always runs), so the emptied list reads "Loading...", not "0 files, 0 folders".
+            IsLoading = true;
             ClearRows();
             Selection = [];
             FilterText = string.Empty;
