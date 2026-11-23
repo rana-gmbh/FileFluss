@@ -610,7 +610,7 @@ internal sealed class S3ApiClient
     {
         var signingHost = host.ToLowerInvariant();
         var canonicalQuery = query is null ? string.Empty : SigV4.CanonicalQuery(query);
-        var uri = new Uri("https://" + signingHost + encodedPath + (canonicalQuery.Length > 0 ? "?" + canonicalQuery : string.Empty));
+        var uri = SigV4.LiteralUri("https://" + signingHost + encodedPath + (canonicalQuery.Length > 0 ? "?" + canonicalQuery : string.Empty));
         var now = _clock();
         var amzDate = SigV4.AmzDate(now);
 

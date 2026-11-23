@@ -221,4 +221,46 @@ public class S3SigV4Tests
         Assert.Contains("response-content-disposition=attachment%3B%20filename%3D%22holiday%20photo.jpg%22", url.AbsoluteUri);
         Assert.Equal("attachment; filename=\"holiday photo.jpg\"", HttpUtility.ParseQueryString(url.Query)["response-content-disposition"]);
     }
+
+    /// <summary>
+    /// "." and ".." are legal inside S3 keys. System.Uri collapsed them ("backup/./x" sent as
+    /// "backup/x"), so what went out wasn't what was signed: SignatureDoesNotMatch.
+    /// </summary>
+    [Theory]
+    [InlineData("backup/./x.txt", "/backup/./x.txt")]
+    [InlineData("logs/../y.txt", "/logs/../y.txt")]
+    public void PresignedUrlsKeepDotSegments(string key, string path)
+    {
+        var url = SigV4.PresignedGetUrl("bucket.s3.eu-central-1.amazonaws.com", key, "eu-central-1", AccessKey, Secret, 300, null, ExampleDate);
+
+        Assert.Equal(path, url.AbsolutePath);
+        Assert.StartsWith("https://bucket.s3.eu-central-1.amazonaws.com" + path + "?", url.AbsoluteUri);
+    }
+
+    /// <summary>The real HttpClient sends such a URI's path byte for byte, not normalised.</summary>
+    [Fact]
+    public async Task HttpClientSendsDotSegmentsAsSigned()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var accept = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            using var reader = new StreamReader(client.GetStream());
+            var line = await reader.ReadLineAsync();
+            var bytes = System.Text.Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+            {
+            }
+
+            await client.GetStream().WriteAsync(bytes);
+            return line;
+        });
+
+        using var http = new HttpClient();
+        using var response = await http.GetAsync(SigV4.LiteralUri($"http://127.0.0.1:{port}/backup/./a/../x.txt"));
+
+        Assert.Equal("GET /backup/./a/../x.txt HTTP/1.1", await accept);
+    }
 }

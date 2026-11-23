@@ -163,8 +163,16 @@ internal static class SigV4
         var canonicalUri = EncodePath("/" + key);
         var canonicalRequest = CanonicalRequest("GET", canonicalUri, canonicalQuery, [new("host", host)], UnsignedPayload, out _);
         var signature = Signature(secretAccessKey, now, region, "s3", StringToSign(now, scope, canonicalRequest));
-        return new Uri($"https://{host}{canonicalUri}?{canonicalQuery}&X-Amz-Signature={signature}");
+        return LiteralUri($"https://{host}{canonicalUri}?{canonicalQuery}&X-Amz-Signature={signature}");
     }
+
+    /// <summary>
+    /// The URL exactly as signed. <see cref="Uri"/> otherwise collapses "." and ".." segments
+    /// ("backup/./x" became "backup/x"): legal in an S3 key, and what was signed was the
+    /// literal path, so every request for such a key failed with SignatureDoesNotMatch.
+    /// </summary>
+    internal static Uri LiteralUri(string url)
+        => new(url, new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true });
 
     public static string Sha256Hex(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 

@@ -323,6 +323,31 @@ public sealed class S3ProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task AKeyWithDotSegmentsIsRequestedAndSignedAsItIs()
+    {
+        _http.OnBytes(HttpMethod.Get, Bucket + "/backup/./x.txt", [1, 2, 3]);
+        using var provider = Connected();
+        var target = Path.Combine(_temp, "x.txt");
+
+        await provider.DownloadFileAsync("/photos/backup/./x.txt", target);
+
+        var sent = Assert.Single(_http.Requests);
+        Assert.Equal("/backup/./x.txt", sent.Uri.AbsolutePath);
+        var expected = SigV4.Authorization(
+            "GET",
+            "/backup/./x.txt",
+            sent.Uri.Query.TrimStart('?'),
+            [new("host", sent.Headers["Host"]), new("x-amz-content-sha256", sent.Headers["x-amz-content-sha256"]), new("x-amz-date", "20260105T100000Z")],
+            sent.Headers["x-amz-content-sha256"],
+            "AKIAEXAMPLE6UDK",
+            "secret",
+            "eu-central-1",
+            "s3",
+            Now);
+        Assert.Equal(expected, sent.Headers["Authorization"]);
+    }
+
+    [Fact]
     public async Task MissingObjectIsNotFoundAndLeavesNoFile()
     {
         _http.On(HttpMethod.Get, Bucket, (_, _) => Xml(ErrorBody("NoSuchKey", "The specified key does not exist."), HttpStatusCode.NotFound));
