@@ -30,6 +30,19 @@ public static partial class LogRedactor
         return result;
     }
 
+    /// <summary>Longest message the support log keeps whole; a server's HTML error page can be 50 KB.</summary>
+    public const int MaxMessageLength = 8_000;
+
+    /// <summary>
+    /// <paramref name="text"/> cut to <see cref="MaxMessageLength"/>, saying how much was left
+    /// out. Apply after <see cref="Redact"/>: cutting first could split a token so that only its
+    /// unmasked half stayed in the log.
+    /// </summary>
+    public static string Cap(string text)
+        => text.Length <= MaxMessageLength
+            ? text
+            : string.Concat(text.AsSpan(0, MaxMessageLength), $"… ({text.Length - MaxMessageLength} more characters)");
+
     /// <summary>
     /// "Bearer eyJ…", "Basic dXNlcjpwYXNz" — a credential has a digit, a capital or a symbol
     /// in it, which keeps prose such as "Basic authentication" readable.
@@ -38,15 +51,15 @@ public static partial class LogRedactor
     private static partial Regex AuthorizationScheme();
 
     /// <summary>"Authorization: …", "Cookie: …", "X-Auth-Token: …" up to the end of the line.</summary>
-    [GeneratedRegex(@"\b(Authorization|Proxy-Authorization|Cookie|Set-Cookie|X-Auth-Token|X-Api-Key|X-Amz-Security-Token|X-Storage-Token|Dropbox-API-Select-User)\s*:\s*[^\r\n]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(Authorization|Proxy-Authorization|Cookie|Set-Cookie|X-Auth-Token|X-Api-Key|X-Amz-Security-Token|X-Storage-Token|X-SYNO-TOKEN|X-SEAFILE-OTP|Dropbox-API-Select-User)\s*:\s*[^\r\n]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SecretHeader();
 
     /// <summary>A JSON member whose name says it holds a secret.</summary>
-    [GeneratedRegex(@"""((?:access|refresh|id|auth|session|upload|api|bearer|csrf)?_?token|accessToken|refreshToken|idToken|authToken|sessionToken|password|passwd|client_secret|clientSecret|secret|api_?key|apiKey|private_?key|privateKey|masterKey|master_key|sid|session_?id|sessionId|auth)""\s*:\s*""(?:[^""\\]|\\.)*""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"""((?:access|refresh|id|auth|session|upload|api|bearer|csrf)?_?token|accessToken|refreshToken|idToken|authToken|sessionToken|password|passwd|client_secret|clientSecret|secret|api_?key|apiKey|private_?key|privateKey|masterKey|master_key|sid|_sid|csid|tsid|authSid|session_?id|sessionId|auth|synotoken|qtoken|vtoken|personalToken|secretAccessKey|uploadKey)""\s*:\s*""(?:[^""\\]|\\.)*""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SecretJson();
 
     /// <summary>A query, form or "name=value" parameter whose name says it holds a secret.</summary>
-    [GeneratedRegex(@"(^|[?&;,\s""'(])((?:access_|refresh_|id_|auth_|session_)?token|authtoken|auth|password|passwd|pwd|secret|client_secret|code|code_verifier|api_?key|key|sig|signature|x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|x-goog-credential|sid|session_?id|upload_id)=([^&\s""'#,;)]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(^|[?&;,\s""'(])((?:access_|refresh_|id_|auth_|session_)?token|authtoken|auth|password|passwd|pwd|secret|client_secret|code|code_verifier|api_?key|key|sig|signature|x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|x-goog-credential|sid|_sid|csid|tsid|session_?id|upload_id|synotoken|qtoken|vtoken)=([^&\s""'#,;)]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SecretParameter();
 
     /// <summary>"https://user:password@host" — user info with a password.</summary>

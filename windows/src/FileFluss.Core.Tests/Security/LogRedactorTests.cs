@@ -23,6 +23,15 @@ public sealed class LogRedactorTests
     [InlineData("request had Cookie: session=abcdef; other=1", "abcdef")]
     [InlineData("X-Auth-Token: 0123456789abcdef", "0123456789abcdef")]
     [InlineData("access_token=abc123&refresh_token=def456", "def456")]
+    [InlineData("GET /webapi/entry.cgi?api=SYNO.API.Info&_sid=SYNOSESSION42&version=1", "SYNOSESSION42")]
+    [InlineData("""{"data":{"sid":"x","synotoken":"SYNOTOK99"}}""", "SYNOTOK99")]
+    [InlineData("X-SYNO-TOKEN: ABCDEF0123", "ABCDEF0123")]
+    [InlineData("QTS login ok: qtoken=QT0KEN77&vtoken=VT0KEN88", "QT0KEN77")]
+    [InlineData("QTS login ok: qtoken=QT0KEN77&vtoken=VT0KEN88", "VT0KEN88")]
+    [InlineData("""[Mega] answer {"csid":"CSIDSECRET","tsid":"TSIDSECRET"}""", "CSIDSECRET")]
+    [InlineData("""[Mega] answer {"csid":"CSIDSECRET","tsid":"TSIDSECRET"}""", "TSIDSECRET")]
+    [InlineData("""{"secretAccessKey":"wJalrXUtnFEMI"}""", "wJalrXUtnFEMI")]
+    [InlineData("X-SEAFILE-OTP: 123456", "123456")]
     public void SecretsAreMasked(string message, string secret)
     {
         var redacted = LogRedactor.Redact(message);
@@ -39,6 +48,20 @@ public sealed class LogRedactorTests
     [InlineData("Listing /a=b/c failed")]
     public void OrdinaryMessagesAreUntouched(string message)
         => Assert.Equal(message, LogRedactor.Redact(message));
+
+    [Fact]
+    public void LongMessagesAreCutAfterMasking()
+    {
+        // A server's HTML error page, with a token near where the cut falls.
+        var page = new string('x', LogRedactor.MaxMessageLength - 10) + "access_token=SPLITTOKEN123456&more" + new string('y', 50_000);
+
+        var stored = LogRedactor.Cap(LogRedactor.Redact(page));
+
+        Assert.True(stored.Length < LogRedactor.MaxMessageLength + 100);
+        Assert.DoesNotContain("SPLIT", stored, StringComparison.Ordinal);
+        Assert.EndsWith("more characters)", stored, StringComparison.Ordinal);
+        Assert.Equal("short", LogRedactor.Cap("short"));
+    }
 
     [Fact]
     public void TheSupportLogStoresOnlyTheMaskedText()
