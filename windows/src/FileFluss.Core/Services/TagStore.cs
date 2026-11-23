@@ -79,6 +79,13 @@ public sealed class TagStore : IDisposable
     private readonly object _writeGate = new();
     private readonly Dictionary<string, Dictionary<string, Entry>> _scopes = new(StringComparer.Ordinal);
     private readonly HashSet<string> _dirty = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Scopes whose file exists but couldn't be read (nor its backup): never written or deleted
+    /// this session, so a file a scanner held at the wrong moment, or one that went bad, isn't
+    /// replaced by the empty set it loaded as.
+    /// </summary>
+    private readonly HashSet<string> _unreadable = new(StringComparer.Ordinal);
     private Timer? _saveTimer;
 
     public TagStore(string directory)
@@ -295,6 +302,8 @@ public sealed class TagStore : IDisposable
         var scope = TagScope.Account(accountId, lastingItemIds: false);
         lock (_gate)
         {
+            // Removing the account removes its tags file too, readable or not.
+            _unreadable.Remove(scope.Key);
             _scopes[scope.Key] = NewEntries(scope);
             MarkDirty(scope);
         }
@@ -440,11 +449,50 @@ public sealed class TagStore : IDisposable
         }
 
         var entries = NewEntries(scope);
-        try
+        var path = FilePath(scope.Key);
+        var backup = AtomicFile.BackupPath(path);
+
+        // The file, or else the previous good one: a power cut's half-written file or one a
+        // scanner holds at launch mustn't read as "no tags" — the next save would then write
+        // that empty set over the real one (and its backup on the save after).
+        if (File.Exists(path) || File.Exists(backup))
         {
-            var path = FilePath(scope.Key);
-            if (File.Exists(path) && JsonSerializer.Deserialize<ScopeFile>(File.ReadAllText(path), Json) is { Entries: { } stored })
+            if (!TryRead(path, entries, scope.Key) && !TryRead(backup, entries, scope.Key))
             {
+                // A damaged file is no tags, not a failure to open a folder — but it stays as
+                // it is: this scope is neither written nor deleted until the next launch.
+                entries.Clear();
+                _unreadable.Add(scope.Key);
+                Diagnostics.SupportLogger.Shared.Log($"Tags for {scope.Key} are left untouched this session: neither the file nor its backup could be read", "Tags", Diagnostics.LogLevel.Error);
+            }
+        }
+
+        _scopes[scope.Key] = entries;
+        return entries;
+    }
+
+    /// <summary>
+    /// Reads one tags file into <paramref name="entries"/>. A file held by another process is
+    /// tried again briefly (a scanner opening it as FileFluss starts); false when it can't be
+    /// read or parsed, or isn't there.
+    /// </summary>
+    private static bool TryRead(string path, Dictionary<string, Entry> entries, string scopeKey)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                if (JsonSerializer.Deserialize<ScopeFile>(File.ReadAllText(path), Json) is not { Entries: { } stored })
+                {
+                    return false;
+                }
+
+                entries.Clear();
                 foreach (var (key, entry) in stored)
                 {
                     if (entry?.Tags is not { Count: > 0 } tags)
@@ -455,16 +503,19 @@ public sealed class TagStore : IDisposable
                     // A colour index a newer version wrote is shown as no colour, not refused.
                     entries[key] = entry with { Tags = tags.Where(t => !string.IsNullOrEmpty(t.Name)).Select(t => t with { Color = FileTags.Known(t.Color) }).ToList() };
                 }
+
+                return true;
+            }
+            catch (IOException) when (attempt < 3)
+            {
+                Thread.Sleep(50 * attempt);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+            {
+                Diagnostics.SupportLogger.Shared.Log($"Tags for {scopeKey} could not be read from {Path.GetFileName(path)}: {e.Message}", "Tags", Diagnostics.LogLevel.Error);
+                return false;
             }
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
-        {
-            // A damaged file is no tags, not a failure to open a folder.
-            Diagnostics.SupportLogger.Shared.Log($"Tags for {scope.Key} could not be read: {e.Message}", "Tags", Diagnostics.LogLevel.Error);
-        }
-
-        _scopes[scope.Key] = entries;
-        return entries;
     }
 
     /// <summary>
@@ -473,6 +524,12 @@ public sealed class TagStore : IDisposable
     /// </summary>
     private void MarkDirty(TagScope scope)
     {
+        // An unreadable scope's file is kept as it is; changes to it live for this session only.
+        if (_unreadable.Contains(scope.Key))
+        {
+            return;
+        }
+
         _dirty.Add(scope.Key);
         _saveTimer ??= new Timer(_ => Flush(), null, SaveDelay, Timeout.InfiniteTimeSpan);
     }

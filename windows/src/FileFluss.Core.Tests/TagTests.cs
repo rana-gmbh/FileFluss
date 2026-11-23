@@ -1,5 +1,6 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
+using FileFluss.Core.IO;
 using FileFluss.Core.Models;
 using FileFluss.Core.Providers;
 using FileFluss.Core.Services;
@@ -235,6 +236,86 @@ public sealed class TagStoreTests : IDisposable
         var file = Path.Combine(_root, _accountId.ToString("D").ToUpperInvariant() + ".json");
         File.WriteAllText(file, """{"entries":{"/Photos/Trip":{"tags":[{"color":2,"name":"Grün"}]}},"version":1}""");
         Assert.Equal([new FileTag("Grün", TagColor.Green)], new TagStore(_root).Tags(Account, "/Photos/Trip"));
+    }
+
+    /// <summary>The account's tags file, written once with Red on "/a"; no backup yet.</summary>
+    private string WriteAccountFile()
+    {
+        using (var store = new TagStore(_root))
+        {
+            store.SetTags(Account, "/a", [Red]);
+        }
+
+        var file = Directory.GetFiles(_root, "*.json").Single();
+        File.Delete(AtomicFile.BackupPath(file));
+        return file;
+    }
+
+    [Fact]
+    public void AFileHeldByAnotherProgramAtLaunchIsNotOverwritten()
+    {
+        var file = WriteAccountFile();
+        var original = File.ReadAllBytes(file);
+
+        // A scanner holds the file while the store first reads it, and has let go by the save.
+        using (var store = new TagStore(_root))
+        {
+            using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.Empty(store.Tags(Account, "/a"));
+            }
+
+            store.SetTags(Account, "/b", [Blue]);
+            store.Flush();
+        }
+
+        Assert.Equal(original, File.ReadAllBytes(file));
+        Assert.False(File.Exists(AtomicFile.BackupPath(file)));
+        Assert.Equal([Red], new TagStore(_root).Tags(Account, "/a"));
+    }
+
+    [Fact]
+    public void ADamagedFileFallsBackToTheBackup()
+    {
+        var file = WriteAccountFile();
+        File.Copy(file, AtomicFile.BackupPath(file));
+        File.WriteAllText(file, "{ \"version\": 1, \"entr");
+
+        Assert.Equal([Red], new TagStore(_root).Tags(Account, "/a"));
+    }
+
+    [Fact]
+    public void WhenNeitherFileNorBackupCanBeReadBothAreLeftAsTheyAre()
+    {
+        var file = WriteAccountFile();
+        var backup = AtomicFile.BackupPath(file);
+        File.WriteAllText(file, "not json");
+        File.WriteAllText(backup, "{ broken");
+
+        using (var store = new TagStore(_root))
+        {
+            store.SetTags(Account, "/b", [Blue]);
+            store.SetTags(Account, "/b", []);
+            store.Flush();
+        }
+
+        Assert.Equal("not json", File.ReadAllText(file));
+        Assert.Equal("{ broken", File.ReadAllText(backup));
+    }
+
+    [Fact]
+    public void RemovingTheAccountStillRemovesAnUnreadableFile()
+    {
+        var file = WriteAccountFile();
+        File.WriteAllText(file, "not json");
+
+        using (var store = new TagStore(_root))
+        {
+            Assert.Empty(store.Tags(Account, "/a"));
+            store.RemoveAccount(_accountId);
+        }
+
+        Assert.False(File.Exists(file));
     }
 
     [Fact]
