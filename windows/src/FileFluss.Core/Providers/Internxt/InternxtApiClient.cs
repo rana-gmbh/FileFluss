@@ -416,10 +416,28 @@ internal sealed class InternxtApiClient
             var newUuid = createdUuid ?? throw CloudProviderException.InvalidResponse();
             try
             {
-                await DriveSendAsync($"/files/{existing!.Uuid}", HttpMethod.Delete, null, cancellationToken).ConfigureAwait(false);
+                await DeleteRetryingTransientAsync($"/files/{existing!.Uuid}", cancellationToken).ConfigureAwait(false);
+            }
+            catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+            {
+                // Already gone (deleted elsewhere, or a stale cached node): the name is free.
             }
             catch (CloudProviderException)
             {
+                // The old file can't be removed (no permission, a lasting server error). Going
+                // on would spin on 409 for the taken name and end in a confusing error, with
+                // the old file and a ".fileflusspart-…" copy side by side. Put the folder back
+                // as it was — the old file stays — and report why.
+                try
+                {
+                    await DriveSendAsync($"/files/{newUuid}", HttpMethod.Delete, null, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (CloudProviderException cleanup)
+                {
+                    Diagnostics.SupportLogger.Shared.Log($"Internxt: removing the replacement left as {CloudPath.Name(registeredPath)} failed: {cleanup.Message}", "Internxt", Diagnostics.LogLevel.Error);
+                }
+
+                throw;
             }
 
             _nodeCache.TryRemove(remotePath, out _);

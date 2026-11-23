@@ -534,6 +534,33 @@ public class InternxtProviderTests
     }
 
     [Fact]
+    public async Task AnOldFileThatCannotBeDeletedEndsTheReplaceAndLeavesTheFolderAsItWas()
+    {
+        // Deleting the old entry is refused: the replace used to carry on, spin on 409 for the
+        // taken name and fail confusingly, leaving the old file and a temporary-named copy.
+        using var h = WithRoute(HttpMethod.Delete, "/drive/files/report-file-uuid", _ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        using var temp = new TempDirectory();
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 46)), "/report.pdf"));
+
+        Assert.NotEqual(CloudErrorKind.NotFound, error.Kind);
+        Assert.Single(h.Capture.Matching(HttpMethod.Delete, "/drive/files/new-file-uuid"));
+        Assert.Empty(h.Capture.Matching(HttpMethod.Put, "/drive/files/new-file-uuid/meta"));
+    }
+
+    [Fact]
+    public async Task AnOldFileAlreadyGoneDoesNotStopTheReplace()
+    {
+        using var h = WithRoute(HttpMethod.Delete, "/drive/files/report-file-uuid", _ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var temp = new TempDirectory();
+
+        await h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 47)), "/report.pdf");
+
+        Assert.Single(h.Capture.Matching(HttpMethod.Put, "/drive/files/new-file-uuid/meta"));
+        Assert.Empty(h.Capture.Matching(HttpMethod.Delete, "/drive/files/new-file-uuid"));
+    }
+
+    [Fact]
     public async Task AReplacementTheRenameCannotSeeYetIsRetriedUntilItTakesTheName()
     {
         // Drive's rename endpoint can answer 404 for the entry created a moment earlier; the
