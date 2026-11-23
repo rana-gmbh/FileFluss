@@ -47,9 +47,9 @@ jobs:
       SIGNING_PROFILE: rana-public
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "10.0.x"
 
@@ -92,7 +92,7 @@ jobs:
       # A login per round: the GitHub token behind it is short-lived, and packaging takes minutes.
       - name: Azure login for the executables
         if: env.HAS_AZURE_SIGNING == 'true'
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -101,7 +101,7 @@ jobs:
 
       - name: Sign the executables
         if: env.HAS_AZURE_SIGNING == 'true'
-        uses: azure/artifact-signing-action@v2
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ env.SIGNING_ENDPOINT }}
           signing-account-name: ${{ env.SIGNING_ACCOUNT }}
@@ -134,7 +134,7 @@ jobs:
 
       - name: Azure login for the installers
         if: env.HAS_AZURE_SIGNING == 'true'
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: Sign the installers
         if: env.HAS_AZURE_SIGNING == 'true'
-        uses: azure/artifact-signing-action@v2
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ env.SIGNING_ENDPOINT }}
           signing-account-name: ${{ env.SIGNING_ACCOUNT }}
