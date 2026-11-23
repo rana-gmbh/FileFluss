@@ -529,7 +529,7 @@ public sealed partial class MainViewModel : Observable
     /// downloaded to the open cache first (<see cref="CachedCopyAsync"/>). With
     /// <paramref name="launch"/> false (Quick Look) it only fetches the cached copy.
     /// </summary>
-    public async Task<string?> OpenCloudFileAsync(PanelViewModel panel, CloudFileItem item, bool launch = true)
+    public async Task<string?> OpenCloudFileAsync(PanelViewModel panel, CloudFileItem item, bool launch = true, CancellationToken cancellationToken = default)
     {
         if (launch && await MountedPathsAsync(panel, [item]) is [var mounted])
         {
@@ -545,12 +545,13 @@ public sealed partial class MainViewModel : Observable
             return mounted;
         }
 
-        if (await CachedCopyAsync(panel, item) is not { } copy)
+        if (await SharedCachedCopyAsync(panel, item, cancellationToken) is not { } copy)
         {
             return null;
         }
 
-        var (target, kept) = copy;
+        var target = copy.Path;
+        var kept = copy.TakeKept();
         if (launch)
         {
             try
@@ -632,13 +633,14 @@ public sealed partial class MainViewModel : Observable
         {
             foreach (var item in items)
             {
-                if (await CachedCopyAsync(panel, item) is not { } copy)
+                if (await SharedCachedCopyAsync(panel, item, CancellationToken.None) is not { } copy)
                 {
                     // Failed (and said so) or cancelled: the rest still open, as on macOS.
                     continue;
                 }
 
-                var (target, keptAt) = copy;
+                var target = copy.Path;
+                var keptAt = copy.TakeKept();
                 MarkOfTheWeb.Apply(target);
                 paths.Add(target);
                 if (keptAt is not null)
@@ -728,13 +730,54 @@ public sealed partial class MainViewModel : Observable
         }
     }
 
+    /// <summary>Cached copies being fetched, one per account and path (see <see cref="SingleFlight{TKey, TResult}"/>).</summary>
+    private readonly SingleFlight<(Guid Account, string Path), OpenedCopy?> _openingCopies = new();
+
+    /// <summary>
+    /// <see cref="CachedCopyAsync"/>, shared by everyone opening the same file at once: a second
+    /// double-click, or Enter after Quick Look, waits for the download already running instead
+    /// of starting another into the same partial file. <paramref name="cancellationToken"/>
+    /// only stops this caller waiting (null then); the download stops once nobody waits for it.
+    /// </summary>
+    private async Task<OpenedCopy?> SharedCachedCopyAsync(PanelViewModel panel, CloudFileItem item, CancellationToken cancellationToken)
+    {
+        if (panel.Location.AccountId is not { } accountId)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _openingCopies.RunAsync((accountId, item.Path), token => CachedCopyAsync(panel, item, token), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A cached copy, with the edited copy moved aside on the way (if any) — which only one of
+    /// the callers sharing it reports, so the notice appears once.
+    /// </summary>
+    private sealed class OpenedCopy(string path, string? kept)
+    {
+        private string? _kept = kept;
+
+        public string Path { get; } = path;
+
+        public string? TakeKept() => Interlocked.Exchange(ref _kept, null);
+    }
+
     /// <summary>
     /// The open cache's copy of a cloud file, downloaded unless the copy there is still current.
     /// A copy an app has saved over since it was downloaded is the user's work, not cache: it
     /// is moved aside first (<see cref="CachedCopy"/>) and returned as <c>Kept</c>. Null when the
-    /// download failed (the user has been told) or was cancelled.
+    /// download failed (the user has been told) or was cancelled — by the transfer's own cancel
+    /// button, or through <paramref name="cancellationToken"/> once nobody waits for it any more
+    /// (Quick Look moved on), when it also leaves the transfers list.
     /// </summary>
-    private async Task<(string Path, string? Kept)?> CachedCopyAsync(PanelViewModel panel, CloudFileItem item)
+    private async Task<OpenedCopy?> CachedCopyAsync(PanelViewModel panel, CloudFileItem item, CancellationToken cancellationToken)
     {
         if (panel.Provider is not { } provider || panel.Location.AccountId is not { } accountId)
         {
@@ -775,7 +818,7 @@ public sealed partial class MainViewModel : Observable
                 // Still held by the app it was saved in: never write over it. That app has the
                 // user's version open, and this copy is what it shows.
                 SupportLogger.Shared.Log($"open: an edited copy of {item.Name} is in use ({e.Message}); opening it as it is", "Open", LogLevel.Notice);
-                return (target, null);
+                return new OpenedCopy(target, null);
             }
         }
 
@@ -787,6 +830,10 @@ public sealed partial class MainViewModel : Observable
             progress.SetPlan(1, item.Size);
             progress.SetPhase(TransferPhase.Downloading);
             _services.Transfers.Track(progress);
+
+            // Nobody waits any more (Quick Look moved on): stop the download as its own cancel
+            // button would. The provider discards the partial file.
+            using var abandon = cancellationToken.Register(progress.Cancel);
             try
             {
                 progress.BeginFile(item.Name, item.Size);
@@ -802,6 +849,12 @@ public sealed partial class MainViewModel : Observable
             {
                 failed = true;
             }
+            catch (Exception) when (progress.IsCancelled)
+            {
+                // Some providers report a download torn down by cancelling as a network
+                // failure; it was cancelled, which says nothing to anyone.
+                failed = true;
+            }
             catch (Exception e)
             {
                 progress.RecordFailure(item.Name, e.Message);
@@ -811,6 +864,14 @@ public sealed partial class MainViewModel : Observable
             finally
             {
                 progress.Complete();
+
+                // Given up by everyone who wanted it rather than cancelled by the user: an
+                // arrow-key walk through cloud files in Quick Look leaves no trail of
+                // "Cancelled" entries in the transfers list.
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _services.Transfers.Remove(progress);
+                }
             }
 
             if (failed)
@@ -825,7 +886,7 @@ public sealed partial class MainViewModel : Observable
             }
         }
 
-        return (target, kept);
+        return new OpenedCopy(target, kept);
     }
 
     // MARK: - Transfers
