@@ -264,6 +264,52 @@ public static class ShellFileOperations
     public static void Open(string path)
         => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty })?.Dispose();
 
+    /// <summary>
+    /// <see cref="Open"/> on a background STA thread. ShellExecute blocks until the handler has
+    /// taken the file — seconds for a file on a slow share or the mapped-account drive, or a
+    /// handler that talks DDE — and on the UI thread that froze the window. STA because shell
+    /// handlers are COM objects that expect one; the call waits for DDE before it returns, so
+    /// the thread may end right after. A failure comes back through the task.
+    /// </summary>
+    public static Task OpenAsync(string path)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Open(path);
+                done.SetResult();
+            }
+            catch (Exception e)
+            {
+                done.SetException(e);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "FileFluss open",
+        };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        return done.Task;
+    }
+
+    /// <summary>
+    /// Whether Windows counts the file's type as dangerous to open from an untrusted source —
+    /// programs, scripts, shortcuts and the like (the attachment manager's own list, via
+    /// <c>AssocIsDangerous</c>). Documents are not.
+    /// </summary>
+    public static bool IsDangerousType(string fileName)
+    {
+        var extension = Path.GetExtension(fileName);
+        return extension.Length > 1 && AssocIsDangerous(extension);
+    }
+
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AssocIsDangerous(string association);
+
     /// <summary>The system "Open with" chooser.</summary>
     public static void OpenWith(string path, nint owner)
     {

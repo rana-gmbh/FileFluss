@@ -113,7 +113,7 @@ public sealed partial class MainViewModel
                 MarkOfTheWeb.Apply(path);
             }
 
-            ShellFileOperations.Open(path);
+            await ShellFileOperations.OpenAsync(path);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

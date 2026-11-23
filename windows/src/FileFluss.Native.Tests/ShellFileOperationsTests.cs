@@ -28,6 +28,27 @@ public sealed class ShellFileOperationsTests : IDisposable
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.Windows), Path.GetDirectoryName(ShellFileOperations.ExplorerPath), ignoreCase: true);
     }
 
+    [Theory]
+    [InlineData("setup.exe", true)]
+    [InlineData("invoice.pdf.exe", true)]
+    [InlineData("run.bat", true)]
+    [InlineData("script.js", true)]
+    [InlineData("link.lnk", true)]
+    [InlineData("Report.docx", false)]
+    [InlineData("photo.jpg", false)]
+    [InlineData("notes.txt", false)]
+    [InlineData("README", false)]
+    public void KnowsWhichTypesAreDangerous(string name, bool dangerous)
+        => Assert.Equal(dangerous, ShellFileOperations.IsDangerousType(name));
+
+    [Fact]
+    public async Task OpenAsyncRunsOffTheCallingThreadAndReportsFailures()
+    {
+        // A path no handler can open: the failure comes back through the task, not the caller's stack.
+        var missing = Path.Combine(_folder, "missing-" + Guid.NewGuid().ToString("N") + ".nonexistent-type");
+        await Assert.ThrowsAnyAsync<Exception>(() => ShellFileOperations.OpenAsync(missing));
+    }
+
     [Fact]
     public async Task CopiesAndReportsEveryByte()
     {

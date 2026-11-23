@@ -510,7 +510,7 @@ public sealed partial class MainViewModel : Observable
         {
             try
             {
-                ShellFileOperations.Open(row.Path);
+                await ShellFileOperations.OpenAsync(row.Path);
             }
             catch (Exception e)
             {
@@ -535,7 +535,7 @@ public sealed partial class MainViewModel : Observable
         {
             try
             {
-                ShellFileOperations.Open(mounted);
+                await ShellFileOperations.OpenAsync(mounted);
             }
             catch (Exception e)
             {
@@ -559,7 +559,7 @@ public sealed partial class MainViewModel : Observable
                 // Downloaded from someone's server: SmartScreen and Protected View apply, as to
                 // a browser download. (Quick Look's own preview stays unmarked.)
                 MarkOfTheWeb.Apply(target);
-                ShellFileOperations.Open(target);
+                await ShellFileOperations.OpenAsync(target);
             }
             catch (Exception e)
             {
