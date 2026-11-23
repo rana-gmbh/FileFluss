@@ -1,9 +1,12 @@
 // Copyright (C) 2026 Rana GmbH — GPLv3. See LICENSE at the repository root.
 
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Threading;
 using FileFluss.App.Services;
 using FileFluss.App.Views.Dialogs;
 using FileFluss.Core.Formatting;
@@ -30,6 +33,8 @@ public sealed class TransferDetailsWindow : Window
     private readonly StackPanel _currentPanel = new();
     private readonly Grid _figures = new();
     private readonly ListBox _items = new() { MaxHeight = 220, BorderThickness = new Thickness(0), Background = Brushes.Transparent };
+    private readonly ObservableCollection<ResultRow> _rows = [];
+    private bool _refreshPending;
     private readonly TextBlock _itemsHeader;
     private readonly Button _cancel;
 
@@ -59,6 +64,14 @@ public sealed class TransferDetailsWindow : Window
         _figures.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _figures.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _itemsHeader = new TextBlock { Opacity = 0.7, Margin = new Thickness(0, 12, 0, 4) };
+
+        // One row per finished item, appended as they finish and drawn only while on screen:
+        // a copy of 20,000 files rebuilt the whole list every 150 ms.
+        _items.ItemTemplate = CreateResultTemplate();
+        _items.ItemsSource = _rows;
+        ScrollViewer.SetHorizontalScrollBarVisibility(_items, ScrollBarVisibility.Disabled);
+        VirtualizingPanel.SetIsVirtualizing(_items, true);
+        VirtualizingPanel.SetVirtualizationMode(_items, VirtualizationMode.Recycling);
 
         _cancel = new Button { Content = L("Cancel Transfer"), HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
         _cancel.Click += (_, _) =>
@@ -114,7 +127,71 @@ public sealed class TransferDetailsWindow : Window
         return line;
     }
 
-    private void OnTransferChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.BeginInvoke(Refresh);
+    /// <summary>
+    /// A transfer reports several changes per pump tick; one refresh follows them all instead
+    /// of one each.
+    /// </summary>
+    private void OnTransferChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_refreshPending)
+        {
+            return;
+        }
+
+        _refreshPending = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            _refreshPending = false;
+            Refresh();
+        });
+    }
+
+    /// <summary>A finished item as the list shows it.</summary>
+    public sealed record ResultRow(string Text, bool IsFailed);
+
+    internal static ResultRow RowFor(TransferItemResult result) => new(
+        result.Status switch
+        {
+            TransferItemStatus.Failed => $"✕  {result.Name} — {result.ErrorMessage}",
+            TransferItemStatus.Skipped => $"↷  {result.Name}",
+            _ => $"✓  {result.Name}",
+        },
+        result.Status == TransferItemStatus.Failed);
+
+    /// <summary>
+    /// Appends the results not yet shown. Results only ever grow, so the rows already there
+    /// stay as they are; a shorter list (never expected) starts over.
+    /// </summary>
+    internal static void AppendNew(ObservableCollection<ResultRow> rows, IReadOnlyList<TransferItemResult> results)
+    {
+        if (results.Count < rows.Count)
+        {
+            rows.Clear();
+        }
+
+        for (var i = rows.Count; i < results.Count; i++)
+        {
+            rows.Add(RowFor(results[i]));
+        }
+    }
+
+    internal static DataTemplate CreateResultTemplate() => (DataTemplate)XamlReader.Parse(
+        """
+        <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+            <TextBlock Text="{Binding Text}" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DataTemplate>
+        """);
 
     private void Refresh()
     {
@@ -194,20 +271,7 @@ public sealed class TransferDetailsWindow : Window
         var results = t.Results;
         _itemsHeader.Text = t.IsComplete ? L("Items ({0})", results.Count) : L("Finished so far ({0})", results.Count);
         _itemsHeader.Visibility = results.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (_items.Items.Count != results.Count)
-        {
-            _items.ItemsSource = results.Select(r => new TextBlock
-            {
-                Text = r.Status switch
-                {
-                    TransferItemStatus.Failed => $"✕  {r.Name} — {r.ErrorMessage}",
-                    TransferItemStatus.Skipped => $"↷  {r.Name}",
-                    _ => $"✓  {r.Name}",
-                },
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = r.Status == TransferItemStatus.Failed ? (Brush)FindResource("DangerBrush") : (Brush)FindResource("TextFillColorPrimaryBrush"),
-            }).ToList();
-        }
+        AppendNew(_rows, results);
 
         _cancel.Visibility = t.IsComplete ? Visibility.Collapsed : Visibility.Visible;
     }
