@@ -349,7 +349,28 @@ public class SftpProviderTests
         Assert.Equal(SftpAuthMethod.Password, stored.AuthMethod);
         Assert.Equal(" secret ", stored.Password);
         Assert.Null(stored.PrivateKey);
-        Assert.Null(Assert.Single(_server.Checks).Expected);
+
+        // First a probe that only learns the key (and refuses it, so no login is sent), then —
+        // the user having confirmed it — the real connection, pinned to exactly that key.
+        Assert.Equal(2, _server.Checks.Count);
+        Assert.Equal("SHA256:first-key", _server.Checks[0].Presented);
+        Assert.Equal("SHA256:first-key", _server.Checks[1].Expected);
+        Assert.Single(_server.Opened);
+    }
+
+    [Fact]
+    public async Task ANewAccountAsksBeforeTrustingTheServersKey()
+    {
+        _server.Tree.Dir("/home/u");
+        using var provider = new SftpProvider(_accountId, _store, _server.ConnectAsync);
+        var prompt = new ScriptedConnectPrompt { ConfirmAnswer = false };
+
+        var declined = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(), prompt));
+
+        Assert.Equal(CloudErrorKind.Cancelled, declined.Kind);
+        Assert.Null(Stored());
+        Assert.Empty(_server.Opened);
+        Assert.Contains("SHA256:first-key", Assert.Single(prompt.Confirmations).Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -424,13 +445,17 @@ public class SftpProviderTests
     }
 
     [Fact]
-    public async Task ANewServerStartsWithoutAPinnedKey()
+    public async Task ANewServerStartsWithoutAPinnedKeyAndIsTrustedOnlyOnAYes()
     {
         _server.Tree.Dir("/home/u");
         _server.HostKey = "SHA256:new-server";
         using var provider = Signed();
 
-        await provider.ConnectAsync(PasswordValues(host: "other.example.test"), new ScriptedConnectPrompt { ConfirmAnswer = false });
+        var declined = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ConnectAsync(PasswordValues(host: "other.example.test"), new ScriptedConnectPrompt { ConfirmAnswer = false }));
+        Assert.Equal(CloudErrorKind.Cancelled, declined.Kind);
+        Assert.Equal("SHA256:first-key", Stored()!.HostKeyFingerprint);
+
+        await provider.ConnectAsync(PasswordValues(host: "other.example.test"), new ScriptedConnectPrompt { ConfirmAnswer = true });
 
         Assert.Equal("SHA256:new-server", Stored()!.HostKeyFingerprint);
     }

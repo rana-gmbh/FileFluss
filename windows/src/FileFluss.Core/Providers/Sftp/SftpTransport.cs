@@ -69,6 +69,8 @@ internal sealed record SftpExecResult(int? ExitStatus, string Output, string Err
 /// </summary>
 internal sealed class SftpHostKeyCheck(string? expected)
 {
+    private bool _refuseAll;
+
     public string? Expected { get; } = expected;
 
     /// <summary>What the server presented, "SHA256:…".</summary>
@@ -77,10 +79,22 @@ internal sealed class SftpHostKeyCheck(string? expected)
     /// <summary>The server presented a key other than the pinned one; the connection was refused.</summary>
     public bool Mismatch { get; private set; }
 
+    /// <summary>
+    /// A check that only learns the server's key and refuses it, so the connection ends during
+    /// key exchange — before any password or key is sent — and the user can be asked about a
+    /// server never seen before.
+    /// </summary>
+    public static SftpHostKeyCheck Probe() => new(null) { _refuseAll = true };
+
     /// <summary>Called during key exchange; returns whether to trust the key.</summary>
     public bool Verify(string fingerprint)
     {
         Presented = fingerprint;
+        if (_refuseAll)
+        {
+            return false;
+        }
+
         if (Expected is null || string.Equals(Expected, fingerprint, StringComparison.Ordinal))
         {
             return true;

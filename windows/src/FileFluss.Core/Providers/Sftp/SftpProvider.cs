@@ -178,6 +178,44 @@ public sealed class SftpProvider : CloudProvider
                 : null;
         }
 
+        // A server this account hasn't pinned a key for (a new account, or a new address): ask
+        // before trusting it, as OpenSSH does, instead of pinning whatever answered. The probe
+        // ends during key exchange, so nothing is sent to a server the user then declines.
+        if (expected is null)
+        {
+            var probe = SftpHostKeyCheck.Probe();
+            try
+            {
+                (await _factory(credentials, probe, cancellationToken).ConfigureAwait(false)).Dispose();
+            }
+            catch (Exception e) when (e is not OperationCanceledException && probe.Presented is null)
+            {
+                throw SftpErrors.Map(e, null, credentials.AuthMethod);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // Refused by the probe itself: the key is known now.
+            }
+
+            if (probe.Presented is { } presented)
+            {
+                var trusted = await prompt.ConfirmAsync(
+                    Localization.L("Trust this server?"),
+                    Localization.L(
+                        "This is the first connection to {0}. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n{1}\n\nTrust this key and connect?",
+                        credentials.Host,
+                        presented),
+                    cancellationToken).ConfigureAwait(false);
+                if (!trusted)
+                {
+                    throw CloudProviderException.Cancelled();
+                }
+
+                // Pin exactly the key the user just saw; a different one next is a changed key.
+                expected = presented;
+            }
+        }
+
         var check = new SftpHostKeyCheck(expected);
         ISftpTransport transport;
         try
