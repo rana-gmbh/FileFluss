@@ -253,6 +253,13 @@ public static class ShellFileOperations
 
     // MARK: - Shell verbs
 
+    /// <summary>
+    /// Explorer by its full path. Started by bare name, CreateProcess looks in the app's own
+    /// folder and the current directory before %WINDIR%, so a planted "explorer.exe" there
+    /// would run instead.
+    /// </summary>
+    public static string ExplorerPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+
     /// <summary>Opens with the default app, like a double-click in Explorer.</summary>
     public static void Open(string path)
         => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty })?.Dispose();
@@ -290,7 +297,7 @@ public static class ShellFileOperations
         var folder = Path.GetDirectoryName(paths[0]);
         if (folder is null)
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{paths[0]}\"") { UseShellExecute = true })?.Dispose();
+            Process.Start(new ProcessStartInfo(ExplorerPath) { ArgumentList = { paths[0] }, UseShellExecute = false })?.Dispose();
             return;
         }
 
@@ -301,7 +308,7 @@ public static class ShellFileOperations
         {
             if (parent == 0 || SHOpenFolderAndSelectItems(parent, (uint)children.Length, children, 0) != 0)
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{paths[0]}\"") { UseShellExecute = true })?.Dispose();
+                Process.Start(new ProcessStartInfo(ExplorerPath, $"/select,\"{paths[0]}\"") { UseShellExecute = false })?.Dispose();
             }
         }
         finally

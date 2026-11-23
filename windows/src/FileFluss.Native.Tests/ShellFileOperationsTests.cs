@@ -19,6 +19,16 @@ public sealed class ShellFileOperationsTests : IDisposable
     }
 
     [Fact]
+    public void ExplorerIsStartedByItsFullPath()
+    {
+        // A bare "explorer.exe" is searched for in the app's folder and the current directory
+        // before %WINDIR%.
+        Assert.True(Path.IsPathFullyQualified(ShellFileOperations.ExplorerPath));
+        Assert.True(File.Exists(ShellFileOperations.ExplorerPath));
+        Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.Windows), Path.GetDirectoryName(ShellFileOperations.ExplorerPath), ignoreCase: true);
+    }
+
+    [Fact]
     public async Task CopiesAndReportsEveryByte()
     {
         var source = Source(3 * 1024 * 1024);
