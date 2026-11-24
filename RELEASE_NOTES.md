@@ -1,6 +1,6 @@
 # FileFluss 1.7 Beta 3
 
-The Mac and Windows apps are **feature-identical again**: the gallery view, reconnecting an account from its panel, and pCloud's browser sign-in, new on the Mac in 1.7 Beta 2, now come to Windows too. From now on every feature arrives on both platforms in the same release.
+The Mac and Windows apps are **feature-identical again**: the gallery view, reconnecting an account from its panel, and pCloud's browser sign-in, new on the Mac in 1.7 Beta 2, now come to Windows too. Both apps also gain **colour tags** for files and folders, and the gallery now shows **cloud photos as thumbnails**. From now on every feature arrives on both platforms in the same release.
 
 This is a **beta**. Please keep backups of anything important, and tell me what you run into: [open an issue](https://github.com/rana-gmbh/FileFluss/issues/new) and say whether it's the Mac or the Windows app.
 
@@ -11,11 +11,24 @@ This is a **beta**. Please keep backups of anything important, and tell me what 
 
 ### Gallery view
 
-Each panel can now show its folder as a **gallery of thumbnails** instead of a list. Local images, videos, PDFs and documents show a real preview; cloud files show the icon of their file type.
+Each panel can now show its folder as a **gallery of thumbnails** instead of a list. Images, videos, PDFs and documents show a real preview, in local folders and in cloud accounts alike.
 
 - Switch with the **List / Gallery switch at the right end of each panel's path bar**, or with **View → as List** and **View → as Gallery**: ⌃⌘1 / ⌃⌘2 on the Mac, Ctrl+Shift+1 / Ctrl+Shift+2 on Windows, changeable in Settings → Keyboard Map. Each panel remembers its own choice, so a photo folder can be a gallery on one side while the other side stays a list. The list stays the default.
 - **⌘+ and ⌘-** on the Mac, **Ctrl+Plus and Ctrl+Minus** on Windows, make the thumbnails bigger and smaller, as they do with the rows of the list.
-- Everything works in the gallery as it does in the list: selecting several items, double-clicking, the right-click menu, drag and drop, Quick Look with the arrow keys, and cut, copy and paste.
+- Everything works in the gallery as it does in the list: selecting several items, double-clicking, the right-click menu, drag and drop, Quick Look with the arrow keys, and cut, copy and paste. On the Mac, double-clicking a folder in the gallery opens it again; in 1.7 Beta 2 it did nothing.
+- **Cloud photos get thumbnails too.** Dropbox, Box, pCloud, Google Drive, OneDrive, kDrive, Nextcloud, Seafile, Synology Drive and GoPro supply their own small preview, which is also how videos get one. On every other account, images and PDFs up to 20 MB are downloaded once and drawn on your computer. iCloud Drive files that iCloud has moved off your computer are never downloaded just for a preview.
+- Previews are kept on disk (up to 300 MB), so a folder you've seen once shows them at once. Only the tiles you can see are fetched, four at a time.
+
+### Colour tags
+
+Files and folders can now carry **Finder's seven colour tags**, in local folders and in every cloud account.
+
+- **Right-click → Tags** offers the seven colours, shows which ones the selection already has, lists any other tags it carries, and offers Remove All Tags.
+- Tagged items show **up to three colour dots**, after the name in the list and before it in the gallery. A tagged folder is drawn in the colour of its last tag, as Finder does on macOS 26.
+- **On the Mac, local files and iCloud Drive use Finder's own tags,** so Finder and FileFluss show the same thing. A tag given in Finder shows in its own colour, also when it was given on a Mac set to another language.
+- **MEGA and kDrive** have labels of their own; a tag is written there too, and a label set in their apps shows up in FileFluss.
+- On **every other account**, and for **local files on Windows**, FileFluss keeps the tags itself, so they show only in FileFluss on that computer.
+- **Tags travel with the file** when FileFluss renames, moves, copies, uploads, downloads, transfers between accounts or syncs it. A sync only adds tags, so it never takes off a tag given on the other side.
 
 ### Reconnect an account right where it stopped working
 
@@ -43,6 +56,7 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 
 ## Fixed on the Mac
 
+- **FTP servers whose listings leave out a field now open** ([#70](https://github.com/rana-gmbh/FileFluss/issues/70)). A server that lists files without a group column, such as OpenHASP on small display boards, was refused as unreadable. FTP also reads Windows-style listings (`10-28-26  09:30PM  <DIR>  Photos`), and SFTP benefits from the same change. Windows already read both.
 - **Mirror deletes again in folders whose path contains a space or an umlaut.** In a folder such as "Backup Übersicht", the files Mirror reported as deleted were left in place, and replacing a file there left a `.filefluss-part` file behind.
 - **Names that differ only in capitals or accents no longer overwrite each other.** A cloud folder holding `README.md` and `Readme.md` (or two forms of "Café") kept only one of them on the Mac, and after a cut the other was gone from the cloud too. Now the second arrives as `Readme (2).md`. A Mirror between `readme.md` and `README.md` replaces the file in place instead of writing it and then deleting it.
 - **A folder can't be copied or moved into itself.** Copying a folder into one of its own subfolders kept copying until the path was too long.
