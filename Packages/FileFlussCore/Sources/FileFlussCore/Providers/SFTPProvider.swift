@@ -21,6 +21,13 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
 
     // MARK: - Authentication
 
+    /// Connects with what the user entered and stores it.
+    ///
+    /// The server's host key is checked as OpenSSH would, but asked about in
+    /// the app, as on Windows: a server the account has no key for yet shows
+    /// its fingerprint, and a key other than the pinned one shows both. Each
+    /// time FileFluss connects only on a yes, and the probe that learns the
+    /// key ends before any password or key is sent.
     public func authenticate(
         host: String,
         port: Int,
@@ -28,18 +35,60 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
         password: String? = nil,
         privateKey: String? = nil,
         passphrase: String? = nil,
-        remotePath: String = "/"
+        remotePath: String = "/",
+        confirmTrust: @escaping @Sendable (SFTPTrustQuestion) async -> Bool
     ) async throws {
-        let credentials = try await SFTPAPIClient.authenticate(
-            host: host,
-            port: port,
-            username: username,
-            password: password,
-            privateKey: privateKey,
-            passphrase: passphrase,
-            remotePath: remotePath
-        )
-        self.apiClient = SFTPAPIClient(credentials: credentials)
+        // The pinned key carries over while the account points at the same
+        // server. One stored before keys were pinned takes over what
+        // `~/.ssh/known_hosts` trusts, which is where OpenSSH recorded it.
+        var expected: SFTPHostKey?
+        if let stored = KeychainService.load(key: keychainKey, as: SFTPCredentials.self),
+           stored.host.caseInsensitiveCompare(host) == .orderedSame,
+           stored.port == port {
+            if let pinned = stored.hostKey {
+                expected = pinned
+            } else {
+                expected = await SFTPHostKeys.fromUserKnownHosts(host: host, port: port)
+            }
+        }
+
+        let pinned: SFTPHostKey
+        if let expected {
+            pinned = expected
+        } else {
+            let presented = try await SFTPHostKeys.probe(host: host, port: port, username: username)
+            guard await confirmTrust(.firstConnection(host: host, fingerprint: presented.fingerprint)) else {
+                throw SFTPHostKeyNotTrusted()
+            }
+            pinned = presented
+        }
+
+        func connect(_ key: SFTPHostKey) async throws -> SFTPCredentials {
+            try await SFTPAPIClient.authenticate(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                privateKey: privateKey,
+                passphrase: passphrase,
+                remotePath: remotePath,
+                hostKey: key
+            )
+        }
+
+        let credentials: SFTPCredentials
+        do {
+            credentials = try await connect(pinned)
+        } catch is SFTPHostKeyMismatch {
+            let presented = try await SFTPHostKeys.probe(host: host, port: port, username: username)
+            guard await confirmTrust(.changed(host: host, previous: pinned.fingerprint, now: presented.fingerprint)) else {
+                throw SFTPHostKeyMismatch()
+            }
+            // Pin exactly the key the user just saw, not whatever comes next.
+            credentials = try await connect(presented)
+        }
+
+        self.apiClient = makeClient(credentials)
         try KeychainService.save(key: keychainKey, value: credentials)
         sftpProviderLog.info("[SFTP] Authenticated as \(credentials.username)@\(credentials.host) via \(credentials.authMethod.rawValue)")
     }
@@ -146,8 +195,17 @@ public final class SFTPProvider: CloudProvider, @unchecked Sendable {
 
     private func restoreCredentials() {
         if let creds = KeychainService.load(key: keychainKey, as: SFTPCredentials.self) {
-            apiClient = SFTPAPIClient(credentials: creds)
+            apiClient = makeClient(creds)
         }
+    }
+
+    /// A client that saves the account when it takes over a host key, which
+    /// an account stored before keys were pinned does on first use.
+    private func makeClient(_ credentials: SFTPCredentials) -> SFTPAPIClient {
+        let key = keychainKey
+        return SFTPAPIClient(credentials: credentials, onHostKeyPinned: { updated in
+            try? KeychainService.save(key: key, value: updated)
+        })
     }
 }
 #endif

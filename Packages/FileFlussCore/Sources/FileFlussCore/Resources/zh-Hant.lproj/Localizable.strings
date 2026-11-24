@@ -15,3 +15,12 @@
 
 /* MEGA download that fails its integrity check */
 "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下載的檔案已損毀：其 MEGA 完整性檢查（MAC）不相符。";
+
+/* SFTP host keys */
+"Host key changed" = "主機金鑰已變更";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "主機金鑰驗證失敗——伺服器的主機金鑰已變更。如果這在你的預期之中，請編輯帳戶並重新連線以接受新金鑰。";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "自上次連線以來，%@ 的 SSH 主機金鑰已變更。伺服器重新安裝後會發生這種情況——也可能是有人在攔截連線。\n\n先前：%@\n現在：%@\n\n要信任新金鑰嗎？";
+"Trust this server?" = "要信任此伺服器嗎？";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "這是第一次連線到 %@。請確認此 SSH 主機金鑰指紋屬於該伺服器——你的服務供應商或管理員可以幫你確認：\n\n%@\n\n要信任此金鑰並連線嗎？";
+"SFTP can't work with a name that contains a line break." = "SFTP 無法處理包含換行字元的名稱。";
+"The server's host key wasn't trusted, so FileFluss didn't connect." = "未信任伺服器的主機金鑰，因此 FileFluss 沒有連線。";

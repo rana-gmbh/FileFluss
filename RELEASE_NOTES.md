@@ -53,9 +53,12 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **WordPress lists every year and month of a large media library,** keeps uploads under their real name, and only ever deletes the exact item you chose.
 - **Filen:** a folder with an item FileFluss can't decrypt reports an error instead of leaving the item out, which a Mirror would have taken as deleted.
 - **Internxt:** when the folder can't be listed during a replace, nothing is replaced.
+- **A new SFTP account shows the server's key fingerprint and asks before trusting it.** No password or key is sent until you confirm. If the key changes later, FileFluss refuses to connect and, when you edit the account, shows the old and new fingerprints and asks before trusting the new one. On the Mac, existing accounts keep the key they have been trusting.
 
 ## Fixed on the Mac
 
+- **SFTP keeps passwords and private keys off the disk.** They used to reach OpenSSH through files in the temporary folder. Now the password or passphrase is handed over through a private connection, and the key is loaded into a short-lived agent. FileFluss also no longer adds SFTP servers to your own `~/.ssh/known_hosts`.
+- **SFTP handles names containing `$` or a backtick.** `Price $5.txt` was uploaded as `Price \$5.txt`, and such files couldn't be downloaded. A name containing a line break, which a server can list, is refused instead of being passed on.
 - **FTP servers whose listings leave out a field now open** ([#70](https://github.com/rana-gmbh/FileFluss/issues/70)). A server that lists files without a group column, such as OpenHASP on small display boards, was refused as unreadable. FTP also reads Windows-style listings (`10-28-26  09:30PM  <DIR>  Photos`), and SFTP benefits from the same change. Windows already read both.
 - **Mirror deletes again in folders whose path contains a space or an umlaut.** In a folder such as "Backup Übersicht", the files Mirror reported as deleted were left in place, and replacing a file there left a `.filefluss-part` file behind.
 - **Names that differ only in capitals or accents no longer overwrite each other.** A cloud folder holding `README.md` and `Readme.md` (or two forms of "Café") kept only one of them on the Mac, and after a cut the other was gone from the cloud too. Now the second arrives as `Readme (2).md`. A Mirror between `readme.md` and `README.md` replaces the file in place instead of writing it and then deleting it.
@@ -82,7 +85,6 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **Sync keeps both files whose names are one name on the PC,** such as `README.md` and `Readme.md` from a cloud that tells them apart. One used to overwrite the other while Sync still reported success; now the second arrives as `Readme (2).md`, and later runs leave both alone.
 - **Updates are installed only when they carry Rana GmbH's code signature,** in addition to matching the release's checksums, as Sparkle requires its signature on the Mac.
 - **"Allow self-signed certificate" now trusts a NAS's certificate on first use, not every certificate.** If it changes later, FileFluss refuses to connect and, when you edit the account, shows the old and new fingerprints and asks before trusting the new one. New accounts turn the option on only for local addresses (such as `192.168.…` or `nas.local`); existing accounts keep their setting. This covers QNAP, Synology Drive, NAS WebDAV, Seafile and FTPS.
-- **A new SFTP account shows the server's key fingerprint and asks before trusting it.** No password is sent until you confirm.
 - **A network drive or share that has gone offline no longer freezes FileFluss.** Showing a mapped drive's name in the path bar or title, or typing a path to an offline server, could block the window for up to a minute.
 - **A local path typed into a cloud panel's path bar opens on this PC.** `C:\…`, `\\server\share` and `%USERPROFILE%` used to be looked up inside the cloud account.
 - **The Compare window stays responsive with thousands of selected items,** also after copying them, and when "Compare dates" is switched on or off.

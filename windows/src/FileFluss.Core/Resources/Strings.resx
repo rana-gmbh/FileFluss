@@ -3379,9 +3379,6 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   <data name="Wrong passphrase for the private key." xml:space="preserve">
     <value>Wrong passphrase for the private key.</value>
   </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." xml:space="preserve">
-    <value>Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry.</value>
-  </data>
   <data name="Connection refused — is the SSH daemon running on this host and port?" xml:space="preserve">
     <value>Connection refused — is the SSH daemon running on this host and port?</value>
   </data>
@@ -3606,6 +3603,36 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   </data>
   <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
     <value>The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.</value>
+  </data>
+  <data name="Host key changed" xml:space="preserve">
+    <value>Host key changed</value>
+  </data>
+  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
+    <value>Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key.</value>
+  </data>
+  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
+    <value>The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.
+
+Previously: {1}
+Now: {2}
+
+Trust the new key?</value>
+  </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>Trust this server?</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>This is the first connection to {0}. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:
+
+{1}
+
+Trust this key and connect?</value>
+  </data>
+  <data name="SFTP can&apos;t work with a name that contains a line break." xml:space="preserve">
+    <value>SFTP can't work with a name that contains a line break.</value>
+  </data>
+  <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
+    <value>The server's host key wasn't trusted, so FileFluss didn't connect.</value>
   </data>
   <data name="File" xml:space="preserve">
     <value>File</value>
@@ -3975,30 +4002,6 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   </data>
   <data name="This SFTP operation is not supported by the bundled SSH library." xml:space="preserve">
     <value>This SFTP operation is not supported by the bundled SSH library.</value>
-  </data>
-  <data name="Host key changed" xml:space="preserve">
-    <value>Host key changed</value>
-  </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
-    <value>Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key.</value>
-  </data>
-  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
-    <value>The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.
-
-Previously: {1}
-Now: {2}
-
-Trust the new key?</value>
-  </data>
-  <data name="Trust this server?" xml:space="preserve">
-    <value>Trust this server?</value>
-  </data>
-  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
-    <value>This is the first connection to {0}. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:
-
-{1}
-
-Trust this key and connect?</value>
   </data>
   <data name="Certificate changed" xml:space="preserve">
     <value>Certificate changed</value>
