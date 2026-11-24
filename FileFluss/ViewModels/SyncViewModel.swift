@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import FileFlussCore
 
 @Observable @MainActor
@@ -386,7 +387,8 @@ final class SyncViewModel {
                 password: password,
                 privateKey: privateKey,
                 passphrase: passphrase,
-                remotePath: resolvedRemotePath
+                remotePath: resolvedRemotePath,
+                confirmTrust: { question in await Self.confirmSFTPTrust(question) }
             )
             var connectedAccount = account
 
@@ -1650,6 +1652,32 @@ final class SyncViewModel {
         }
     }
 
+    /// Asks before FileFluss trusts an SFTP server's host key: the first
+    /// time it connects to a server, and when the server's key has changed.
+    /// The Windows app asks the same.
+    static func confirmSFTPTrust(_ question: SFTPTrustQuestion) -> Bool {
+        let alert = NSAlert()
+        switch question {
+        case let .firstConnection(host, fingerprint):
+            alert.messageText = L10n.text("Trust this server?")
+            alert.informativeText = L10n.format(
+                "This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?",
+                host, fingerprint
+            )
+            alert.alertStyle = .warning
+        case let .changed(host, previous, now):
+            alert.messageText = L10n.text("Host key changed")
+            alert.informativeText = L10n.format(
+                "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?",
+                host, previous, now
+            )
+            alert.alertStyle = .critical
+        }
+        alert.addButton(withTitle: L10n.text("Connect"))
+        alert.addButton(withTitle: L10n.text("Cancel"))
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     func updateSFTPAccount(
         accountId: UUID,
         host: String,
@@ -1671,7 +1699,8 @@ final class SyncViewModel {
                     username: username,
                     privateKey: privateKey,
                     passphrase: passphrase,
-                    remotePath: resolvedRemote
+                    remotePath: resolvedRemote,
+                    confirmTrust: { question in await Self.confirmSFTPTrust(question) }
                 )
             } else {
                 try await provider.authenticate(
@@ -1679,7 +1708,8 @@ final class SyncViewModel {
                     port: port,
                     username: username,
                     password: password ?? "",
-                    remotePath: resolvedRemote
+                    remotePath: resolvedRemote,
+                    confirmTrust: { question in await Self.confirmSFTPTrust(question) }
                 )
             }
             await syncEngine.registerProvider(for: accountId, provider: provider)

@@ -1202,7 +1202,6 @@
 "Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "私钥格式不受支持。请将其转换为 OpenSSH 格式（例如使用 `puttygen key.ppk -O private-openssh -o id_rsa`）。";
 "Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again." = "私钥文件的权限不安全。请运行 `chmod 600 <keyfile>` 后重试。";
 "Wrong passphrase for the private key." = "私钥的口令错误。";
-"Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." = "主机密钥验证失败——服务器的主机密钥已更改。请从 ~/.ssh/known_hosts 中删除过期条目后重试。";
 "Connection refused — is the SSH daemon running on this host and port?" = "连接被拒绝——SSH 守护进程是否在此主机和端口上运行？";
 "Connection timed out. Check the hostname, port, and your network." = "连接超时。请检查主机名、端口和你的网络。";
 "Network is unreachable from this Mac." = "无法从这台 Mac 访问网络。";
@@ -1284,3 +1283,12 @@
 
 /* MEGA download that fails its integrity check */
 "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下载的文件已损坏：其 MEGA 完整性校验（MAC）不匹配。";
+
+/* SFTP host keys */
+"Host key changed" = "主机密钥已更改";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "主机密钥验证失败——服务器的主机密钥已更改。如果这在你的预料之中，请编辑账户并重新连接以接受新密钥。";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "自上次连接以来，%@ 的 SSH 主机密钥已更改。服务器重新安装后会出现这种情况——也可能是有人在拦截连接。\n\n之前：%@\n现在：%@\n\n要信任新密钥吗？";
+"Trust this server?" = "要信任此服务器吗？";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "这是首次连接到 %@。请确认此 SSH 主机密钥指纹属于该服务器——你的服务商或管理员可以帮你核实：\n\n%@\n\n要信任此密钥并连接吗？";
+"SFTP can't work with a name that contains a line break." = "SFTP 无法处理包含换行符的名称。";
+"The server's host key wasn't trusted, so FileFluss didn't connect." = "未信任服务器的主机密钥，因此 FileFluss 没有连接。";

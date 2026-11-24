@@ -3379,9 +3379,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   <data name="Wrong passphrase for the private key." xml:space="preserve">
     <value>Falsche Passphrase für den privaten Schlüssel.</value>
   </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." xml:space="preserve">
-    <value>Überprüfung des Host-Schlüssels fehlgeschlagen — der Host-Schlüssel des Servers hat sich geändert. Entferne den veralteten Eintrag aus ~/.ssh/known_hosts und versuche es erneut.</value>
-  </data>
   <data name="Connection refused — is the SSH daemon running on this host and port?" xml:space="preserve">
     <value>Verbindung abgelehnt – läuft der SSH-Dienst auf diesem Host und Port?</value>
   </data>
@@ -3606,6 +3603,36 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
     <value>Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.</value>
+  </data>
+  <data name="Host key changed" xml:space="preserve">
+    <value>Hostschlüssel geändert</value>
+  </data>
+  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
+    <value>Überprüfung des Hostschlüssels fehlgeschlagen – der Hostschlüssel des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um den neuen Schlüssel zu akzeptieren.</value>
+  </data>
+  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
+    <value>Der SSH-Hostschlüssel von {0} hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server neu installiert wurde – oder wenn jemand die Verbindung abfängt.
+
+Bisher: {1}
+Jetzt: {2}
+
+Dem neuen Schlüssel vertrauen?</value>
+  </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>Diesem Server vertrauen?</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>Das ist die erste Verbindung zu {0}. Prüfe, ob dieser Fingerabdruck des SSH-Hostschlüssels zum Server gehört – dein Anbieter oder Administrator kann ihn bestätigen:
+
+{1}
+
+Diesem Schlüssel vertrauen und verbinden?</value>
+  </data>
+  <data name="SFTP can&apos;t work with a name that contains a line break." xml:space="preserve">
+    <value>SFTP kann mit einem Namen, der einen Zeilenumbruch enthält, nicht arbeiten.</value>
+  </data>
+  <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
+    <value>Dem Hostschlüssel des Servers wurde nicht vertraut, daher hat FileFluss keine Verbindung hergestellt.</value>
   </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
@@ -3975,30 +4002,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="This SFTP operation is not supported by the bundled SSH library." xml:space="preserve">
     <value>Dieser SFTP-Vorgang wird von der mitgelieferten SSH-Bibliothek nicht unterstützt.</value>
-  </data>
-  <data name="Host key changed" xml:space="preserve">
-    <value>Hostschlüssel geändert</value>
-  </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
-    <value>Überprüfung des Hostschlüssels fehlgeschlagen – der Hostschlüssel des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um den neuen Schlüssel zu akzeptieren.</value>
-  </data>
-  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
-    <value>Der SSH-Hostschlüssel von {0} hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server neu installiert wurde – oder wenn jemand die Verbindung abfängt.
-
-Bisher: {1}
-Jetzt: {2}
-
-Dem neuen Schlüssel vertrauen?</value>
-  </data>
-  <data name="Trust this server?" xml:space="preserve">
-    <value>Diesem Server vertrauen?</value>
-  </data>
-  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
-    <value>Das ist die erste Verbindung zu {0}. Prüfe, ob dieser Fingerabdruck des SSH-Hostschlüssels zum Server gehört – dein Anbieter oder Administrator kann ihn bestätigen:
-
-{1}
-
-Diesem Schlüssel vertrauen und verbinden?</value>
   </data>
   <data name="Certificate changed" xml:space="preserve">
     <value>Zertifikat geändert</value>

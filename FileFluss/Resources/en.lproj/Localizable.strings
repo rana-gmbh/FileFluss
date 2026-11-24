@@ -1202,7 +1202,6 @@
 "Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`).";
 "Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again." = "Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again.";
 "Wrong passphrase for the private key." = "Wrong passphrase for the private key.";
-"Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." = "Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry.";
 "Connection refused — is the SSH daemon running on this host and port?" = "Connection refused — is the SSH daemon running on this host and port?";
 "Connection timed out. Check the hostname, port, and your network." = "Connection timed out. Check the hostname, port, and your network.";
 "Network is unreachable from this Mac." = "Network is unreachable from this Mac.";
@@ -1284,3 +1283,12 @@
 
 /* MEGA download that fails its integrity check */
 "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.";
+
+/* SFTP host keys */
+"Host key changed" = "Host key changed";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key.";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?";
+"Trust this server?" = "Trust this server?";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?";
+"SFTP can't work with a name that contains a line break." = "SFTP can't work with a name that contains a line break.";
+"The server's host key wasn't trusted, so FileFluss didn't connect." = "The server's host key wasn't trusted, so FileFluss didn't connect.";

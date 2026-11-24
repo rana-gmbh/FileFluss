@@ -1202,7 +1202,6 @@
 "Private key is in an unsupported format. Convert it to OpenSSH format (e.g. with `puttygen key.ppk -O private-openssh -o id_rsa`)." = "Der private Schlüssel hat ein nicht unterstütztes Format. Wandle ihn in das OpenSSH-Format um (z. B. mit `puttygen key.ppk -O private-openssh -o id_rsa`).";
 "Private key file has unsafe permissions. Run `chmod 600 <keyfile>` and try again." = "Die Datei des privaten Schlüssels hat unsichere Zugriffsrechte. Führe `chmod 600 <keyfile>` aus und versuche es erneut.";
 "Wrong passphrase for the private key." = "Falsche Passphrase für den privaten Schlüssel.";
-"Host key verification failed — the server's host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." = "Überprüfung des Host-Schlüssels fehlgeschlagen — der Host-Schlüssel des Servers hat sich geändert. Entferne den veralteten Eintrag aus ~/.ssh/known_hosts und versuche es erneut.";
 "Connection refused — is the SSH daemon running on this host and port?" = "Verbindung abgelehnt — läuft der SSH-Dienst auf diesem Host und Port?";
 "Connection timed out. Check the hostname, port, and your network." = "Zeitüberschreitung der Verbindung. Prüfe Hostnamen, Port und dein Netzwerk.";
 "Network is unreachable from this Mac." = "Das Netzwerk ist von diesem Mac aus nicht erreichbar.";
@@ -1284,3 +1283,12 @@
 
 /* MEGA download that fails its integrity check */
 "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.";
+
+/* SFTP host keys */
+"Host key changed" = "Hostschlüssel geändert";
+"Host key verification failed — the server's host key changed. If you expected this, edit the account and connect again to accept the new key." = "Überprüfung des Hostschlüssels fehlgeschlagen – der Hostschlüssel des Servers hat sich geändert. Wenn du das erwartet hast, bearbeite das Konto und verbinde dich erneut, um den neuen Schlüssel zu akzeptieren.";
+"The SSH host key of %@ has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.\n\nPreviously: %@\nNow: %@\n\nTrust the new key?" = "Der SSH-Hostschlüssel von %@ hat sich seit deiner letzten Verbindung geändert. Das passiert, wenn der Server neu installiert wurde – oder wenn jemand die Verbindung abfängt.\n\nBisher: %@\nJetzt: %@\n\nDem neuen Schlüssel vertrauen?";
+"Trust this server?" = "Diesem Server vertrauen?";
+"This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "Das ist die erste Verbindung zu %@. Prüfe, ob dieser Fingerabdruck des SSH-Hostschlüssels zum Server gehört – dein Anbieter oder Administrator kann ihn bestätigen:\n\n%@\n\nDiesem Schlüssel vertrauen und verbinden?";
+"SFTP can't work with a name that contains a line break." = "SFTP kann mit einem Namen, der einen Zeilenumbruch enthält, nicht arbeiten.";
+"The server's host key wasn't trusted, so FileFluss didn't connect." = "Dem Hostschlüssel des Servers wurde nicht vertraut, daher hat FileFluss keine Verbindung hergestellt.";

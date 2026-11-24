@@ -25,16 +25,18 @@ struct SFTPServerSideTransferTests {
         )
     }
 
-    /// These strings are handed to another program, so a path carrying a
-    /// quote, a backslash or a `$` has to come out the other side as the
-    /// same path — and those are the paths nobody tries by hand.
-    @Test("Paths that mean something to a shell are escaped")
+    /// These strings are handed to sftp, so a path carrying a quote or a
+    /// backslash has to come out the other side as the same path — and those
+    /// are the paths nobody tries by hand. sftp is not a shell: `$` and a
+    /// backtick mean nothing to it, and escaping them put the backslash into
+    /// the name (`Price $5.txt` was uploaded as `Price \$5.txt`).
+    @Test("Quotes and backslashes are escaped, nothing else")
     func escapesAwkwardPaths() {
         #expect(SFTPAPIClient.shellEscape("/tmp/plain.txt") == #""/tmp/plain.txt""#)
         #expect(SFTPAPIClient.shellEscape("/tmp/with space.txt") == #""/tmp/with space.txt""#)
         #expect(SFTPAPIClient.shellEscape(#"/tmp/qu"ote.txt"#) == #""/tmp/qu\"ote.txt""#)
-        #expect(SFTPAPIClient.shellEscape("/tmp/$HOME.txt") == #""/tmp/\$HOME.txt""#)
-        #expect(SFTPAPIClient.shellEscape("/tmp/back`tick.txt") == #""/tmp/back\`tick.txt""#)
+        #expect(SFTPAPIClient.shellEscape("/tmp/Price $5.txt") == #""/tmp/Price $5.txt""#)
+        #expect(SFTPAPIClient.shellEscape("/tmp/back`tick.txt") == #""/tmp/back`tick.txt""#)
         #expect(SFTPAPIClient.shellEscape(#"/tmp/back\slash.txt"#) == #""/tmp/back\\slash.txt""#)
     }
 

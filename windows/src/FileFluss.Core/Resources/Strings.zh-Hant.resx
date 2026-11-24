@@ -3379,9 +3379,6 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   <data name="Wrong passphrase for the private key." xml:space="preserve">
     <value>私密金鑰的複雜密碼錯誤。</value>
   </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. Remove the stale entry from ~/.ssh/known_hosts and retry." xml:space="preserve">
-    <value>主機金鑰驗證失敗——伺服器的主機金鑰已變更。請從 ~/.ssh/known_hosts 中刪除過期項目後重試。</value>
-  </data>
   <data name="Connection refused — is the SSH daemon running on this host and port?" xml:space="preserve">
     <value>連線遭拒——此主機和連接埠上是否正在執行 SSH 服務？</value>
   </data>
@@ -3606,6 +3603,36 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   </data>
   <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
     <value>下載的檔案已損毀：其 MEGA 完整性檢查（MAC）不相符。</value>
+  </data>
+  <data name="Host key changed" xml:space="preserve">
+    <value>主機金鑰已變更</value>
+  </data>
+  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
+    <value>主機金鑰驗證失敗——伺服器的主機金鑰已變更。如果這在你的預期之中，請編輯帳戶並重新連線以接受新金鑰。</value>
+  </data>
+  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
+    <value>自上次連線以來，{0} 的 SSH 主機金鑰已變更。伺服器重新安裝後會發生這種情況——也可能是有人在攔截連線。
+
+先前：{1}
+現在：{2}
+
+要信任新金鑰嗎？</value>
+  </data>
+  <data name="Trust this server?" xml:space="preserve">
+    <value>要信任此伺服器嗎？</value>
+  </data>
+  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
+    <value>這是第一次連線到 {0}。請確認此 SSH 主機金鑰指紋屬於該伺服器——你的服務供應商或管理員可以幫你確認：
+
+{1}
+
+要信任此金鑰並連線嗎？</value>
+  </data>
+  <data name="SFTP can&apos;t work with a name that contains a line break." xml:space="preserve">
+    <value>SFTP 無法處理包含換行字元的名稱。</value>
+  </data>
+  <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
+    <value>未信任伺服器的主機金鑰，因此 FileFluss 沒有連線。</value>
   </data>
   <data name="File" xml:space="preserve">
     <value>檔案</value>
@@ -3975,30 +4002,6 @@ RAR 是 RARLAB 的試用軟體：最多可使用 40 天，之後需要在 rarlab
   </data>
   <data name="This SFTP operation is not supported by the bundled SSH library." xml:space="preserve">
     <value>內建的 SSH 程式庫不支援此 SFTP 操作。</value>
-  </data>
-  <data name="Host key changed" xml:space="preserve">
-    <value>主機金鑰已變更</value>
-  </data>
-  <data name="Host key verification failed — the server&apos;s host key changed. If you expected this, edit the account and connect again to accept the new key." xml:space="preserve">
-    <value>主機金鑰驗證失敗——伺服器的主機金鑰已變更。如果這在你的預期之中，請編輯帳戶並重新連線以接受新金鑰。</value>
-  </data>
-  <data name="The SSH host key of {0} has changed since you last connected. This happens when the server was reinstalled — or when someone intercepts the connection.&#10;&#10;Previously: {1}&#10;Now: {2}&#10;&#10;Trust the new key?" xml:space="preserve">
-    <value>自上次連線以來，{0} 的 SSH 主機金鑰已變更。伺服器重新安裝後會發生這種情況——也可能是有人在攔截連線。
-
-先前：{1}
-現在：{2}
-
-要信任新金鑰嗎？</value>
-  </data>
-  <data name="Trust this server?" xml:space="preserve">
-    <value>要信任此伺服器嗎？</value>
-  </data>
-  <data name="This is the first connection to {0}. Check that this SSH host key fingerprint is the server&apos;s — your provider or administrator can confirm it:&#10;&#10;{1}&#10;&#10;Trust this key and connect?" xml:space="preserve">
-    <value>這是第一次連線到 {0}。請確認此 SSH 主機金鑰指紋屬於該伺服器——你的服務供應商或管理員可以幫你確認：
-
-{1}
-
-要信任此金鑰並連線嗎？</value>
   </data>
   <data name="Certificate changed" xml:space="preserve">
     <value>憑證已變更</value>
