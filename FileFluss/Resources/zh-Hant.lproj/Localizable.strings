@@ -1292,3 +1292,7 @@
 "This is the first connection to %@. Check that this SSH host key fingerprint is the server's — your provider or administrator can confirm it:\n\n%@\n\nTrust this key and connect?" = "這是第一次連線到 %@。請確認此 SSH 主機金鑰指紋屬於該伺服器——你的服務供應商或管理員可以幫你確認：\n\n%@\n\n要信任此金鑰並連線嗎？";
 "SFTP can't work with a name that contains a line break." = "SFTP 無法處理包含換行字元的名稱。";
 "The server's host key wasn't trusted, so FileFluss didn't connect." = "未信任伺服器的主機金鑰，因此 FileFluss 沒有連線。";
+
+/* Trash refused for an iCloud Drive item */
+"FileFluss isn't allowed to use the iCloud Drive Trash" = "FileFluss 無權使用 iCloud 雲碟垃圾桶";
+"%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss." = "%@ 儲存在 iCloud 雲碟中（與 iCloud 同步時，你的桌面和文件檔案夾也在其中），因此會被移到 iCloud 雲碟垃圾桶，而 macOS 不允許 FileFluss 這樣做。請在「系統設定 → 隱私權與安全性 → 檔案和檔案夾」中允許 FileFluss 取用 iCloud 雲碟，或授予其「完全取用磁碟」；之後可能需要重新啟動 FileFluss。如果 Finder 也無法將其移到垃圾桶，則原因不在 FileFluss。";

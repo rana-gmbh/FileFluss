@@ -3634,6 +3634,12 @@ Diesem Schlüssel vertrauen und verbinden?</value>
   <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
     <value>Dem Hostschlüssel des Servers wurde nicht vertraut, daher hat FileFluss keine Verbindung hergestellt.</value>
   </data>
+  <data name="FileFluss isn&apos;t allowed to use the iCloud Drive Trash" xml:space="preserve">
+    <value>FileFluss darf den iCloud Drive-Papierkorb nicht verwenden</value>
+  </data>
+  <data name="{0} is stored in iCloud Drive — your Desktop and Documents folders are when they&apos;re synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn&apos;t let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy &amp; Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can&apos;t move it to the Trash either, the cause lies outside FileFluss." xml:space="preserve">
+    <value>{0} liegt in iCloud Drive – so wie dein Schreibtisch und dein Dokumente-Ordner, wenn sie mit iCloud synchronisiert werden – und kommt deshalb in den Papierkorb von iCloud Drive. Windows hat FileFluss das nicht erlaubt. Erlaube FileFluss den Zugriff auf iCloud Drive unter Systemeinstellungen → Datenschutz &amp; Sicherheit → Dateien und Ordner, oder erteile ihm dort den Festplattenvollzugriff; danach muss FileFluss eventuell neu gestartet werden. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss.</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
   </data>

@@ -298,6 +298,8 @@ were left alone and want a human decision.
 | `en` | `Filen API error` | windows override | Filen API error |
 | `en` | `View` | windows override | View |
 | `en` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+Plus** and **Ctrl+Minus** make the thumbnails bigger and smaller, as they do with the rows of the list. |
+| `en` | `FileFluss isn't allowed to use the iCloud Drive Trash` | needs review | FileFluss isn't allowed to use the iCloud Drive Trash |
+| `en` | `%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | %@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and Windows didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Explorer can't move it to the Trash either, the cause lies outside FileFluss. |
 | `de` | `System Default follows the language selected in macOS.` | windows override | „Systemstandard“ folgt der in Windows eingestellten Sprache. |
 | `de` | `Search all sources (⌘F)` | windows override | Alle Quellen durchsuchen (Strg+F) |
 | `de` | `Open System Settings…` | windows override | Windows-Einstellungen öffnen … |
@@ -583,6 +585,7 @@ were left alone and want a human decision.
 | `de` | `Filen API error` | windows override | Filen-API-Fehler |
 | `de` | `View` | windows override | Ansicht |
 | `de` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Strg+Plus** und **Strg+Minus** vergrößern und verkleinern die Miniaturbilder, so wie die Zeilen der Liste. |
+| `de` | `%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | %@ liegt in iCloud Drive – so wie dein Schreibtisch und dein Dokumente-Ordner, wenn sie mit iCloud synchronisiert werden – und kommt deshalb in den Papierkorb von iCloud Drive. Windows hat FileFluss das nicht erlaubt. Erlaube FileFluss den Zugriff auf iCloud Drive unter Systemeinstellungen → Datenschutz & Sicherheit → Dateien und Ordner, oder erteile ihm dort den Festplattenvollzugriff; danach muss FileFluss eventuell neu gestartet werden. Kann auch der Explorer das Objekt nicht in den Papierkorb legen, liegt die Ursache außerhalb von FileFluss. |
 | `zh-Hans` | `System Default follows the language selected in macOS.` | windows override | “跟随系统”将使用 Windows 中设置的语言。 |
 | `zh-Hans` | `Search all sources (⌘F)` | windows override | 搜索所有来源（Ctrl+F） |
 | `zh-Hans` | `Open System Settings…` | windows override | 打开 Windows 设置… |
@@ -883,6 +886,7 @@ were left alone and want a human decision.
 | `zh-Hans` | `Filen API error` | windows override | Filen API 错误 |
 | `zh-Hans` | `View` | windows override | 查看 |
 | `zh-Hans` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+加号** 和 **Ctrl+减号** 可放大和缩小缩略图，与列表中的行一样。 |
+| `zh-Hans` | `%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | %@ 存储在 iCloud 云盘中（与 iCloud 同步时，你的桌面和文稿文件夹也在其中），因此会被移到 iCloud 云盘废纸篓，而 Windows 不允许 FileFluss 这样做。请在“系统设置 → 隐私与安全性 → 文件和文件夹”中允许 FileFluss 访问 iCloud 云盘，或授予其“完全磁盘访问权限”；之后可能需要重新启动 FileFluss。如果访达也无法将其移到废纸篓，则原因不在 FileFluss。 |
 | `zh-Hant` | `System Default follows the language selected in macOS.` | windows override | 「跟隨系統」會使用 Windows 中設定的語言。 |
 | `zh-Hant` | `Search all sources (⌘F)` | windows override | 搜尋所有來源（Ctrl+F） |
 | `zh-Hant` | `Open System Settings…` | windows override | 開啟 Windows 設定… |
@@ -1184,3 +1188,4 @@ were left alone and want a human decision.
 | `zh-Hant` | `Filen API error` | windows override | Filen API 錯誤 |
 | `zh-Hant` | `View` | windows override | 檢視 |
 | `zh-Hant` | `**⌘+** and **⌘-** make the thumbnails bigger and smaller, as they do with the rows of the list.` | windows override | **Ctrl+加號** 和 **Ctrl+減號** 可放大和縮小縮覽圖，與列表中的列一樣。 |
+| `zh-Hant` | `%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.` | auto-rewritten | %@ 儲存在 iCloud 雲碟中（與 iCloud 同步時，你的桌面和文件檔案夾也在其中），因此會被移到 iCloud 雲碟垃圾桶，而 Windows 不允許 FileFluss 這樣做。請在「系統設定 → 隱私權與安全性 → 檔案和檔案夾」中允許 FileFluss 取用 iCloud 雲碟，或授予其「完全取用磁碟」；之後可能需要重新啟動 FileFluss。如果 Explorer 也無法將其移到垃圾桶，則原因不在 FileFluss。 |

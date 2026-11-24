@@ -593,8 +593,29 @@ final class FileManagerViewModel {
         }
         if !needPermission.isEmpty {
             SupportLogger.shared.log("trash refused for \(needPermission.count) item(s) — macOS withheld permission", category: "fs", level: .error)
-            trashRefusal = await FileSystemService.shared.diagnoseTrashRefusal(for: needPermission[0].url)
-            itemsBlockedByPermission = needPermission
+            var refusal = await FileSystemService.shared.diagnoseTrashRefusal(for: needPermission[0].url)
+            if refusal == .iCloudDrive, await FileSystemService.shared.openICloudDrive() {
+                // Reading iCloud Drive is what makes macOS ask for it. Once
+                // FileFluss may use it, the Trash may well take the items.
+                var stillRefused: [FileItem] = []
+                for item in needPermission {
+                    do {
+                        try await FileSystemService.shared.trashItem(at: item.url)
+                    } catch {
+                        stillRefused.append(item)
+                    }
+                }
+                SupportLogger.shared.log("trash retried after opening iCloud Drive: \(needPermission.count - stillRefused.count) of \(needPermission.count) moved", category: "fs")
+                needPermission = stillRefused
+                await loadDirectory()
+                if !stillRefused.isEmpty {
+                    refusal = await FileSystemService.shared.diagnoseTrashRefusal(for: stillRefused[0].url)
+                }
+            }
+            if !needPermission.isEmpty {
+                trashRefusal = refusal
+                itemsBlockedByPermission = needPermission
+            }
         }
     }
 
