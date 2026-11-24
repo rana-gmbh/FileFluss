@@ -3634,6 +3634,12 @@ RAR 是 RARLAB 的试用软件：最多可使用 40 天，之后需要在 rarlab
   <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
     <value>未信任服务器的主机密钥，因此 FileFluss 没有连接。</value>
   </data>
+  <data name="FileFluss isn&apos;t allowed to use the iCloud Drive Trash" xml:space="preserve">
+    <value>FileFluss 无法将此项目从 iCloud 云盘移到回收站</value>
+  </data>
+  <data name="{0} is stored in iCloud Drive — your Desktop and Documents folders are when they&apos;re synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn&apos;t let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy &amp; Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can&apos;t move it to the Trash either, the cause lies outside FileFluss." xml:space="preserve">
+    <value>{0} 存储在 iCloud 云盘中，Windows 不允许 FileFluss 将其移到回收站。请在 Windows 版 iCloud 中检查 iCloud 云盘是否已开启，然后重试。如果文件资源管理器也无法将其移到回收站，则原因不在 FileFluss。</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>文件</value>
   </data>

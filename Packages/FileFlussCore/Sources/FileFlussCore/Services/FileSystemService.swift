@@ -167,12 +167,25 @@ public final class FileSystemService: Sendable {
         /// The folder the item is in can't be changed by this user, so it
         /// can neither be trashed nor deleted.
         case folderNotWritable(folderPath: String)
+        /// The item is in iCloud Drive, which is where Desktop and Documents
+        /// live when they're synced with iCloud. It goes to iCloud Drive's
+        /// own Trash, and macOS didn't let FileFluss use it. Both customer
+        /// reports of a refused Trash were about files in those two folders.
+        case iCloudDrive
         /// Nothing visible explains it.
         case unknown
     }
 
     public static func classifyTrashRefusal(trash: FolderFacts?, parent: FolderFacts?,
-                                            userID: uid_t) -> TrashRefusal {
+                                            userID: uid_t, inICloudDrive: Bool = false) -> TrashRefusal {
+        // An iCloud Drive item doesn't go to the user's own Trash folder, so
+        // what that folder looks like says nothing about it.
+        if inICloudDrive {
+            if let parent, !parent.isWritable {
+                return .folderNotWritable(folderPath: parent.path)
+            }
+            return .iCloudDrive
+        }
         if let trash, trash.ownerUID != userID || !trash.isWritable {
             return .trashFolderUnwritable(trashPath: trash.path, ownerUID: trash.ownerUID)
         }
@@ -185,16 +198,72 @@ public final class FileSystemService: Sendable {
     /// Looks at the Trash this item would go to and at the folder it's in.
     public func diagnoseTrashRefusal(for url: URL) async -> TrashRefusal {
         (try? await Self.perform {
-            let trashURL = try? Foundation.FileManager.default.url(
-                for: .trashDirectory, in: .userDomainMask, appropriateFor: url, create: false)
+            var lookup = "ok"
+            var trashURL: URL?
+            do {
+                trashURL = try Foundation.FileManager.default.url(
+                    for: .trashDirectory, in: .userDomainMask, appropriateFor: url, create: false)
+            } catch {
+                lookup = Self.errorChain(error)
+            }
             let trash = trashURL.flatMap(FolderFacts.read)
             let parent = FolderFacts.read(url.deletingLastPathComponent())
-            let verdict = Self.classifyTrashRefusal(trash: trash, parent: parent, userID: getuid())
+            let iCloud = Self.isInICloudDrive(url)
+            let verdict = Self.classifyTrashRefusal(trash: trash, parent: parent, userID: getuid(), inICloudDrive: iCloud)
             SupportLogger.shared.log(
-                "trash refusal: trash=\(Self.describe(trash)) parent=\(Self.describe(parent)) uid=\(getuid()) → \(verdict)",
+                "trash refusal: trash=\(Self.describe(trash)) (lookup \(lookup)) parent=\(Self.describe(parent)) "
+                    + "icloud=\(iCloud ? "yes" : "no") uid=\(getuid()) → \(verdict)",
                 category: "fs", level: .error)
             return verdict
         }) ?? .unknown
+    }
+
+    /// Whether an item lives in iCloud Drive. With "Desktop & Documents
+    /// Folders" turned on in iCloud settings, the Desktop and Documents
+    /// folders are part of it although their paths don't say so; iCloud
+    /// marks them, and everything else it manages, with its file provider
+    /// domain.
+    public static func isInICloudDrive(
+        _ url: URL,
+        home: String = NSHomeDirectory(),
+        fileProviderDomain: (String) -> String? = FileSystemService.fileProviderDomain(ofPath:)
+    ) -> Bool {
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(home + "/Library/Mobile Documents/") { return true }
+        var current = path
+        while current.hasPrefix(home + "/"), current != home {
+            if fileProviderDomain(current)?.hasPrefix("com.apple.CloudDocs") == true { return true }
+            current = (current as NSString).deletingLastPathComponent
+        }
+        return false
+    }
+
+    /// The file provider domain macOS records on an item it syncs, e.g.
+    /// `com.apple.CloudDocs.iCloudDriveFileProvider/…` for iCloud Drive.
+    public static func fileProviderDomain(ofPath path: String) -> String? {
+        extendedAttribute("com.apple.file-provider-domain-id", ofPath: path)
+    }
+
+    static func extendedAttribute(_ name: String, ofPath path: String) -> String? {
+        let size = getxattr(path, name, nil, 0, 0, XATTR_NOFOLLOW)
+        guard size > 0 else { return nil }
+        var buffer = [UInt8](repeating: 0, count: size)
+        let read = getxattr(path, name, &buffer, size, 0, XATTR_NOFOLLOW)
+        guard read > 0 else { return nil }
+        return String(decoding: buffer.prefix(read), as: UTF8.self)
+    }
+
+    /// Reads the iCloud Drive folder once. If macOS hasn't asked yet
+    /// whether FileFluss may use iCloud Drive, this is what makes it ask,
+    /// in the moment the user wants something from it. True when FileFluss
+    /// can read it.
+    public func openICloudDrive() async -> Bool {
+        (try? await Self.perform {
+            let folder = NSHomeDirectory() + "/Library/Mobile Documents"
+            let readable = (try? Foundation.FileManager.default.contentsOfDirectory(atPath: folder)) != nil
+            SupportLogger.shared.log("iCloud Drive readable: \(readable ? "yes" : "no")", category: "fs")
+            return readable
+        }) ?? false
     }
 
     private static func describe(_ facts: FolderFacts?) -> String {

@@ -158,6 +158,15 @@ struct FileListView: View {
                 // Deleting needs the same permission, so there's nothing to
                 // offer but the explanation.
                 Button(L10n.text("OK"), role: .cancel) { fm.itemsBlockedByPermission = [] }
+            case .iCloudDrive:
+                Button(L10n.text("Open Privacy Settings…")) {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    fm.itemsBlockedByPermission = []
+                }
+                .keyboardShortcut(.defaultAction)
+                deletePermanentlyBlockedButton(fm)
             case .unknown:
                 Button(L10n.text("Open Privacy Settings…")) {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
@@ -925,6 +934,7 @@ extension FileListView {
     private func trashRefusalTitle(_ refusal: FileSystemService.TrashRefusal) -> String {
         switch refusal {
         case .trashFolderUnwritable: L10n.text("Your Trash folder can't be written to")
+        case .iCloudDrive: L10n.text("FileFluss isn't allowed to use the iCloud Drive Trash")
         case .folderNotWritable, .unknown: L10n.text("FileFluss isn't allowed to move this to the Trash")
         }
     }
@@ -943,6 +953,8 @@ extension FileListView {
             return cause + " " + L10n.text("Finder runs into the same problem. To repair it, copy the command, paste it into Terminal and enter your password.")
         case .folderNotWritable(let folderPath):
             return L10n.format("You don't have permission to change the folder %@ is in (%@), so it can't be moved to the Trash or deleted. Its owner can change this in Finder under File → Get Info.", name, folderPath)
+        case .iCloudDrive:
+            return L10n.format("%@ is stored in iCloud Drive — your Desktop and Documents folders are when they're synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn't let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.", name)
         case .unknown:
             return L10n.format("macOS refused to let FileFluss move %@ to the Trash. If FileFluss doesn't have Full Disk Access yet, granting it in System Settings → Privacy & Security may help; FileFluss has to be restarted afterwards. If Finder can't move it to the Trash either, the cause lies outside FileFluss.", name)
         }

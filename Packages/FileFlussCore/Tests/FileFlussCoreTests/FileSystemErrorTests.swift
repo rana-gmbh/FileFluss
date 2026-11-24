@@ -103,6 +103,55 @@ struct FileSystemErrorTests {
         #expect(FileSystemService.classifyTrashRefusal(trash: nil, parent: nil, userID: me) == .unknown)
     }
 
+    /// A customer's report: a file on a Desktop synced with iCloud. Its Trash
+    /// couldn't even be looked up, so nothing was "visibly wrong".
+    @Test("An item in iCloud Drive is named as such")
+    func iCloudDriveItem() {
+        #expect(FileSystemService.classifyTrashRefusal(
+            trash: nil, parent: folder("/Users/m/Desktop"), userID: me, inICloudDrive: true) == .iCloudDrive)
+        // Its own Trash folder doesn't matter for an iCloud Drive item…
+        #expect(FileSystemService.classifyTrashRefusal(
+            trash: folder("/Users/m/.Trash", owner: 0, writable: false),
+            parent: folder("/Users/m/Desktop"), userID: me, inICloudDrive: true) == .iCloudDrive)
+        // …but a folder the user can't change still can't give the item up.
+        #expect(FileSystemService.classifyTrashRefusal(
+            trash: nil, parent: folder("/Users/m/Desktop/Shared", owner: 0, writable: false),
+            userID: me, inICloudDrive: true) == .folderNotWritable(folderPath: "/Users/m/Desktop/Shared"))
+    }
+
+    @Test("iCloud Drive is recognised by its file provider, wherever it is")
+    func recognisesICloudDrive() {
+        let domains = [
+            "/Users/m/Desktop": "com.apple.CloudDocs.iCloudDriveFileProvider/79B89A7C",
+            "/Users/m/Dropbox": "com.getdropbox.dropbox.fileprovider/abc",
+        ]
+        func isICloud(_ path: String) -> Bool {
+            FileSystemService.isInICloudDrive(URL(fileURLWithPath: path), home: "/Users/m") { domains[$0] }
+        }
+        #expect(isICloud("/Users/m/Desktop/Scan.pdf"))
+        #expect(isICloud("/Users/m/Desktop/Scans/a.pdf"))
+        #expect(isICloud("/Users/m/Library/Mobile Documents/com~apple~CloudDocs/a.txt"))
+        #expect(!isICloud("/Users/m/Downloads/a.pdf"))
+        #expect(!isICloud("/Users/m/Dropbox/a.pdf"))
+        #expect(!isICloud("/Volumes/USB/a.pdf"))
+    }
+
+    /// macOS doesn't let anyone set the file provider attribute itself, so
+    /// the reader is tried on an attribute of our own.
+    @Test("Extended attributes are read from a real folder")
+    func readsExtendedAttribute() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(FileSystemService.fileProviderDomain(ofPath: dir.path) == nil)
+
+        let name = "com.rana.filefluss.test"
+        let value = Array("com.apple.CloudDocs.iCloudDriveFileProvider/X".utf8)
+        #expect(setxattr(dir.path, name, value, value.count, 0, 0) == 0)
+        #expect(FileSystemService.extendedAttribute(name, ofPath: dir.path) == "com.apple.CloudDocs.iCloudDriveFileProvider/X")
+        #expect(FileSystemService.extendedAttribute(name, ofPath: dir.appendingPathComponent("missing").path) == nil)
+    }
+
     @Test("Facts about a real folder are read without listing it")
     func readsRealFolder() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

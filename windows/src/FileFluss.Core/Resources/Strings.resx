@@ -3634,6 +3634,12 @@ Trust this key and connect?</value>
   <data name="The server&apos;s host key wasn&apos;t trusted, so FileFluss didn&apos;t connect." xml:space="preserve">
     <value>The server's host key wasn't trusted, so FileFluss didn't connect.</value>
   </data>
+  <data name="FileFluss isn&apos;t allowed to use the iCloud Drive Trash" xml:space="preserve">
+    <value>FileFluss can't move this item from iCloud Drive to the Recycle Bin</value>
+  </data>
+  <data name="{0} is stored in iCloud Drive — your Desktop and Documents folders are when they&apos;re synced with iCloud — so it goes to the iCloud Drive Trash, and macOS didn&apos;t let FileFluss use it. Allow FileFluss to access iCloud Drive in System Settings → Privacy &amp; Security → Files and Folders, or give it Full Disk Access; FileFluss may have to be restarted afterwards. If Finder can&apos;t move it to the Trash either, the cause lies outside FileFluss." xml:space="preserve">
+    <value>{0} is stored in iCloud Drive, and Windows didn't let FileFluss move it to the Recycle Bin. Check in iCloud for Windows that iCloud Drive is turned on, then try again. If File Explorer can't move it to the Recycle Bin either, the cause lies outside FileFluss.</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>File</value>
   </data>
