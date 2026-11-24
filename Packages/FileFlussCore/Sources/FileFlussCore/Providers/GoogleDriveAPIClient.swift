@@ -31,8 +31,8 @@ public actor GoogleDriveAPIClient {
 
     private(set) var credentials: GoogleDriveCredentials
     private let session: URLSession
-    private let apiURL = "https://www.googleapis.com/drive/v3"
-    private let uploadURL = "https://www.googleapis.com/upload/drive/v3"
+    private let apiURL: String
+    private let uploadURL: String
 
     /// When a token refresh is in flight, concurrent callers must await
     /// the same Task rather than firing parallel POSTs. Without this,
@@ -43,6 +43,10 @@ public actor GoogleDriveAPIClient {
 
     // Cache path → (file ID, mimeType) lookups to avoid repeated resolution
     private var pathIdCache: [String: CachedFile] = ["/" : CachedFile(id: "root", mimeType: "application/vnd.google-apps.folder")]
+
+    /// Folder ids `createFolder` has created or confirmed live this session,
+    /// so a cached folder is checked against Drive once, not per upload.
+    private var confirmedFolderIds: Set<String> = []
 
     struct CachedFile {
         let id: String
@@ -96,9 +100,16 @@ public actor GoogleDriveAPIClient {
     ]
 
     public init(credentials: GoogleDriveCredentials) {
+        self.init(credentials: credentials, session: URLSession(configuration: URLSessionConfiguration.fileTransfer()))
+    }
+
+    /// The session and host are injectable so tests can answer requests
+    /// from a script.
+    init(credentials: GoogleDriveCredentials, session: URLSession, apiHost: String = "www.googleapis.com") {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer()
-        self.session = URLSession(configuration: config)
+        self.session = session
+        self.apiURL = "https://\(apiHost)/drive/v3"
+        self.uploadURL = "https://\(apiHost)/upload/drive/v3"
     }
 
     // MARK: - OAuth2 (PKCE)
@@ -394,29 +405,24 @@ public actor GoogleDriveAPIClient {
             return try await listSharedDrivesAsFolders()
         }
 
-        let cached = try await resolvePathToCachedFile(path)
-        let folderId = cached.id
-        let driveId = cached.driveId
+        let wasCached = path != "/" && pathIdCache[path] != nil
+        var cached = try await resolvePathToCachedFile(path)
+        var allItems = try await listChildren(of: cached)
 
-        var allItems: [GoogleDriveFile] = []
-        var pageToken: String?
-
-        repeat {
-            var queryItems = [
-                URLQueryItem(name: "q", value: "'\(folderId)' in parents and trashed = false"),
-                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)"),
-                URLQueryItem(name: "pageSize", value: "1000"),
-                URLQueryItem(name: "orderBy", value: "folder,name"),
-            ]
-            queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
-            if let pageToken {
-                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+        // "'<id>' in parents" for a folder that no longer exists, or sits in
+        // the trash, isn't an error — it is an empty result. A stale cached
+        // id (the folder was deleted or recreated on the web) would make the
+        // folder look empty and a Mirror from it delete the destination. So
+        // an empty listing of a cached folder is confirmed before it counts.
+        if allItems.isEmpty, wasCached {
+            let live = try await liveFile(id: cached.id)
+            if live == nil || live?.trashed == true {
+                evictCacheSubtree(path)
+                cached = try await resolvePathToCachedFile(path)
+                allItems = try await listChildren(of: cached)
             }
-
-            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
-            allItems.append(contentsOf: response.files)
-            pageToken = response.nextPageToken
-        } while pageToken != nil
+        }
+        let driveId = cached.driveId
 
         // Cache IDs and mimeTypes for resolved items, inheriting the drive scope.
         for file in allItems {
@@ -436,6 +442,36 @@ public actor GoogleDriveAPIClient {
         }
 
         return result
+    }
+
+    /// Every listed child of a folder, page by page.
+    private func listChildren(of folder: CachedFile) async throws -> [GoogleDriveFile] {
+        let folderId = folder.id
+        let driveId = folder.driveId
+
+        var allItems: [GoogleDriveFile] = []
+        var pageToken: String?
+
+        repeat {
+            var queryItems = [
+                URLQueryItem(name: "q", value: "'\(folderId)' in parents and trashed = false"),
+                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)"),
+                URLQueryItem(name: "pageSize", value: "1000"),
+                URLQueryItem(name: "orderBy", value: "folder,name"),
+            ]
+            queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
+            if let pageToken {
+                queryItems.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+
+            let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
+            // Workspace documents under their exported names; Google types
+            // that can't be downloaded are left out (see GoogleWorkspaceNaming).
+            allItems.append(contentsOf: response.files.compactMap { $0.listed(exportExtensions: Self.exportExtensions) })
+            pageToken = response.nextPageToken
+        } while pageToken != nil
+
+        return allItems
     }
 
     /// The shared drives the user belongs to, presented as folder items under
@@ -492,7 +528,12 @@ public actor GoogleDriveAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        let cached = try await resolvePathToCachedFile(remotePath)
+        try await withResolved(remotePath) { cached in
+            try await self.download(cached, remotePath: remotePath, to: localURL, onBytes: onBytes)
+        }
+    }
+
+    private func download(_ cached: CachedFile, remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
         let creds = try await refreshTokenIfNeeded()
 
         let url: URL
@@ -501,8 +542,11 @@ public actor GoogleDriveAPIClient {
             // Google Workspace file — use export endpoint
             let encodedMime = exportMime.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exportMime
             url = URL(string: "\(apiURL)/files/\(cached.id)/export?mimeType=\(encodedMime)&supportsAllDrives=true")!
-            // Append correct file extension for the exported format
-            if let ext = Self.exportExtensions[cached.mimeType] {
+            // A path that already carries the export extension (the name a
+            // listing gives the document) is written exactly where asked;
+            // only a bare document name gets the extension appended.
+            if let ext = Self.exportExtensions[cached.mimeType],
+               GoogleWorkspaceNaming.needsExtensionAppended(remotePath: remotePath, ext: ext) {
                 actualLocalURL = localURL.appendingPathExtension(ext)
             }
             googleLog.debug("[Google] Exporting workspace file as \(exportMime) → .\(Self.exportExtensions[cached.mimeType] ?? "?")")
@@ -555,31 +599,42 @@ public actor GoogleDriveAPIClient {
         // Can't drop files straight into the synthetic "Shared drives" node;
         // they belong inside a specific drive.
         guard parentPath != "/\(Self.sharedDrivesFolderName)" else { throw CloudProviderError.notImplemented }
-        let parentCached = try await resolvePathToCachedFile(parentPath)
-        let parentId = parentCached.id
+        let parentWasCached = pathIdCache[parentPath] != nil
+        var parentCached = try await resolvePathToCachedFile(parentPath)
 
-        // Prefer a cached ID (populated by listFolder). A Drive query for a
-        // just-uploaded file can miss due to index lag, which would cause us
-        // to POST a duplicate on the next replace. Only fall back to a query
-        // when the file isn't in our cache at all.
-        let existingId: String?
-        if let cached = pathIdCache[remotePath] {
-            existingId = cached.id
-        } else {
-            existingId = try? await findFileId(parentId: parentId, name: fileName, driveId: parentCached.driveId)
-        }
+        var existingId = try await existingFileId(for: remotePath, name: fileName, parent: parentCached)
 
         let fileSize = try FileChunkReader.size(of: localURL)
         let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path)
         let modDate = attrs?[.modificationDate] as? Date
         let createdDate = attrs?[.creationDate] as? Date
 
+        func send(parentId: String, existingId: String?) async throws -> GoogleDriveFile {
+            if fileSize <= 5_000_000 {
+                let fileData = try Data(contentsOf: localURL)
+                return try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
+            } else {
+                return try await resumableUpload(from: localURL, fileSize: fileSize, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
+            }
+        }
+
         let uploaded: GoogleDriveFile
-        if fileSize <= 5_000_000 {
-            let fileData = try Data(contentsOf: localURL)
-            uploaded = try await simpleUpload(data: fileData, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
-        } else {
-            uploaded = try await resumableUpload(from: localURL, fileSize: fileSize, fileName: fileName, parentId: parentId, existingId: existingId, modDate: modDate, createdDate: createdDate, onBytes: onBytes)
+        do {
+            uploaded = try await send(parentId: parentCached.id, existingId: existingId)
+        } catch CloudProviderError.notFound {
+            // A replaced file's id or a cached parent's id went stale (the
+            // item was deleted on the web). Before this, every later upload
+            // to the path failed the same way until the app restarted.
+            // Forget both, look again, and upload once more — as a new file
+            // if nothing is there now.
+            googleLog.info("[Google] upload target or parent id is gone; looking them up again")
+            evictCacheSubtree(remotePath)
+            if parentWasCached {
+                evictCacheSubtree(parentPath)
+                parentCached = try await resolvePathToCachedFile(parentPath)
+            }
+            existingId = try? await findFileId(parentId: parentCached.id, name: fileName, driveId: parentCached.driveId)
+            uploaded = try await send(parentId: parentCached.id, existingId: existingId)
         }
 
         // Cache the uploaded file's ID so subsequent replace/delete don't need
@@ -599,8 +654,9 @@ public actor GoogleDriveAPIClient {
     /// outside the upload path (clipboard paste, drag-drop) can preserve
     /// the source's mtime on a cross-source copy.
     public func setModificationDate(at remotePath: String, to date: Date) async throws {
-        let cached = try await resolvePathToCachedFile(remotePath)
-        try await patchFileTimestamps(fileId: cached.id, modDate: date, createdDate: nil)
+        try await withResolved(remotePath) { cached in
+            try await self.patchFileTimestamps(fileId: cached.id, modDate: date, createdDate: nil)
+        }
     }
 
     private func patchFileTimestamps(fileId: String, modDate: Date?, createdDate: Date?) async throws {
@@ -627,19 +683,55 @@ public actor GoogleDriveAPIClient {
         }
     }
 
+    /// The id an upload to `remotePath` replaces, or nil to create a file.
+    ///
+    /// A cached id is preferred — a Drive query for a just-uploaded file can
+    /// miss through index lag and the next replace would POST a duplicate —
+    /// but it is checked first. Listings only ever add to the cache, so the
+    /// id may be of a file since deleted on the web (every PATCH would fail),
+    /// trashed (the PATCH would succeed *into the trash* and the sync never
+    /// converge) or moved to another folder (the PATCH would overwrite it
+    /// there). Any of those makes the cached id absent. A Google document is
+    /// never overwritten with bytes either.
+    private func existingFileId(for remotePath: String, name: String, parent: CachedFile) async throws -> String? {
+        if let cached = pathIdCache[remotePath], !GoogleWorkspaceNaming.isGoogleNative(cached.mimeType) {
+            if let live = try await liveFile(id: cached.id),
+               live.trashed != true,
+               parent.id == "root" || (live.parents?.contains(parent.id) ?? true) {
+                return cached.id
+            }
+            evictCacheSubtree(remotePath)
+        }
+        return try? await findFileId(parentId: parent.id, name: name, driveId: parent.driveId)
+    }
+
+    /// The file's current state, or nil when Drive no longer knows the id.
+    private func liveFile(id: String) async throws -> GoogleDriveFile? {
+        do {
+            let file: GoogleDriveFile = try await apiRequest(.get, path: "/files/\(id)", queryItems: [
+                URLQueryItem(name: "fields", value: "id,name,mimeType,trashed,parents"),
+            ])
+            return file
+        } catch CloudProviderError.notFound {
+            return nil
+        }
+    }
+
     /// Look up a file's ID by name within a parent folder, without populating
-    /// the full-folder cache. Returns nil when the file doesn't exist.
+    /// the full-folder cache. Returns nil when the file doesn't exist. A
+    /// Google document of that name doesn't count: its content can't be
+    /// replaced by an upload.
     private func findFileId(parentId: String, name: String, driveId: String? = nil) async throws -> String? {
         let escaped = name.replacingOccurrences(of: "'", with: "\\'")
         let query = "'\(parentId)' in parents and name = '\(escaped)' and trashed = false"
         var queryItems = [
             URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "fields", value: "files(id)"),
-            URLQueryItem(name: "pageSize", value: "1"),
+            URLQueryItem(name: "fields", value: "files(id,name,mimeType)"),
+            URLQueryItem(name: "pageSize", value: "10"),
         ]
         queryItems.append(contentsOf: Self.driveQueryItems(driveId: driveId))
         let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
-        return response.files.first?.id
+        return response.files.first { !GoogleWorkspaceNaming.isGoogleNative($0.mimeType) }?.id
     }
 
     private func simpleUpload(data: Data, fileName: String, parentId: String, existingId: String?, modDate: Date?, createdDate: Date?, onBytes: ByteProgressHandler?) async throws -> GoogleDriveFile {
@@ -784,7 +876,15 @@ public actor GoogleDriveAPIClient {
     public func deleteItem(at path: String) async throws {
         guard !isVirtualSharedDriveNode(path) else { throw CloudProviderError.notImplemented }
         let cached = try await resolvePathToCachedFile(path)
-        try await apiRequestVoid(.delete, path: "/files/\(cached.id)")
+        do {
+            try await apiRequestVoid(.delete, path: "/files/\(cached.id)")
+        } catch CloudProviderError.notFound {
+            // The id is gone (deleted on the web). Don't keep resolving the
+            // path to it — and don't delete whatever now has that name
+            // either: a delete only ever touches the item that was meant.
+            evictCacheSubtree(path)
+            throw CloudProviderError.notFound(path)
+        }
         evictCacheSubtree(path)
     }
 
@@ -807,6 +907,19 @@ public actor GoogleDriveAPIClient {
         // Idempotent: Google Drive allows duplicate folder names under the same
         // parent, so a naive create multiplies folders on each retry. Short-
         // circuit when the folder already exists at this path.
+        //
+        // A cached id may be stale, though (the folder was deleted or trashed
+        // on the web): short-circuiting on it created nothing, and every
+        // upload into the folder then failed. A cached hit is confirmed once
+        // per session — this runs before every file a sync uploads, so it
+        // must stay cheap.
+        if let cached = pathIdCache[path], !confirmedFolderIds.contains(cached.id) {
+            if let live = try await liveFile(id: cached.id), live.trashed != true {
+                confirmedFolderIds.insert(cached.id)
+            } else {
+                evictCacheSubtree(path)
+            }
+        }
         if (try? await resolvePathToCachedFile(path)) != nil { return }
 
         let parentPath = (path as NSString).deletingLastPathComponent
@@ -827,7 +940,11 @@ public actor GoogleDriveAPIClient {
         )
 
         let created: GoogleDriveFile = try await apiRequest(.post, path: "/files", body: body)
-        pathIdCache[path] = CachedFile(id: created.id, mimeType: created.mimeType)
+        // Keep the parent's drive scope: without it, a folder created on a
+        // shared drive later lists without the shared-drive corpus and comes
+        // back empty — and a Mirror from it would delete the destination.
+        pathIdCache[path] = CachedFile(id: created.id, mimeType: created.mimeType, driveId: parentCached.driveId)
+        confirmedFolderIds.insert(created.id)
 
         // Drive occasionally hands back a folder ID that isn't yet usable as
         // an upload parent — subsequent POST /upload returns 404 "File not
@@ -857,7 +974,21 @@ public actor GoogleDriveAPIClient {
             let name: String
         }
 
-        let _: GoogleDriveFile = try await apiRequest(.patch, path: "/files/\(fileId)", body: RenameBody(name: newName))
+        // A Google document lists under its exported name ("Report.docx");
+        // renaming it to "Notes.docx" means the document is called "Notes".
+        var driveName = newName
+        if let ext = Self.exportExtensions[cached.mimeType],
+           !GoogleWorkspaceNaming.needsExtensionAppended(remotePath: newName, ext: ext) {
+            let stem = (newName as NSString).deletingPathExtension
+            if !stem.isEmpty { driveName = stem }
+        }
+
+        do {
+            let _: GoogleDriveFile = try await apiRequest(.patch, path: "/files/\(fileId)", body: RenameBody(name: driveName))
+        } catch CloudProviderError.notFound {
+            evictCacheSubtree(path)
+            throw CloudProviderError.notFound(path)
+        }
 
         // Update cache. Evict the whole old subtree — for a folder rename the
         // descendants' paths all changed, so their old keys are now stale.
@@ -865,13 +996,22 @@ public actor GoogleDriveAPIClient {
         // descendants re-resolve lazily under the new parent path.
         evictCacheSubtree(path)
         let parentPath = (path as NSString).deletingLastPathComponent
-        let newPath = parentPath == "/" ? "/\(newName)" : "\(parentPath)/\(newName)"
-        pathIdCache[newPath] = CachedFile(id: fileId, mimeType: cached.mimeType)
+        let listedName = GoogleWorkspaceNaming.listedName(
+            name: driveName, mimeType: cached.mimeType, exportExtensions: Self.exportExtensions
+        ) ?? newName
+        let newPath = parentPath == "/" ? "/\(listedName)" : "\(parentPath)/\(listedName)"
+        // Keep the drive scope (see createFolder): a renamed shared-drive
+        // folder must not start listing as empty.
+        pathIdCache[newPath] = CachedFile(id: fileId, mimeType: cached.mimeType, driveId: cached.driveId)
     }
 
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
-        let fileId = (try await resolvePathToCachedFile(path)).id
+        try await withResolved(path) { cached in
+            try await self.fileMetadata(fileId: cached.id, path: path)
+        }
+    }
 
+    private func fileMetadata(fileId: String, path: String) async throws -> CloudFileItem {
         var components = URLComponents(string: "\(apiURL)/files/\(fileId)")!
         components.queryItems = [
             URLQueryItem(name: "fields", value: "id,name,mimeType,size,modifiedTime,md5Checksum"),
@@ -894,7 +1034,8 @@ public actor GoogleDriveAPIClient {
 
         let file = try JSONDecoder().decode(GoogleDriveFile.self, from: data)
         let parentPath = (path as NSString).deletingLastPathComponent
-        return file.toCloudFileItem(parentPath: parentPath)
+        // Under the name its listing gives it, so the path round-trips.
+        return (file.listed(exportExtensions: Self.exportExtensions) ?? file).toCloudFileItem(parentPath: parentPath)
     }
 
     public func folderSize(at path: String) async throws -> Int64 {
@@ -923,6 +1064,23 @@ public actor GoogleDriveAPIClient {
     /// container) and `/Shared drives/<DriveName>` (whose ID is the shared
     /// drive's ID, which doubles as its root folder). Anything below the latter
     /// carries that `driveId` so queries scope to the drive's corpus.
+    /// Runs `operation` with the entry for `path`. An id from the cache can
+    /// be stale — the file was deleted or replaced on the web, and listings
+    /// only ever add to the cache — and Drive then answers 404 for it on
+    /// every attempt until the app restarts. When that happens the entry is
+    /// evicted and the path looked up afresh, once.
+    private func withResolved<T>(_ path: String, _ operation: (CachedFile) async throws -> T) async throws -> T {
+        let wasCached = pathIdCache[path] != nil
+        let cached = try await resolvePathToCachedFile(path)
+        do {
+            return try await operation(cached)
+        } catch CloudProviderError.notFound where wasCached {
+            googleLog.info("[Google] cached id for a path is gone; looking it up again")
+            evictCacheSubtree(path)
+            return try await operation(try await resolvePathToCachedFile(path))
+        }
+    }
+
     private func resolvePathToCachedFile(_ path: String) async throws -> CachedFile {
         if let cached = pathIdCache[path] {
             return cached
@@ -1001,7 +1159,24 @@ public actor GoogleDriveAPIClient {
 
             let response: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: queryItems)
 
-            guard let file = response.files.first else {
+            var found = response.files.first
+            if found == nil,
+               let origin = GoogleWorkspaceNaming.exportedOrigin(of: name, exportExtensions: Self.exportExtensions) {
+                // A Google document lists under its exported name
+                // ("Report.docx" for the Doc "Report"); look it up by its
+                // Drive name and type.
+                let stem = origin.name.replacingOccurrences(of: "'", with: "\\'")
+                let types = origin.mimeTypes.map { "mimeType = '\($0)'" }.joined(separator: " or ")
+                var docQuery = [
+                    URLQueryItem(name: "q", value: "'\(currentCached.id)' in parents and name = '\(stem)' and (\(types)) and trashed = false"),
+                    URLQueryItem(name: "fields", value: "files(id,name,mimeType)"),
+                    URLQueryItem(name: "pageSize", value: "1"),
+                ]
+                docQuery.append(contentsOf: Self.driveQueryItems(driveId: currentCached.driveId))
+                let docs: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: docQuery)
+                found = docs.files.first
+            }
+            guard let file = found else {
                 throw CloudProviderError.notFound(currentPath)
             }
 
@@ -1047,7 +1222,9 @@ public actor GoogleDriveAPIClient {
             pageToken = response.nextPageToken
         } while pageToken != nil && allItems.count < 500
 
-        return allItems.map { $0.toCloudFileItem(parentPath: "/") }
+        return allItems
+            .compactMap { $0.listed(exportExtensions: Self.exportExtensions) }
+            .map { $0.toCloudFileItem(parentPath: "/") }
     }
 
     // MARK: - Share links
@@ -1567,6 +1744,55 @@ private struct GoogleUserInfo: Decodable {
     let name: String?
 }
 
+/// How Google's own document types appear in a listing.
+///
+/// A Doc, Sheet, Slides deck or Drawing has no bytes of its own: a download
+/// exports it (`Report` arrives as `Report.docx`). Listed under its bare name
+/// it could never match what a download writes, so a sync re-downloaded it
+/// on every run and a Mirror deleted the `.docx` as "extra" every other run —
+/// and a cloud-to-cloud copy failed outright because the staged file wasn't
+/// where it was asked for. Listed under the exported name, the listing, the
+/// download and the destination all agree.
+///
+/// Google types that can't be exported at all (Forms, Sites, My Maps,
+/// shortcuts, Apps Script…) are left out: every attempt to download one fails
+/// with a 403, so a sync would fail on it every run, and there is nothing
+/// FileFluss could do with one anyway.
+enum GoogleWorkspaceNaming {
+    static let googleTypePrefix = "application/vnd.google-apps."
+    static let folderMimeType = "application/vnd.google-apps.folder"
+
+    static func isGoogleNative(_ mimeType: String) -> Bool {
+        mimeType.hasPrefix(googleTypePrefix) && mimeType != folderMimeType
+    }
+
+    /// The name an item lists under, or nil when it is left out of listings.
+    static func listedName(name: String, mimeType: String, exportExtensions: [String: String]) -> String? {
+        guard isGoogleNative(mimeType) else { return name }
+        guard let ext = exportExtensions[mimeType] else { return nil }
+        return name.lowercased().hasSuffix("." + ext) ? name : "\(name).\(ext)"
+    }
+
+    /// For a listed name that ends in an export extension: the Drive name it
+    /// stands for and the Google types that export to that extension. Used
+    /// to find a Workspace document by its listed name when it isn't cached.
+    static func exportedOrigin(of listedName: String, exportExtensions: [String: String]) -> (name: String, mimeTypes: [String])? {
+        let ext = (listedName as NSString).pathExtension.lowercased()
+        let stem = (listedName as NSString).deletingPathExtension
+        guard !ext.isEmpty, !stem.isEmpty else { return nil }
+        let types = exportExtensions.filter { $0.value == ext }.map(\.key).sorted()
+        return types.isEmpty ? nil : (stem, types)
+    }
+
+    /// Whether a download of `remotePath` must still get the export
+    /// extension appended: only when the path names the document by its
+    /// bare Drive name (an older path, e.g. from a favourite) rather than by
+    /// the exported name a listing gives it.
+    static func needsExtensionAppended(remotePath: String, ext: String) -> Bool {
+        !(remotePath as NSString).lastPathComponent.lowercased().hasSuffix("." + ext)
+    }
+}
+
 struct GoogleFileListResponse: Decodable {
     let files: [GoogleDriveFile]
     let nextPageToken: String?
@@ -1579,9 +1805,24 @@ struct GoogleDriveFile: Decodable {
     let size: String?
     let modifiedTime: String?
     let md5Checksum: String?
+    /// Only present when a request asks for it (`fields=…trashed,parents`).
+    var trashed: Bool? = nil
+    var parents: [String]? = nil
 
     var isDirectory: Bool {
         mimeType == "application/vnd.google-apps.folder"
+    }
+
+    /// The same item under the name a listing shows for it (see
+    /// `GoogleWorkspaceNaming`), or nil when it is left out of listings.
+    func listed(exportExtensions: [String: String]) -> GoogleDriveFile? {
+        guard let listedName = GoogleWorkspaceNaming.listedName(
+            name: name, mimeType: mimeType, exportExtensions: exportExtensions
+        ) else { return nil }
+        if listedName == name { return self }
+        return GoogleDriveFile(id: id, name: listedName, mimeType: mimeType, size: size,
+                               modifiedTime: modifiedTime, md5Checksum: md5Checksum,
+                               trashed: trashed, parents: parents)
     }
 
     public func toCloudFileItem(parentPath: String) -> CloudFileItem {

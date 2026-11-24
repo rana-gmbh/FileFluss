@@ -167,7 +167,8 @@ extension CloudFileManagerViewModel {
             let tree = try await ArchiveService.list(local, format: format)
             guard !tree.isEmpty else { return false }
             closeArchive()
-            archiveSession = ArchiveBrowseSession(archiveURL: local, format: format, tree: tree)
+            // Whatever comes out of it came from the account.
+            archiveSession = ArchiveBrowseSession(archiveURL: local, format: format, tree: tree, isUntrusted: true)
             archiveRemotePath = item.path
             currentPath = item.path
             pushToHistory(item.path)
@@ -297,13 +298,19 @@ extension CloudFileManagerViewModel {
         case .local:
             progress?.recordSuccess(result.lastPathComponent)
         case .here:
-            progress?.expectedBytesUpload = Self.localSizeRecursively(url: result)
+            progress?.expectedBytesUpload = await Self.unpackedSize(of: result)
             await uploadFiles(from: [result], progress: progress, skipConflictCheck: true)
         case .cloud(let other):
-            progress?.expectedBytesUpload = Self.localSizeRecursively(url: result)
+            progress?.expectedBytesUpload = await Self.unpackedSize(of: result)
             await other.uploadFiles(from: [result], progress: progress, skipConflictCheck: true)
         }
         progress?.uploadEndTime = Date()
         finish()
+    }
+
+    /// The size of what was unpacked, walked off the main actor: an
+    /// archive can hold tens of thousands of files.
+    private static func unpackedSize(of url: URL) async -> Int64 {
+        await Task.detached(priority: .userInitiated) { localSizeRecursively(url: url) }.value
     }
 }

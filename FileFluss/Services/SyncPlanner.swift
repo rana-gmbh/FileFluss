@@ -163,7 +163,7 @@ actor SyncPlanner {
     private func enumerateLocal(root: URL) throws -> [SyncEntry] {
         let fm = Foundation.FileManager.default
         let keys: [URLResourceKey] = [
-            .isDirectoryKey, .fileSizeKey, .totalFileSizeKey,
+            .isDirectoryKey, .fileSizeKey,
             .contentModificationDateKey, .creationDateKey
         ]
         // A folder that can't be read must stop the scan. Left out of the
@@ -198,7 +198,10 @@ actor SyncPlanner {
             let relative = itemURL.pathComponents.suffix(enumerator.level).joined(separator: "/")
             if relative.isEmpty { continue }
             let isDir = values.isDirectory ?? false
-            let size = Int64(values.totalFileSize ?? values.fileSize ?? 0)
+            // The data fork alone: that's what a cloud stores and reports.
+            // With the resource fork counted, a file with a custom icon never
+            // looked identical and every Mirror uploaded it again.
+            let size = Int64(values.fileSize ?? 0)
             let mod = values.contentModificationDate ?? .distantPast
             let created = values.creationDate
             results.append(SyncEntry(
@@ -252,12 +255,45 @@ actor SyncPlanner {
 
     // MARK: - Diff / planning
 
+    /// Whether names that differ only in case are one name at `endpoint`.
+    /// A local folder asks its volume (APFS folds case unless formatted
+    /// otherwise). A cloud folds case unless its service is known not to:
+    /// treating a case-sensitive server as folding costs at most a "(2)"
+    /// that wasn't needed, the other way round Mirror writes README.md over
+    /// readme.md and then deletes readme.md, which is the file it wrote.
+    func destinationIgnoresCase(_ endpoint: SyncEndpoint) async -> Bool {
+        switch endpoint {
+        case .local(let url):
+            let values = try? url.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+            return !(values?.volumeSupportsCaseSensitiveNames ?? false)
+        case .cloud(let accountId, _):
+            guard let provider = await SyncEngine.shared.provider(for: accountId) else { return true }
+            return Self.namesIgnoreCase(on: provider.providerType)
+        case .offlineIndexed:
+            return true
+        }
+    }
+
+    /// Services whose names are case-sensitive by design: object keys
+    /// (S3 and its kin), Google Drive's freely duplicated names, git trees.
+    /// Everything else, a NAS or an SFTP server among them, may sit on a
+    /// disk that folds case, so it's taken to.
+    static func namesIgnoreCase(on type: CloudProviderType) -> Bool {
+        switch type {
+        case .s3, .s3Compatible, .synologyC2, .googleDrive, .googleDrivePicker, .github:
+            return false
+        default:
+            return true
+        }
+    }
+
     func plan(sourceEntries: [SyncEntry],
               destEntries: [SyncEntry],
               mode: SyncMode,
               direction: PlanDirection,
               sourceIsCloud: Bool,
               destIsCloud: Bool,
+              destinationIgnoresCase: Bool = true,
               dateTolerance: TimeInterval = SyncPlanner.defaultDateTolerance) -> SyncPlan {
         // A local scan skips hidden files, so without this the cloud's `.git`
         // and `.env` look like extras and Mirror deletes them. Scanning them
@@ -267,12 +303,89 @@ actor SyncPlanner {
         let sourceEntries = touchesThisMac ? sourceEntries.filter { !$0.isHidden } : sourceEntries
         let destEntries = touchesThisMac ? destEntries.filter { !$0.isHidden } : destEntries
 
+        // Names on the destination side are matched the way the destination
+        // matches them. String equality already ignores Unicode form (a
+        // Mac's NFD "Café" is a server's NFC one); case is folded as well
+        // where the destination folds it. Matching exactly made Mirror plan
+        // "add README.md" beside "delete readme.md" on APFS, and the delete
+        // then removed the file the add had just written.
+        let key: (String) -> String = destinationIgnoresCase ? { $0.lowercased() } : { $0 }
+
         var destMap: [String: SyncEntry] = [:]
         destMap.reserveCapacity(destEntries.count)
-        for entry in destEntries { destMap[entry.relativePath] = entry }
-        var sourceMap: [String: SyncEntry] = [:]
-        sourceMap.reserveCapacity(sourceEntries.count)
-        for entry in sourceEntries { sourceMap[entry.relativePath] = entry }
+        for entry in destEntries { destMap[key(entry.relativePath)] = entry }
+
+        // Directories before their children, and a fixed order that decides
+        // which of two colliding names keeps the name. Spellings equal as
+        // strings (NFC beside NFD) are ordered by their bytes.
+        let sourceSorted = sourceEntries.sorted {
+            $0.relativePath == $1.relativePath
+                ? $0.relativePath.utf8.lexicographicallyPrecedes($1.relativePath.utf8)
+                : $0.relativePath < $1.relativePath
+        }
+
+        // Where each source item lands, by its index in `sourceSorted`. Two
+        // source names can be one name at the destination: README.md and
+        // Readme.md from a case-sensitive server onto APFS, or NFC and NFD
+        // spellings of Café. Only one can have it; writing both there made
+        // the second fail on every run, or silently overwrite the first. So
+        // the first keeps the name and each later one gets "name (2)",
+        // chosen from the source's names alone so every run picks the same
+        // one and finds the copy already there. A renamed folder takes its
+        // contents along.
+        var targetOf: [String] = []
+        targetOf.reserveCapacity(sourceSorted.count)
+        // Keyed by the exact bytes: as strings, the NFC and NFD folders
+        // would share one entry and the second's children would follow the
+        // first.
+        var targetByPath: [Data: String] = [:]
+        var targets: Set<String> = []
+        var collisions: Set<Int> = []
+        var naturalKeys: Set<String>?
+        for (index, entry) in sourceSorted.enumerated() {
+            let path = entry.relativePath
+            let target: String
+            if let slash = path.lastIndex(of: "/") {
+                let parent = String(path[..<slash])
+                let parentTarget = targetByPath[Data(parent.utf8)] ?? parent
+                target = parentTarget + "/" + path[path.index(after: slash)...]
+            } else {
+                target = path
+            }
+            var landed = target
+            if !targets.insert(key(target)).inserted {
+                if naturalKeys == nil { naturalKeys = Set(sourceSorted.map { key($0.relativePath) }) }
+                let taken = naturalKeys!.union(targets)
+                landed = uniqueName(for: target) { taken.contains(key($0)) }
+                targets.insert(key(landed))
+                collisions.insert(index)
+            }
+            targetOf.append(landed)
+            targetByPath[Data(path.utf8)] = landed
+        }
+
+        // Where a target lands: folders the destination already has keep its
+        // spelling (its case and Unicode form, or a file would go into a
+        // folder that isn't there, or beside an NFC copy as an NFD one), new
+        // components are spelled as the source spells them.
+        func destinationPath(for target: String) -> String {
+            var landed = ""
+            var prefix = ""
+            for component in target.split(separator: "/", omittingEmptySubsequences: false) {
+                prefix = prefix.isEmpty ? String(component) : prefix + "/" + component
+                if let match = destMap[key(prefix)] {
+                    landed = match.relativePath
+                } else {
+                    landed = landed.isEmpty ? String(component) : landed + "/" + component
+                }
+            }
+            return landed
+        }
+
+        /// nil when `path` is byte for byte the source's own path.
+        func differing(_ path: String, from source: String) -> String? {
+            path.utf8.elementsEqual(source.utf8) ? nil : path
+        }
 
         var ops: [SyncOperation] = []
         var adds = 0
@@ -281,25 +394,57 @@ actor SyncPlanner {
         var folderAdds = 0
         var folderDeletes = 0
         var typeClashes = 0
+        var folderTypeClashes = 0
         var bytesMoved: Int64 = 0
         // Net bytes the destination gains (adds + replaced growth − replaced
         // old size − mirror deletes). Drives the planner's space projection.
         var netDelta: Int64 = 0
+        // Names a renamed Add-only copy must not take: anything on either
+        // side, and earlier renames.
+        var additiveTaken: Set<String>?
+        // Source folders that can't be created because a file of that name
+        // is at the destination, in a mode that never deletes. Neither they
+        // nor anything in them is planned: their contents would only fail,
+        // on every run.
+        var blockedFolders: Set<String> = []
 
-        // Sort source entries so directories are created before their children.
-        let sourceSorted = sourceEntries.sorted { $0.relativePath < $1.relativePath }
-
-        for entry in sourceSorted {
-            if let existing = destMap[entry.relativePath] {
-                // Both sides have it. Skip directories (they already exist).
-                if entry.isDirectory { continue }
+        for (index, entry) in sourceSorted.enumerated() {
+            if !blockedFolders.isEmpty, Self.isInside(entry.relativePath, anyOf: blockedFolders) { continue }
+            let target = targetOf[index]
+            let renamed = collisions.contains(index)
+            if let existing = destMap[key(target)] {
+                if entry.isDirectory {
+                    // A folder that's there already; its contents are planned
+                    // one by one. A file of that name used to be skipped as
+                    // "exists" too, and everything in the folder then failed
+                    // beneath it on every run.
+                    if !existing.isDirectory {
+                        if mode == .mirror {
+                            // The file goes first, then the folder is created
+                            // in its place, before anything that goes into it.
+                            ops.append(.delete(relativePath: existing.relativePath, isDirectory: false, bytes: existing.size))
+                            deletes += 1
+                            netDelta -= existing.size
+                            ops.append(.add(relativePath: entry.relativePath, isDirectory: true, bytes: 0,
+                                            destRelativePath: differing(existing.relativePath, from: entry.relativePath)))
+                            folderAdds += 1
+                        } else {
+                            blockedFolders.insert(entry.relativePath)
+                            folderTypeClashes += 1
+                        }
+                    }
+                    continue
+                }
+                // A folded match is the same item: it's replaced (or left) in
+                // place, under the destination's spelling.
+                let destPath = differing(existing.relativePath, from: entry.relativePath)
                 switch mode {
                 case .mirror:
                     // Skip when source and destination look identical. Cloud
                     // providers often quantize mod dates to whole seconds, so
                     // use a small tolerance to avoid re-uploading every file.
                     if Self.filesLookIdentical(entry, existing, tolerance: dateTolerance) { continue }
-                    ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
+                    ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size, destRelativePath: destPath))
                     replaces += 1
                     bytesMoved += entry.size
                     netDelta += entry.size - existing.size
@@ -311,20 +456,30 @@ actor SyncPlanner {
                         continue
                     }
                     if entry.modificationDate.timeIntervalSince(existing.modificationDate) > dateTolerance {
-                        ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size))
+                        ops.append(.replace(relativePath: entry.relativePath, bytes: entry.size, destRelativePath: destPath))
                         replaces += 1
                         bytesMoved += entry.size
                         netDelta += entry.size - existing.size
                     }
                 case .additive:
-                    let unique = uniqueName(for: entry.relativePath, existing: destMap)
+                    if additiveTaken == nil { additiveTaken = Set(destMap.keys).union(targets) }
+                    let unique = uniqueName(for: destinationPath(for: target)) { additiveTaken!.contains(key($0)) }
+                    additiveTaken!.insert(key(unique))
                     ops.append(.addRenamed(sourceRelativePath: entry.relativePath, destRelativePath: unique, bytes: entry.size))
                     adds += 1
                     bytesMoved += entry.size
                     netDelta += entry.size
                 }
             } else {
-                ops.append(.add(relativePath: entry.relativePath, isDirectory: entry.isDirectory, bytes: entry.size))
+                // A renamed file is an add under another name; a renamed
+                // folder is created at its new path and its contents follow.
+                let destPath = destinationPath(for: target)
+                if renamed && !entry.isDirectory {
+                    ops.append(.addRenamed(sourceRelativePath: entry.relativePath, destRelativePath: destPath, bytes: entry.size))
+                } else {
+                    ops.append(.add(relativePath: entry.relativePath, isDirectory: entry.isDirectory, bytes: entry.size,
+                                    destRelativePath: differing(destPath, from: entry.relativePath)))
+                }
                 if entry.isDirectory { folderAdds += 1 } else { adds += 1 }
                 bytesMoved += entry.size
                 netDelta += entry.size
@@ -332,9 +487,10 @@ actor SyncPlanner {
         }
 
         if mode == .mirror {
-            // Delete dest entries not present on source. Sort deepest-first so children go before parents.
+            // Delete dest entries no source item lands on; a renamed copy
+            // counts as landed. Deepest first so children go before parents.
             let destSorted = destEntries.sorted { $0.relativePath.count > $1.relativePath.count }
-            for entry in destSorted where sourceMap[entry.relativePath] == nil {
+            for entry in destSorted where !targets.contains(key(entry.relativePath)) {
                 ops.append(.delete(relativePath: entry.relativePath, isDirectory: entry.isDirectory, bytes: entry.size))
                 if entry.isDirectory { folderDeletes += 1 } else { deletes += 1 }
                 netDelta -= entry.size
@@ -364,8 +520,19 @@ actor SyncPlanner {
                     dates[entry.relativePath] = entry.modificationDate
                 }
             },
-            typeClashes: typeClashes
+            typeClashes: typeClashes,
+            folderTypeClashes: folderTypeClashes
         )
+    }
+
+    /// Whether `path` lies inside one of `folders`.
+    private static func isInside(_ path: String, anyOf folders: Set<String>) -> Bool {
+        var current = Substring(path)
+        while let slash = current.lastIndex(of: "/") {
+            current = current[..<slash]
+            if folders.contains(String(current)) { return true }
+        }
+        return false
     }
 
     /// Tolerance used when comparing modification dates across endpoints.
@@ -383,14 +550,16 @@ actor SyncPlanner {
         return abs(a.modificationDate.timeIntervalSince(b.modificationDate)) <= tolerance
     }
 
-    private func uniqueName(for relativePath: String, existing: [String: SyncEntry]) -> String {
+    /// "sub/name (2).ext": the first "name (n)" in the same folder that
+    /// isn't `taken`.
+    private func uniqueName(for relativePath: String, taken: (String) -> Bool) -> String {
         let ns = relativePath as NSString
         let ext = ns.pathExtension
         let base = ns.deletingPathExtension
         var index = 2
         while true {
             let candidate = ext.isEmpty ? "\(base) (\(index))" : "\(base) (\(index)).\(ext)"
-            if existing[candidate] == nil { return candidate }
+            if !taken(candidate) { return candidate }
             index += 1
         }
     }

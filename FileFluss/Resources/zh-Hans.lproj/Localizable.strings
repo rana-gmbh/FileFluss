@@ -991,6 +991,7 @@
 "The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "来源为空，因此镜像会删除目标中的所有内容。请检查打开的文件夹是否正确。";
 "Yes, delete %d of the %d items at the destination." = "是，删除目标中 %2$d 个项目中的 %1$d 个。";
 "“%@” can't replace a folder it's inside." = "“%@”无法替换包含它自身的文件夹。";
+"A folder can't be copied or moved into itself." = "无法将文件夹复制或移动到其自身中。";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "“%1$@”的新副本已上传，但无法重命名，仍名为“%2$@”。";
 "Couldn't check the destination for items with the same name: %@" = "无法检查目标中是否有同名项目：%@";
 
@@ -1280,3 +1281,6 @@
 "Remove All Tags" = "移除所有标签";
 "Tags couldn't be changed" = "无法更改标签";
 "The tags of “%@” couldn't be changed: %@" = "无法更改“%@”的标签：%@";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下载的文件已损坏：其 MEGA 完整性校验（MAC）不匹配。";

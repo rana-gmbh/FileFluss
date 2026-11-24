@@ -125,6 +125,18 @@ struct FileSystemServiceTests {
         #expect(!notExists)
     }
 
+    @Test("Item exists in a folder whose name has a space and an umlaut")
+    func itemExistsWithSpaceAndUmlaut() async throws {
+        let folder = testBaseDir.appendingPathComponent("Backup Übersicht", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("extra datei.txt")
+        try Data("x".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: testBaseDir) }
+
+        #expect(await service.itemExists(at: folder))
+        #expect(await service.itemExists(at: file))
+    }
+
     @Test("List empty directory returns empty array")
     func listEmptyDirectory() async throws {
         defer { try? FileManager.default.removeItem(at: testBaseDir) }

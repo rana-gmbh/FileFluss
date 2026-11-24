@@ -12,3 +12,6 @@
 "Invalid email or password." = "Ungültige E-Mail-Adresse oder ungültiges Passwort.";
 "File is too large to upload (%@). This provider's limit is %@." = "Datei ist zu groß zum Hochladen (%@). Das Limit dieses Anbieters beträgt %@.";
 "File is too large to upload (%@). The provider rejected it. Try splitting the file or using a different cloud." = "Datei ist zu groß zum Hochladen (%@). Der Anbieter hat sie abgelehnt. Teile die Datei auf oder verwende einen anderen Cloud-Dienst.";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.";

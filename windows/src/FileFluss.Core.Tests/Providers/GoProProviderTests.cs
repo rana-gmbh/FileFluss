@@ -65,9 +65,16 @@ public sealed class GoProMediaListTests
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_696_600_109), video.ModificationDate);
     }
 
+    /// <summary>After a card swap or format the folder a sync reads from is gone; listing it as
+    /// empty would make a Mirror delete the copied footage.</summary>
     [Fact]
-    public void UnknownDirectoryYieldsNoItems()
-        => Assert.Empty(GoProMediaList.Parse(SampleJson).Items("/999GOPRO"));
+    public void UnknownDirectoryIsNotFoundNotEmpty()
+    {
+        var e = Assert.Throws<CloudProviderException>(() => GoProMediaList.Parse(SampleJson).Items("/999GOPRO"));
+        Assert.Equal(CloudErrorKind.NotFound, e.Kind);
+        Assert.Throws<CloudProviderException>(() => GoProMediaList.Parse("""{ "media": [] }""").Items("/100GOPRO"));
+        Assert.Empty(GoProMediaList.Parse("""{ "media": [] }""").Items("/"));
+    }
 
     [Fact]
     public void SingleFileLookupByPath()

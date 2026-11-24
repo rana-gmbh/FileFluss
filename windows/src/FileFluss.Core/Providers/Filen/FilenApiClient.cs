@@ -162,53 +162,51 @@ internal sealed class FilenApiClient
         var parentBase = parentPath.EndsWith('/') ? parentPath[..^1] : parentPath;
         var items = new List<CloudFileItem>();
 
-        if (data.TryGetProperty("folders", out var folders) && folders.ValueKind == JsonValueKind.Array)
+        // Nothing is left out: an entry whose metadata doesn't decrypt (a key we don't have) or
+        // doesn't parse, or an answer without the folders/uploads arrays, used to be skipped or
+        // read as empty — and a folder that looks emptier than it is tells Mirror to delete those
+        // files on the other side. Such a listing is an error instead, as on macOS.
+        if (!data.TryGetProperty("folders", out var folders) || folders.ValueKind != JsonValueKind.Array ||
+            !data.TryGetProperty("uploads", out var files) || files.ValueKind != JsonValueKind.Array)
         {
-            foreach (var folder in folders.EnumerateArray())
-            {
-                if (GetString(folder, "uuid") is not { } uuid || GetString(folder, "name") is not { } nameMeta)
-                {
-                    continue;
-                }
-
-                // Folders whose metadata doesn't decrypt (a key we no longer have) are skipped.
-                if (TryDecryptItemMetadata(nameMeta) is not { } decoded || ParseFolderMeta(decoded) is not { } meta)
-                {
-                    continue;
-                }
-
-                var timestamp = GetDouble(folder, "timestamp") is { } ts ? TimestampToDate(ts) : CloudFileItem.UnknownDate;
-                items.Add(new CloudFileItem($"d:{uuid}", meta.Name, ChildPath(parentBase, meta.Name), true, 0, meta.Created ?? timestamp));
-            }
+            throw UnreadableListing();
         }
 
-        if (data.TryGetProperty("uploads", out var files) && files.ValueKind == JsonValueKind.Array)
+        foreach (var folder in folders.EnumerateArray())
         {
-            foreach (var file in files.EnumerateArray())
+            if (GetString(folder, "uuid") is not { } uuid || GetString(folder, "name") is not { } nameMeta ||
+                TryDecryptItemMetadata(nameMeta) is not { } decoded || ParseFolderMeta(decoded) is not { } meta)
             {
-                if (GetString(file, "uuid") is not { } uuid || GetString(file, "metadata") is not { } metadata)
-                {
-                    continue;
-                }
-
-                if (TryDecryptItemMetadata(metadata) is not { } decoded || ParseFileMeta(decoded) is not { } meta)
-                {
-                    continue;
-                }
-
-                _fileChunkInfo[uuid] = new FileChunkInfo(
-                    meta.Key,
-                    GetString(file, "region") ?? string.Empty,
-                    GetString(file, "bucket") ?? string.Empty,
-                    (int)(GetInt64(file, "chunks") ?? 0),
-                    meta.Size,
-                    meta.Mime);
-                items.Add(new CloudFileItem($"f:{uuid}", meta.Name, ChildPath(parentBase, meta.Name), false, meta.Size, meta.LastModified, meta.Hash));
+                throw UnreadableListing();
             }
+
+            var timestamp = GetDouble(folder, "timestamp") is { } ts ? TimestampToDate(ts) : CloudFileItem.UnknownDate;
+            items.Add(new CloudFileItem($"d:{uuid}", meta.Name, ChildPath(parentBase, meta.Name), true, 0, meta.Created ?? timestamp));
+        }
+
+        foreach (var file in files.EnumerateArray())
+        {
+            if (GetString(file, "uuid") is not { } uuid || GetString(file, "metadata") is not { } metadata ||
+                TryDecryptItemMetadata(metadata) is not { } decoded || ParseFileMeta(decoded) is not { } meta)
+            {
+                throw UnreadableListing();
+            }
+
+            _fileChunkInfo[uuid] = new FileChunkInfo(
+                meta.Key,
+                GetString(file, "region") ?? string.Empty,
+                GetString(file, "bucket") ?? string.Empty,
+                (int)(GetInt64(file, "chunks") ?? 0),
+                meta.Size,
+                meta.Mime);
+            items.Add(new CloudFileItem($"f:{uuid}", meta.Name, ChildPath(parentBase, meta.Name), false, meta.Size, meta.LastModified, meta.Hash));
         }
 
         return items;
     }
+
+    private static CloudProviderException UnreadableListing()
+        => CloudProviderException.CommandFailed(Localization.L("The server sent a folder listing FileFluss couldn't read."));
 
     // MARK: - Download
 

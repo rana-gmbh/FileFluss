@@ -22,10 +22,42 @@ public actor MegaAPIClient {
     /// Cached decrypted file keys: handle → full 8-word decrypted key (for files) or 4-word key (for folders)
     private var nodeKeys: [String: [UInt32]] = [:]
 
+    /// When the node tree was last fetched. It used to be fetched once per
+    /// session and never again, so whatever changed on the web or a phone
+    /// stayed invisible until the app restarted, and a sync planned — and
+    /// deleted — from that stale picture.
+    private var nodesFetchedAt: Date?
+    /// How old the tree may be before a listing or an operation fetches it
+    /// again. Long enough that one sync run's walk through every folder, or
+    /// a quick series of clicks, reuses one fetch; short enough that a change
+    /// made elsewhere is seen almost at once.
+    static let defaultNodeTreeMaxAge: TimeInterval = 10
+    private let nodeTreeMaxAge: TimeInterval
+    /// The fetch in flight, so concurrent callers share it.
+    private var inflightFetch: Task<Void, Error>?
+    /// Bumped by every command that changes the tree. A fetch that overlaps
+    /// one may predate it, and is repeated rather than allowed to roll the
+    /// change back in the cache.
+    private var mutationGeneration = 0
+
+    private let apiURL: String
+
     public init(credentials: MegaCredentials) {
+        self.init(credentials: credentials, session: URLSession(configuration: URLSessionConfiguration.fileTransfer()))
+    }
+
+    /// The session and API address are injectable so tests can answer
+    /// requests from a script.
+    init(
+        credentials: MegaCredentials,
+        session: URLSession,
+        apiURL: String = MegaAPIClient.apiURL,
+        nodeTreeMaxAge: TimeInterval = MegaAPIClient.defaultNodeTreeMaxAge
+    ) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer()
-        self.session = URLSession(configuration: config)
+        self.session = session
+        self.apiURL = apiURL
+        self.nodeTreeMaxAge = nodeTreeMaxAge
     }
 
     // MARK: - Authentication
@@ -139,7 +171,7 @@ public actor MegaAPIClient {
                 throw CloudProviderError.invalidResponse
             }
             let csidMPI = parseMPI(from: Array(csidData))
-            let decryptedSid = rsaDecrypt(data: csidMPI, privKey: rsaPrivKey)
+            let decryptedSid = try rsaDecrypt(data: csidMPI, privKey: rsaPrivKey)
             sessionId = Data(decryptedSid.prefix(43)).base64MegaEncode()
         } else {
             throw CloudProviderError.invalidResponse
@@ -156,16 +188,62 @@ public actor MegaAPIClient {
 
     // MARK: - File Operations
 
-    public func fetchNodes() async throws {
-        let result = try await apiCall([["a": "f", "c": 1]])
+    /// Fetches the node tree unless the one in memory is younger than
+    /// `nodeTreeMaxAge`. Every listing and every operation that resolves a
+    /// path goes through here.
+    private func ensureNodes() async throws {
+        if !nodes.isEmpty, let fetchedAt = nodesFetchedAt,
+           Date().timeIntervalSince(fetchedAt) < nodeTreeMaxAge {
+            return
+        }
+        try await refreshNodes()
+    }
 
+    /// Fetches the node tree now, sharing a fetch already in flight.
+    private func refreshNodes() async throws {
+        if let inflight = inflightFetch {
+            return try await inflight.value
+        }
+        let task = Task { try await self.fetchNodes() }
+        inflightFetch = task
+        defer { inflightFetch = nil }
+        try await task.value
+    }
+
+    public func fetchNodes() async throws {
+        // A fetch that overlapped a change of our own may not contain it;
+        // taking it would roll the change back in the cache (and make, say,
+        // an idempotent createFolder create the folder a second time).
+        var attempts = 0
+        while true {
+            let generation = mutationGeneration
+            let result = try await apiCall([["a": "f", "c": 1]])
+            attempts += 1
+            if generation == mutationGeneration || attempts >= 3 {
+                try loadNodes(from: result)
+                return
+            }
+        }
+    }
+
+    private func loadNodes(from result: [Any]) throws {
         guard let filesData = result.first as? [String: Any],
               let fileNodes = filesData["f"] as? [[String: Any]] else {
             throw CloudProviderError.invalidResponse
         }
 
-        nodes.removeAll()
-        rootHandle = nil
+        // The account's own handle (the owner of its Cloud Drive root) picks
+        // the right part of a node key, and the share keys decrypt nodes
+        // that others put into folders this account shares.
+        let ownHandle = fileNodes.first { ($0["t"] as? Int) == 2 }?["u"] as? String
+        let shareKeys = Self.shareKeys(in: filesData, nodes: fileNodes, masterKey: credentials.masterKey)
+
+        // Built aside and swapped in whole, so a failed fetch leaves the
+        // previous tree intact and no reader sees half of one.
+        var newNodes: [String: MegaNode] = [:]
+        var newKeys: [String: [UInt32]] = [:]
+        var newRoot: String?
+        var undecryptable = 0
 
         for nodeData in fileNodes {
             guard let handle = nodeData["h"] as? String,
@@ -180,24 +258,29 @@ public actor MegaAPIClient {
             var attributes: String?
             if type == 2 {
                 name = "Cloud Drive"
-                rootHandle = handle
+                newRoot = handle
             } else if type == 3 {
                 name = "Inbox"
             } else if type == 4 {
                 name = "Trash"
             } else if let attrBase64 = nodeData["a"] as? String,
-                      let keyStr = nodeData["k"] as? String {
-                if let decrypted = decryptNodeAttributes(attr: attrBase64, keyStr: keyStr, handle: handle) {
-                    name = decrypted.name
-                    attributes = decrypted.json
-                } else {
-                    name = "Unknown"
-                }
+                      let keyStr = nodeData["k"] as? String,
+                      let decrypted = Self.decryptNodeAttributes(
+                        attr: attrBase64, keyStr: keyStr, ownHandle: ownHandle,
+                        shareKeys: shareKeys, masterKey: credentials.masterKey) {
+                name = decrypted.name
+                attributes = decrypted.json
+                newKeys[handle] = decrypted.key
             } else {
-                name = "Unknown"
+                // No key this account holds opens the node. It used to be
+                // listed as "Unknown" — siblings then collided under one
+                // name — and downloaded as garbage. Left out instead (and
+                // with it anything inside it, which can't be named either).
+                undecryptable += 1
+                continue
             }
 
-            let node = MegaNode(
+            newNodes[handle] = MegaNode(
                 handle: handle,
                 parentHandle: parent,
                 name: name,
@@ -206,16 +289,40 @@ public actor MegaAPIClient {
                 timestamp: timestamp,
                 attributes: attributes
             )
-            nodes[handle] = node
         }
 
-        megaLog.debug("[Mega] Loaded \(self.nodes.count) nodes, root=\(self.rootHandle ?? "nil")")
+        nodes = newNodes
+        nodeKeys = newKeys
+        rootHandle = newRoot
+        nodesFetchedAt = Date()
+
+        megaLog.debug("[Mega] Loaded \(newNodes.count) nodes, root=\(newRoot ?? "nil")")
+        if undecryptable > 0 {
+            SupportLogger.shared.log("[Mega] \(undecryptable) node(s) have no key this account can open; left out", category: "mega", level: .notice)
+        }
+    }
+
+    /// Share keys by share handle: those of folders this account shares
+    /// (`ok`, wrapped with the master key) and of incoming shares whose key
+    /// is wrapped the same way (`sk` of 16 bytes; RSA-wrapped ones can't be
+    /// opened without the private key, which isn't kept).
+    static func shareKeys(in filesData: [String: Any], nodes: [[String: Any]], masterKey: [UInt32]) -> [String: [UInt32]] {
+        var keys: [String: [UInt32]] = [:]
+        func add(handle: String?, wrapped: String?) {
+            guard let handle, let wrapped, let data = Data(base64MegaDecode: wrapped), data.count == 16 else { return }
+            keys[handle] = decryptECB(data: bytesToUInt32Array(Array(data)), key: masterKey)
+        }
+        for share in (filesData["ok"] as? [[String: Any]]) ?? [] {
+            add(handle: share["h"] as? String, wrapped: share["k"] as? String)
+        }
+        for node in nodes where node["sk"] != nil {
+            add(handle: node["h"] as? String, wrapped: node["sk"] as? String)
+        }
+        return keys
     }
 
     public func listFolder(path: String) async throws -> [CloudFileItem] {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let parentHandle = try resolveHandle(for: path)
 
@@ -244,9 +351,7 @@ public actor MegaAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let handle = try resolveHandle(for: remotePath)
         guard let node = nodes[handle], node.type == 0 else {
@@ -256,7 +361,7 @@ public actor MegaAPIClient {
         // Re-fetch nodes if we don't have the decryption key cached
         if nodeKeys[handle] == nil {
             megaLog.info("[Mega] Key missing for \(node.name), re-fetching node tree")
-            try await fetchNodes()
+            try await refreshNodes()
         }
 
         let result = try await apiCall([["a": "g", "g": 1, "n": handle]])
@@ -294,9 +399,7 @@ public actor MegaAPIClient {
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let parentHandle = try resolveHandle(for: folderPath)
         let fileData = try Data(contentsOf: localURL)
@@ -320,7 +423,7 @@ public actor MegaAPIClient {
         // Step 2: Generate random file key and encrypt the file
         let fileKey = generateRandomKey()
         let iv = generateRandomIV()
-        let encryptedData = encryptAESCTR(data: fileData, key: fileKey, iv: iv)
+        let encryptedData = try encryptAESCTR(data: fileData, key: fileKey, iv: iv)
 
         // Step 3: Upload encrypted data
         var request = URLRequest(url: uploadURL)
@@ -408,17 +511,13 @@ public actor MegaAPIClient {
     }
 
     public func deleteItem(at path: String) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
         let handle = try resolveHandle(for: path)
         try await deleteItem(handle: handle)
     }
 
     public func createFolder(at path: String) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         // Idempotent: MEGA allows duplicate folder names, so a naive create
         // produces many siblings with the same name. Short-circuit when the
@@ -465,9 +564,7 @@ public actor MegaAPIClient {
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let handle = try resolveHandle(for: path)
         guard let node = nodes[handle] else {
@@ -499,9 +596,7 @@ public actor MegaAPIClient {
     /// from the nodes already in memory: a label is part of an item's
     /// attributes, which were decrypted for its name.
     public func labels(inFolder path: String) async throws -> [String: Int] {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
         let parentHandle = try resolveHandle(for: path)
         var result: [String: Int] = [:]
         for node in nodes.values where node.parentHandle == parentHandle && node.type <= 1 {
@@ -515,9 +610,7 @@ public actor MegaAPIClient {
 
     /// Sets an item's colour label (1…7), or takes it off (0).
     public func setLabel(_ label: Int, at path: String) async throws {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
         let handle = try resolveHandle(for: path)
         guard let node = nodes[handle] else {
             throw CloudProviderError.notFound(path)
@@ -548,7 +641,7 @@ public actor MegaAPIClient {
         // can't be read again, name included. So the key is fetched first,
         // and without it nothing is written.
         if nodeKeys[handle] == nil {
-            try await fetchNodes()
+            try await refreshNodes()
         }
         guard nodeKeys[handle] != nil else {
             throw CloudProviderError.invalidResponse
@@ -562,9 +655,7 @@ public actor MegaAPIClient {
     }
 
     public func stat(at path: String) async throws -> CloudFileItem {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let handle = try resolveHandle(for: path)
         guard let node = nodes[handle] else {
@@ -583,18 +674,14 @@ public actor MegaAPIClient {
     }
 
     public func folderSize(at path: String) async throws -> Int64 {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let handle = try resolveHandle(for: path)
         return computeFolderSize(handle: handle)
     }
 
     public func searchFiles(query: String, path: String?) async throws -> [CloudFileItem] {
-        if nodes.isEmpty {
-            try await fetchNodes()
-        }
+        try await ensureNodes()
 
         let lowercaseQuery = query.lowercased()
         let searchRoot: String?
@@ -663,13 +750,18 @@ public actor MegaAPIClient {
         let body = try JSONSerialization.data(withJSONObject: commands)
         let sess = session
         let sid = credentials.sessionId
+        let url = apiURL
+        // Put, delete, move, attribute writes: anything that changes the tree.
+        if commands.contains(where: { ["p", "d", "m", "a"].contains($0["a"] as? String ?? "") }) {
+            mutationGeneration += 1
+        }
         // Retry on EAGAIN (-3) with exponential backoff — MEGA commonly returns
         // this as a bare integer on transient overload, and the request is safe
         // to retry for our idempotent ops (delete, fetch, etc.).
         var attempt = 0
         while true {
             do {
-                return try await Self.apiRequest(session: sess, sessionId: sid, body: body)
+                return try await Self.apiRequest(session: sess, sessionId: sid, body: body, apiURL: url)
             } catch CloudProviderError.serverError(let code) where code == -3 && attempt < 4 {
                 attempt += 1
                 try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
@@ -683,7 +775,7 @@ public actor MegaAPIClient {
         return try await apiRequest(session: session, sessionId: sessionId, body: body)
     }
 
-    private static func apiRequest(session: URLSession, sessionId: String?, body: Data) async throws -> sending [Any] {
+    private static func apiRequest(session: URLSession, sessionId: String?, body: Data, apiURL: String = MegaAPIClient.apiURL) async throws -> sending [Any] {
         let seqNum = Int.random(in: 0..<0x100000000)
         var urlString = "\(apiURL)?id=\(seqNum)"
         if let sessionId {
@@ -948,37 +1040,61 @@ public actor MegaAPIClient {
     /// An item's name, and its attributes whole as the JSON they are kept
     /// in — the label is in there, and whatever else must be written back
     /// unchanged when one of them is.
-    private func decryptNodeAttributes(attr: String, keyStr: String, handle: String) -> (name: String, json: String)? {
-        // Key string format: "owner:base64key" or "handle:base64key/..."
-        let keyParts = keyStr.split(separator: "/").compactMap { part -> Data? in
-            let segments = part.split(separator: ":")
-            guard segments.count >= 2 else { return nil }
-            return Data(base64MegaDecode: String(segments.last!))
+    ///
+    /// A node key reads `owner:key` or, for a node in a shared folder,
+    /// `id:key/id:key…` — one part per party able to open it, each wrapped
+    /// with that party's key. The part for this account (its own handle,
+    /// wrapped with the master key) is tried first, then parts for shares it
+    /// holds the key of, then any other part with the master key. Taking the first part blindly decrypted
+    /// shared nodes with the wrong key. A key only counts once the
+    /// attributes it opens begin with "MEGA"; before that check it isn't
+    /// returned, so a wrong key can't be cached and used for a download.
+    static func decryptNodeAttributes(
+        attr: String,
+        keyStr: String,
+        ownHandle: String?,
+        shareKeys: [String: [UInt32]],
+        masterKey: [UInt32]
+    ) -> (name: String, json: String, key: [UInt32])? {
+        let parts: [(id: String, key: [UInt32])] = keyStr.split(separator: "/").compactMap { part in
+            let segments = part.split(separator: ":", maxSplits: 1)
+            guard segments.count == 2, let data = Data(base64MegaDecode: String(segments[1])) else { return nil }
+            return (String(segments[0]), bytesToUInt32Array(Array(data)))
         }
 
-        guard let encKeyData = keyParts.first else { return nil }
-        let encKey = bytesToUInt32Array(Array(encKeyData))
-
-        // Decrypt node key with master key
-        let nodeKey: [UInt32]
-        if encKey.count == 4 {
-            // Folder key: 4 words
-            let decrypted = decryptECB(data: encKey, key: credentials.masterKey)
-            nodeKeys[handle] = decrypted
-            nodeKey = decrypted
-        } else if encKey.count >= 8 {
-            // File key: 8 words → decrypt to get full key, then XOR for attribute key
-            let decrypted = decryptECB(data: Array(encKey.prefix(8)), key: credentials.masterKey)
-            nodeKeys[handle] = decrypted // Cache full 8-word key for file decryption
-            nodeKey = [
-                decrypted[0] ^ decrypted[4],
-                decrypted[1] ^ decrypted[5],
-                decrypted[2] ^ decrypted[6],
-                decrypted[3] ^ decrypted[7]
-            ]
-        } else {
-            return nil
+        var candidates: [(wrapped: [UInt32], with: [UInt32])] = []
+        if let ownHandle {
+            candidates += parts.filter { $0.id == ownHandle }.map { ($0.key, masterKey) }
         }
+        candidates += parts.compactMap { part in shareKeys[part.id].map { (part.key, $0) } }
+        // Last resort, for an account whose handle isn't known: every part
+        // with the master key. The "MEGA" check rejects the wrong ones.
+        candidates += parts.filter { $0.id != ownHandle }.map { ($0.key, masterKey) }
+
+        for candidate in candidates {
+            guard let nodeKey = unwrapNodeKey(candidate.wrapped, with: candidate.with),
+                  let decrypted = decryptAttributes(attr: attr, nodeKey: nodeKey) else { continue }
+            return (decrypted.name, decrypted.json, nodeKey)
+        }
+        return nil
+    }
+
+    /// A folder key (4 words) or a file key (8 words) unwrapped.
+    private static func unwrapNodeKey(_ wrapped: [UInt32], with key: [UInt32]) -> [UInt32]? {
+        if wrapped.count == 4 { return decryptECB(data: wrapped, key: key) }
+        if wrapped.count >= 8 { return decryptECB(data: Array(wrapped.prefix(8)), key: key) }
+        return nil
+    }
+
+    /// The attribute key of a node key: a folder's key itself, a file's
+    /// first half XORed with its second.
+    static func attributeKey(of nodeKey: [UInt32]) -> [UInt32] {
+        guard nodeKey.count >= 8 else { return nodeKey }
+        return [nodeKey[0] ^ nodeKey[4], nodeKey[1] ^ nodeKey[5], nodeKey[2] ^ nodeKey[6], nodeKey[3] ^ nodeKey[7]]
+    }
+
+    private static func decryptAttributes(attr: String, nodeKey fullKey: [UInt32]) -> (name: String, json: String)? {
+        let nodeKey = attributeKey(of: fullKey)
 
         // Decrypt attributes
         guard let attrData = Data(base64MegaDecode: attr) else { return nil }
@@ -1020,30 +1136,46 @@ public actor MegaAPIClient {
     }
 
     private func decryptFileData(_ data: Data, handle: String) throws -> Data {
-        guard let fullKey = nodeKeys[handle], fullKey.count >= 8 else {
-            megaLog.warning("[Mega] No cached key for handle \(handle), returning raw data")
-            return data
+        guard let fullKey = nodeKeys[handle] else {
+            // This used to hand back the still-encrypted bytes, which were
+            // then written as the download and reported as a success.
+            megaLog.error("[Mega] No key for a file; refusing to write its encrypted bytes")
+            throw CloudProviderError.invalidResponse
         }
+        return try Self.decryptFile(data, fullKey: fullKey)
+    }
+
+    /// A file's content decrypted with its 8-word node key, checked against
+    /// the MAC the key carries.
+    static func decryptFile(_ data: Data, fullKey: [UInt32]) throws -> Data {
+        guard fullKey.count >= 8 else { throw CloudProviderError.invalidResponse }
 
         // MEGA stores 8 words: [k0, k1, k2, k3, iv0, iv1, mac0, mac1]
         // File content AES-CTR key = XOR of first and second halves
-        let fileKey: [UInt32] = [
-            fullKey[0] ^ fullKey[4],
-            fullKey[1] ^ fullKey[5],
-            fullKey[2] ^ fullKey[6],
-            fullKey[3] ^ fullKey[7]
-        ]
+        let fileKey = attributeKey(of: fullKey)
 
         // CTR nonce: [iv0, iv1] (words 4-5), padded to 16 bytes with zeros
         let iv = [fullKey[4], fullKey[5]]
 
         // CTR decryption = encryption (XOR with keystream)
-        let decrypted = aesCTR(data: data, key: fileKey, iv: iv)
+        let decrypted = try aesCTR(data: data, key: fileKey, iv: iv)
+
+        // Files FileFluss for Mac uploaded carry an all-zero MAC (it never
+        // computed one), so only a real one is checked — as on Windows.
+        if fullKey[6] != 0 || fullKey[7] != 0 {
+            let mac = try MegaFileMAC.metaMAC(of: decrypted, key: fileKey, nonce: iv)
+            guard mac == [fullKey[6], fullKey[7]] else {
+                megaLog.error("[Mega] Downloaded file failed the MAC check")
+                throw CloudProviderError.commandFailed(L10n.text("The downloaded file is corrupted: its MEGA integrity check (MAC) does not match."))
+            }
+        }
         return decrypted
     }
 
-    /// AES-128-CTR encrypt/decrypt (symmetric operation)
-    private func aesCTR(data: Data, key: [UInt32], iv: [UInt32]) -> Data {
+    /// AES-128-CTR encrypt/decrypt (symmetric operation). Throws rather than
+    /// hand the input back unchanged: on the way down that would write the
+    /// encrypted bytes as the file, on the way up upload the plain ones.
+    private static func aesCTR(data: Data, key: [UInt32], iv: [UInt32]) throws -> Data {
         let keyBytes = uint32ArrayToBytes(key)
         // CTR counter: [nonce0, nonce1, 0, 0] — 16 bytes total
         var ivBytes = uint32ArrayToBytes(iv)
@@ -1067,17 +1199,22 @@ public actor MegaAPIClient {
 
         guard status == kCCSuccess, let cryptor else {
             megaLog.error("[Mega] CCCryptorCreateWithMode failed: \(status)")
-            return data
+            throw CloudProviderError.invalidResponse
         }
+        defer { CCCryptorRelease(cryptor) }
 
+        guard !data.isEmpty else { return Data() }
         var dataOut = 0
-        data.withUnsafeBytes { rawBuffer in
-            guard let ptr = rawBuffer.baseAddress else { return }
-            CCCryptorUpdate(cryptor, ptr, data.count, &output, output.count, &dataOut)
+        let updateStatus = data.withUnsafeBytes { rawBuffer -> CCCryptorStatus in
+            guard let ptr = rawBuffer.baseAddress else { return CCCryptorStatus(kCCParamError) }
+            return CCCryptorUpdate(cryptor, ptr, data.count, &output, output.count, &dataOut)
         }
-        CCCryptorRelease(cryptor)
+        guard updateStatus == kCCSuccess, dataOut == data.count else {
+            megaLog.error("[Mega] CCCryptorUpdate failed: \(updateStatus)")
+            throw CloudProviderError.invalidResponse
+        }
 
-        return Data(output.prefix(dataOut))
+        return Data(output)
     }
 
     private func encryptAttributes(name: String, key: [UInt32]) -> String {
@@ -1130,8 +1267,8 @@ public actor MegaAPIClient {
         return iv
     }
 
-    private func encryptAESCTR(data: Data, key: [UInt32], iv: [UInt32]) -> Data {
-        aesCTR(data: data, key: key, iv: iv)
+    private func encryptAESCTR(data: Data, key: [UInt32], iv: [UInt32]) throws -> Data {
+        try Self.aesCTR(data: data, key: key, iv: iv)
     }
 
     private static func mapError(code: Int) -> CloudProviderError {
@@ -1148,6 +1285,64 @@ public actor MegaAPIClient {
         case -26: return .twoFactorRequired // EMFAREQUIRED — 2FA code missing/wrong
         default: return .serverError(code)
         }
+    }
+}
+
+// MARK: - File MAC
+
+/// MEGA's file MAC. The plaintext is cut into chunks of 128 KiB, 256 KiB, …
+/// 1 MiB (growing by 128 KiB), then 1 MiB each; every chunk gets a CBC-MAC
+/// with IV `[n0, n1, n0, n1]` (last block zero-padded); the chunk MACs are
+/// folded by `mac = AES(mac ⊕ chunkMac)`, and the 8-byte meta-MAC kept in the
+/// node key is `[mac0 ⊕ mac1, mac2 ⊕ mac3]`. Same algorithm as the Windows
+/// port's `MegaMac`.
+enum MegaFileMAC {
+    /// Size of MAC chunk `index` (0-based).
+    static func chunkSize(_ index: Int) -> Int { min(index + 1, 8) * 128 * 1024 }
+
+    static func metaMAC(of plaintext: Data, key: [UInt32], nonce: [UInt32]) throws -> [UInt32] {
+        let keyBytes = uint32ArrayToBytes(key)
+        let chunkIV = uint32ArrayToBytes([nonce[0], nonce[1], nonce[0], nonce[1]])
+        var fileMac = [UInt8](repeating: 0, count: 16)
+
+        try plaintext.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            var offset = 0
+            var index = 0
+            var output = [UInt8](repeating: 0, count: chunkSize(8))
+            while offset < raw.count {
+                let length = min(chunkSize(index), raw.count - offset)
+                let padded = (length + 15) / 16 * 16
+                var chunk = [UInt8](repeating: 0, count: padded)
+                chunk.withUnsafeMutableBytes { $0.copyMemory(from: UnsafeRawBufferPointer(rebasing: raw[offset..<(offset + length)])) }
+
+                var moved = 0
+                let status = CCCrypt(
+                    CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES128), 0, // CBC, no padding
+                    keyBytes, keyBytes.count, chunkIV,
+                    chunk, padded, &output, output.count, &moved
+                )
+                guard status == kCCSuccess, moved == padded else { throw CloudProviderError.invalidResponse }
+
+                let folded = (0..<16).map { fileMac[$0] ^ output[padded - 16 + $0] }
+                fileMac = try ecbEncryptBlock(folded, key: keyBytes)
+                offset += length
+                index += 1
+            }
+        }
+
+        let words = bytesToUInt32Array(fileMac)
+        return [words[0] ^ words[1], words[2] ^ words[3]]
+    }
+
+    private static func ecbEncryptBlock(_ block: [UInt8], key: [UInt8]) throws -> [UInt8] {
+        var out = [UInt8](repeating: 0, count: 16)
+        var moved = 0
+        let status = CCCrypt(
+            CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES128), CCOptions(kCCOptionECBMode),
+            key, key.count, nil, block, 16, &out, 16, &moved
+        )
+        guard status == kCCSuccess, moved == 16 else { throw CloudProviderError.invalidResponse }
+        return out
     }
 }
 
@@ -1335,13 +1530,16 @@ private func parseMPISequence(from bytes: [UInt8], count: Int) throws -> [[UInt8
     return result
 }
 
-private func rsaDecrypt(data: (value: [UInt8], bytesRead: Int), privKey: [[UInt8]]) -> [UInt8] {
-    guard privKey.count >= 4 else { return data.value }
+private func rsaDecrypt(data: (value: [UInt8], bytesRead: Int), privKey: [[UInt8]]) throws -> [UInt8] {
+    guard privKey.count >= 4 else { throw CloudProviderError.invalidResponse }
 
     let p = BigUInt(data: privKey[0])
     let q = BigUInt(data: privKey[1])
     let d = BigUInt(data: privKey[2])
     let n = p * q
+    // A private key that decrypted to garbage can hold a zero factor; the
+    // modular arithmetic below would then divide by zero and crash the app.
+    guard !n.isZero else { throw CloudProviderError.invalidResponse }
 
     let ciphertext = BigUInt(data: data.value)
     let plaintext = ciphertext.modPow(d, n)
@@ -1463,7 +1661,9 @@ private struct BigUInt {
 
     // Division and remainder
     public static func divmod(_ lhs: BigUInt, _ rhs: BigUInt) -> (quotient: BigUInt, remainder: BigUInt) {
-        if rhs.isZero { fatalError("Division by zero") }
+        // Unreachable: rsaDecrypt refuses a zero modulus before any division.
+        // Kept from crashing the app all the same.
+        if rhs.isZero { return (.zero, .zero) }
         if lhs.compare(rhs) < 0 { return (.zero, lhs) }
         if rhs.digits.count == 1 {
             return divmodSingle(lhs, rhs.digits[0])

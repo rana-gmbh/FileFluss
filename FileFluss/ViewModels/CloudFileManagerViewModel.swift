@@ -702,9 +702,27 @@ final class CloudFileManagerViewModel {
     /// them, so nothing may treat "it exists" as "it arrived".
     @discardableResult
     func downloadItems(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async -> Set<String> {
+        let landed = await downloadItemsLocating(items, to: localDirectory, progress: progress, skipConflictCheck: skipConflictCheck)
+        return Set(items.filter { landed[$0.id] != nil }.map(\.name))
+    }
+
+    /// Where a downloaded item ended up. `renamedForClash` is set when its
+    /// name was taken by a sibling the disk treats as the same name, and it
+    /// landed as "name (2)" instead.
+    struct LandedDownload: Equatable {
+        let url: URL
+        let renamedForClash: Bool
+    }
+
+    /// The same as `downloadItems`, keyed by item id and saying where each
+    /// item landed. Callers that go on to use the files (a cloud-to-cloud
+    /// copy staged on this Mac) must ask this rather than rebuild the path
+    /// from the item's name: on a disk that ignores case, `Readme.md` names
+    /// `README.md` too, and the name alone would hand over the wrong file.
+    func downloadItemsLocating(_ items: [CloudFileItem], to localDirectory: URL, progress: TransferProgress? = nil, skipConflictCheck: Bool = false) async -> [String: LandedDownload] {
         guard let provider = await SyncEngine.shared.provider(for: accountId) else {
             SupportLogger.shared.log("downloadItems aborted: provider unavailable", category: cloudCategory, level: .error)
-            return []
+            return [:]
         }
         SupportLogger.shared.log("downloadItems start: \(items.count) item(s) → \(localDirectory.path)", category: cloudCategory)
 
@@ -726,28 +744,35 @@ final class CloudFileManagerViewModel {
             progress?.expectedBytesSingle = expected
         }
 
-        let convertedExtensions = ["docx", "xlsx", "pptx", "pdf"]
         var applyToAllChoice: ConflictChoice?
         var downloadedCount = 0
-        var downloaded: Set<String> = []
+        var landed: [String: LandedDownload] = [:]
+        // Asked once: every name below lands on the same volume.
+        let caseSensitive = LocalNameClaims.isCaseSensitive(localDirectory)
+        // Siblings the disk would store under one name get distinct ones.
+        let localNames = LocalNameClaims.localNames(for: items.map(\.name), caseSensitive: caseSensitive)
+        let providerType = provider.providerType
 
         for (index, item) in items.enumerated() {
             if progress?.isCancelled == true || Task.isCancelled {
                 if !(progress?.isCloudToCloud ?? false) {
                     progress?.endTime = Date(); progress?.isComplete = true
                 }
-                return downloaded
+                return landed
             }
+            let localName = localNames[index]
+            let renamedForClash = localName != SafeLocalPath.fileName(from: item.name)
+            let exportExtensions = Self.exportExtensions(for: item, providerType: providerType)
             // Server-supplied name: sanitise and confine before writing. A
             // name that escapes the target directory is refused rather than
             // downloaded; the rest of the batch continues.
-            guard let base = try? SafeLocalPath.destination(for: item.name, in: localDirectory) else {
+            guard let base = try? SafeLocalPath.destination(for: localName, in: localDirectory) else {
                 let msg = L10n.text("Unsafe file name from the server — download refused.")
                 self.actionError = msg
                 progress?.recordFailure(item.name, error: msg)
                 continue
             }
-            let existingURL = Self.findExistingFile(base: base, convertedExtensions: convertedExtensions)
+            let existingURL = Self.findExistingFile(base: base, convertedExtensions: exportExtensions)
             let exists = existingURL != nil
             var keepBoth = false
 
@@ -758,7 +783,7 @@ final class CloudFileManagerViewModel {
                 } else {
                     let remaining = items[(index + 1)...].filter { nextItem in
                         let nextBase = localDirectory.appendingPathComponent(nextItem.name)
-                        return Self.findExistingFile(base: nextBase, convertedExtensions: convertedExtensions) != nil
+                        return Self.findExistingFile(base: nextBase, convertedExtensions: Self.exportExtensions(for: nextItem, providerType: providerType)) != nil
                     }.count
                     let destInfo = FileManagerViewModel.localFileInfo(at: existingURL!)
                     let resolution = await ConflictPrompter.shared.ask(PendingConflict(
@@ -777,7 +802,7 @@ final class CloudFileManagerViewModel {
                     continue
                 case .stop:
                     if !(progress?.isCloudToCloud ?? false) { progress?.endTime = Date(); progress?.isComplete = true }
-                    return downloaded
+                    return landed
                 case .keepBoth:
                     keepBoth = true
                 case .replace: break
@@ -785,26 +810,38 @@ final class CloudFileManagerViewModel {
             }
 
             do {
+                let arrived: URL
                 if exists, let existingURL, !skipConflictCheck {
-                    try await downloadOverExisting(
+                    arrived = try await downloadOverExisting(
                         item: item,
+                        localName: localName,
                         existing: existingURL,
+                        exportExtensions: exportExtensions,
                         keepBoth: keepBoth,
                         in: localDirectory,
                         provider: provider,
                         progress: progress,
+                        caseSensitive: caseSensitive,
                         downloadedCount: &downloadedCount
                     )
                 } else {
                     if exists {
-                        for ext in convertedExtensions {
+                        // A caller that settled conflicts already asked for
+                        // this item to be replaced. Its earlier export
+                        // (`Doc.pdf` beside the `Doc.docx` about to land)
+                        // goes to the Trash — and only for a Workspace
+                        // document: for anything else these extensions name
+                        // unrelated files.
+                        for ext in exportExtensions {
                             let converted = base.appendingPathExtension(ext)
-                            if FileManager.default.fileExists(atPath: converted.path) { try FileManager.default.removeItem(at: converted) }
+                            if FileManager.default.fileExists(atPath: converted.path) {
+                                try? await FileSystemService.shared.trashItem(at: converted)
+                            }
                         }
                     }
-                    try await downloadRecursively(item: item, to: localDirectory, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+                    arrived = try await downloadRecursively(item: item, localName: localName, to: localDirectory, provider: provider, progress: progress, caseSensitive: caseSensitive, downloadedCount: &downloadedCount)
                 }
-                downloaded.insert(item.name)
+                landed[item.id] = LandedDownload(url: arrived, renamedForClash: renamedForClash)
                 progress?.completedItems = index + 1
                 // In a cloud-to-cloud transfer the upload phase is the
                 // canonical place to record per-item success — recording
@@ -835,27 +872,30 @@ final class CloudFileManagerViewModel {
             progress?.endTime = Date()
             progress?.isComplete = true
         }
-        return downloaded
+        return landed
     }
 
     /// Downloads an item whose name is already taken here. It goes to a
     /// staging folder on the same volume first, so the existing item is only
-    /// touched once the new one is complete.
+    /// touched once the new one is complete. Returns where it landed.
     private func downloadOverExisting(
         item: CloudFileItem,
+        localName: String,
         existing: URL,
+        exportExtensions: [String],
         keepBoth: Bool,
         in localDirectory: URL,
         provider: any CloudProvider,
         progress: TransferProgress?,
+        caseSensitive: Bool,
         downloadedCount: inout Int
-    ) async throws {
+    ) async throws -> URL {
         let fm = FileManager.default
         let staging = localDirectory.appendingPathComponent(".filefluss-download-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: staging) }
 
-        try await downloadRecursively(item: item, to: staging, provider: provider, progress: progress, downloadedCount: &downloadedCount)
+        try await downloadRecursively(item: item, localName: localName, to: staging, provider: provider, progress: progress, caseSensitive: caseSensitive, downloadedCount: &downloadedCount)
 
         // The name can differ from `item.name`: Google Docs gain an extension.
         guard let arrived = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil).first else {
@@ -863,35 +903,59 @@ final class CloudFileManagerViewModel {
         }
         let target = localDirectory.appendingPathComponent(arrived.lastPathComponent)
         if keepBoth {
-            try await FileSystemService.shared.moveItem(from: arrived, to: FileManagerViewModel.uniqueDestination(for: target))
-            return
+            let unique = FileManagerViewModel.uniqueDestination(for: target)
+            try await FileSystemService.shared.moveItem(from: arrived, to: unique)
+            return unique
         }
         try await FileSystemService.shared.replaceItem(at: target, withMoved: arrived)
-        if existing.standardizedFileURL != target.standardizedFileURL {
-            try await FileSystemService.shared.deleteItem(at: existing)
+        // What was found under another name goes too — but only when it is
+        // this same item's earlier export (`Doc.pdf` replaced by the
+        // `Doc.docx` that just arrived), and to the Trash rather than for
+        // good. `Report.pdf` beside a folder called `Report` is an unrelated
+        // file, and Replace used to delete it.
+        if existing.standardizedFileURL != target.standardizedFileURL,
+           Self.isExport(existing, ofLocalName: localName, in: localDirectory, extensions: exportExtensions) {
+            do {
+                try await FileSystemService.shared.trashItem(at: existing)
+            } catch {
+                SupportLogger.shared.log("kept the earlier export \(existing.lastPathComponent): \(error.localizedDescription)", category: cloudCategory)
+            }
         }
+        return target
     }
 
     private static func wasCancelled(_ progress: TransferProgress?) -> Bool {
         progress?.isCancelled == true || Task.isCancelled
     }
 
-    private func downloadRecursively(item: CloudFileItem, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, downloadedCount: inout Int, knownTags: [FileTag]? = nil) async throws {
+    /// `localName` is the name the item takes on this disk, which differs
+    /// from its own when a sibling already claimed that name (see
+    /// `LocalNameClaims`). Returns where the item landed — for a Google
+    /// Workspace document, under its exported name.
+    @discardableResult
+    private func downloadRecursively(item: CloudFileItem, localName: String? = nil, to localDirectory: URL, provider: any CloudProvider, progress: TransferProgress?, caseSensitive: Bool, downloadedCount: inout Int, knownTags: [FileTag]? = nil) async throws -> URL {
         // Some providers make no call that notices a cancel, so a folder
         // would otherwise go on fetching its remaining files.
         if Self.wasCancelled(progress) { throw CancellationError() }
         if item.isDirectory {
-            let folderURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
+            let folderURL = try SafeLocalPath.destination(for: localName ?? item.name, in: localDirectory)
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
             await TagTransfer.downloaded(fromAccount: accountId, providerType: providerType, remotePath: item.path, to: folderURL, known: knownTags)
             let contents = try await provider.listDirectory(at: item.path)
+            // A case-sensitive server can hold README.md and Readme.md side
+            // by side, a Drive folder two files of one name, and any server
+            // the NFC and NFD spellings of Café. Written here under their
+            // own names, the second silently replaced the first, the folder
+            // still counted as downloaded, and a cut then deleted the
+            // original. Each child gets a name of its own instead.
+            let childNames = LocalNameClaims.localNames(for: contents.map(\.name), caseSensitive: caseSensitive)
             // A folder never opened in a panel has no record yet. Where the
             // service has labels of its own, they are asked for here so the
             // files inside come down tagged all the same.
             let support = provider.nativeTagSupport
             let native = support == .none ? nil : try? await provider.nativeTags(inFolder: item.path)
             let standard = SystemTagNames.standard
-            for child in contents {
+            for (child, childName) in zip(contents, childNames) {
                 var childTags: [FileTag]?
                 if let native {
                     childTags = NativeTagSync.reconcile(
@@ -902,10 +966,11 @@ final class CloudFileManagerViewModel {
                         standard: standard
                     ).tags
                 }
-                try await downloadRecursively(item: child, to: folderURL, provider: provider, progress: progress, downloadedCount: &downloadedCount, knownTags: childTags)
+                try await downloadRecursively(item: child, localName: childName, to: folderURL, provider: provider, progress: progress, caseSensitive: caseSensitive, downloadedCount: &downloadedCount, knownTags: childTags)
             }
+            return folderURL
         } else {
-            let localURL = try SafeLocalPath.destination(for: item.name, in: localDirectory)
+            let localURL = try SafeLocalPath.destination(for: localName ?? item.name, in: localDirectory)
             progress?.beginFile(item.name, size: item.size)
             // Straight into the inbox: this fires per network chunk, and a
             // main-actor hop each time costs more than the figure is worth.
@@ -914,15 +979,13 @@ final class CloudFileManagerViewModel {
                 inbox?.addDownload(bytes)
             })
             // Preserve original cloud modification date on the local file
-            // so conflict dialogs and file listings show the correct date
-            let finalURL: URL
-            // Google Workspace files may get an extension appended
-            let convertedExts = ["docx", "xlsx", "pptx", "pdf"]
-            if let converted = convertedExts.lazy.map({ localURL.appendingPathExtension($0) }).first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
-                finalURL = converted
-            } else {
-                finalURL = localURL
-            }
+            // so conflict dialogs and file listings show the correct date.
+            // A Google Workspace document lands under its exported name;
+            // for anything else a `Name.pdf` beside it is a sibling, which
+            // must not be stamped, marked or tagged in its place.
+            let finalURL = Self.exportExtensions(for: item, providerType: provider.providerType)
+                .lazy.map { localURL.appendingPathExtension($0) }
+                .first { FileManager.default.fileExists(atPath: $0.path) } ?? localURL
             try? FileManager.default.setAttributes(
                 [.modificationDate: item.modificationDate],
                 ofItemAtPath: finalURL.path
@@ -934,7 +997,39 @@ final class CloudFileManagerViewModel {
             downloadedCount += 1
             progress?.totalFiles = downloadedCount
             progress?.completedItems = downloadedCount
+            return finalURL
         }
+    }
+
+    // MARK: - Google Workspace exports
+
+    /// The extensions a Google Workspace document can come down with. It
+    /// has no bytes of its own, so the provider exports it and writes `Doc`
+    /// as `Doc.docx` (or `.xlsx`, `.pptx`, `.pdf`).
+    nonisolated static let googleExportExtensions = ["docx", "xlsx", "pptx", "pdf"]
+
+    /// The extensions `item` may gain on the way down: none for anything
+    /// but a Google Workspace document.
+    ///
+    /// Applied to every item, a folder or plain file called `Report`
+    /// "already existed" whenever `Report.pdf` or `Report.docx` sat in the
+    /// destination, and Replace then deleted that unrelated file. The
+    /// listing carries no MIME type, but a Workspace document is the one
+    /// kind of Drive file without an MD5 checksum — Drive keeps one for
+    /// every file with content of its own — and is never a folder.
+    nonisolated static func exportExtensions(for item: CloudFileItem, providerType: CloudProviderType?) -> [String] {
+        guard providerType == .googleDrive || providerType == .googleDrivePicker,
+              !item.isDirectory, item.checksum == nil else { return [] }
+        return googleExportExtensions
+    }
+
+    /// Whether `url` is the exported form of the item that lands as
+    /// `localName` in `directory` — `Doc.pdf` for `Doc` — rather than some
+    /// other file that merely shares the stem.
+    nonisolated static func isExport(_ url: URL, ofLocalName localName: String, in directory: URL, extensions: [String]) -> Bool {
+        guard url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL else { return false }
+        let safe = SafeLocalPath.fileName(from: localName)
+        return extensions.contains { url.lastPathComponent == "\(safe).\($0)" }
     }
 
     // MARK: - Share links
@@ -1309,13 +1404,20 @@ final class CloudFileManagerViewModel {
             let sizeOK = item.size == 0 || cachedSize == item.size
             let dateOK = cachedModDate.map { abs($0.timeIntervalSince(item.modificationDate)) < 1.0 } ?? false
             if sizeOK && dateOK {
+                // A copy cached by an earlier version went unmarked.
+                Quarantine.mark(localURL)
                 return localURL
             }
             try? FileManager.default.removeItem(at: localURL)
         }
-        for ext in ["docx", "xlsx", "pptx", "pdf"] {
+        // Only a Google Workspace document comes down under another name.
+        // For anything else `Name.pdf` in this folder is a sibling, and
+        // opening `Name` must not open that instead.
+        let exportExtensions = Self.exportExtensions(for: item, providerType: provider.providerType)
+        for ext in exportExtensions {
             let converted = localURL.appendingPathExtension(ext)
             if FileManager.default.fileExists(atPath: converted.path) {
+                Quarantine.mark(converted)
                 return converted
             }
         }
@@ -1323,21 +1425,21 @@ final class CloudFileManagerViewModel {
         do {
             try await provider.downloadFile(remotePath: item.path, to: localURL)
             // Google Workspace files get written with an appended extension
-            for ext in ["docx", "xlsx", "pptx", "pdf"] {
-                let converted = localURL.appendingPathExtension(ext)
-                if FileManager.default.fileExists(atPath: converted.path) {
-                    try? FileManager.default.setAttributes(
-                        [.modificationDate: item.modificationDate],
-                        ofItemAtPath: converted.path
-                    )
-                    return converted
-                }
-            }
+            let finalURL = exportExtensions
+                .lazy.map { localURL.appendingPathExtension($0) }
+                .first { FileManager.default.fileExists(atPath: $0.path) } ?? localURL
             try? FileManager.default.setAttributes(
                 [.modificationDate: item.modificationDate],
-                ofItemAtPath: localURL.path
+                ofItemAtPath: finalURL.path
             )
-            return localURL
+            // Everything that opens a cloud file comes through here — a
+            // double-click, Open With, Quick Look, browsing a cloud archive —
+            // and the copy is as much a download as one from a browser.
+            // Without the mark Gatekeeper never looks at it, and a `.dmg`,
+            // a `.terminal` file or an app in a shared folder would run
+            // unchecked.
+            Quarantine.mark(finalURL)
+            return finalURL
         } catch {
             cloudFileVMLog.error("QuickLook download failed for \(item.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
@@ -1379,17 +1481,25 @@ final class CloudFileManagerViewModel {
         let existingByName = Dictionary(existingItems.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
 
         progress?.transferredFileNames = urls.map(\.lastPathComponent)
-        let fm = FileManager.default
-        progress?.transferredFolderNames = Set(urls.filter { var isDir: ObjCBool = false; return fm.fileExists(atPath: $0.path, isDirectory: &isDir) && isDir.boolValue }.map(\.lastPathComponent))
         progress?.isCloudUpload = true
 
-        // Pre-compute expected upload bytes for byte-weighted progress.
-        if progress?.isCloudToCloud != true {
-            var expected: Int64 = 0
-            for url in urls {
-                expected += Self.localSizeRecursively(url: url)
+        // Which items are folders, and the bytes to send for byte-weighted
+        // progress. Sizing a folder walks every file in it, and done here
+        // on the main actor a 100,000-file folder froze the app for seconds
+        // before the first byte went out. The walk runs alongside the
+        // upload instead; until it reports, the bar counts files.
+        if let progress {
+            let wantsBytes = progress.isCloudToCloud != true
+            let toInspect = urls
+            Task {
+                let inspected = await Task.detached(priority: .userInitiated) {
+                    Self.inspectUploadSources(toInspect, measuringBytes: wantsBytes)
+                }.value
+                progress.transferredFolderNames = inspected.folderNames
+                if wantsBytes, !progress.isComplete {
+                    progress.expectedBytesSingle = inspected.bytes
+                }
             }
-            progress?.expectedBytesSingle = expected
         }
 
         var applyToAllChoice: ConflictChoice?
@@ -1494,11 +1604,10 @@ final class CloudFileManagerViewModel {
     /// `remoteItemPath` puts a single item somewhere other than under its own
     /// name, for a replacement that's first written beside the original.
     private func uploadRecursively(urls: [URL], toRemotePath remotePath: String, remoteItemPath: String? = nil, provider: CloudProvider, progress: TransferProgress?, uploadedCount: inout Int) async throws {
-        let fm = FileManager.default
         for url in urls {
             if Self.wasCancelled(progress) { throw CancellationError() }
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else {
+            // Stat and list off the main actor; see `inspectLocalUploadItem`.
+            guard let local = try await Self.inspectLocalUploadItem(url) else {
                 cloudFileVMLog.debug("Upload: file not found, skipping \(url.path, privacy: .public)")
                 continue
             }
@@ -1506,7 +1615,7 @@ final class CloudFileManagerViewModel {
             let itemRemotePath = remoteItemPath
                 ?? (remotePath == "/" ? "/\(url.lastPathComponent)" : "\(remotePath)/\(url.lastPathComponent)")
 
-            if isDir.boolValue {
+            if local.isDirectory {
                 cloudFileVMLog.debug("Upload: creating directory \(itemRemotePath, privacy: .public)")
                 do {
                     try await provider.createDirectory(at: itemRemotePath)
@@ -1519,12 +1628,11 @@ final class CloudFileManagerViewModel {
                         cloudFileVMLog.debug("Upload: create directory failed (may already exist) \(itemRemotePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
-                let contents = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey])
+                let contents = local.children
                 cloudFileVMLog.debug("Upload: directory \(url.lastPathComponent, privacy: .public) has \(contents.count) items")
                 try await uploadRecursively(urls: contents, toRemotePath: itemRemotePath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
             } else {
-                let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-                let fileBytes = Int64(fileSize)
+                let fileBytes = local.size
                 progress?.beginFile(url.lastPathComponent, size: fileBytes)
 
                 // Pre-flight: reject oversized files locally before sending
@@ -1532,7 +1640,7 @@ final class CloudFileManagerViewModel {
                 // the server would refuse anyway.
                 try await CloudProviderError.enforceUploadSizeLimit(url, provider: provider)
 
-                cloudFileVMLog.debug("Upload: \(url.lastPathComponent, privacy: .public) (\(fileSize) bytes) → \(itemRemotePath, privacy: .public)")
+                cloudFileVMLog.debug("Upload: \(url.lastPathComponent, privacy: .public) (\(fileBytes) bytes) → \(itemRemotePath, privacy: .public)")
                 let inbox = progress?.byteInbox
                 try await provider.uploadFile(from: url, to: itemRemotePath, onBytes: { bytes in
                     inbox?.addUpload(bytes)
@@ -1544,7 +1652,7 @@ final class CloudFileManagerViewModel {
                 // For cloud→local→cloud transfers the local mtime was set
                 // to the original source mtime during download (see
                 // downloadRecursively), so this carries it through.
-                if let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                if let mtime = local.modificationDate {
                     try? await provider.setModificationDate(at: itemRemotePath, to: mtime)
                 }
                 progress?.totalBytes += fileBytes
@@ -1635,26 +1743,23 @@ final class CloudFileManagerViewModel {
 
         // Only what downloaded in full goes on. A failed folder still has a
         // partial copy in staging, which must not upload and pass for it.
-        let downloadedNames = await downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        // Where each item landed, as the download reports it: on a disk that
+        // ignores case the path rebuilt from `Readme.md` would also find a
+        // staged `README.md`, and upload that in its place.
+        let staged = await downloadItemsLocating(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
         progress?.downloadEndTime = Date()
 
         let existingNames = Set(targetSiblings.map(\.name))
+        var clashRenamed: Set<String> = []
         let stagedItems: [(item: CloudFileItem, url: URL)] = itemsToTransfer.compactMap { item -> (item: CloudFileItem, url: URL)? in
-            guard downloadedNames.contains(item.name),
-                  let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
-            var localURL: URL?
-            if FileManager.default.fileExists(atPath: expected.path) {
-                localURL = expected
-            } else {
-                for ext in ["docx", "xlsx", "pptx", "pdf"] {
-                    let converted = expected.appendingPathExtension(ext)
-                    if FileManager.default.fileExists(atPath: converted.path) {
-                        localURL = converted
-                        break
-                    }
-                }
+            guard let landed = staged[item.id] else { return nil }
+            let url = landed.url
+            // Staged as "name (2)" next to a sibling of the same name: it
+            // goes up under that name, and replaces nothing.
+            if landed.renamedForClash {
+                clashRenamed.insert(item.id)
+                return (item, url)
             }
-            guard let url = localURL else { return nil }
 
             if resolutionByName[item.name] == .keepBoth {
                 let uniqueName = Self.uniqueCloudName(for: url.lastPathComponent, existing: existingNames)
@@ -1681,7 +1786,7 @@ final class CloudFileManagerViewModel {
         for (item, url) in stagedItems {
             if progress?.isCancelled == true || Task.isCancelled { break }
             do {
-                if resolutionByName[item.name] == .replace,
+                if resolutionByName[item.name] == .replace, !clashRenamed.contains(item.id),
                    let existing = targetSiblings.first(where: { $0.name == item.name }) {
                     try await provider.replacingItem(at: existing.path, finalName: url.lastPathComponent) { temporaryPath in
                         try await uploadRecursively(urls: [url], toRemotePath: targetPath, remoteItemPath: temporaryPath, provider: provider, progress: progress, uploadedCount: &uploadedCount)
@@ -1895,8 +2000,56 @@ final class CloudFileManagerViewModel {
         }
     }
 
+    /// What `uploadFiles` shows before the bytes move: which of the sources
+    /// are folders, and (when asked) how many bytes all of them hold. Walks
+    /// the disk, so it is called off the main actor.
+    nonisolated static func inspectUploadSources(_ urls: [URL], measuringBytes: Bool) -> (folderNames: Set<String>, bytes: Int64) {
+        let fm = FileManager.default
+        var folders: Set<String> = []
+        var bytes: Int64 = 0
+        for url in urls {
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+            if isDir.boolValue { folders.insert(url.lastPathComponent) }
+            if measuringBytes { bytes += localSizeRecursively(url: url) }
+        }
+        return (folders, bytes)
+    }
+
+    /// One local item as an upload needs it. `nil` when it isn't there.
+    struct LocalUploadItem: Sendable {
+        let isDirectory: Bool
+        let size: Int64
+        let modificationDate: Date?
+        /// A folder's contents; empty for a file.
+        let children: [URL]
+    }
+
+    /// Reads what `uploadRecursively` needs to know about `url` — whether it
+    /// exists, is a folder, its size and date, a folder's contents — in one
+    /// go off the main actor. Asked once per item, these stats and listings
+    /// on the main actor added up to seconds of frozen UI for a big folder.
+    nonisolated static func inspectLocalUploadItem(_ url: URL) async throws -> LocalUploadItem? {
+        try await Task.detached(priority: .userInitiated) { () throws -> LocalUploadItem? in
+            let fm = FileManager.default
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return nil }
+            if isDir.boolValue {
+                let children = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey])
+                return LocalUploadItem(isDirectory: true, size: 0, modificationDate: nil, children: children)
+            }
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            return LocalUploadItem(
+                isDirectory: false,
+                size: Int64(values?.fileSize ?? 0),
+                modificationDate: values?.contentModificationDate,
+                children: []
+            )
+        }.value
+    }
+
     /// Recursively sums up the total byte size of a local file or directory.
-    static func localSizeRecursively(url: URL) -> Int64 {
+    nonisolated static func localSizeRecursively(url: URL) -> Int64 {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return 0 }

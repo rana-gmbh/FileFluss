@@ -350,6 +350,7 @@ struct SyncPlannerView: View {
             async let srcEntriesTask = planner.enumerate(src)
             async let dstEntriesTask = planner.enumerate(dst)
             let (srcEntries, dstEntries) = try await (srcEntriesTask, dstEntriesTask)
+            let destinationIgnoresCase = await planner.destinationIgnoresCase(dst)
             plan = await planner.plan(
                 sourceEntries: srcEntries,
                 destEntries: dstEntries,
@@ -357,6 +358,7 @@ struct SyncPlannerView: View {
                 direction: direction,
                 sourceIsCloud: src.isCloud,
                 destIsCloud: dst.isCloud,
+                destinationIgnoresCase: destinationIgnoresCase,
                 dateTolerance: dateTolerance(between: src, and: dst)
             )
             plannedEndpoints = (src, dst)

@@ -364,18 +364,58 @@ public sealed class GitHubProviderTests : IDisposable
         Assert.Equal(Api + "/repos/rana-gmbh/FileFluss/git/trees/release/1.5?recursive=1", _http.Requests.Last().Uri.AbsoluteUri);
     }
 
-    /// <summary>An empty repository has no tree (404): browsable, but with no archive GitHub would refuse to produce.</summary>
+    /// <summary>An empty repository has no tree (409 "Git Repository is empty"): browsable, but with no archive GitHub would refuse to produce.</summary>
     [Fact]
     public async Task AnEmptyRepositoryOffersNoArchive()
     {
         ServeRepositories(Repo("robert", "fresh"));
-        _http.On(HttpMethod.Get, "/git/trees/", (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+        _http.On(HttpMethod.Get, "/git/trees/", (_, _) => new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("""{"message":"Git Repository is empty."}""") });
         using var provider = Connected();
 
         var items = await provider.ListDirectoryAsync("/robert/fresh");
 
         Assert.Equal(["Source"], items.Select(i => i.Name));
         Assert.Empty(await provider.ListDirectoryAsync("/robert/fresh/Source"));
+    }
+
+    /// <summary>A tree 404 means the branch or repository is gone, not that it is empty — and it isn't cached as empty either.</summary>
+    [Fact]
+    public async Task ATree404IsAnErrorNotAnEmptyRepository()
+    {
+        ServeRepositories(Repo("robert", "gone"));
+        _http.On(HttpMethod.Get, "/git/trees/", (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+        using var provider = Connected();
+
+        var first = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/robert/gone/Source"));
+        Assert.Equal(CloudErrorKind.NotFound, first.Kind);
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/robert/gone/Source"));
+        Assert.Equal(2, _http.Requests.Count(r => r.Uri.AbsolutePath.Contains("/git/trees/", StringComparison.Ordinal)));
+    }
+
+    /// <summary>A folder renamed upstream must not list as empty: Mirror would delete the local copy.</summary>
+    [Fact]
+    public async Task AFolderMissingFromTheTreeIsNotFound()
+    {
+        ServeRepositories(Repo("rana-gmbh", "FileFluss"));
+        _http.OnJson(HttpMethod.Get, "/git/trees/", TreeJson);
+        using var provider = Connected();
+
+        var missing = await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/rana-gmbh/FileFluss/Source/Renamed"));
+        Assert.Equal(CloudErrorKind.NotFound, missing.Kind);
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/rana-gmbh/FileFluss/Source/README.md"));
+    }
+
+    /// <summary>The Contents API caps a directory at 1000 entries and drops the rest without saying so.</summary>
+    [Fact]
+    public async Task AContentsListingAtTheCapIsRefused()
+    {
+        ServeRepositories(Repo("torvalds", "linux", branch: "master"));
+        _http.OnJson(HttpMethod.Get, "/git/trees/", """{"tree":[],"truncated":true}""");
+        var entries = string.Join(',', Enumerable.Range(0, 1000).Select(i => $$"""{"path":"big/f{{i}}","type":"file","size":1,"sha":"s{{i}}"}"""));
+        _http.OnJson(HttpMethod.Get, "/contents/", "[" + entries + "]");
+        using var provider = Connected();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.ListDirectoryAsync("/torvalds/linux/Source/big"));
     }
 
     [Fact]

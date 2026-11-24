@@ -677,6 +677,36 @@ public sealed class WebDavServerTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<SocketException>(() => client.ConnectAsync(IPAddress.Loopback, port));
     }
 
+    // MARK: - Leftovers of a crashed run
+
+    [Fact]
+    public void StagingFoldersOfAnEarlierRunAreSwept()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "webdav-sweep-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var start = DateTime.UtcNow;
+            var leftover = Directory.CreateDirectory(Path.Combine(root, "webdav-" + Guid.NewGuid().ToString("N"))).FullName;
+            File.WriteAllText(Path.Combine(leftover, "dav-body"), "a decrypted copy");
+            Directory.SetLastWriteTimeUtc(leftover, start.AddHours(-1));
+            var running = Directory.CreateDirectory(Path.Combine(root, "webdav-" + Guid.NewGuid().ToString("N"))).FullName;
+            Directory.SetLastWriteTimeUtc(running, start.AddMinutes(1));
+            var unrelated = Directory.CreateDirectory(Path.Combine(root, "transfer-" + Guid.NewGuid().ToString("N"))).FullName;
+            Directory.SetLastWriteTimeUtc(unrelated, start.AddHours(-1));
+
+            WebDavServer.SweepLeftoverTempDirectories(root, start);
+
+            Assert.False(Directory.Exists(leftover));
+            Assert.True(Directory.Exists(running), "a folder written since this run started may be in use");
+            Assert.True(Directory.Exists(unrelated));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     // MARK: - Helpers
 
     private async Task<string> RawAsync(string request)

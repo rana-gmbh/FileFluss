@@ -147,8 +147,11 @@ internal sealed class GitHubApiClient
 
     /// <summary>
     /// The repository's whole tree at its default branch. An empty repository (created but
-    /// never pushed to) has no tree and GitHub answers 404 — reported as an empty tree,
-    /// because an empty repository is a legitimate thing to browse into, not an error.
+    /// never pushed to) has no tree and GitHub answers 409 "Git Repository is empty" — reported
+    /// as an empty tree, because an empty repository is a legitimate thing to browse into, not
+    /// an error. A 404 is something else (the branch or repository is gone, or the token lost
+    /// access) and stays an error: passed off as an empty repository it would make a Mirror
+    /// delete everything copied from it.
     /// </summary>
     public async Task<GitHubTree> TreeAsync(GitHubRepository repository, CancellationToken cancellationToken)
     {
@@ -164,7 +167,7 @@ internal sealed class GitHubApiClient
             body = await GetAsync($"{RepositoryPath(repository)}/git/trees/{CloudHttp.EscapePath(repository.DefaultBranch)}", [("recursive", "1")], cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.ServerError && e.StatusCode == 409)
         {
             _cachedTrees[key] = GitHubTree.Empty;
             return GitHubTree.Empty;
@@ -186,8 +189,11 @@ internal sealed class GitHubApiClient
         var tree = await TreeAsync(repository, cancellationToken).ConfigureAwait(false);
         return tree.IsTruncated
             ? await ContentsListingAsync(repository, directory, cancellationToken).ConfigureAwait(false)
-            : tree.Children(directory);
+            : tree.Listing(directory);
     }
+
+    /// <summary>The Contents API serves at most this many entries of one directory and silently drops the rest.</summary>
+    internal const int ContentsListingLimit = 1000;
 
     /// <summary>
     /// One directory straight from the Contents API. Used only for repositories too large for
@@ -197,7 +203,16 @@ internal sealed class GitHubApiClient
     {
         var body = await GetAsync($"{RepositoryPath(repository)}/contents/{CloudHttp.EscapePath(directory)}", [("ref", repository.DefaultBranch)], cancellationToken)
             .ConfigureAwait(false);
-        return GitHubResponseParser.ContentsListing(body) ?? throw CloudProviderException.NotFound(directory);
+        var entries = GitHubResponseParser.ContentsListing(body) ?? throw CloudProviderException.NotFound(directory);
+
+        // A directory at the cap may well hold more; a listing that quietly stops part way would
+        // read to a sync as files deleted upstream.
+        if (entries.Count >= ContentsListingLimit)
+        {
+            throw Ftp.FtpListingCheck.UnreadableListing();
+        }
+
+        return entries;
     }
 
     // MARK: - Downloads

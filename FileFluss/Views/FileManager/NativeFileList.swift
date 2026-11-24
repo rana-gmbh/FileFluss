@@ -1374,8 +1374,12 @@ class FileTableCoordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate
         // item (and inside `allInSameDir`) is wasteful on large drops.
         let standardizedTarget = targetURL.standardizedFileURL
 
-        // Don't drop a folder into itself
-        guard !droppedItems.contains(where: { $0.url.standardizedFileURL == standardizedTarget }) else { return false }
+        // Don't drop a folder into itself, or into a folder inside it: the
+        // copy would recurse into its own copy.
+        guard !droppedItems.contains(where: {
+            $0.url.standardizedFileURL == standardizedTarget
+                || ($0.isDirectory && FileManagerViewModel.isSameOrInside(targetURL, of: $0.url))
+        }) else { return false }
 
         // Don't drop into the same directory the items are already in
         let allInSameDir = droppedItems.allSatisfy {

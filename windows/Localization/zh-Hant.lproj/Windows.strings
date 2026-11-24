@@ -115,7 +115,6 @@
 "\"%@\" couldn't be moved to the Recycle Bin." = "無法將「%@」移到資源回收筒。";
 "%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone." = "%@無法移到資源回收筒，因為其所在的磁碟機沒有資源回收筒。要永久刪除嗎？此操作無法復原。";
 "\"%@\" can't be moved." = "無法移動「%@」。";
-"A folder can't be copied or moved into itself." = "無法將資料夾複製或移動到其本身之中。";
 "An item named “%@” already exists at the destination." = "目的地已有名為「%@」的項目。";
 "The items need %@, but only %@ is available at the destination." = "這些項目需要 %@，但目的地只有 %@ 可用空間。";
 "Copy Anyway" = "仍要複製";
@@ -376,7 +375,6 @@
 "S3 error (HTTP %@): %@" = "S3 錯誤（HTTP %@）：%@";
 "S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "S3 端點 URL 無效（主機：「%@」）。請檢查「端點 URL」欄位。";
 "This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions." = "此金鑰無權列出帳戶的值區（s3:ListAllMyBuckets）。請在「路徑」欄位中輸入值區名稱——FileFluss 將只使用該值區，不會要求整個帳戶的權限。";
-"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下載的檔案已損毀：其 MEGA 完整性檢查（MAC）不相符。";
 
 /* FTP and SFTP */
 "FTP command failed." = "FTP 命令失敗。";

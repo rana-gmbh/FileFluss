@@ -747,7 +747,8 @@ public class MegaProviderTests
 
         var root = await h.Provider.ListDirectoryAsync("/");
 
-        Assert.Equal(new[] { "Docs", "a.txt", "Unknown" }, root.Select(i => i.Name));
+        // FOREIGN1 has no key this account can open: left out rather than listed as "Unknown".
+        Assert.Equal(new[] { "Docs", "a.txt" }, root.Select(i => i.Name));
         var docs = root[0];
         Assert.True(docs.IsDirectory);
         Assert.Equal("/Docs", docs.Path);
@@ -792,7 +793,7 @@ public class MegaProviderTests
         var items = await h.Provider.ListDirectoryAsync("/");
 
         Assert.Equal(3, calls);
-        Assert.Equal(3, items.Count);
+        Assert.Equal(2, items.Count);
     }
 
     [Fact]
@@ -803,6 +804,61 @@ public class MegaProviderTests
         await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => h.Provider.ListDirectoryAsync("/")));
 
         Assert.Single(h.Server.CommandsNamed("f"));
+    }
+
+    /// <summary>
+    /// The tree was fetched once per session, so a change made on the web or a phone stayed
+    /// invisible — and a sync planned from it — until the app restarted.
+    /// </summary>
+    [Fact]
+    public async Task TheTreeIsFetchedAgainOnceItIsOlderThanItsMaximumAge()
+    {
+        using var h = new MegaHarness();
+        await h.Provider.ListDirectoryAsync("/");
+        await h.Provider.ListDirectoryAsync("/");
+        Assert.Single(h.Server.CommandsNamed("f"));
+
+        h.Provider.Client!.NodeTreeMaxAge = TimeSpan.Zero;
+        await h.Provider.ListDirectoryAsync("/");
+        Assert.Equal(2, h.Server.CommandsNamed("f").Length);
+    }
+
+    /// <summary>
+    /// A file a collaborator put into a folder this account shares carries the collaborator's key
+    /// part first; taking it named the file "Unknown" and downloaded it as garbage.
+    /// </summary>
+    [Fact]
+    public async Task SharedFolderNodesOpenWithTheShareKey()
+    {
+        using var h = new MegaHarness();
+        var shareKey = Bytes(16, 120);
+        var fileKey = MegaCrypto.ComposeFileKey(Bytes(16, 121), Bytes(8, 122), new byte[8]);
+        var byOther = "OTHERUSR:" + MegaCrypto.Base64UrlEncode(MegaCrypto.EncryptEcb(Bytes(16, 123), MegaCrypto.ToBytes(fileKey)));
+        var byShare = MegaTestServer.DocsHandle + ":" + MegaCrypto.Base64UrlEncode(MegaCrypto.EncryptEcb(shareKey, MegaCrypto.ToBytes(fileKey)));
+        var nodes = new JsonArray(
+            new JsonObject { ["h"] = MegaTestServer.Root, ["p"] = string.Empty, ["t"] = 2, ["u"] = MegaTestServer.Owner, ["ts"] = 1600000000 },
+            new JsonObject
+            {
+                ["h"] = MegaTestServer.DocsHandle, ["p"] = MegaTestServer.Root, ["t"] = 1, ["ts"] = 1700000000,
+                ["a"] = MegaCrypto.EncryptAttributes("Docs", h.Server.DocsKey), ["k"] = h.Server.NodeKeyField(MegaCrypto.ToWords(h.Server.DocsKey)),
+            },
+            new JsonObject
+            {
+                ["h"] = "SHAREDF1", ["p"] = MegaTestServer.DocsHandle, ["t"] = 0, ["s"] = 1, ["ts"] = 1700000000,
+                ["a"] = MegaCrypto.EncryptAttributes("report.pdf", Bytes(16, 121)), ["k"] = byOther + "/" + byShare,
+            },
+            new JsonObject
+            {
+                ["h"] = "SHAREDF2", ["p"] = MegaTestServer.DocsHandle, ["t"] = 0, ["s"] = 1, ["ts"] = 1700000000,
+                ["a"] = MegaCrypto.EncryptAttributes("secret.pdf", Bytes(16, 121)), ["k"] = byOther,
+            });
+        var ok = new JsonArray(new JsonObject { ["h"] = MegaTestServer.DocsHandle, ["k"] = MegaCrypto.Base64UrlEncode(MegaCrypto.EncryptEcb(h.Server.MasterKey, shareKey)) });
+        var tree = new JsonArray(new JsonObject { ["f"] = nodes, ["ok"] = ok }).ToJsonString();
+        h.Server.Overrides["f"] = _ => FakeHttpHandler.Json(tree);
+
+        var names = (await h.Provider.ListDirectoryAsync("/Docs")).Select(i => i.Name).ToArray();
+
+        Assert.Equal(["report.pdf"], names);
     }
 
     [Fact]
@@ -1019,7 +1075,7 @@ public class MegaProviderTests
         Assert.Equal(new[] { "/Docs/legacy report.bin" }, inDocs!.Select(i => i.Path));
 
         Assert.Equal(1000, await h.Provider.FolderSizeAsync("/Docs"));
-        Assert.Equal(401_005, await h.Provider.FolderSizeAsync("/"));
+        Assert.Equal(401_000, await h.Provider.FolderSizeAsync("/")); // FOREIGN1, which no key opens, is left out
 
         var meta = await h.Provider.GetFileMetadataAsync("/Docs/legacy report.bin");
         Assert.Equal(1000, meta.Size);

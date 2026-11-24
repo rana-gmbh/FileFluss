@@ -56,7 +56,7 @@ enum SyncExecutor {
                                   source: source, destination: destination,
                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
                 progress.completedItems += 1
-                if case .add(_, let isDir, _) = op, !isDir {
+                if case .add(_, let isDir, _, _) = op, !isDir {
                     progress.transferredFileNames.append(opName)
                     progress.recordSuccess(opName)
                 } else if case .replace = op {
@@ -83,8 +83,8 @@ enum SyncExecutor {
 
     private static func displayName(for op: SyncOperation) -> String {
         switch op {
-        case .add(let p, _, _): return p
-        case .replace(let p, _): return p
+        case .add(let p, _, _, let dest): return dest ?? p
+        case .replace(let p, _, let dest): return dest ?? p
         case .addRenamed(_, let dest, _): return dest
         case .delete(let p, _, _): return p
         }
@@ -97,17 +97,17 @@ enum SyncExecutor {
                                 onDownloadBytes: @escaping @Sendable (Int64) -> Void,
                                 onUploadBytes: @escaping @Sendable (Int64) -> Void) async throws {
         switch op {
-        case .add(let rel, let isDir, _):
+        case .add(let rel, let isDir, _, let destRel):
             if isDir {
-                try await createDirectory(at: rel, on: destination)
+                try await createDirectory(at: destRel ?? rel, on: destination)
             } else {
-                try await copyFile(sourceRelative: rel, destRelative: rel,
+                try await copyFile(sourceRelative: rel, destRelative: destRel ?? rel,
                                    modificationDate: modificationDates[rel],
                                    source: source, destination: destination,
                                    onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
             }
-        case .replace(let rel, _):
-            try await replaceFile(at: rel, modificationDate: modificationDates[rel],
+        case .replace(let rel, _, let destRel):
+            try await replaceFile(sourceRelative: rel, at: destRel ?? rel, modificationDate: modificationDates[rel],
                                   source: source, destination: destination,
                                   onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
         case .addRenamed(let srcRel, let destRel, _):
@@ -130,7 +130,12 @@ enum SyncExecutor {
     /// once it's complete. Deleting first meant a failed copy, for any reason
     /// from a lost connection to a file over the provider's size limit, lost
     /// the destination's version for nothing.
-    private static func replaceFile(at rel: String,
+    ///
+    /// `rel` is the destination's path, which can be spelled differently
+    /// from the source's (`sourceRelative`): another case or Unicode form,
+    /// or a collision rename.
+    private static func replaceFile(sourceRelative: String,
+                                    at rel: String,
                                     modificationDate: Date?,
                                     source: SyncEndpoint,
                                     destination: SyncEndpoint,
@@ -147,7 +152,7 @@ enum SyncExecutor {
             let target = try SafeLocalPath.destination(forRelativePath: rel, in: root)
             let temporaryRel = sibling(named: FileSystemService.temporaryReplacementName(for: target.lastPathComponent))
             do {
-                try await copyFile(sourceRelative: rel, destRelative: temporaryRel,
+                try await copyFile(sourceRelative: sourceRelative, destRelative: temporaryRel,
                                    modificationDate: modificationDate,
                                    source: source, destination: destination,
                                    onDownloadBytes: onDownloadBytes, onUploadBytes: onUploadBytes)
@@ -162,7 +167,7 @@ enum SyncExecutor {
                 throw SyncPlannerError.providerUnavailable
             }
             try await provider.replacingItem(at: cloudJoin(rootPath, rel)) { temporaryPath in
-                try await copyFile(sourceRelative: rel,
+                try await copyFile(sourceRelative: sourceRelative,
                                    destRelative: sibling(named: (temporaryPath as NSString).lastPathComponent),
                                    modificationDate: modificationDate,
                                    source: source, destination: destination,

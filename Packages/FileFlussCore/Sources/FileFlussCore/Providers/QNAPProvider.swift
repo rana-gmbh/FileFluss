@@ -18,6 +18,13 @@ public final class QNAPProvider: CloudProvider, @unchecked Sendable {
         restoreCredentials()
     }
 
+    /// Tests hand in a client talking to a stubbed NAS; nothing is read
+    /// from the keychain.
+    init(client: QNAPAPIClient) {
+        self.keychainKey = "qnap.test.\(UUID().uuidString)"
+        self.apiClient = client
+    }
+
     // MARK: - Authentication
 
     /// `securityCode` is the 6-digit code of a 2-step account. QTS answers
@@ -113,16 +120,35 @@ public final class QNAPProvider: CloudProvider, @unchecked Sendable {
     }
 
     /// File Station copies and moves keep the source name, so a different
-    /// destination name is a rename afterwards.
+    /// destination name is a rename afterwards. They run with overwrite on
+    /// (`mode=0`), so when the source name is already taken at the
+    /// destination — or the copy stays in its own folder — a renamed copy
+    /// ("Keep both", "a (2).txt") would first overwrite the very file the
+    /// user chose to keep. Then the caller copies the bytes instead.
     private func copyOrMove(from path: String, to newPath: String, move: Bool) async throws {
-        let destFolder = (newPath as NSString).deletingLastPathComponent
+        let destFolder = QNAPAPIClient.split(newPath).parent
         let destName = (newPath as NSString).lastPathComponent
         let sourceName = (path as NSString).lastPathComponent
+        let landed = QNAPAPIClient.join(destFolder, sourceName)
         try await withPersistedTokens { client in
+            if destName != sourceName,
+               try await Self.landingSpotTaken(client, source: path, landed: landed, destFolder: destFolder) {
+                throw CloudProviderError.notImplemented
+            }
             try await client.copyMove(path: path, toFolderPath: destFolder, move: move)
             if destName != sourceName {
-                try await client.renameItem(at: QNAPAPIClient.join(destFolder.isEmpty ? "/" : destFolder, sourceName), to: destName)
+                try await client.renameItem(at: landed, to: destName)
             }
+        }
+    }
+
+    private static func landingSpotTaken(_ client: QNAPAPIClient, source: String, landed: String, destFolder: String) async throws -> Bool {
+        if QNAPAPIClient.split(source).parent == destFolder { return true }
+        do {
+            _ = try await client.getFileInfo(at: landed)
+            return true
+        } catch CloudProviderError.notFound {
+            return false
         }
     }
 

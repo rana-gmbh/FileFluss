@@ -2770,6 +2770,9 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   <data name="“{0}” can&apos;t replace a folder it&apos;s inside." xml:space="preserve">
     <value>„{0}“ kann keinen Ordner ersetzen, in dem es selbst liegt.</value>
   </data>
+  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
+    <value>Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.</value>
+  </data>
   <data name="The new copy of “{0}” was uploaded, but it couldn&apos;t be renamed and is still called “{1}”." xml:space="preserve">
     <value>Die neue Kopie von „{0}“ wurde hochgeladen, konnte aber nicht umbenannt werden und heißt noch „{1}“.</value>
   </data>
@@ -3601,6 +3604,9 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   <data name="The tags of “{0}” couldn&apos;t be changed: {1}" xml:space="preserve">
     <value>Die Tags von „{0}“ konnten nicht geändert werden: {1}</value>
   </data>
+  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
+    <value>Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>Datei</value>
   </data>
@@ -3726,9 +3732,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="&quot;{0}&quot; can&apos;t be moved." xml:space="preserve">
     <value>„{0}“ kann nicht verschoben werden.</value>
-  </data>
-  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
-    <value>Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.</value>
   </data>
   <data name="An item named “{0}” already exists at the destination." xml:space="preserve">
     <value>Am Ziel ist bereits ein Objekt namens „{0}“ vorhanden.</value>
@@ -3960,9 +3963,6 @@ RAR ist Testsoftware von RARLAB: Sie darf bis zu 40 Tage genutzt werden, danach 
   </data>
   <data name="Permission denied: {0}" xml:space="preserve">
     <value>Zugriff verweigert: {0}</value>
-  </data>
-  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
-    <value>Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.</value>
   </data>
   <data name="FTP command failed." xml:space="preserve">
     <value>FTP-Befehl fehlgeschlagen.</value>

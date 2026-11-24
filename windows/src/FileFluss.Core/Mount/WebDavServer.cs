@@ -131,6 +131,11 @@ public sealed class WebDavServer : IAsyncDisposable
         }
 
         _ownsTempDirectory = _options.TempDirectory is null;
+        if (_ownsTempDirectory)
+        {
+            SweepLeftoverTempDirectoriesOnce(StagingLocation.Base());
+        }
+
         TempDirectory = _options.TempDirectory ?? StagingLocation.StagingDirectory("webdav");
         Directory.CreateDirectory(TempDirectory);
         _metadata = new WebDavMetadataCache(provider.NameComparer, _options.MetadataLifetime);
@@ -157,6 +162,55 @@ public sealed class WebDavServer : IAsyncDisposable
 
     /// <summary><c>\\127.0.0.1@port\FileFluss-…</c> — the same location as the redirector's UNC path.</summary>
     public string UncPath => string.Create(CultureInfo.InvariantCulture, $@"\\127.0.0.1@{Port}\{Secret}");
+
+    private static readonly ConcurrentDictionary<string, bool> SweptRoots = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <see cref="SweepLeftoverTempDirectories"/> once per staging root and process: a second
+    /// mount starting must not delete the bodies the first one is still uploading.
+    /// </summary>
+    private static void SweepLeftoverTempDirectoriesOnce(string root)
+    {
+        if (SweptRoots.TryAdd(Path.GetFullPath(root), true))
+        {
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            SweepLeftoverTempDirectories(root, process.StartTime.ToUniversalTime());
+        }
+    }
+
+    /// <summary>
+    /// Deletes the <c>webdav-*</c> staging folders a run that crashed or was killed left in
+    /// <paramref name="root"/>: <see cref="StopAsync"/> never ran for them, so they still hold
+    /// whole files written through the drive, decrypted copies of end-to-end encrypted ones
+    /// among them (the macOS server sweeps its own leftovers the same way). Only folders last
+    /// written before <paramref name="olderThanUtc"/> — this process's start — go.
+    /// </summary>
+    internal static void SweepLeftoverTempDirectories(string root, DateTime olderThanUtc)
+    {
+        string[] candidates;
+        try
+        {
+            candidates = Directory.GetDirectories(root, "webdav-*");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var directory in candidates)
+        {
+            try
+            {
+                if (Directory.GetLastWriteTimeUtc(directory) < olderThanUtc)
+                {
+                    Directory.Delete(directory, recursive: true);
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
 
     /// <summary>A fresh secret: the prefix plus 128 random bits as lower-case hex.</summary>
     public static string NewSecret() => SecretPrefix + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));

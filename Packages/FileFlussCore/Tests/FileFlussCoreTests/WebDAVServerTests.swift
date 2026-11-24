@@ -1,4 +1,5 @@
 import XCTest
+import Network
 @testable import FileFlussCore
 
 /// End-to-end smoke test: spin up WebDAVServer backed by an in-memory
@@ -9,6 +10,10 @@ final class WebDAVServerTests: XCTestCase {
     private var server: WebDAVServer!
     private var stub: StubProvider!
     private var port: UInt16 = 0
+    /// The secret path every request goes under.
+    private var base: String = ""
+    /// The server's own staging folder, so a test can see what it leaves.
+    private var tempDirectory: URL!
 
     override func setUp() async throws {
         stub = StubProvider()
@@ -16,7 +21,11 @@ final class WebDAVServerTests: XCTestCase {
         await stub.seedFile(path: "/hello.txt", contents: Data("hi".utf8))
         await stub.seedFolder(path: "/folder")
         await stub.seedFile(path: "/folder/inside.txt", contents: Data("nested".utf8))
-        server = WebDAVServer(provider: stub)
+        tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webdav-server-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        server = WebDAVServer(provider: stub, volumeLabel: "Test.localhost", tempDirectory: tempDirectory)
+        base = server.basePath
         port = try await server.start()
     }
 
@@ -24,6 +33,138 @@ final class WebDAVServerTests: XCTestCase {
         await server.stop()
         server = nil
         stub = nil
+        try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    // MARK: - Who is answered
+
+    func testBasePathCarriesASecretAndTheLabel() {
+        let parts = base.split(separator: "/").map(String.init)
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(parts[0].hasPrefix(WebDAVServer.secretPrefix))
+        XCTAssertEqual(parts[0].count, WebDAVServer.secretPrefix.count + 32, "128 bits as hex")
+        XCTAssertEqual(parts[1], "Test.localhost", "the label stays last, where NetFS takes the volume name from")
+        XCTAssertNotEqual(WebDAVServer.newSecret(), WebDAVServer.newSecret())
+    }
+
+    /// Without the secret nothing is served: no listing, no file, no write.
+    func testRequestsWithoutTheSecretAreNotAnswered() async throws {
+        let (_, get) = try await sendRaw(method: "GET", path: "/hello.txt")
+        XCTAssertEqual(get.statusCode, 404)
+        let (_, labelOnly) = try await sendRaw(method: "GET", path: "/Test.localhost/hello.txt")
+        XCTAssertEqual(labelOnly.statusCode, 404)
+        let wrongSecret = WebDAVServer.newSecret()
+        let (_, wrong) = try await sendRaw(method: "GET", path: "/\(wrongSecret)/Test.localhost/hello.txt")
+        XCTAssertEqual(wrong.statusCode, 404)
+        let (_, put) = try await sendRaw(method: "PUT", path: "/evil.txt", body: Data("x".utf8))
+        XCTAssertEqual(put.statusCode, 404)
+        let (_, delete) = try await sendRaw(method: "DELETE", path: "/hello.txt")
+        XCTAssertEqual(delete.statusCode, 404)
+        let (listing, propfind) = try await sendRaw(method: "PROPFIND", path: "/", headers: ["Depth": "1"])
+        XCTAssertEqual(propfind.statusCode, 207, "the server root lists, as a client probes it")
+        XCTAssertFalse(String(decoding: listing, as: UTF8.self).contains("hello.txt"), "but shows nothing of the mount")
+
+        let evil = await stub.contents(at: "/evil.txt")
+        XCTAssertNil(evil)
+        let hello = await stub.contents(at: "/hello.txt")
+        XCTAssertEqual(hello, Data("hi".utf8))
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: tempDirectory.path)
+        XCTAssertEqual(leftovers, [], "a body outside the mount must not even be written to disk")
+    }
+
+    func testTheSecretIsMatchedWithoutRegardToCase() async throws {
+        let upper = base.uppercased()
+        let (data, response) = try await sendRaw(method: "GET", path: "\(upper)/hello.txt")
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(data, Data("hi".utf8))
+    }
+
+    /// DNS rebinding: a page on evil.example that resolves to 127.0.0.1
+    /// still sends its own name.
+    func testAForeignHostIsRefused() async throws {
+        // Over a raw socket: URLSession sets Host itself.
+        func get(host: String) async throws -> Int {
+            try await rawRequest(Data("GET \(base)/hello.txt HTTP/1.1\r\nHost: \(host)\r\n\r\n".utf8))
+        }
+        let foreign = try await get(host: "evil.example:\(port)")
+        XCTAssertEqual(foreign, 403)
+        let otherPort = try await get(host: "127.0.0.1:1")
+        XCTAssertEqual(otherPort, 403)
+        let bareSuffix = try await get(host: ".localhost:\(port)")
+        XCTAssertEqual(bareSuffix, 403)
+        let named = try await get(host: "Test.localhost:\(port)")
+        XCTAssertEqual(named, 200, "NetFS sends the volume's .localhost name")
+        let local = try await get(host: "localhost:\(port)")
+        XCTAssertEqual(local, 200)
+        let loopback = try await get(host: "127.0.0.1:\(port)")
+        XCTAssertEqual(loopback, 200)
+    }
+
+    func testAMoveOutOfTheSecretIsRefused() async throws {
+        let (_, outside) = try await send(
+            method: "MOVE", path: "/hello.txt",
+            headers: ["Destination": "http://127.0.0.1:\(port)/stolen.txt"]
+        )
+        XCTAssertEqual(outside.statusCode, 403)
+        let (_, elsewhere) = try await send(
+            method: "MOVE", path: "/hello.txt",
+            headers: ["Destination": "http://evil.example:\(port)\(base)/stolen.txt"]
+        )
+        XCTAssertEqual(elsewhere.statusCode, 502)
+        let hello = await stub.contents(at: "/hello.txt")
+        XCTAssertEqual(hello, Data("hi".utf8), "the file stayed where it was")
+    }
+
+    func testMountURLPutsTheSecretInThePathOnly() {
+        let url = server.mountURL(host: "Test.localhost", port: 8080)
+        XCTAssertEqual(url?.host?.lowercased(), "test.localhost")
+        XCTAssertEqual(url?.port, 8080)
+        XCTAssertEqual(url?.path, base)
+        XCTAssertEqual(url?.lastPathComponent, "Test.localhost")
+    }
+
+    // MARK: - Request bodies
+
+    /// Finder gives up on a copy, or the connection drops: the body ends
+    /// before Content-Length. Uploading what arrived would replace the file
+    /// in the cloud with its first part.
+    func testABodyCutShortUploadsNothing() async throws {
+        await stub.seedFile(path: "/report.txt", contents: Data("the whole report".utf8))
+        let head = "PUT \(base)/report.txt HTTP/1.1\r\nHost: 127.0.0.1:\(port)\r\nContent-Length: 1000\r\n\r\n"
+        let status = try await rawRequest(Data(head.utf8) + Data("only the start".utf8))
+        XCTAssertEqual(status, 400)
+
+        let stored = await stub.contents(at: "/report.txt")
+        XCTAssertEqual(stored, Data("the whole report".utf8), "a short body replaced the file")
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: tempDirectory.path)
+        XCTAssertEqual(leftovers, [], "the partial body was left on disk")
+    }
+
+    /// Every file written through the mount used to stay in the temporary
+    /// folder — for end-to-end encrypted accounts a decrypted copy.
+    func testABodyIsDeletedOnceHandled() async throws {
+        let (_, response) = try await send(method: "PUT", path: "/kept.txt", body: Data("secret contents".utf8))
+        XCTAssertEqual(response.statusCode, 201)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: tempDirectory.path)
+        XCTAssertEqual(leftovers, [])
+    }
+
+    func testLeftoversOfAnEarlierRunAreSweptAtStart() async throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webdav-sweep-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let leftover = folder.appendingPathComponent("filefluss-webdav-\(UUID().uuidString)")
+        let unrelated = folder.appendingPathComponent("someone-elses-file")
+        try Data("old body".utf8).write(to: leftover)
+        try Data("keep".utf8).write(to: unrelated)
+
+        let other = WebDAVServer(provider: stub, tempDirectory: folder)
+        _ = try await other.start()
+        await other.stop()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: leftover.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
     }
 
     // MARK: - OPTIONS
@@ -56,7 +197,7 @@ final class WebDAVServerTests: XCTestCase {
 
         let (_, move) = try await send(
             method: "MOVE", path: "\(tempFolder)/Doc.pages",
-            headers: ["Destination": "http://127.0.0.1:\(port)/Doc.pages", "Overwrite": "T"]
+            headers: ["Destination": "http://127.0.0.1:\(port)\(base)/Doc.pages", "Overwrite": "T"]
         )
         XCTAssertTrue((200...299).contains(move.statusCode), "MOVE over the original: \(move.statusCode)")
 
@@ -90,7 +231,7 @@ final class WebDAVServerTests: XCTestCase {
         let (_, move) = try await send(
             method: "MOVE", path: "/\(encodedFolder)/\(encodedDoc)",
             headers: [
-                "Destination": "http://127.0.0.1:\(port)/\(encodedDoc)",
+                "Destination": "http://127.0.0.1:\(port)\(base)/\(encodedDoc)",
                 "Overwrite": "T",
             ]
         )
@@ -123,7 +264,7 @@ final class WebDAVServerTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: localURL) }
 
         let client = WebDAVAPIClient(credentials: WebDAVCredentials(
-            serverURL: "http://127.0.0.1:\(port)",
+            serverURL: "http://127.0.0.1:\(port)\(base)",
             username: "user",
             password: "pass",
             displayName: "test"
@@ -217,7 +358,7 @@ final class WebDAVServerTests: XCTestCase {
     // MARK: - MOVE
 
     func testMOVERenameWithinSameFolder() async throws {
-        let dest = "http://127.0.0.1:\(port)/hello_renamed.txt"
+        let dest = "http://127.0.0.1:\(port)\(base)/hello_renamed.txt"
         let (_, response) = try await send(method: "MOVE", path: "/hello.txt", headers: ["Destination": dest])
         XCTAssertEqual(response.statusCode, 201)
         let original = await stub.contents(at: "/hello.txt")
@@ -227,7 +368,7 @@ final class WebDAVServerTests: XCTestCase {
     }
 
     func testMOVECrossDirectory() async throws {
-        let dest = "http://127.0.0.1:\(port)/folder/hello.txt"
+        let dest = "http://127.0.0.1:\(port)\(base)/folder/hello.txt"
         let (_, response) = try await send(method: "MOVE", path: "/hello.txt", headers: ["Destination": dest])
         XCTAssertEqual(response.statusCode, 201)
         let original = await stub.contents(at: "/hello.txt")
@@ -260,12 +401,59 @@ final class WebDAVServerTests: XCTestCase {
         headers: [String: String] = [:],
         body: Data? = nil
     ) async throws -> (Data, HTTPURLResponse) {
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(base)\(path)")!)
+        request.httpMethod = method
+        request.httpBody = body
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return (data, response as! HTTPURLResponse)
+    }
+
+    /// The same, at a path not under the secret.
+    private func sendRaw(
+        method: String,
+        path: String,
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
         request.httpMethod = method
         request.httpBody = body
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         let (data, response) = try await URLSession.shared.data(for: request)
         return (data, response as! HTTPURLResponse)
+    }
+
+    /// Writes `bytes` to the server over a plain socket, closes the sending
+    /// side — which is how a body that stops short looks to the server —
+    /// and returns the status of the response.
+    private func rawRequest(_ bytes: Data) async throws -> Int {
+        let connection = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+        connection.start(queue: .global())
+        defer { connection.cancel() }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: bytes, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+            })
+        }
+        var response = Data()
+        while true {
+            let (chunk, done) = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(Data, Bool), Error>) in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, isComplete, error in
+                    if let error, data == nil { continuation.resume(throwing: error); return }
+                    continuation.resume(returning: (data ?? Data(), isComplete || data == nil))
+                }
+            }
+            response.append(chunk)
+            if done || response.range(of: Data("\r\n".utf8)) != nil { break }
+        }
+        let statusLine = String(decoding: response, as: UTF8.self).components(separatedBy: "\r\n").first ?? ""
+        let parts = statusLine.split(separator: " ")
+        guard parts.count >= 2, let status = Int(parts[1]) else {
+            XCTFail("no status line in \(statusLine)")
+            return 0
+        }
+        return status
     }
 }
 

@@ -55,11 +55,16 @@ struct SyncEntry: Hashable, Sendable {
 }
 
 /// A single operation the planner will perform to sync one side into the other.
+///
+/// `destRelativePath` on `add` and `replace` is where the item lands when
+/// that isn't spelled like the source: inside a folder the destination
+/// already holds under another case or Unicode form, or over a file it
+/// holds that way. nil means the source's own path.
 enum SyncOperation: Hashable, Sendable {
     /// Source file (or directory) does not exist at destination — create it.
-    case add(relativePath: String, isDirectory: Bool, bytes: Int64)
+    case add(relativePath: String, isDirectory: Bool, bytes: Int64, destRelativePath: String? = nil)
     /// Source file exists at destination and will overwrite it.
-    case replace(relativePath: String, bytes: Int64)
+    case replace(relativePath: String, bytes: Int64, destRelativePath: String? = nil)
     /// Source file exists at destination; add the source with a unique name on the destination.
     case addRenamed(sourceRelativePath: String, destRelativePath: String, bytes: Int64)
     /// Destination has a file/dir not present on source — delete it (mirror mode only).
@@ -97,6 +102,9 @@ struct SyncPlan: Sendable {
     /// Files left alone because a folder of the same name is at the
     /// destination, in a mode that promises never to delete.
     var typeClashes: Int = 0
+    /// Source folders left out, with everything in them, because a file of
+    /// the same name is at the destination, in a mode that never deletes.
+    var folderTypeClashes: Int = 0
 
     /// Whether this is the plan for what's selected now. A plan calculated
     /// for one direction or mode must not run under another.

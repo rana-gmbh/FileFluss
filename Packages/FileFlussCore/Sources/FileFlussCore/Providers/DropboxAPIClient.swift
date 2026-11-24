@@ -1265,13 +1265,21 @@ public actor DropboxAPIClient {
 
     /// Dropbox requires non-ASCII characters in the Dropbox-API-Arg header to be
     /// escaped as \uXXXX sequences per their HTTP header encoding requirements.
-    private static func escapeNonASCII(_ string: String) -> String {
+    ///
+    /// A JSON `\u` escape holds one UTF-16 code unit, so this walks code units,
+    /// not Unicode scalars: a character above U+FFFF (an emoji) becomes its
+    /// surrogate pair. Escaping the scalar wrote 🎉 as `Ἰ9`, which JSON
+    /// reads as U+1F38 followed by "9" — uploads got the wrong name and
+    /// downloads of such files failed. DEL (0x7F) isn't allowed in a header
+    /// either, so everything above "~" is escaped, as on Windows.
+    static func escapeNonASCII(_ string: String) -> String {
         var result = ""
-        for scalar in string.unicodeScalars {
-            if scalar.value > 127 {
-                result += String(format: "\\u%04x", scalar.value)
+        result.reserveCapacity(string.utf16.count)
+        for unit in string.utf16 {
+            if unit > 0x7E {
+                result += String(format: "\\u%04x", unit)
             } else {
-                result.append(Character(scalar))
+                result.unicodeScalars.append(Unicode.Scalar(UInt8(unit)))
             }
         }
         return result

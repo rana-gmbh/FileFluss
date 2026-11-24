@@ -323,13 +323,36 @@ public actor PCloudAPIClient {
     /// A form body, every value escaped except unreserved characters — a
     /// "+" or "&" in a file name must reach pCloud as itself.
     static func formEncoded(_ items: [URLQueryItem]) -> Data {
-        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        let pairs = items.map { item in
-            let name = item.name.addingPercentEncoding(withAllowedCharacters: allowed) ?? item.name
-            let value = (item.value ?? "").addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
-            return "\(name)=\(value)"
-        }
-        return Data(pairs.joined(separator: "&").utf8)
+        Data(queryString(items).utf8)
+    }
+
+    /// The same strict encoding for a URL query. `URLQueryItem` leaves "+"
+    /// raw, which pCloud reads as a space, so `a+b.txt` named `a b.txt`.
+    static func queryString(_ items: [URLQueryItem]) -> String {
+        StrictQueryEncoding.query(items.map { ($0.name, $0.value ?? "") })
+    }
+
+    /// The `uploadfile` query. pCloud names the upload from `path` and
+    /// `filename`, so both must arrive whole: escaped with `.urlQueryAllowed`,
+    /// `a&b.txt` was written as `a` (overwriting it) and a folder
+    /// `/Rock&Roll` sent the file to `/Rock`.
+    static func uploadQuery(auth: URLQueryItem, folderPath: String, fileName: String, mtime: Int64?, ctime: Int64?) -> String {
+        var items = [
+            auth,
+            URLQueryItem(name: "path", value: folderPath),
+            URLQueryItem(name: "filename", value: fileName),
+            URLQueryItem(name: "nopartial", value: "1"),
+        ]
+        if let mtime { items.append(URLQueryItem(name: "mtime", value: String(mtime))) }
+        if let ctime { items.append(URLQueryItem(name: "ctime", value: String(ctime))) }
+        return queryString(items)
+    }
+
+    /// An API call's URL, token first, then the parameters (sorted, so the
+    /// URL is stable), every value strictly encoded.
+    static func apiURL(baseURL: String, method: String, auth: URLQueryItem, params: [String: String]) -> URL? {
+        let items = [auth] + params.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        return URL(string: "\(baseURL)/\(method)?\(queryString(items))")
     }
 
     /// pCloud's answers that mean "no preview for this file": 1014, a type
@@ -376,17 +399,16 @@ public actor PCloudAPIClient {
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
-        let auth = credentials.authQueryItem
-        var urlString = "\(baseURL)/uploadfile?\(auth.name)=\(auth.value ?? "")&path=\(folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath)&filename=\(fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName)&nopartial=1"
+        let attributes = try? FileManager.default.attributesOfItem(atPath: localURL.path)
+        let query = Self.uploadQuery(
+            auth: credentials.authQueryItem,
+            folderPath: folderPath,
+            fileName: fileName,
+            mtime: (attributes?[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) },
+            ctime: (attributes?[.creationDate] as? Date).map { Int64($0.timeIntervalSince1970) }
+        )
 
-        if let modDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.modificationDate]) as? Date {
-            urlString += "&mtime=\(Int64(modDate.timeIntervalSince1970))"
-        }
-        if let createdDate = (try? FileManager.default.attributesOfItem(atPath: localURL.path)[.creationDate]) as? Date {
-            urlString += "&ctime=\(Int64(createdDate.timeIntervalSince1970))"
-        }
-
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: "\(baseURL)/uploadfile?\(query)") else {
             throw CloudProviderError.invalidResponse
         }
 
@@ -417,9 +439,10 @@ public actor PCloudAPIClient {
     /// Updates a file's mtime via pCloud's `setfilemtime` endpoint so
     /// cross-source copies preserve the original "Date Modified".
     public func setModificationDate(at remotePath: String, to date: Date) async throws {
-        let encoded = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
+        // The raw path: `fetch` encodes it. Encoding it here as well sent
+        // "%2520" for a space, so dates on such names were silently not set.
         let params: [String: String] = [
-            "path": encoded,
+            "path": remotePath,
             "newtime": "\(Int64(date.timeIntervalSince1970))"
         ]
         let _: PCloudBasicResponse = try await request("setfilemtime", params: params)
@@ -769,14 +792,7 @@ public actor PCloudAPIClient {
     /// (`api.pcloud.com` for US accounts, `eapi.pcloud.com` for EU ones —
     /// `credentials.hostname` records which one logged in).
     private func fetch(_ method: String, params: [String: String]) async throws -> Data {
-        var components = URLComponents(string: "\(baseURL)/\(method)")!
-        var queryItems = [credentials.authQueryItem]
-        for (key, value) in params {
-            queryItems.append(URLQueryItem(name: key, value: value))
-        }
-        components.queryItems = queryItems
-
-        guard let url = components.url else {
+        guard let url = Self.apiURL(baseURL: baseURL, method: method, auth: credentials.authQueryItem, params: params) else {
             throw CloudProviderError.invalidResponse
         }
 

@@ -113,8 +113,8 @@ enum SearchResultItem: Identifiable, Hashable, Sendable {
     var locationDescription: String {
         switch self {
         case .local(let item):
-            let parent = item.url.deletingLastPathComponent().path()
-            return parent
+            // Not `path()`, which is percent-encoded: a space showed as %20.
+            return item.url.deletingLastPathComponent().path(percentEncoded: false)
         case .cloud(let item, _, let accountName):
             let parent = (item.path as NSString).deletingLastPathComponent
             return L10n.format("%@: %@", accountName, parent)

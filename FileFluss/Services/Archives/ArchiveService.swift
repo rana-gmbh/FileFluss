@@ -94,6 +94,9 @@ enum ArchiveService {
     /// One pass over the archive however many entries were asked for:
     /// libarchive is a stream reader, and in a solid rar or 7z there is no
     /// cheaper way to reach the tenth entry than to walk the first nine.
+    ///
+    /// `markQuarantined` marks every file written as downloaded, whether or
+    /// not the archive itself carries the mark — see `extractSync`.
     @discardableResult
     static func extract(
         entryPaths: Set<String>,
@@ -101,12 +104,14 @@ enum ArchiveService {
         format: ArchiveFormat,
         strippingPrefix prefix: String,
         into destination: URL,
+        markQuarantined: Bool = false,
         onBytes: (@Sendable (Int64) -> Void)? = nil
     ) async throws -> [URL] {
         try await offMainActor {
             try extractSync(
                 entryPaths: entryPaths, from: url, format: format,
-                strippingPrefix: prefix, into: destination, onBytes: onBytes
+                strippingPrefix: prefix, into: destination,
+                markQuarantined: markQuarantined, onBytes: onBytes
             )
         }
     }
@@ -154,6 +159,7 @@ enum ArchiveService {
         format: ArchiveFormat,
         strippingPrefix prefix: String,
         into destination: URL,
+        markQuarantined: Bool = false,
         onBytes: (@Sendable (Int64) -> Void)?
     ) throws -> [URL] {
         let fm = FileManager.default
@@ -163,7 +169,10 @@ enum ArchiveService {
         var remaining = entryPaths
         // Whatever came from the internet still did after unpacking. ditto
         // carries the flag across by itself; this path has to do it by hand.
-        let quarantined = Quarantine.isMarked(url)
+        // The caller's word counts as much as the archive's own mark: an
+        // archive opened from a cloud account is untrusted even when its
+        // cached copy lost the mark, or was cached before copies got one.
+        let quarantined = markQuarantined || Quarantine.isMarked(url)
         var buffer = [UInt8](repeating: 0, count: blockSize)
         // Directory dates are applied at the end: writing into a directory
         // bumps its mtime, so one stamped at creation would be wrong again by

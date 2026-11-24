@@ -162,6 +162,7 @@ public sealed class CompareSessionTests : IDisposable
         var reads = wrapped.ListCalls;
 
         session.CompareDates = true;
+        await session.Rediffing;
 
         Assert.Equal(reads, wrapped.ListCalls);
         var row = Assert.Single(session.Rows);
@@ -172,6 +173,32 @@ public sealed class CompareSessionTests : IDisposable
         Assert.Null(row.CreatedDetail);
 
         session.CompareDates = false;
+        await session.Rediffing;
+        Assert.Empty(session.Rows);
+    }
+
+    [Fact]
+    public async Task CompareDateKeepsTheResultUntilTheRediffIsDoneAndDropsAStaleOne()
+    {
+        var left = new MemoryCloudProvider();
+        var right = new MemoryCloudProvider();
+        left.AddFile("/doc.txt", "same", Stamp);
+        right.AddFile("/doc.txt", "same", Stamp.AddDays(1));
+        var session = new CompareSession();
+        await session.CompareAsync(new SyncEndpoint(left, "/"), new SyncEndpoint(right, "/"));
+        var before = session.Result;
+
+        // Toggled twice in a row: whichever re-diff finishes last, the session shows the
+        // outcome for the setting it ended on.
+        session.CompareDates = true;
+        var first = session.Rediffing;
+        session.CompareDates = false;
+        await first;
+        await session.Rediffing;
+
+        Assert.False(session.CompareDates);
+        Assert.Equal(1, session.Result!.IdenticalCount);
+        Assert.Equal(before!.Entries.Count, session.Result.Entries.Count);
         Assert.Empty(session.Rows);
     }
 

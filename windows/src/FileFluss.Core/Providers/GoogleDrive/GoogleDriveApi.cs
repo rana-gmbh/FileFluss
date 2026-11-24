@@ -363,7 +363,25 @@ internal sealed class GoogleDriveFile
 
     public IReadOnlyList<string>? Parents { get; init; }
 
+    /// <summary>Only present when a request asks for it (<c>fields=…trashed</c>).</summary>
+    public bool? Trashed { get; init; }
+
     public bool IsFolder => MimeType == GoogleDriveApi.FolderMimeType;
+
+    /// <summary>The same item under the name a listing shows for it (see <see cref="GoogleWorkspaceNaming"/>), or null when it is left out of listings.</summary>
+    public GoogleDriveFile? Listed(IReadOnlyDictionary<string, string> exportExtensions)
+    {
+        if (GoogleWorkspaceNaming.ListedName(Name, MimeType, exportExtensions) is not { } listedName)
+        {
+            return null;
+        }
+
+        return listedName == Name ? this : new GoogleDriveFile
+        {
+            Id = Id, Name = listedName, MimeType = MimeType, Size = Size, ModifiedTime = ModifiedTime,
+            Md5Checksum = Md5Checksum, Parents = Parents, Trashed = Trashed,
+        };
+    }
 
     public DateTimeOffset ModificationDate => GoogleDriveApi.ParseTimestamp(ModifiedTime);
 
@@ -379,6 +397,69 @@ internal sealed class GoogleDriveFile
     {
         IsHidden = CloudFileItem.IsDotHidden(Name),
     };
+}
+
+/// <summary>
+/// How Google's own document types appear in a listing (macOS <c>GoogleWorkspaceNaming</c>).
+///
+/// <para>A Doc, Sheet, Slides deck or Drawing has no bytes of its own: a download exports it
+/// ("Report" arrives as "Report.docx"). Listed under its bare name it could never match what a
+/// download writes, so a sync re-downloaded it on every run and a Mirror deleted the .docx as
+/// "extra" every other run. Listed under the exported name, the listing, the download and the
+/// destination all agree.</para>
+///
+/// <para>Google types that can't be exported at all (Forms, Sites, My Maps, shortcuts, Apps
+/// Script…) are left out: every download of one fails with a 403, so a sync would fail on it
+/// every run, and there is nothing FileFluss could do with one anyway.</para>
+/// </summary>
+internal static class GoogleWorkspaceNaming
+{
+    private const string GoogleTypePrefix = "application/vnd.google-apps.";
+
+    public static bool IsGoogleNative(string mimeType)
+        => mimeType.StartsWith(GoogleTypePrefix, StringComparison.Ordinal) && mimeType != GoogleDriveApi.FolderMimeType;
+
+    /// <summary>The name an item lists under, or null when it is left out of listings.</summary>
+    public static string? ListedName(string name, string mimeType, IReadOnlyDictionary<string, string> exportExtensions)
+    {
+        if (!IsGoogleNative(mimeType))
+        {
+            return name;
+        }
+
+        if (!exportExtensions.TryGetValue(mimeType, out var extension))
+        {
+            return null;
+        }
+
+        return name.EndsWith("." + extension, StringComparison.OrdinalIgnoreCase) ? name : name + "." + extension;
+    }
+
+    /// <summary>
+    /// For a listed name ending in an export extension: the Drive name it stands for and the
+    /// Google types that export to that extension. Finds a Workspace document by its listed name
+    /// when it isn't cached.
+    /// </summary>
+    public static (string Name, string[] MimeTypes)? ExportedOrigin(string listedName, IReadOnlyDictionary<string, string> exportExtensions)
+    {
+        var dot = listedName.LastIndexOf('.');
+        if (dot <= 0 || dot == listedName.Length - 1)
+        {
+            return null;
+        }
+
+        var extension = listedName[(dot + 1)..].ToLowerInvariant();
+        var types = exportExtensions.Where(e => e.Value == extension).Select(e => e.Key).Order(StringComparer.Ordinal).ToArray();
+        return types.Length == 0 ? null : (listedName[..dot], types);
+    }
+
+    /// <summary>
+    /// Whether a download of <paramref name="remotePath"/> must still get the export extension
+    /// appended: only when the path names the document by its bare Drive name (an older path)
+    /// rather than by the exported name a listing gives it.
+    /// </summary>
+    public static bool NeedsExtensionAppended(string remotePath, string extension)
+        => !remotePath.EndsWith("." + extension, StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed class GoogleFileList

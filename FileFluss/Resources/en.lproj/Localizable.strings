@@ -991,6 +991,7 @@
 "The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open.";
 "Yes, delete %d of the %d items at the destination." = "Yes, delete %d of the %d items at the destination.";
 "“%@” can't replace a folder it's inside." = "“%@” can't replace a folder it's inside.";
+"A folder can't be copied or moved into itself." = "A folder can't be copied or moved into itself.";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”.";
 "Couldn't check the destination for items with the same name: %@" = "Couldn't check the destination for items with the same name: %@";
 
@@ -1280,3 +1281,6 @@
 "Remove All Tags" = "Remove All Tags";
 "Tags couldn't be changed" = "Tags couldn't be changed";
 "The tags of “%@” couldn't be changed: %@" = "The tags of “%@” couldn't be changed: %@";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.";

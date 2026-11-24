@@ -300,13 +300,16 @@ internal sealed class InternxtApiClient
 
         var bucket = Credentials.Bucket;
 
-        // A file already at this path is replaced once the new one has landed.
+        // A file already at this path is replaced once the new one has landed. Only "not there"
+        // means no file: a listing that failed must not pass for an empty folder, or the
+        // replacement would skip the temporary name below and end in the 409 branch, which
+        // deletes the old entry before the new one exists.
         Node? existing = null;
         try
         {
             existing = await ResolveAsync(remotePath, cancellationToken).ConfigureAwait(false);
         }
-        catch (CloudProviderException)
+        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
         {
         }
 

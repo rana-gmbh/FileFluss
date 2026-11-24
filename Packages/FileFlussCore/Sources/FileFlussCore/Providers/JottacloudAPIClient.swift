@@ -76,6 +76,12 @@ public actor JottacloudAPIClient {
 
     private var accessToken: String?
     private var accessTokenExpiry: Date?
+    /// The refresh in flight, which every caller needing a token awaits.
+    private var refreshTask: Task<String, Error>?
+
+    /// Sends a token-endpoint form. Replaceable so tests can count refreshes.
+    typealias TokenPoster = @Sendable (_ endpoint: String, _ form: [String: String]) async throws -> TokenResponse
+    private let tokenPoster: TokenPoster
 
     private let session: URLSession = .shared
 
@@ -83,8 +89,18 @@ public actor JottacloudAPIClient {
         credentials: JottacloudCredentials,
         onCredentialsChanged: @escaping @Sendable (JottacloudCredentials) -> Void
     ) {
+        self.init(credentials: credentials, onCredentialsChanged: onCredentialsChanged,
+                  tokenPoster: { try await JottacloudAPIClient.postToken(endpoint: $0, form: $1) })
+    }
+
+    init(
+        credentials: JottacloudCredentials,
+        onCredentialsChanged: @escaping @Sendable (JottacloudCredentials) -> Void,
+        tokenPoster: @escaping TokenPoster
+    ) {
         self.credentials = credentials
         self.onCredentialsChanged = onCredentialsChanged
+        self.tokenPoster = tokenPoster
     }
 
     // MARK: - Login (personal token → credentials)
@@ -130,12 +146,29 @@ public actor JottacloudAPIClient {
 
     // MARK: - Token management
 
-    /// A non-expired access token, refreshing if needed. Serialized by the
-    /// actor so two concurrent callers can't both spend the refresh token.
-    private func validAccessToken() async throws -> String {
+    /// A non-expired access token, refreshing if needed.
+    ///
+    /// The actor alone does not serialise this: it is reentrant across the
+    /// `await` on the token request, so two calls after expiry both sent the
+    /// same refresh token, Jottacloud saw the reuse, revoked the token family
+    /// and the user was signed out. One refresh runs at a time (`refreshTask`)
+    /// and every caller that needs a token meanwhile awaits that one, as
+    /// Windows does with `_refreshGate`.
+    func validAccessToken() async throws -> String {
         if let token = accessToken, let exp = accessTokenExpiry, exp > Date().addingTimeInterval(60) {
             return token
         }
+        if let refreshTask {
+            return try await refreshTask.value
+        }
+        let task = Task { try await self.refreshAccessToken() }
+        refreshTask = task
+        defer { refreshTask = nil }
+        return try await task.value
+    }
+
+    /// Spends the refresh token once. Only `validAccessToken` calls this.
+    private func refreshAccessToken() async throws -> String {
         let form = [
             "grant_type": "refresh_token",
             "client_id": clientId,
@@ -143,7 +176,7 @@ public actor JottacloudAPIClient {
         ]
         let resp: TokenResponse
         do {
-            resp = try await Self.postToken(endpoint: credentials.tokenEndpoint, form: form)
+            resp = try await tokenPoster(credentials.tokenEndpoint, form)
         } catch {
             // A revoked/rotated-away refresh token comes back as 400 invalid_grant.
             throw CloudProviderError.notAuthenticated
@@ -518,8 +551,19 @@ public actor JottacloudAPIClient {
         var full = "\(credentials.username)/\(device)/\(mountpoint)"
         if !rel.isEmpty { full += "/\(rel)" }
         var components = URLComponents(string: Self.jfsBase + encodePath(full))!
-        if !query.isEmpty { components.queryItems = query }
+        if !query.isEmpty { components.percentEncodedQuery = Self.jfsQuery(query) }
         return components.url!
+    }
+
+    /// The query of a JFS call. `URLQueryItem` leaves `+` (read as a space)
+    /// and `;` raw, so renaming to `a+b.txt` through `mv=` produced
+    /// `a b.txt`. Values are strictly encoded; slashes stay readable, as on
+    /// Windows, since `mv`/`cp` carry a path.
+    static func jfsQuery(_ items: [URLQueryItem]) -> String {
+        items.map { item in
+            let value = StrictQueryEncoding.encode(item.value ?? "").replacingOccurrences(of: "%2F", with: "/")
+            return "\(StrictQueryEncoding.encode(item.name))=\(value)"
+        }.joined(separator: "&")
     }
 
     /// Absolute JFS path used as the value of `mv`/`cp`:
@@ -618,7 +662,7 @@ public actor JottacloudAPIClient {
         enum CodingKeys: String, CodingKey { case tokenEndpoint = "token_endpoint" }
     }
 
-    private struct TokenResponse: Decodable {
+    struct TokenResponse: Decodable, Sendable {
         let accessToken: String
         let refreshToken: String?
         let expiresIn: Int?

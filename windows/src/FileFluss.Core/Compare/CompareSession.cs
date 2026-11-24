@@ -146,6 +146,7 @@ public sealed class CompareSession : INotifyPropertyChanged
     private HashSet<CompareTreeNode> _visible = [];
     private IReadOnlyList<CompareRow>? _rows;
     private int _generation;
+    private Task _rediffing = Task.CompletedTask;
     private CancellationTokenSource? _calculation;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -284,7 +285,12 @@ public sealed class CompareSession : INotifyPropertyChanged
         }
     }
 
-    /// <summary>"Compare Date": same-size files with different dates count as different. Re-diffs without re-reading.</summary>
+    /// <summary>
+    /// "Compare Date": same-size files with different dates count as different. Re-diffs without
+    /// re-reading, on the thread pool: the diff and the tree are linear or worse in the number of
+    /// entries, and the checkbox sets this on the UI thread, which hung the window on a big
+    /// comparison. The current result stays until the new one is ready (see <see cref="Rediffing"/>).
+    /// </summary>
     public bool CompareDates
     {
         get
@@ -305,13 +311,26 @@ public sealed class CompareSession : INotifyPropertyChanged
                 }
 
                 _compareDates = value;
-                if (_leftEntries.Count > 0 || _rightEntries.Count > 0)
+                // A comparison in progress reads the setting when it gets there.
+                if (!_isCalculating && (_leftEntries.Count > 0 || _rightEntries.Count > 0))
                 {
-                    SetResultLocked(FolderComparison.Compare(_leftEntries, _rightEntries, value, _ignoreCase, _dateTolerance));
+                    StartRediffLocked();
                 }
             }
 
             Notify();
+        }
+    }
+
+    /// <summary>The re-diff started by the last <see cref="CompareDates"/> change; completed when none is running.</summary>
+    public Task Rediffing
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _rediffing;
+            }
         }
     }
 
@@ -415,6 +434,26 @@ public sealed class CompareSession : INotifyPropertyChanged
             SupportLogger.Shared.Log($"Compare failed: {e.Message}", "Compare", LogLevel.Error);
         }
 
+        // The diff and the tree are built here, outside the lock: under it, the UI thread would
+        // wait for them the moment it read anything from the session.
+        var ignoreCase = !left.IsCloud || !right.IsCloud;
+
+        // The tolerance a sync between these two sides uses, so Compare and Sync agree.
+        var dateTolerance = SyncPlanner.DateToleranceFor(left, right);
+        bool compareDates;
+        lock (_gate)
+        {
+            compareDates = _compareDates;
+        }
+
+        FolderComparisonResult? result = null;
+        CompareTreeNode? tree = null;
+        if (leftEntries is not null && rightEntries is not null)
+        {
+            result = FolderComparison.Compare(leftEntries, rightEntries, compareDates, ignoreCase, dateTolerance);
+            tree = CompareTreeBuilder.Build(result.Entries);
+        }
+
         lock (_gate)
         {
             if (generation != _generation)
@@ -423,15 +462,19 @@ public sealed class CompareSession : INotifyPropertyChanged
             }
 
             _isCalculating = false;
-            if (leftEntries is not null && rightEntries is not null)
+            if (leftEntries is not null && rightEntries is not null && result is not null)
             {
                 _leftEntries = leftEntries;
                 _rightEntries = rightEntries;
-                _ignoreCase = !left.IsCloud || !right.IsCloud;
+                _ignoreCase = ignoreCase;
+                _dateTolerance = dateTolerance;
+                SetResultLocked(result, tree);
 
-                // The tolerance a sync between these two sides uses, so Compare and Sync agree.
-                _dateTolerance = SyncPlanner.DateToleranceFor(left, right);
-                SetResultLocked(FolderComparison.Compare(leftEntries, rightEntries, _compareDates, _ignoreCase, _dateTolerance));
+                // Compare Date was toggled while the diff above ran.
+                if (compareDates != _compareDates)
+                {
+                    StartRediffLocked();
+                }
             }
             else if (error is not null)
             {
@@ -508,11 +551,41 @@ public sealed class CompareSession : INotifyPropertyChanged
 
     // MARK: - Internals
 
-    private void SetResultLocked(FolderComparisonResult? result)
+    private void SetResultLocked(FolderComparisonResult? result, CompareTreeNode? tree = null)
     {
         _result = result;
-        _tree = result is null ? null : CompareTreeBuilder.Build(result.Entries);
+        _tree = result is null ? null : tree ?? CompareTreeBuilder.Build(result.Entries);
         RecomputeVisibleLocked();
+    }
+
+    /// <summary>
+    /// Re-diffs the cached listings with the current Compare Date setting on the thread pool and
+    /// shows the outcome unless a newer comparison or re-diff has started since.
+    /// </summary>
+    private void StartRediffLocked()
+    {
+        var generation = ++_generation;
+        var left = _leftEntries;
+        var right = _rightEntries;
+        var compareDates = _compareDates;
+        var ignoreCase = _ignoreCase;
+        var dateTolerance = _dateTolerance;
+        _rediffing = Task.Run(() =>
+        {
+            var result = FolderComparison.Compare(left, right, compareDates, ignoreCase, dateTolerance);
+            var tree = CompareTreeBuilder.Build(result.Entries);
+            lock (_gate)
+            {
+                if (generation != _generation)
+                {
+                    return;
+                }
+
+                SetResultLocked(result, tree);
+            }
+
+            Notify();
+        });
     }
 
     /// <summary>

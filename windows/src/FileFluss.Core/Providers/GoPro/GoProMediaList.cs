@@ -91,8 +91,11 @@ internal sealed class GoProMediaList
             return Media.Select(FolderItem).ToList();
         }
 
-        var directory = Media.FirstOrDefault(d => d.Name == trimmed);
-        return directory is null ? [] : directory.Files.Select(f => FileItem(directory.Name, f)).ToList();
+        // A directory the card doesn't have is not found rather than empty: after a card swap
+        // or format 100GOPRO is simply gone, and an empty listing would tell a Mirror from it
+        // to delete the footage already copied off the camera.
+        var directory = Media.FirstOrDefault(d => d.Name == trimmed) ?? throw CloudProviderException.NotFound(path);
+        return directory.Files.Select(f => FileItem(directory.Name, f)).ToList();
     }
 
     /// <summary>A single file by its <c>/&lt;dir&gt;/&lt;file&gt;</c> path; null for folders and unknown paths.</summary>

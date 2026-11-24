@@ -48,4 +48,28 @@ struct SafeLocalPathTests {
         let url = try SafeLocalPath.destination(for: "Ünïcødé …file.tar.gz", in: downloads)
         #expect(url.lastPathComponent == "Ünïcødé …file.tar.gz")
     }
+
+    @Test("a folder under /private takes new files, and still refuses a way out")
+    func privateFolders() throws {
+        // The temporary folder is /var/folders/…, really /private/var/folders/….
+        let temporary = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SafeLocalPath-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
+        let root = URL(fileURLWithPath: "/private" + temporary.path, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(root.path.hasPrefix("/private/"))
+
+        let nested = try SafeLocalPath.destination(forRelativePath: "sub/README.md", in: root)
+        #expect(nested.path == root.path + "/sub/README.md")
+        let single = try SafeLocalPath.destination(for: "README.md", in: root)
+        #expect(single.path == root.path + "/README.md")
+
+        #expect(throws: (any Error).self) {
+            try SafeLocalPath.destination(forRelativePath: "../escape.txt", in: root)
+        }
+        #expect(throws: (any Error).self) {
+            try SafeLocalPath.destination(forRelativePath: "sub/../../escape.txt", in: root)
+        }
+    }
 }

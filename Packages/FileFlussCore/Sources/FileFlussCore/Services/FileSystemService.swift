@@ -325,7 +325,10 @@ public final class FileSystemService: Sendable {
     }
 
     public func itemExists(at url: URL) async -> Bool {
-        (try? await Self.perform { Foundation.FileManager.default.fileExists(atPath: url.path()) }) ?? false
+        // `path`, not `path()`: the latter is percent-encoded, so a folder
+        // like "Backup Übersicht" read as missing and Mirror's deletes there
+        // did nothing while reporting success.
+        (try? await Self.perform { Foundation.FileManager.default.fileExists(atPath: url.path) }) ?? false
     }
 
     /// Adds up a folder. Stops when the calling task is cancelled, so a size

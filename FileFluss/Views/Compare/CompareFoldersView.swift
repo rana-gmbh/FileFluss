@@ -18,22 +18,28 @@ struct CompareFoldersView: View {
     /// the displayed paths.
     @State private var snapshotLeft: SyncEndpoint?
     @State private var snapshotRight: SyncEndpoint?
-    /// Built once per comparison rather than on every redraw: the builder
-    /// walks every entry, and the view body runs again for each disclosure
-    /// toggle, filter change and window resize.
-    @State private var tree: CompareTreeNode?
-    /// Ids of the nodes the active filter keeps. Computed in one pass when
-    /// the filter or the tree changes; asking each node to re-walk its
-    /// subtree meant every ancestor re-walked the same descendants.
-    @State private var visibleNodeIDs: Set<UUID> = []
+    /// Built once per comparison, off the main thread, together with
+    /// `result` (see `FolderCompareOutcome`). Each node carries its
+    /// descendant counts, so folder rows read them instead of walking.
+    @State private var tree: CompareTree?
+    /// Paths of the folders the user has opened. Kept across a "Compare
+    /// Date" toggle, which compares the same folders again, and cleared
+    /// when a new comparison starts.
+    @State private var expanded: Set<String> = []
+    /// The rows on screen, in order. Worked out when the tree, the filter
+    /// or `expanded` changes, and rendered by a lazy stack, so only the
+    /// rows in view are built; nested disclosure groups built every row of
+    /// an opened folder at once.
+    @State private var rows: [CompareRow] = []
+    /// Bumped whenever a comparison or a recompute starts. A result is
+    /// applied only if nothing newer has started since, so a slow, stale
+    /// run can never replace a newer one.
+    @State private var generation = 0
+    /// The background recompute started by toggling "Compare Date".
+    @State private var recomputeTask: Task<Void, Never>?
+    @State private var isRecomputing = false
 
-    enum Filter: String, CaseIterable, Hashable {
-        case all = "All"
-        case differences = "Differences"
-        case onlyLeft = "Only Left"
-        case onlyRight = "Only Right"
-        case identical = "Identical"
-    }
+    typealias Filter = CompareFilter
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -55,23 +61,34 @@ struct CompareFoldersView: View {
         .task(id: appState.compareTrigger) {
             await calculate()
         }
-        // Visibility depends on the tree and the filter; the tree itself is
-        // rebuilt where the result is assigned, which is the only thing that
-        // changes it.
+        // The rows depend on the tree, the filter and the opened folders;
+        // the tree is replaced where the result is assigned, which is the
+        // only thing that changes it.
         .onChange(of: filter) { _, _ in
-            if let tree { recomputeVisibleNodes(in: tree) }
+            refreshRows()
+        }
+        .onDisappear {
+            recomputeTask?.cancel()
         }
     }
 
-    private func rebuildTree() {
-        guard let result else {
-            tree = nil
-            visibleNodeIDs = []
-            return
+    private func refreshRows() {
+        rows = tree?.visibleRows(filter: filter, expanded: expanded) ?? []
+    }
+
+    private func toggleExpansion(_ row: CompareRow) {
+        if expanded.contains(row.path) {
+            expanded.remove(row.path)
+        } else {
+            expanded.insert(row.path)
         }
-        let built = CompareTreeBuilder.build(from: result.entries)
-        tree = built
-        recomputeVisibleNodes(in: built)
+        refreshRows()
+    }
+
+    private func apply(_ outcome: FolderCompareOutcome) {
+        result = outcome.result
+        tree = outcome.tree
+        refreshRows()
     }
 
     // MARK: - Header
@@ -120,6 +137,10 @@ struct CompareFoldersView: View {
                 .help(L10n.text("Treat files with matching size but different modification dates as different. Shows which side is newer along with both modify and create dates."))
                 .onChange(of: compareDates) { _, _ in
                     recompute()
+                }
+                if isRecomputing {
+                    ProgressView()
+                        .controlSize(.small)
                 }
                 Spacer()
                 Button {
@@ -208,22 +229,20 @@ struct CompareFoldersView: View {
     }
 
     private func resultsView(_ result: FolderComparisonResult) -> some View {
-        let tree = self.tree ?? CompareTreeBuilder.build(from: result.entries)
-        let visibleTopLevel = tree.children.filter { visibleNodeIDs.contains($0.id) }
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             filterChips(result: result)
                 .padding(.bottom, 10)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if visibleTopLevel.isEmpty {
+                    if rows.isEmpty {
                         LText("Nothing matches this filter.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 30)
                             .frame(maxWidth: .infinity)
-                    } else {
-                        ForEach(visibleTopLevel) { node in
-                            nodeView(node, depth: 0)
+                    } else if let tree {
+                        ForEach(rows) { row in
+                            rowView(row, node: tree.nodes[row.index])
                         }
                     }
                 }
@@ -234,69 +253,50 @@ struct CompareFoldersView: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// Marks every node the active filter keeps — a node matches itself, or
-    /// keeps a matching descendant, so folders containing matches stay
-    /// visible. One bottom-up pass over the tree; the previous predicate
-    /// re-walked a subtree once per ancestor asking about it.
-    private func recomputeVisibleNodes(in tree: CompareTreeNode) {
-        var visible: Set<UUID> = []
+    /// Indent per level of the tree: a folder's chevron plus the gap after
+    /// it, so a child's status icon lines up under its folder's.
+    private static let indentStep: CGFloat = 16
 
-        @discardableResult
-        func mark(_ node: CompareTreeNode) -> Bool {
-            var keep = false
-            if let entry = node.entry, entryMatchesFilter(entry) { keep = true }
-            for child in node.children where mark(child) { keep = true }
-            if keep { visible.insert(node.id) }
-            return keep
-        }
-
-        for child in tree.children { mark(child) }
-        visibleNodeIDs = visible
-    }
-
-    private func entryMatchesFilter(_ entry: FolderCompareEntry) -> Bool {
-        switch filter {
-        case .all: return true
-        case .differences: return entry.status != .identical
-        case .onlyLeft: return entry.status == .onlyLeft
-        case .onlyRight: return entry.status == .onlyRight
-        case .identical: return entry.status == .identical
-        }
-    }
-
-    /// Returns AnyView because the body recurses on itself, and SwiftUI's
-    /// opaque-return-type inference would otherwise reject it.
-    private func nodeView(_ node: CompareTreeNode, depth: Int) -> AnyView {
-        let visibleChildren = node.children.filter { visibleNodeIDs.contains($0.id) }
-        if node.isDirectory && !visibleChildren.isEmpty {
-            return AnyView(
-                DisclosureGroup {
-                    ForEach(visibleChildren) { child in
-                        nodeView(child, depth: depth + 1)
-                    }
-                } label: {
-                    folderLabel(node)
-                }
-                .padding(.leading, CGFloat(depth) * 14 + 12)
-                .padding(.trailing, 12)
-                .padding(.vertical, 2)
-            )
+    @ViewBuilder
+    private func rowView(_ row: CompareRow, node: CompareTree.Node) -> some View {
+        if row.isExpandable {
+            folderRow(row, node: node)
         } else {
-            return AnyView(
-                VStack(alignment: .leading, spacing: 0) {
-                    entryRow(node: node, depth: depth)
-                    if !node.isDirectory {
-                        Divider().padding(.leading, CGFloat(depth) * 14 + 38)
-                    }
+            VStack(alignment: .leading, spacing: 0) {
+                entryRow(node: node, depth: row.depth)
+                if !node.isDirectory {
+                    Divider().padding(.leading, CGFloat(row.depth) * Self.indentStep + 38)
                 }
-            )
+            }
         }
     }
 
-    /// The clickable header label for a folder DisclosureGroup. Shows the
-    /// folder's own status (or a neutral folder icon for synthetic nodes)
-    /// and an aggregated count of what's hidden underneath.
-    private func folderLabel(_ node: CompareTreeNode) -> some View {
+    /// A folder that holds visible rows: a disclosure chevron and the
+    /// folder's label; a click anywhere on the row opens or closes it.
+    private func folderRow(_ row: CompareRow, node: CompareTree.Node) -> some View {
+        Button {
+            toggleExpansion(row)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(row.isExpanded ? 90 : 0))
+                    .frame(width: 10)
+                folderLabel(node)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, CGFloat(row.depth) * Self.indentStep + 12)
+        .padding(.trailing, 12)
+        .padding(.vertical, 5)
+    }
+
+    /// The label of a folder row. Shows the folder's own status (or a
+    /// neutral folder icon for synthetic nodes) and an aggregated count of
+    /// what's hidden underneath.
+    private func folderLabel(_ node: CompareTree.Node) -> some View {
         HStack(spacing: 8) {
             if let status = node.entry?.status {
                 Image(systemName: statusSymbol(status))
@@ -318,9 +318,10 @@ struct CompareFoldersView: View {
     }
 
     /// Counts of children matching the active filter, formatted for the
-    /// right-hand column of a folder row.
-    private func folderSummary(_ node: CompareTreeNode) -> String {
-        let counts = node.descendantCounts()
+    /// right-hand column of a folder row. The counts were taken when the
+    /// tree was built.
+    private func folderSummary(_ node: CompareTree.Node) -> String {
+        let counts = node.counts
         var parts: [String] = []
         switch filter {
         case .all:
@@ -343,7 +344,7 @@ struct CompareFoldersView: View {
     }
 
     /// Render a leaf row (file, or empty folder) for the tree.
-    private func entryRow(node: CompareTreeNode, depth: Int) -> some View {
+    private func entryRow(node: CompareTree.Node, depth: Int) -> some View {
         let entry = node.entry
         return HStack(spacing: 10) {
             if let entry {
@@ -395,7 +396,7 @@ struct CompareFoldersView: View {
 
             Spacer()
         }
-        .padding(.leading, CGFloat(depth) * 14 + 12)
+        .padding(.leading, CGFloat(depth) * Self.indentStep + 12)
         .padding(.trailing, 12)
         .padding(.vertical, 6)
     }
@@ -596,38 +597,74 @@ struct CompareFoldersView: View {
         snapshotLeft = left
         snapshotRight = right
 
+        // A new comparison supersedes any recompute still running, and
+        // starts with every folder closed.
+        recomputeTask?.cancel()
+        isRecomputing = false
+        generation += 1
+        let myGeneration = generation
+        expanded = []
+
         guard let left, let right else {
             result = nil
+            tree = nil
+            refreshRows()
             return
         }
         isCalculating = true
         errorMessage = nil
-        defer { isCalculating = false }
+        defer {
+            // A newer comparison owns the spinner once it has started.
+            if generation == myGeneration { isCalculating = false }
+        }
 
         let planner = SyncPlanner()
         do {
             async let leftTask = planner.enumerate(left)
             async let rightTask = planner.enumerate(right)
             let (l, r) = try await (leftTask, rightTask)
+            guard generation == myGeneration else { return }
             leftEntries = l
             rightEntries = r
-            result = FolderComparison.compare(left: l, right: r, compareDates: compareDates)
-            rebuildTree()
+            let dates = compareDates
+            guard let outcome = await FolderCompareOutcome.make(left: l, right: r, compareDates: dates),
+                  generation == myGeneration else { return }
+            apply(outcome)
+            // "Compare Date" was toggled while the comparison was running
+            // (recompute waits for it): compare once more with the new value.
+            if compareDates != dates {
+                isCalculating = false
+                recompute()
+            }
         } catch {
+            // A run superseded by a newer one has nothing to report.
+            guard generation == myGeneration, !Task.isCancelled else { return }
             errorMessage = L10n.format("Could not read folders: %@", error.localizedDescription)
             result = nil
+            tree = nil
+            refreshRows()
         }
     }
 
     /// Re-runs the diff against the cached enumerated entries. Used when
-    /// the user toggles `Compare Date` so we don't re-scan the cloud.
+    /// the user toggles `Compare Date` so we don't re-scan the cloud. The
+    /// current result stays on screen until the new one is ready.
     private func recompute() {
+        // A comparison in progress reads the toggle when it gets there.
+        guard !isCalculating else { return }
         guard !leftEntries.isEmpty || !rightEntries.isEmpty else { return }
-        result = FolderComparison.compare(
-            left: leftEntries,
-            right: rightEntries,
-            compareDates: compareDates
-        )
-        rebuildTree()
+        recomputeTask?.cancel()
+        generation += 1
+        let myGeneration = generation
+        let left = leftEntries
+        let right = rightEntries
+        let dates = compareDates
+        isRecomputing = true
+        recomputeTask = Task {
+            let outcome = await FolderCompareOutcome.make(left: left, right: right, compareDates: dates)
+            guard generation == myGeneration else { return }
+            isRecomputing = false
+            if let outcome { apply(outcome) }
+        }
     }
 }
