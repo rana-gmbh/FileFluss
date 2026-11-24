@@ -6,7 +6,11 @@ import FileFlussCore
 ///
 /// Each call creates a tracked `Job` exposed in `jobs`; the UI can show
 /// progress and offer cancellation. Indexing runs in a `Task.detached` so
-/// the recursive walk doesn't block the main thread.
+/// the recursive walk doesn't block the main thread. The walks themselves
+/// are `nonisolated`: as members of this main-actor class they would
+/// otherwise inherit its isolation, and the detached task would hop
+/// straight back to main to run them, stalling the UI for minutes on a big
+/// drive. They touch main-actor state only through `MainActor.run`.
 @Observable @MainActor
 final class IndexingService {
     static let shared = IndexingService()
@@ -14,7 +18,7 @@ final class IndexingService {
     /// Rows per write. Large enough that the per-transaction cost is noise
     /// against a million-file drive, small enough that memory stays flat
     /// however big the source is.
-    static let writeBatchSize = 10_000
+    nonisolated static let writeBatchSize = 10_000
 
     @Observable @MainActor
     final class Job: Identifiable {
@@ -54,14 +58,19 @@ final class IndexingService {
         let sourceId = drive.id
         let displayName = drive.displayName
         let rootPath = mountURL.path
-        job.task = Task.detached(priority: .utility) { [weak self] in
+        let kind = "drive-\(drive.kind.rawValue)"
+        let jobId = job.id
+        // The service is a process-wide singleton, so a strong capture
+        // costs nothing and keeps a weak reference out of a sendable closure.
+        let service = self
+        job.task = Task.detached(priority: .utility) {
             await Self.walkLocal(
                 sourceId: sourceId,
                 displayName: displayName,
-                kind: "drive-\(drive.kind.rawValue)",
+                kind: kind,
                 rootPath: rootPath,
-                jobId: job.id,
-                service: self
+                jobId: jobId,
+                service: service
             )
         }
     }
@@ -77,12 +86,15 @@ final class IndexingService {
         )
         jobs.append(job)
         let accountId = account.id
-        job.task = Task.detached(priority: .utility) { [weak self] in
+        let rootPath = account.rootPath.isEmpty ? "/" : account.rootPath
+        let jobId = job.id
+        let service = self
+        job.task = Task.detached(priority: .utility) {
             await Self.walkCloud(
                 accountId: accountId,
-                rootPath: account.rootPath.isEmpty ? "/" : account.rootPath,
-                jobId: job.id,
-                service: self
+                rootPath: rootPath,
+                jobId: jobId,
+                service: service
             )
         }
     }
@@ -108,7 +120,7 @@ final class IndexingService {
 
     // MARK: - Local walk
 
-    private static func walkLocal(
+    nonisolated private static func walkLocal(
         sourceId: String,
         displayName: String,
         kind: String,
@@ -282,7 +294,7 @@ final class IndexingService {
 
     // MARK: - Cloud walk
 
-    private static func walkCloud(
+    nonisolated private static func walkCloud(
         accountId: UUID,
         rootPath: String,
         jobId: UUID,

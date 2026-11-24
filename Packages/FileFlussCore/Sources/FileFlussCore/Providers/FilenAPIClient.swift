@@ -217,24 +217,50 @@ public actor FilenAPIClient {
     private func listChildren(parentUuid: String, parentPath: String) async throws -> [CloudFileItem] {
         let body: [String: Any] = ["uuid": parentUuid]
         let response = try await postAuthenticated(path: "/v3/dir/content", body: body, expectedKey: "data")
+        let content = try Self.parseDirContent(response, parentPath: parentPath, masterKeys: credentials.masterKeys)
+        // Stash everything the download path needs so it doesn't have to
+        // re-list the parent + re-decrypt metadata for each request.
+        // CloudFileItem is intentionally minimal (it crosses the SwiftUI
+        // boundary), so per-file crypto state lives in this actor's cache
+        // instead of being threaded through the item.
+        fileChunkInfo.merge(content.chunkInfo) { _, new in new }
+        return content.items
+    }
 
-        let folders = (response["folders"] as? [[String: Any]]) ?? []
-        let files = (response["uploads"] as? [[String: Any]]) ?? []
+    /// Reads a `/v3/dir/content` answer into items, plus each file's chunk
+    /// info keyed by UUID.
+    ///
+    /// Throws `unreadableListing` rather than leave anything out: an entry
+    /// whose metadata doesn't decrypt (a key we don't have) or doesn't parse,
+    /// or an answer without the `folders`/`uploads` arrays, used to be
+    /// skipped or read as empty — and a folder that looks emptier than it is
+    /// tells Mirror to delete those files on the other side.
+    static func parseDirContent(
+        _ response: [String: Any],
+        parentPath: String,
+        masterKeys: [String]
+    ) throws -> (items: [CloudFileItem], chunkInfo: [String: FileChunkInfo]) {
+        guard let folders = response["folders"] as? [[String: Any]],
+              let files = response["uploads"] as? [[String: Any]] else {
+            filenLog.error("[Filen] dir/content answer without folders/uploads arrays")
+            throw CloudProviderError.unreadableListing
+        }
         let parentBase = parentPath.hasSuffix("/") ? String(parentPath.dropLast()) : parentPath
 
         var items: [CloudFileItem] = []
         items.reserveCapacity(folders.count + files.count)
+        var chunkInfo: [String: FileChunkInfo] = [:]
 
         for folder in folders {
-            guard let uuid = folder["uuid"] as? String,
-                  let nameMeta = folder["name"] as? String else { continue }
-            let timestamp = (folder["timestamp"] as? Double).map(timestampToDate) ?? Date.distantPast
             // Folder metadata blob decrypts to JSON `{ name, creation? }`.
-            // Skip folders whose metadata fails to decrypt — they may have
-            // been created with a key we no longer have (e.g. shared from
-            // another account before the master-keys handshake completed).
-            guard let decoded = try? decryptItemMetadata(nameMeta),
-                  let parsed = parseFolderMeta(decoded) else { continue }
+            guard let uuid = folder["uuid"] as? String,
+                  let nameMeta = folder["name"] as? String,
+                  let decoded = decryptItemMetadata(nameMeta, masterKeys: masterKeys),
+                  let parsed = parseFolderMeta(decoded) else {
+                filenLog.error("[Filen] A folder in the listing couldn't be read")
+                throw CloudProviderError.unreadableListing
+            }
+            let timestamp = (folder["timestamp"] as? Double).map(timestampToDate) ?? Date.distantPast
             let itemPath = parentBase.isEmpty ? "/\(parsed.name)" : "\(parentBase)/\(parsed.name)"
             items.append(CloudFileItem(
                 id: "d:\(uuid)",
@@ -249,20 +275,17 @@ public actor FilenAPIClient {
 
         for file in files {
             guard let uuid = file["uuid"] as? String,
-                  let nameMeta = file["metadata"] as? String else { continue }
-            guard let decoded = try? decryptItemMetadata(nameMeta),
-                  let parsed = parseFileMeta(decoded) else { continue }
+                  let nameMeta = file["metadata"] as? String,
+                  let decoded = decryptItemMetadata(nameMeta, masterKeys: masterKeys),
+                  let parsed = parseFileMeta(decoded) else {
+                filenLog.error("[Filen] A file in the listing couldn't be read")
+                throw CloudProviderError.unreadableListing
+            }
             let itemPath = parentBase.isEmpty ? "/\(parsed.name)" : "\(parentBase)/\(parsed.name)"
-            // Stash everything the download path needs so it doesn't have
-            // to re-list the parent + re-decrypt metadata for each
-            // request. CloudFileItem is intentionally minimal (it crosses
-            // the SwiftUI boundary), so per-file crypto state lives in
-            // this actor's cache instead of being threaded through the
-            // item.
             let chunks = (file["chunks"] as? NSNumber)?.intValue ?? 0
             let region = (file["region"] as? String) ?? ""
             let bucket = (file["bucket"] as? String) ?? ""
-            fileChunkInfo[uuid] = FileChunkInfo(
+            chunkInfo[uuid] = FileChunkInfo(
                 key: parsed.key,
                 region: region,
                 bucket: bucket,
@@ -280,7 +303,7 @@ public actor FilenAPIClient {
             ))
         }
 
-        return items
+        return (items, chunkInfo)
     }
 
     // MARK: - Download
@@ -663,17 +686,17 @@ public actor FilenAPIClient {
     /// because the derived key is at index 0. The first success wins. We
     /// throw an opaque error rather than leaking which key matched, since
     /// metadata strings can be quite verbose in logs.
-    private func decryptItemMetadata(_ encrypted: String) throws -> String {
-        for key in credentials.masterKeys {
+    private static func decryptItemMetadata(_ encrypted: String, masterKeys: [String]) -> String? {
+        for key in masterKeys {
             if let aesKey = try? FilenCrypto.aesKeyFromV2MasterKey(key),
                let plain = try? FilenCrypto.decryptMetadata(encrypted, aesKey: aesKey) {
                 return plain
             }
         }
-        throw CloudProviderError.invalidResponse
+        return nil
     }
 
-    private func parseFolderMeta(_ json: String) -> (name: String, created: Date?)? {
+    private static func parseFolderMeta(_ json: String) -> (name: String, created: Date?)? {
         guard let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let name = obj["name"] as? String else { return nil }
@@ -681,7 +704,7 @@ public actor FilenAPIClient {
         return (name, created)
     }
 
-    private func parseFileMeta(_ json: String) -> (name: String, size: Int64, mime: String, key: String, lastModified: Date, hash: String?)? {
+    private static func parseFileMeta(_ json: String) -> (name: String, size: Int64, mime: String, key: String, lastModified: Date, hash: String?)? {
         guard let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let name = obj["name"] as? String,

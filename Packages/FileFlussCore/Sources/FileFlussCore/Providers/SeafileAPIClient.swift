@@ -140,9 +140,7 @@ public actor SeafileAPIClient {
             request.setValue(otp, forHTTPHeaderField: "X-SEAFILE-OTP")
         }
 
-        let encode: (String) -> String = { $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0 }
-        let body = "username=\(encode(username))&password=\(encode(password))"
-        request.httpBody = body.data(using: .utf8)
+        request.httpBody = Data(loginBody(username: username, password: password).utf8)
 
         // Match the live session's trust behaviour for the auth call too,
         // otherwise a self-hosted server with a self-signed certificate would
@@ -359,7 +357,7 @@ public actor SeafileAPIClient {
     }
 
     private func listLibraryPath(repoId: String, innerPath: String, parentPath: String) async throws -> [CloudFileItem] {
-        let encodedPath = innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? innerPath
+        let encodedPath = Self.queryEncoded(innerPath)
         var request = try authenticatedRequest(path: "/api2/repos/\(repoId)/dir/?p=\(encodedPath)")
         request.httpMethod = "GET"
         let (data, response) = try await session.data(for: request)
@@ -390,7 +388,7 @@ public actor SeafileAPIClient {
         guard let resolved = try await resolveLibrary(forPath: remotePath) else {
             throw CloudProviderError.notFound(remotePath)
         }
-        let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
+        let encodedInner = Self.queryEncoded(resolved.innerPath)
 
         // Step 1: ask Seafile for a short-lived signed download URL.
         var linkRequest = try authenticatedRequest(path: "/api2/repos/\(resolved.repoId)/file/?p=\(encodedInner)")
@@ -423,7 +421,7 @@ public actor SeafileAPIClient {
         }
         let parentInner = (resolved.innerPath as NSString).deletingLastPathComponent
         let fileName = (resolved.innerPath as NSString).lastPathComponent
-        let parentEncoded = (parentInner.isEmpty ? "/" : parentInner).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "/"
+        let parentEncoded = Self.queryEncoded(parentInner.isEmpty ? "/" : parentInner)
 
         // Step 1: get a one-shot upload URL.
         var linkRequest = try authenticatedRequest(path: "/api2/repos/\(resolved.repoId)/upload-link/?p=\(parentEncoded)")
@@ -486,7 +484,7 @@ public actor SeafileAPIClient {
             // through the panel's Delete key.
             throw CloudProviderError.commandFailed(L10n.text("Cannot delete a Seafile library from FileFluss. Use the Seafile web UI."))
         }
-        let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
+        let encodedInner = Self.queryEncoded(resolved.innerPath)
         let isDir = await isDirectory(repoId: resolved.repoId, innerPath: resolved.innerPath)
         let endpoint = isDir
             ? "/api2/repos/\(resolved.repoId)/dir/?p=\(encodedInner)"
@@ -504,7 +502,7 @@ public actor SeafileAPIClient {
         guard let resolved = try await resolveLibrary(forPath: path) else {
             throw CloudProviderError.commandFailed(L10n.text("Create a library in the Seafile web UI before adding folders."))
         }
-        let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
+        let encodedInner = Self.queryEncoded(resolved.innerPath)
         var request = try authenticatedRequest(path: "/api2/repos/\(resolved.repoId)/dir/?p=\(encodedInner)")
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -520,7 +518,7 @@ public actor SeafileAPIClient {
         guard let resolved = try await resolveLibrary(forPath: path), !resolved.innerPath.isEmpty, resolved.innerPath != "/" else {
             throw CloudProviderError.commandFailed(L10n.text("Rename a Seafile library from its web UI."))
         }
-        let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
+        let encodedInner = Self.queryEncoded(resolved.innerPath)
         let isDir = await isDirectory(repoId: resolved.repoId, innerPath: resolved.innerPath)
         let endpoint = isDir
             ? "/api2/repos/\(resolved.repoId)/dir/?p=\(encodedInner)"
@@ -528,11 +526,7 @@ public actor SeafileAPIClient {
         var request = try authenticatedRequest(path: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        let encode: (String) -> String = { $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0 }
-        let body = isDir
-            ? "operation=rename&newname=\(encode(newName))"
-            : "operation=rename&newname=\(encode(newName))"
-        request.httpBody = body.data(using: .utf8)
+        request.httpBody = Data(Self.renameBody(newName: newName).utf8)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
@@ -544,7 +538,7 @@ public actor SeafileAPIClient {
         guard let resolved = try await resolveLibrary(forPath: path) else {
             throw CloudProviderError.commandFailed(L10n.text("Library root has no file metadata."))
         }
-        let encodedInner = resolved.innerPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? resolved.innerPath
+        let encodedInner = Self.queryEncoded(resolved.innerPath)
 
         // Probe as file first; on 404 try as directory. Seafile has no
         // single "stat" endpoint that returns both file/dir info — these are
@@ -595,7 +589,7 @@ public actor SeafileAPIClient {
     private func isDirectory(repoId: String, innerPath: String) async -> Bool {
         let parent = (innerPath as NSString).deletingLastPathComponent
         let name = (innerPath as NSString).lastPathComponent
-        let encoded = (parent.isEmpty ? "/" : parent).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "/"
+        let encoded = Self.queryEncoded(parent.isEmpty ? "/" : parent)
         guard var request = try? authenticatedRequest(path: "/api2/repos/\(repoId)/dir/?p=\(encoded)") else { return false }
         request.httpMethod = "GET"
         guard let (data, response) = try? await session.data(for: request),
@@ -931,11 +925,22 @@ public actor SeafileAPIClient {
 
     /// Strict percent-encoding for a query value: `.urlQueryAllowed` leaves
     /// `&`, `=` and `+` intact, and a filename containing any of those would
-    /// otherwise split the query.
-    private static func queryEncoded(_ raw: String) -> String {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~/")
-        return raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
+    /// otherwise split the query (deleting `/lib/Q&A` deleted `/lib/Q`).
+    /// Slashes stay readable, as on Windows; everything else outside the
+    /// unreserved set is escaped, non-ASCII as UTF-8.
+    static func queryEncoded(_ raw: String) -> String {
+        StrictQueryEncoding.encode(raw).replacingOccurrences(of: "%2F", with: "/")
+    }
+
+    /// The sign-in form. Strictly encoded: a password containing `&`, `+`
+    /// or `=` was cut or altered by `.urlQueryAllowed` and could never sign in.
+    static func loginBody(username: String, password: String) -> String {
+        StrictQueryEncoding.query([("username", username), ("password", password)])
+    }
+
+    /// The rename form; `newname` is strictly encoded for the same reason.
+    static func renameBody(newName: String) -> String {
+        StrictQueryEncoding.query([("operation", "rename"), ("newname", newName)])
     }
 
     /// Seafile reports `expire_date` as an ISO-8601 stamp — with an offset on

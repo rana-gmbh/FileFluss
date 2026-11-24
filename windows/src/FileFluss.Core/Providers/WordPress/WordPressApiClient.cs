@@ -238,60 +238,54 @@ internal sealed partial class WordPressApiClient
             return ListMediaFilesAsync(year, month, cancellationToken);
         }
 
-        return Task.FromResult<IReadOnlyList<CloudFileItem>>([]);
+        // Not a year or month folder: nothing here to list, and an empty listing would read to a
+        // sync as "everything was deleted".
+        return Task.FromException<IReadOnlyList<CloudFileItem>>(CloudProviderException.NotFound(path));
     }
 
     /// <summary>
-    /// The root: one folder per year that has media. The API has no "distinct years" query,
-    /// so this samples the date-ordered list — first page, last page, and the pages in between
-    /// up to ten in total — which is exact for libraries up to 1,000 items and covers the
-    /// oldest and newest year beyond that.
+    /// The root: one folder per year that has media. The API has no "distinct years" query, so
+    /// the oldest and the newest item bound the range and one single-item probe per year in
+    /// between says whether it has media. Exact for any library size — sampling pages, as this
+    /// used to (the first nine and the last), left out the years in between, and a Mirror from
+    /// the library then deleted them. Any failure throws (see <see cref="IsPastLastPage"/>).
     /// </summary>
     private async Task<IReadOnlyList<CloudFileItem>> ListYearFoldersAsync(CancellationToken cancellationToken)
     {
-        var years = new HashSet<int>();
-        int totalPages;
-        using (var first = await SendAsync(HttpMethod.Get, MediaPageUri(1), null, cancellationToken).ConfigureAwait(false))
+        var oldest = await FirstMediaAsync(ApiUri("/media", ("per_page", "1"), ("orderby", "date"), ("order", "asc")), cancellationToken).ConfigureAwait(false);
+        if (oldest is null)
         {
-            ThrowIfUnauthorized(first);
-            if (!first.IsSuccessStatusCode)
-            {
-                throw CloudProviderException.InvalidResponse();
-            }
-
-            totalPages = TotalPages(first);
-            AddYears(years, await ReadMediaAsync(first, cancellationToken).ConfigureAwait(false));
+            return []; // The library is empty.
         }
 
-        if (totalPages > 1)
+        var newest = await FirstMediaAsync(ApiUri("/media", ("per_page", "1"), ("orderby", "date"), ("order", "desc")), cancellationToken).ConfigureAwait(false);
+        if (newest is null || ExtractYear(oldest.Date) is not { } firstYear || ExtractYear(newest.Date) is not { } lastYear || firstYear > lastYear)
         {
-            // The last page holds the newest media.
-            using (var last = await SendAsync(HttpMethod.Get, MediaPageUri(totalPages), null, cancellationToken).ConfigureAwait(false))
-            {
-                ThrowIfUnauthorized(last);
-                if (last.IsSuccessStatusCode)
-                {
-                    AddYears(years, await ReadMediaAsync(last, cancellationToken).ConfigureAwait(false));
-                }
-            }
+            throw Ftp.FtpListingCheck.UnreadableListing();
+        }
 
-            var pagesToFetch = Math.Min(totalPages, 10);
-            for (var page = 2; page < pagesToFetch; page++)
+        var years = new HashSet<int> { firstYear, lastYear };
+        for (var year = firstYear + 1; year < lastYear; year++)
+        {
+            var probe = ApiUri("/media", ("after", $"{year}-01-01T00:00:00"), ("before", $"{year + 1}-01-01T00:00:00"), ("per_page", "1"));
+            if (await FirstMediaAsync(probe, cancellationToken).ConfigureAwait(false) is not null)
             {
-                using var response = await SendAsync(HttpMethod.Get, MediaPageUri(page), null, cancellationToken).ConfigureAwait(false);
-                ThrowIfUnauthorized(response);
-                if (response.IsSuccessStatusCode)
-                {
-                    AddYears(years, await ReadMediaAsync(response, cancellationToken).ConfigureAwait(false));
-                }
+                years.Add(year);
             }
         }
 
         return years.OrderDescending()
             .Select(year => new CloudFileItem($"wp-year-{year}", year.ToString(CultureInfo.InvariantCulture), $"/{year}", true, 0, CloudFileItem.UnknownDate))
             .ToList();
+    }
 
-        Uri MediaPageUri(int page) => ApiUri("/media", ("per_page", "100"), ("page", Num(page)), ("orderby", "date"), ("order", "asc"));
+    /// <summary>The first item of a one-page query, or null when it has none; any failure throws.</summary>
+    private async Task<WordPressMedia?> FirstMediaAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        using var response = await SendAsync(HttpMethod.Get, uri, null, cancellationToken).ConfigureAwait(false);
+        ThrowIfUnauthorized(response);
+        IsPastLastPage(response, 1);
+        return (await ReadMediaAsync(response, cancellationToken).ConfigureAwait(false)).FirstOrDefault();
     }
 
     private async Task<IReadOnlyList<CloudFileItem>> ListMonthFoldersAsync(int year, CancellationToken cancellationToken)
@@ -536,7 +530,9 @@ internal sealed partial class WordPressApiClient
 
     public async Task DeleteAsync(string path, CancellationToken cancellationToken)
     {
-        var mediaId = await ResolveMediaIdAsync(path, cancellationToken).ConfigureAwait(false);
+        // Deletion is permanent (force=true), so the id must come from the month folder the path
+        // names — never from a library-wide search that could match a same-named file elsewhere.
+        var mediaId = await ResolveMediaIdAsync(path, cancellationToken, allowSearch: false).ConfigureAwait(false);
         using var response = await SendAsync(HttpMethod.Delete, ApiUri($"/media/{mediaId}", ("force", "true")), null, cancellationToken).ConfigureAwait(false);
         ThrowIfUnauthorized(response);
         if (!response.IsSuccessStatusCode)
@@ -582,8 +578,8 @@ internal sealed partial class WordPressApiClient
         return WordPressMedia.ParseSingle(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
     }
 
-    /// <summary>Cache, then a listing of the month folder, then a title search.</summary>
-    private async Task<int> ResolveMediaIdAsync(string path, CancellationToken cancellationToken)
+    /// <summary>Cache, then a full listing of the month folder, then (unless <paramref name="allowSearch"/> is false) a title search restricted to that same month.</summary>
+    private async Task<int> ResolveMediaIdAsync(string path, CancellationToken cancellationToken, bool allowSearch = true)
     {
         var normalized = CloudPath.Normalize(path);
         if (_mediaIdCache.TryGetValue(normalized, out var cached))
@@ -606,6 +602,14 @@ internal sealed partial class WordPressApiClient
             return cached;
         }
 
+        if (!allowSearch)
+        {
+            throw CloudProviderException.NotFound(path);
+        }
+
+        // The search covers the whole library: only a match filed under the same year and month
+        // counts — logo.png from 2019/02 is not logo.png from 2024/05.
+        var monthFolder = $"/{year}/{month.ToString("00", CultureInfo.InvariantCulture)}";
         using var response = await SendAsync(
             HttpMethod.Get,
             ApiUri("/media", ("search", Path.GetFileNameWithoutExtension(fileName))),
@@ -619,7 +623,7 @@ internal sealed partial class WordPressApiClient
 
         foreach (var item in await ReadMediaAsync(response, cancellationToken).ConfigureAwait(false))
         {
-            if (FileNameOf(item) == fileName)
+            if (FileNameOf(item) == fileName && VirtualFolder(item) == monthFolder)
             {
                 _mediaIdCache[normalized] = item.Id;
                 return item.Id;
@@ -699,17 +703,6 @@ internal sealed partial class WordPressApiClient
 
     private static bool TryMonth(string component, out int month)
         => int.TryParse(component, NumberStyles.None, CultureInfo.InvariantCulture, out month) && month is >= 1 and <= 12;
-
-    private static void AddYears(HashSet<int> years, IEnumerable<WordPressMedia> items)
-    {
-        foreach (var item in items)
-        {
-            if (ExtractYear(item.Date) is { } year)
-            {
-                years.Add(year);
-            }
-        }
-    }
 
     internal static string MimeTypeForExtension(string extension) => extension.TrimStart('.').ToLowerInvariant() switch
     {

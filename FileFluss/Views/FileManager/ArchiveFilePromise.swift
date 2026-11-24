@@ -12,6 +12,9 @@ struct ArchiveDragPlan: Sendable {
     let tree: ArchiveTree
     /// The folder inside the archive the dragged rows came from.
     let innerPath: String
+    /// Whether what is dragged out must be marked as downloaded: the
+    /// archive came from a cloud account (`ArchiveBrowseSession.isUntrusted`).
+    var markQuarantined: Bool = false
 
     func entryPath(forName name: String) -> String {
         innerPath.isEmpty ? name : "\(innerPath)/\(name)"
@@ -95,6 +98,7 @@ final class ArchiveFilePromiseDelegate: NSObject, NSFilePromiseProviderDelegate,
             format: plan.format,
             strippingPrefix: ArchiveEntry.parentPath(of: promise.entryPath),
             into: staging,
+            markQuarantined: plan.markQuarantined,
             onBytes: nil
         )
         let written = staging.appendingPathComponent(promise.name)

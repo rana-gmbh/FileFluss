@@ -112,12 +112,25 @@ public actor KoofrAPIClient {
 
     // MARK: - File Operations
 
+    /// The `path=` query of the files endpoints. Strictly encoded:
+    /// `.urlQueryAllowed` left `&`, `=` and `+` raw, so deleting `/Docs/Q&A`
+    /// deleted `/Docs/Q`, and `a+b.txt` was read as `a b.txt`.
+    static func pathQuery(_ path: String) -> String {
+        StrictQueryEncoding.query([("path", path)])
+    }
+
+    /// The upload's query. Koofr names the file from `filename=`, so a raw
+    /// `&` there wrote the upload under a truncated name.
+    static func uploadQuery(folderPath: String, fileName: String) -> String {
+        StrictQueryEncoding.query([("path", folderPath), ("filename", fileName)])
+            + "&autorename=false&overwrite=true"
+    }
+
     public func listFolder(path: String) async throws -> [CloudFileItem] {
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         let response: KoofrFilesResponse = try await request(
             .get,
             path: "/mounts/\(mountId)/files/list",
-            queryString: "path=\(encodedPath)"
+            queryString: Self.pathQuery(path)
         )
         return response.files.map { $0.toCloudFileItem(parentPath: path) }
     }
@@ -127,8 +140,7 @@ public actor KoofrAPIClient {
     }
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        let encodedPath = remotePath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? remotePath
-        let urlString = "\(contentURL)/mounts/\(mountId)/files/get?path=\(encodedPath)"
+        let urlString = "\(contentURL)/mounts/\(mountId)/files/get?\(Self.pathQuery(remotePath))"
         guard let url = URL(string: urlString) else {
             throw CloudProviderError.invalidResponse
         }
@@ -149,9 +161,7 @@ public actor KoofrAPIClient {
     }
 
     public func uploadFile(from localURL: URL, toFolder folderPath: String, fileName: String, onBytes: ByteProgressHandler?) async throws {
-        let encodedPath = folderPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? folderPath
-        let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? fileName
-        var urlString = "\(contentURL)/mounts/\(mountId)/files/put?path=\(encodedPath)&filename=\(encodedName)&autorename=false&overwrite=true"
+        var urlString = "\(contentURL)/mounts/\(mountId)/files/put?\(Self.uploadQuery(folderPath: folderPath, fileName: fileName))"
 
         // Koofr's put endpoint takes `modified` in milliseconds since the
         // Unix epoch to preserve the client's modification time.
@@ -187,41 +197,37 @@ public actor KoofrAPIClient {
     }
 
     public func deleteItem(at path: String) async throws {
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
-        try await requestVoid(.delete, path: "/mounts/\(mountId)/files/remove", queryString: "path=\(encodedPath)")
+        try await requestVoid(.delete, path: "/mounts/\(mountId)/files/remove", queryString: Self.pathQuery(path))
     }
 
     public func createFolder(parentPath: String, name: String) async throws {
         let fullPath = parentPath == "/" ? "/\(name)" : "\(parentPath)/\(name)"
         if (try? await getFileInfo(at: fullPath)) != nil { return }
 
-        let encodedPath = parentPath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? parentPath
         struct CreateBody: Encodable { let name: String }
         try await requestVoidWithBody(
             .post,
             path: "/mounts/\(mountId)/files/folder",
-            queryString: "path=\(encodedPath)",
+            queryString: Self.pathQuery(parentPath),
             body: CreateBody(name: name)
         )
     }
 
     public func renameItem(at path: String, to newName: String) async throws {
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         struct RenameBody: Encodable { let name: String }
         try await requestVoidWithBody(
             .put,
             path: "/mounts/\(mountId)/files/rename",
-            queryString: "path=\(encodedPath)",
+            queryString: Self.pathQuery(path),
             body: RenameBody(name: newName)
         )
     }
 
     public func getFileInfo(at path: String) async throws -> CloudFileItem {
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
         let info: KoofrFileInfo = try await request(
             .get,
             path: "/mounts/\(mountId)/files/info",
-            queryString: "path=\(encodedPath)"
+            queryString: Self.pathQuery(path)
         )
         let parentPath = (path as NSString).deletingLastPathComponent
         return info.toCloudFileItem(parentPath: parentPath)

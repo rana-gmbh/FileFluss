@@ -25,6 +25,13 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
         restoreCredentials()
     }
 
+    /// Tests hand in a client talking to a stubbed NAS; nothing is read
+    /// from or written to the keychain.
+    init(client: SynologyDriveAPIClient) {
+        self.keychainKey = "synologyDrive.test.\(UUID().uuidString)"
+        self.apiClient = client
+    }
+
     // MARK: - Authentication
 
     public func authenticate(
@@ -119,30 +126,63 @@ public final class SynologyDriveProvider: CloudProvider, @unchecked Sendable {
 
     public func moveItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
-        let destFolder = (newPath as NSString).deletingLastPathComponent
-        let destName = (newPath as NSString).lastPathComponent
-        let sourceName = (path as NSString).lastPathComponent
-
-        // Synology's CopyMove always lands the source under destFolder
-        // using the *source* filename. If the user wants a different
-        // filename at the destination, do an in-place rename after.
-        try await client.copyMove(path: path, toFolderPath: destFolder, removeSrc: true)
-        if destName != sourceName {
-            let intermediate = destFolder.hasSuffix("/") ? destFolder + sourceName : "\(destFolder)/\(sourceName)"
-            try? await client.renameItem(at: intermediate, to: destName)
-        }
+        try await copyMove(client, from: path, to: newPath, removeSource: true)
     }
 
     public func copyItem(at path: String, toPath newPath: String) async throws {
         guard let client = apiClient else { throw CloudProviderError.notAuthenticated }
+        try await copyMove(client, from: path, to: newPath, removeSource: false)
+    }
+
+    /// Synology's CopyMove always lands the item in the destination folder
+    /// under its *source* name; a different target name is a rename after.
+    private func copyMove(_ client: SynologyDriveAPIClient, from path: String, to newPath: String, removeSource: Bool) async throws {
         let destFolder = (newPath as NSString).deletingLastPathComponent
         let destName = (newPath as NSString).lastPathComponent
         let sourceName = (path as NSString).lastPathComponent
+        let landed = destFolder.hasSuffix("/") ? destFolder + sourceName : "\(destFolder)/\(sourceName)"
 
-        try await client.copyMove(path: path, toFolderPath: destFolder, removeSrc: false)
-        if destName != sourceName {
-            let intermediate = destFolder.hasSuffix("/") ? destFolder + sourceName : "\(destFolder)/\(sourceName)"
-            try? await client.renameItem(at: intermediate, to: destName)
+        if destName != sourceName, try await Self.landingSpotTaken(client, source: path, landed: landed, destFolder: destFolder) {
+            // CopyMove runs with overwrite on and lands under the source
+            // name, so a renamed copy ("Keep both", "a (2).txt") would first
+            // overwrite the very file the user chose to keep — or the source
+            // itself, copying within its folder. Let the caller copy the
+            // bytes instead.
+            throw CloudProviderError.notImplemented
+        }
+
+        try await client.copyMove(path: path, toFolderPath: destFolder, removeSrc: removeSource)
+        guard destName != sourceName else { return }
+        do {
+            try await client.renameItem(at: landed, to: destName)
+        } catch {
+            // A failed rename is reported: the item isn't where it was asked
+            // to go, and calling that a success had sync believe a file was
+            // there that wasn't. A copy's stray item is removed first (the
+            // spot was checked to be free); a moved item stays where it
+            // landed, since it's the only one left.
+            synologyDriveProviderLog.error("[Synology] Rename after copy/move failed: \(error.localizedDescription, privacy: .public)")
+            if !removeSource {
+                do {
+                    try await client.deleteItem(at: landed)
+                } catch let cleanup {
+                    synologyDriveProviderLog.error("[Synology] Removing the copy left at \(landed, privacy: .public) failed: \(cleanup.localizedDescription, privacy: .public)")
+                }
+            }
+            throw error
+        }
+    }
+
+    /// Whether something already sits where CopyMove would land the item:
+    /// always when it stays in its own folder, otherwise when the source
+    /// name exists in the destination folder.
+    private static func landingSpotTaken(_ client: SynologyDriveAPIClient, source: String, landed: String, destFolder: String) async throws -> Bool {
+        if (source as NSString).deletingLastPathComponent == destFolder { return true }
+        do {
+            _ = try await client.getFileInfo(at: landed)
+            return true
+        } catch CloudProviderError.notFound {
+            return false
         }
     }
 

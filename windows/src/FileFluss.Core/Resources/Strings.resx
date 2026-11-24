@@ -2770,6 +2770,9 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   <data name="“{0}” can&apos;t replace a folder it&apos;s inside." xml:space="preserve">
     <value>“{0}” can't replace a folder it's inside.</value>
   </data>
+  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
+    <value>A folder can't be copied or moved into itself.</value>
+  </data>
   <data name="The new copy of “{0}” was uploaded, but it couldn&apos;t be renamed and is still called “{1}”." xml:space="preserve">
     <value>The new copy of “{0}” was uploaded, but it couldn't be renamed and is still called “{1}”.</value>
   </data>
@@ -3601,6 +3604,9 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   <data name="The tags of “{0}” couldn&apos;t be changed: {1}" xml:space="preserve">
     <value>The tags of “{0}” couldn't be changed: {1}</value>
   </data>
+  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
+    <value>The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.</value>
+  </data>
   <data name="File" xml:space="preserve">
     <value>File</value>
   </data>
@@ -3726,9 +3732,6 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   </data>
   <data name="&quot;{0}&quot; can&apos;t be moved." xml:space="preserve">
     <value>"{0}" can't be moved.</value>
-  </data>
-  <data name="A folder can&apos;t be copied or moved into itself." xml:space="preserve">
-    <value>A folder can't be copied or moved into itself.</value>
   </data>
   <data name="An item named “{0}” already exists at the destination." xml:space="preserve">
     <value>An item named “{0}” already exists at the destination.</value>
@@ -3960,9 +3963,6 @@ RAR is trial software from RARLAB: it may be used for up to 40 days, after which
   </data>
   <data name="Permission denied: {0}" xml:space="preserve">
     <value>Permission denied: {0}</value>
-  </data>
-  <data name="The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." xml:space="preserve">
-    <value>The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.</value>
   </data>
   <data name="FTP command failed." xml:space="preserve">
     <value>FTP command failed.</value>

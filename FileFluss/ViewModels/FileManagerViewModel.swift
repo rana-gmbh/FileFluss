@@ -655,6 +655,17 @@ final class FileManagerViewModel {
             var dest = folder.appendingPathComponent(item.name)
             progress?.beginFile(item.name, size: item.size)
 
+            // A folder into itself or into a folder inside it (pasting A into
+            // the other panel showing A/B): a copy recursed into its own copy
+            // until the path got too long, or the disk filled up.
+            if item.isDirectory, Self.isSameOrInside(folder, of: item.url) {
+                let msg = L10n.text("A folder can't be copied or moved into itself.")
+                self.error = msg
+                progress?.recordFailure(item.name, error: msg)
+                progress?.completedItems = index + 1
+                continue
+            }
+
             // Pasting into the folder the file already lives in: source and
             // destination are the same file. "Replace" would delete it and
             // then copy from a path that no longer exists, destroying it for
@@ -737,6 +748,17 @@ final class FileManagerViewModel {
             var dest = folder.appendingPathComponent(item.name)
             progress?.beginFile(item.name, size: item.size)
 
+            // A folder into itself or into a folder inside it (pasting A into
+            // the other panel showing A/B): a copy recursed into its own copy
+            // until the path got too long, or the disk filled up.
+            if item.isDirectory, Self.isSameOrInside(folder, of: item.url) {
+                let msg = L10n.text("A folder can't be copied or moved into itself.")
+                self.error = msg
+                progress?.recordFailure(item.name, error: msg)
+                progress?.completedItems = index + 1
+                continue
+            }
+
             // Pasting into the folder the file already lives in: source and
             // destination are the same file. "Replace" would delete it and
             // then copy from a path that no longer exists, destroying it for
@@ -807,6 +829,15 @@ final class FileManagerViewModel {
         progress?.endTime = Date()
         progress?.isComplete = true
         await loadDirectory()
+    }
+
+    /// Whether `folder` is the folder `item` or lies somewhere inside it.
+    /// Symlinks are resolved: a panel can show the same folder under another
+    /// path.
+    static func isSameOrInside(_ folder: URL, of item: URL) -> Bool {
+        let folderPath = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        let itemPath = item.resolvingSymlinksInPath().standardizedFileURL.path
+        return folderPath == itemPath || folderPath.hasPrefix(itemPath.hasSuffix("/") ? itemPath : itemPath + "/")
     }
 
     /// Whether `url` sits somewhere below `folder`.

@@ -90,10 +90,18 @@ public actor WordPressAPIClient {
     private var mediaIdCache: [String: Int] = [:]
 
     public init(credentials: WordPressCredentials) {
-        self.credentials = credentials
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
-        self.session = URLSession(configuration: config, delegate: WPSessionDelegate(), delegateQueue: nil)
+        self.init(
+            credentials: credentials,
+            session: URLSession(configuration: config, delegate: WPSessionDelegate(), delegateQueue: nil)
+        )
+    }
+
+    /// The session is injectable so tests can answer requests from a script.
+    init(credentials: WordPressCredentials, session: URLSession) {
+        self.credentials = credentials
+        self.session = session
 
         // Normalize site URL
         var url = credentials.siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -188,7 +196,9 @@ public actor WordPressAPIClient {
             return try await listMediaFiles(year: year, month: month)
         }
 
-        return []
+        // Not a year or month folder: there is nothing here to list, and an
+        // empty listing would read to a sync as "everything was deleted".
+        throw CloudProviderError.notFound(path)
     }
 
     public func downloadFile(remotePath: String, to localURL: URL) async throws {
@@ -219,18 +229,28 @@ public actor WordPressAPIClient {
         try await uploadFile(from: localURL, to: remotePath, onBytes: nil)
     }
 
+    /// Uploads into the media library. WordPress files it under the upload
+    /// month, so the virtual folder in `remotePath` is not where it lands —
+    /// but its name is the one the user asked for. The local file is often a
+    /// staging copy (`filefluss-sync-<UUID>` in a cloud-to-cloud transfer),
+    /// whose name must never reach the library.
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
-        let fileName = localURL.lastPathComponent
+        let fileName = Self.uploadFileName(remotePath: remotePath, localURL: localURL)
         let fileData = try Data(contentsOf: localURL)
 
         let boundary = UUID().uuidString
         var body = Data()
 
-        // file field
+        // file field. The name goes in as raw UTF-8 (WordPress's PHP ignores
+        // RFC 2231 `filename*`); a quote or line break would end the header.
+        let quoteSafeName = fileName
+            .replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(quoteSafeName)\"\r\n".data(using: .utf8)!)
 
-        let mimeType = mimeTypeForExtension(localURL.pathExtension)
+        let mimeType = mimeTypeForExtension((fileName as NSString).pathExtension)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(fileData)
         body.append("\r\n".data(using: .utf8)!)
@@ -240,29 +260,35 @@ public actor WordPressAPIClient {
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        let (responseData, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
+        let (_, response) = try await session.uploadReportingProgress(for: request, body: body, onBytes: onBytes)
         guard let http = response as? HTTPURLResponse else {
             throw CloudProviderError.invalidResponse
         }
 
-        // Debug logging
-        let debugLine = "[WP Upload] url=\(request.url?.absoluteString ?? "nil") status=\(http.statusCode) responseURL=\(http.url?.absoluteString ?? "nil") body=\(String(data: responseData.prefix(500), encoding: .utf8) ?? "nil")\n"
-        let logPath = "/tmp/filefluss-wordpress.log"
-        if let fh = FileHandle(forWritingAtPath: logPath) {
-            fh.seekToEndOfFile()
-            fh.write(Data(debugLine.utf8))
-            fh.closeFile()
-        } else {
-            FileManager.default.createFile(atPath: logPath, contents: Data(debugLine.utf8))
-        }
+        // Status only, into the support log: request URLs and response bodies
+        // used to go to a world-readable file in /tmp in every build.
+        SupportLogger.shared.log(
+            "[WordPress] Upload \(fileName) → HTTP \(http.statusCode)",
+            category: "wordpress",
+            level: (200...299).contains(http.statusCode) ? .info : .error
+        )
 
+        if http.statusCode == 401 { throw CloudProviderError.unauthorized }
         guard (200...299).contains(http.statusCode) else {
             throw CloudProviderError.serverError(http.statusCode)
         }
     }
 
+    static func uploadFileName(remotePath: String, localURL: URL) -> String {
+        let name = (remotePath as NSString).lastPathComponent
+        return name.isEmpty || name == "/" ? localURL.lastPathComponent : name
+    }
+
     public func deleteItem(at path: String) async throws {
-        let mediaId = try await resolveMediaId(for: path)
+        // Deletion is permanent (`force=true`), so the id must come from the
+        // month folder the path names — never from a library-wide search
+        // that could match a same-named file in another month.
+        let mediaId = try await resolveMediaId(for: path, allowSearch: false)
 
         var request = try makeRequest(path: "/media/\(mediaId)", query: [("force", "true")])
         request.httpMethod = "DELETE"
@@ -378,62 +404,29 @@ public actor WordPressAPIClient {
 
     // MARK: - Virtual Folder Structure
 
+    /// One folder per year that has media. The API has no "distinct years"
+    /// query, so the oldest and the newest item bound the range and one
+    /// single-item probe per year in between says whether it has media.
+    /// Exact for any library size — sampling pages, as this used to, left
+    /// out the years between page 9 and the last page, and a Mirror from
+    /// the library then deleted them.
     private func listYearFolders() async throws -> [CloudFileItem] {
-        // Fetch all media to determine which years have content
-        // Use a single request to get the date range
-        var years = Set<Int>()
-        var page = 1
-
-        // Fetch first page to get total count
-        let firstRequest = try makeRequest(path: "/media", query: [
-            ("per_page", "100"),
-            ("page", "1"),
-            ("orderby", "date"),
-            ("order", "asc")
-        ])
-        let (firstData, firstResponse) = try await session.data(for: firstRequest)
-        guard let firstHttp = firstResponse as? HTTPURLResponse, (200...299).contains(firstHttp.statusCode) else {
-            throw CloudProviderError.invalidResponse
+        let byDate: [(String, String)] = [("per_page", "1"), ("orderby", "date")]
+        guard let oldest = try await mediaPage(byDate + [("order", "asc")], page: 1)?.items.first else {
+            return []   // The library is empty.
+        }
+        guard let newest = try await mediaPage(byDate + [("order", "desc")], page: 1)?.items.first,
+              let firstYear = extractYear(from: oldest.date),
+              let lastYear = extractYear(from: newest.date),
+              firstYear <= lastYear else {
+            throw CloudProviderError.unreadableListing
         }
 
-        let totalPages = Int(firstHttp.value(forHTTPHeaderField: "X-WP-TotalPages") ?? "1") ?? 1
-        let firstItems = try JSONDecoder().decode([WPMediaItem].self, from: firstData)
-        for item in firstItems {
-            if let year = extractYear(from: item.date) { years.insert(year) }
-        }
-
-        // If there are more pages, also fetch last page to get the most recent year
-        if totalPages > 1 {
-            let lastRequest = try makeRequest(path: "/media", query: [
-                ("per_page", "100"),
-                ("page", "\(totalPages)"),
-                ("orderby", "date"),
-                ("order", "asc")
-            ])
-            let (lastData, lastResponse) = try await session.data(for: lastRequest)
-            if let lastHttp = lastResponse as? HTTPURLResponse, (200...299).contains(lastHttp.statusCode) {
-                let lastItems = try JSONDecoder().decode([WPMediaItem].self, from: lastData)
-                for item in lastItems {
-                    if let year = extractYear(from: item.date) { years.insert(year) }
-                }
-            }
-
-            // Fetch middle pages if needed (up to 10 pages total to be reasonable)
-            let pagesToFetch = min(totalPages, 10)
-            for p in 2..<pagesToFetch {
-                let request = try makeRequest(path: "/media", query: [
-                    ("per_page", "100"),
-                    ("page", "\(p)"),
-                    ("orderby", "date"),
-                    ("order", "asc")
-                ])
-                let (data, response) = try await session.data(for: request)
-                if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                    let items = try JSONDecoder().decode([WPMediaItem].self, from: data)
-                    for item in items {
-                        if let year = extractYear(from: item.date) { years.insert(year) }
-                    }
-                }
+        var years: Set<Int> = [firstYear, lastYear]
+        if lastYear - firstYear > 1 {
+            for year in (firstYear + 1)..<lastYear {
+                let probe = try await mediaPage(Self.yearQuery(year) + [("per_page", "1")], page: 1)
+                if probe?.items.isEmpty == false { years.insert(year) }
             }
         }
 
@@ -452,37 +445,12 @@ public actor WordPressAPIClient {
 
     private func listMonthFolders(year: Int) async throws -> [CloudFileItem] {
         var months = Set<Int>()
-        var page = 1
 
         let monthNames = ["", "January", "February", "March", "April", "May", "June",
                           "July", "August", "September", "October", "November", "December"]
 
-        while true {
-            let afterDate = "\(year)-01-01T00:00:00"
-            let beforeDate = "\(year + 1)-01-01T00:00:00"
-
-            let request = try makeRequest(path: "/media", query: [
-                ("after", afterDate),
-                ("before", beforeDate),
-                ("per_page", "100"),
-                ("page", "\(page)")
-            ])
-
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                break
-            }
-
-            let items = try JSONDecoder().decode([WPMediaItem].self, from: data)
-            if items.isEmpty { break }
-
-            for item in items {
-                if let month = extractMonth(from: item.date) { months.insert(month) }
-            }
-
-            let totalPages = Int(http.value(forHTTPHeaderField: "X-WP-TotalPages") ?? "1") ?? 1
-            if page >= totalPages { break }
-            page += 1
+        for item in try await allMedia(Self.yearQuery(year)) {
+            if let month = extractMonth(from: item.date), (1...12).contains(month) { months.insert(month) }
         }
 
         return months.sorted(by: >).map { month in
@@ -500,61 +468,76 @@ public actor WordPressAPIClient {
     }
 
     private func listMediaFiles(year: Int, month: Int) async throws -> [CloudFileItem] {
-        var allItems: [CloudFileItem] = []
-        var page = 1
         let paddedMonth = String(format: "%02d", month)
 
         // Calculate next month for the before date
         let nextYear = month == 12 ? year + 1 : year
         let nextMonth = month == 12 ? 1 : month + 1
+        let query: [(String, String)] = [
+            ("after", "\(year)-\(paddedMonth)-01T00:00:00"),
+            ("before", "\(nextYear)-\(String(format: "%02d", nextMonth))-01T00:00:00"),
+        ]
 
-        while true {
-            let afterDate = "\(year)-\(paddedMonth)-01T00:00:00"
-            let beforeDate = "\(nextYear)-\(String(format: "%02d", nextMonth))-01T00:00:00"
+        let basePath = "/\(year)/\(paddedMonth)"
+        let allItems = try await allMedia(query).map { item in
+            let cloudFile = mediaItemToCloudFile(item, basePath: basePath)
+            mediaIdCache[cloudFile.path] = item.id
+            return cloudFile
+        }
 
-            let request = try makeRequest(path: "/media", query: [
-                ("after", afterDate),
-                ("before", beforeDate),
-                ("per_page", "100"),
-                ("page", "\(page)")
-            ])
-
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                let debugLine = "[WP List] url=\(request.url?.absoluteString ?? "nil") status=\((response as? HTTPURLResponse)?.statusCode ?? -1) body=\(String(data: Data(), encoding: .utf8) ?? "")\n"
-                Self.writeLog(debugLine)
-                break
-            }
-
-            let items = try JSONDecoder().decode([WPMediaItem].self, from: data)
-            let debugLine = "[WP List] url=\(request.url?.absoluteString ?? "nil") status=\(http.statusCode) items=\(items.count) body=\(String(data: data.prefix(300), encoding: .utf8) ?? "")\n"
-            Self.writeLog(debugLine)
-            if items.isEmpty { break }
-
-            let basePath = "/\(year)/\(paddedMonth)"
-            for item in items {
-                let cloudFile = mediaItemToCloudFile(item, basePath: basePath)
-                allItems.append(cloudFile)
-                mediaIdCache[cloudFile.path] = item.id
-            }
-
-            let totalPages = Int(http.value(forHTTPHeaderField: "X-WP-TotalPages") ?? "1") ?? 1
-            if page >= totalPages { break }
-            page += 1
+        // The listing ran to the end, so whatever it no longer shows is gone
+        // and must not resolve to a stale id later.
+        let listed = Set(allItems.map(\.path))
+        for path in mediaIdCache.keys where path.hasPrefix(basePath + "/") && !listed.contains(path) {
+            mediaIdCache.removeValue(forKey: path)
         }
 
         return allItems
     }
 
-    private static func writeLog(_ line: String) {
-        let logPath = "/tmp/filefluss-wordpress.log"
-        if let fh = FileHandle(forWritingAtPath: logPath) {
-            fh.seekToEndOfFile()
-            fh.write(Data(line.utf8))
-            fh.closeFile()
-        } else {
-            FileManager.default.createFile(atPath: logPath, contents: Data(line.utf8))
+    private static func yearQuery(_ year: Int) -> [(String, String)] {
+        [("after", "\(year)-01-01T00:00:00"), ("before", "\(year + 1)-01-01T00:00:00")]
+    }
+
+    private static let pageSize = 100
+
+    /// One page of `/media`. Any failure throws: a listing that stopped at a
+    /// 429 or 500 and returned what it had would make a sync read everything
+    /// after it as deleted. The one exception is WordPress's 400 for a page
+    /// past the end, which comes back as nil.
+    private func mediaPage(_ query: [(String, String)], page: Int) async throws -> (items: [WPMediaItem], totalPages: Int?)? {
+        let request = try makeRequest(path: "/media", query: query + [("page", "\(page)")])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw CloudProviderError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            if page > 1 && http.statusCode == 400 { return nil }
+            SupportLogger.shared.log(
+                "[WordPress] Listing page \(page) failed: HTTP \(http.statusCode)",
+                category: "wordpress", level: .error
+            )
+            if http.statusCode == 401 { throw CloudProviderError.unauthorized }
+            throw CloudProviderError.serverError(http.statusCode)
         }
+        guard let items = try? JSONDecoder().decode([WPMediaItem].self, from: data) else {
+            throw CloudProviderError.unreadableListing
+        }
+        return (items, http.value(forHTTPHeaderField: "X-WP-TotalPages").flatMap { Int($0) })
+    }
+
+    /// Every media item matching `query`, page by page to the very end.
+    private func allMedia(_ query: [(String, String)]) async throws -> [WPMediaItem] {
+        var all: [WPMediaItem] = []
+        var page = 1
+        while let result = try await mediaPage(query + [("per_page", "\(Self.pageSize)")], page: page) {
+            all.append(contentsOf: result.items)
+            if result.items.isEmpty { break }
+            // Without the header (a proxy may strip it) a full page means
+            // there may be another; WordPress answers 400 past the end.
+            let morePages = result.totalPages.map { page < $0 } ?? (result.items.count == Self.pageSize)
+            if !morePages { break }
+            page += 1
+        }
+        return all
     }
 
     // MARK: - Helpers
@@ -661,7 +644,9 @@ public actor WordPressAPIClient {
         return "/\(year)/\(String(format: "%02d", month))"
     }
 
-    private func resolveMediaId(for path: String) async throws -> Int {
+    /// Cache, then a full listing of the month folder, then (unless
+    /// `allowSearch` is false) a title search restricted to that same month.
+    private func resolveMediaId(for path: String, allowSearch: Bool = true) async throws -> Int {
         if let cached = mediaIdCache[path] {
             return cached
         }
@@ -682,8 +667,12 @@ public actor WordPressAPIClient {
         if let cached = mediaIdCache[path] {
             return cached
         }
+        guard allowSearch else { throw CloudProviderError.notFound(path) }
 
-        // Try searching by filename
+        // Try searching by filename — but only accept a match filed under
+        // the same year and month. The search covers the whole library, and
+        // `logo.png` from 2019/02 is not `logo.png` from 2024/05.
+        let monthFolder = "/\(year)/\(String(format: "%02d", month))"
         let nameWithoutExt = (fileName as NSString).deletingPathExtension
         let request = try makeRequest(path: "/media", query: [("search", nameWithoutExt)])
         let (data, response) = try await session.data(for: request)
@@ -694,7 +683,7 @@ public actor WordPressAPIClient {
         let items = try JSONDecoder().decode([WPMediaItem].self, from: data)
         for item in items {
             let itemFileName = fileNameFromItem(item)
-            if itemFileName == fileName {
+            if itemFileName == fileName, virtualPathPrefix(for: item) == monthFolder {
                 mediaIdCache[path] = item.id
                 return item.id
             }

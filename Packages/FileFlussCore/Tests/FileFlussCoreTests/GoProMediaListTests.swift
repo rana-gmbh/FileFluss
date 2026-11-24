@@ -36,7 +36,7 @@ struct GoProMediaListTests {
     @Test("Root lists each on-card directory as a folder")
     func rootListsDirectories() throws {
         let list = try decode(sampleJSON)
-        let root = list.items(at: "/")
+        let root = try list.items(at: "/")
         let allFolders = root.allSatisfy { $0.isDirectory }
         #expect(root.count == 2)
         #expect(allFolders)
@@ -51,7 +51,7 @@ struct GoProMediaListTests {
     @Test("Directory lists its files with full paths and parsed sizes")
     func directoryListsFiles() throws {
         let list = try decode(sampleJSON)
-        let files = list.items(at: "/100GOPRO")
+        let files = try list.items(at: "/100GOPRO")
         let noneAreFolders = files.allSatisfy { !$0.isDirectory }
         #expect(files.count == 2)
         #expect(noneAreFolders)
@@ -63,10 +63,15 @@ struct GoProMediaListTests {
         #expect(video.modificationDate == Date(timeIntervalSince1970: 1_696_600_109))
     }
 
-    @Test("Unknown directory yields no items")
+    /// After a card swap or format the folder a sync reads from is gone.
+    /// Listing it as empty would make a Mirror delete the copied footage.
+    @Test("Unknown directory is not found, not empty")
     func unknownDirectory() throws {
         let list = try decode(sampleJSON)
-        #expect(list.items(at: "/999GOPRO").isEmpty)
+        #expect(throws: CloudProviderError.self) { try list.items(at: "/999GOPRO") }
+        let empty = try decode(#"{ "media": [] }"#)
+        #expect(throws: CloudProviderError.self) { try empty.items(at: "/100GOPRO") }
+        #expect(try empty.items(at: "/").isEmpty)
     }
 
     @Test("Single-file lookup by path")
@@ -86,7 +91,7 @@ struct GoProMediaListTests {
         { "media": [ { "d": "100GOPRO", "fs": [ { "n": "A.JPG", "s": 1234, "mod": 1696600109 } ] } ] }
         """
         let list = try decode(json)
-        let item = try #require(list.items(at: "/100GOPRO").first)
+        let item = try #require(try list.items(at: "/100GOPRO").first)
         #expect(item.size == 1234)
         #expect(item.modificationDate == Date(timeIntervalSince1970: 1_696_600_109))
     }
@@ -97,7 +102,7 @@ struct GoProMediaListTests {
         { "media": [ { "d": "100GOPRO", "fs": [ { "n": "A.JPG", "s": "10" } ] } ] }
         """
         let list = try decode(json)
-        let item = try #require(list.items(at: "/100GOPRO").first)
+        let item = try #require(try list.items(at: "/100GOPRO").first)
         #expect(item.modificationDate == .distantPast)
     }
 }

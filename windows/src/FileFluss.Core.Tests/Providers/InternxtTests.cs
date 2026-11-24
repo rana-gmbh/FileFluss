@@ -161,6 +161,9 @@ internal sealed class InternxtTestServer
 
     public bool ListDocs { get; set; } = true;
 
+    /// <summary>Answers every file listing with a server error.</summary>
+    public bool FailFileListing { get; set; }
+
     public byte[] ReportIndex { get; }
 
     public byte[] ReportContent { get; }
@@ -256,6 +259,11 @@ internal sealed class InternxtTestServer
                 _ => [],
             };
             return FakeHttpHandler.Json(new JsonObject { ["folders"] = new JsonArray(folders.Skip(offset).Take(50).Select(f => (JsonNode)f).ToArray()) }.ToJsonString());
+        }
+
+        if (FailFileListing)
+        {
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") };
         }
 
         var files = uuid switch
@@ -531,6 +539,21 @@ public class InternxtProviderTests
         await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 44)), "/report.pdf"));
 
         Assert.Empty(h.Capture.Matching(HttpMethod.Delete, "/drive/files/report-file-uuid"));
+    }
+
+    [Fact]
+    public async Task AFolderThatCannotBeListedStopsTheUploadBeforeAnythingIsReplaced()
+    {
+        // A failed listing used to pass for "no file there": the upload then registered under
+        // the real name, and the 409 that followed deleted the old entry before the new one existed.
+        using var h = new InternxtHarness();
+        h.Server.FailFileListing = true;
+        using var temp = new TempDirectory();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.UploadFileAsync(temp.File("report.pdf", Bytes(10, 48)), "/report.pdf"));
+
+        Assert.Empty(h.Server.CallsTo(HttpMethod.Post, "/files/start"));
+        Assert.Empty(h.Server.CallsTo(HttpMethod.Post, "/files"));
     }
 
     [Fact]

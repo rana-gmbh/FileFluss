@@ -204,6 +204,42 @@ struct FileManagerViewModelTests {
         #expect(!FileManager.default.fileExists(atPath: fileURL.path()))
     }
 
+    @Test("A folder is never copied or moved into itself or a folder inside it")
+    func copyIntoOwnSubfolder() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let a = root.appendingPathComponent("A", isDirectory: true)
+        let b = a.appendingPathComponent("B", isDirectory: true)
+        try write("x", to: a.appendingPathComponent("file.txt"))
+        try FileManager.default.createDirectory(at: b, withIntermediateDirectories: true)
+        let item = FileItem(url: a)
+
+        // The last one names A/B through /private, as a panel may show it.
+        for target in [b, a, URL(fileURLWithPath: "/private" + b.standardizedFileURL.path, isDirectory: true)] {
+            let vm = FileManagerViewModel()
+            let copy = TransferProgress(operation: "Copying", totalItems: 1)
+            await vm.performCopy(items: [item], to: target, progress: copy)
+            #expect(copy.failureCount == 1)
+            #expect(vm.error != nil)
+
+            let move = TransferProgress(operation: "Moving", totalItems: 1)
+            await vm.performMove(items: [item], to: target, progress: move)
+            #expect(move.failureCount == 1)
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: b.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: a.path).sorted() == ["B", "file.txt"])
+    }
+
+    @Test("A folder can still be copied beside itself and into a sibling")
+    func copyBesideItself() {
+        let parent = URL(fileURLWithPath: "/Users/someone/Docs", isDirectory: true)
+        let a = parent.appendingPathComponent("A", isDirectory: true)
+        #expect(FileManagerViewModel.isSameOrInside(a, of: a))
+        #expect(FileManagerViewModel.isSameOrInside(a.appendingPathComponent("B/C"), of: a))
+        #expect(!FileManagerViewModel.isSameOrInside(parent, of: a))
+        #expect(!FileManagerViewModel.isSameOrInside(parent.appendingPathComponent("AB"), of: a))
+    }
+
     @Test("Loading nonexistent directory sets error")
     func loadBadDirectory() async {
         let vm = FileManagerViewModel()

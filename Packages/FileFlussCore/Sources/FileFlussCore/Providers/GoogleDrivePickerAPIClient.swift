@@ -285,7 +285,15 @@ public actor GoogleDrivePickerAPIClient {
     }
 
     private func listChildren(of folderId: String, parentPath: String) async throws -> [CloudFileItem] {
-        var out: [CloudFileItem] = []
+        try await listChildFiles(of: folderId, parentPath: parentPath).map { $0.toCloudFileItem(parentPath: parentPath) }
+    }
+
+    /// The children of a folder, Google documents under their exported names
+    /// and the Google types that can't be downloaded left out — see
+    /// `GoogleWorkspaceNaming`. Keeps each item's MIME type, which a download
+    /// needs to know whether to export.
+    private func listChildFiles(of folderId: String, parentPath: String) async throws -> [GoogleDriveFile] {
+        var out: [GoogleDriveFile] = []
         var pageToken: String?
         do {
             repeat {
@@ -299,7 +307,7 @@ public actor GoogleDrivePickerAPIClient {
                 ]
                 if let pageToken { q.append(URLQueryItem(name: "pageToken", value: pageToken)) }
                 let resp: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: q)
-                out.append(contentsOf: resp.files.map { $0.toCloudFileItem(parentPath: parentPath) })
+                out.append(contentsOf: resp.files.compactMap { $0.listed(exportExtensions: Self.exportExtensions) })
                 pageToken = resp.nextPageToken
             } while pageToken != nil
             // Empty is normal in this access model (folders only expose what
@@ -335,17 +343,18 @@ public actor GoogleDrivePickerAPIClient {
         var currentMime = "application/vnd.google-apps.folder"
         var walked = "/\(rootName)"
         for comp in comps {
-            let children = try await listChildren(of: currentId, parentPath: walked)
+            let children = try await listChildFiles(of: currentId, parentPath: walked)
             // Prefer a folder match for intermediate components; for the final
             // component fall back to any name match.
             guard let match = children.first(where: { $0.name == comp && $0.isDirectory })
                     ?? children.first(where: { $0.name == comp }) else {
                 throw CloudProviderError.notFound(path)
             }
-            // Strip the synthetic d/f id prefix added by toCloudFileItem.
-            currentId = String(match.id.dropFirst())
-            currentMime = match.isDirectory ? "application/vnd.google-apps.folder" : "application/octet-stream"
-            walked = match.path
+            // The real MIME type, not a stand-in: a Google document must be
+            // exported, and a plain download of one is refused with a 403.
+            currentId = match.id
+            currentMime = match.mimeType
+            walked += "/\(match.name)"
         }
         return Resolved(id: currentId, mimeType: currentMime)
     }
@@ -391,7 +400,15 @@ public actor GoogleDrivePickerAPIClient {
     public func renameItem(at path: String, to newName: String) async throws {
         let resolved = try await resolve(path)
         struct Body: Encodable { let name: String }
-        let _: GoogleDriveFile = try await apiRequest(.patch, path: "/files/\(resolved.id)", body: Body(name: newName))
+        // A Google document lists under its exported name ("Report.pdf");
+        // renaming it to "Notes.pdf" means the document is called "Notes".
+        var driveName = newName
+        if let ext = Self.exportExtensions[resolved.mimeType],
+           !GoogleWorkspaceNaming.needsExtensionAppended(remotePath: newName, ext: ext),
+           !(newName as NSString).deletingPathExtension.isEmpty {
+            driveName = (newName as NSString).deletingPathExtension
+        }
+        let _: GoogleDriveFile = try await apiRequest(.patch, path: "/files/\(resolved.id)", body: Body(name: driveName))
     }
 
     public func moveItem(at path: String, toPath newPath: String) async throws {
@@ -431,7 +448,9 @@ public actor GoogleDrivePickerAPIClient {
     public func getFileMetadata(at path: String) async throws -> CloudFileItem {
         let resolved = try await resolve(path)
         guard let file = try await fetchFile(id: resolved.id) else { throw CloudProviderError.notFound(path) }
-        return file.toCloudFileItem(parentPath: (path as NSString).deletingLastPathComponent)
+        // Under the name its listing gives it, so the path round-trips.
+        return (file.listed(exportExtensions: Self.exportExtensions) ?? file)
+            .toCloudFileItem(parentPath: (path as NSString).deletingLastPathComponent)
     }
 
     public func folderSize(at path: String) async throws -> Int64 {
@@ -453,7 +472,12 @@ public actor GoogleDrivePickerAPIClient {
         if let exportMime = Self.exportMimeTypes[resolved.mimeType] {
             let enc = exportMime.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? exportMime
             url = URL(string: "\(apiURL)/files/\(resolved.id)/export?mimeType=\(enc)")!
-            if let ext = Self.exportExtensions[resolved.mimeType] { dest = localURL.appendingPathExtension(ext) }
+            // Written exactly where asked when the path already carries the
+            // export extension (the name a listing gives the document).
+            if let ext = Self.exportExtensions[resolved.mimeType],
+               GoogleWorkspaceNaming.needsExtensionAppended(remotePath: remotePath, ext: ext) {
+                dest = localURL.appendingPathExtension(ext)
+            }
         } else {
             url = URL(string: "\(apiURL)/files/\(resolved.id)?alt=media&supportsAllDrives=true")!
         }
@@ -501,12 +525,13 @@ public actor GoogleDrivePickerAPIClient {
         let escaped = name.replacingOccurrences(of: "'", with: "\\'")
         let q = [
             URLQueryItem(name: "q", value: "'\(parentId)' in parents and name = '\(escaped)' and trashed = false"),
-            URLQueryItem(name: "fields", value: "files(id)"),
-            URLQueryItem(name: "pageSize", value: "1"),
+            URLQueryItem(name: "fields", value: "files(id,name,mimeType)"),
+            URLQueryItem(name: "pageSize", value: "10"),
             URLQueryItem(name: "supportsAllDrives", value: "true"),
         ]
         let resp: GoogleFileListResponse = try await apiRequest(.get, path: "/files", queryItems: q)
-        return resp.files.first?.id
+        // A Google document's content can't be replaced by an upload.
+        return resp.files.first { !GoogleWorkspaceNaming.isGoogleNative($0.mimeType) }?.id
     }
 
     private static func buildMetadata(name: String?, parentId: String?, modDate: Date?, createdDate: Date?) -> String {

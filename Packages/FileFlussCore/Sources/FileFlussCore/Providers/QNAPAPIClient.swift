@@ -48,7 +48,31 @@ public actor QNAPAPIClient {
         } else {
             self.session = URLSession(configuration: config)
         }
+        self.landingBaseTimeout = .seconds(60)
+        self.pollInterval = .milliseconds(500)
     }
+
+    /// Tests hand in a session whose requests they answer themselves, and a
+    /// session id so no login is needed.
+    init(
+        credentials: QNAPCredentials,
+        session: URLSession,
+        sid: String?,
+        landingBaseTimeout: Duration = .seconds(60),
+        pollInterval: Duration = .milliseconds(500)
+    ) {
+        self.credentials = credentials
+        self.session = session
+        self.sid = sid
+        self.landingBaseTimeout = landingBaseTimeout
+        self.pollInterval = pollInterval
+    }
+
+    /// How long a server-side copy or move may take to show up at its
+    /// destination before it counts as failed (plus a second per 10 MB),
+    /// and the pause between looks. Tests shorten both.
+    private let landingBaseTimeout: Duration
+    private let pollInterval: Duration
 
     public func userDisplayName() -> String { credentials.displayName }
 
@@ -221,7 +245,12 @@ public actor QNAPAPIClient {
             let page = try Self.items(fromListing: data, parentPath: cleaned)
             items.append(contentsOf: page.items)
             start += page.rawCount
-            if page.rawCount < Self.listPageSize || start >= (page.total ?? 0) { break }
+            // A short page is the last; so is reaching the total — when the
+            // firmware sends one. Treating a missing total as 0 ended every
+            // listing after its first 1,000 rows, and Mirror then deleted
+            // the rest on the other side.
+            if page.rawCount < Self.listPageSize { break }
+            if let total = page.total, start >= total { break }
         }
         return items
     }
@@ -432,20 +461,61 @@ public actor QNAPAPIClient {
     /// `mode=0` overwrites what's there, as every other provider does.
     public func copyMove(path: String, toFolderPath destFolder: String, move: Bool) async throws {
         let (parent, name) = Self.split(path)
+        let folder = Self.cleanPath(destFolder)
+        let destination = Self.join(folder, name)
+
+        // What "landed" means: the source as it is, and whatever already
+        // sits at the destination (mode=0 overwrites it) — that one existing
+        // tells nothing, so it has to change first. Either can be unknown (a
+        // stat QTS doesn't answer as expected): then the destination only
+        // has to appear.
+        let source = try? await getFileInfo(at: path)
+        let before = try? await getFileInfo(at: destination)
+
         _ = try await call(move ? "move" : "copy", [
             ("source_file", name),
             ("source_total", "1"),
             ("source_path", parent),
-            ("dest_path", Self.cleanPath(destFolder)),
+            ("dest_path", folder),
             ("mode", "0"),
         ], path: path)
-        // QTS may hand back a process id and finish in the background; the
-        // destination has to exist before a follow-up rename can find it.
-        let destination = Self.join(Self.cleanPath(destFolder), name)
-        for _ in 0..<120 {
-            if (try? await getFileInfo(at: destination)) != nil { return }
-            try? await Task.sleep(nanoseconds: 500_000_000)
+
+        // QTS may hand back a process id and finish in the background. Wait
+        // until the copy is there — at the source's size, and changed if
+        // something was there before — for a time that grows with the file.
+        // Returning after a minute either way let a follow-up rename, or the
+        // deletion of a set-aside original, run against a copy still being
+        // written or against the old file.
+        let clock = ContinuousClock()
+        let extra = Duration.seconds(source.map { $0.isDirectory ? 0 : Double($0.size) / 10_000_000 } ?? 0)
+        let deadline = clock.now + landingBaseTimeout + extra
+        while true {
+            do {
+                let landed = try await getFileInfo(at: destination)
+                if Self.hasLanded(source: source, before: before, landed: landed) { return }
+            } catch CloudProviderError.notFound {
+                // Not there yet.
+            }
+            if clock.now >= deadline {
+                qnapLog.error("[QNAP] \(move ? "move" : "copy") of \(path) to \(folder) didn't finish in time")
+                throw CloudProviderError.serverError(504)
+            }
+            try await Task.sleep(for: pollInterval)
         }
+    }
+
+    /// Whether a server-side copy or move has arrived: the item is there, a
+    /// file at the source's size, and — if something was at the destination
+    /// before — changed since, unless that already was the same file (same
+    /// size and date).
+    static func hasLanded(source: CloudFileItem?, before: CloudFileItem?, landed: CloudFileItem) -> Bool {
+        guard let source else { return true }
+        if source.isDirectory { return landed.isDirectory }
+        if landed.isDirectory || landed.size != source.size { return false }
+        guard let before, !before.isDirectory else { return true }
+        return before.size != landed.size
+            || before.modificationDate != landed.modificationDate
+            || (before.size == source.size && before.modificationDate == source.modificationDate)
     }
 
     public func setModificationDate(at path: String, to date: Date) async throws {

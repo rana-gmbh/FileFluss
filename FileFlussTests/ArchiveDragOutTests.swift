@@ -61,6 +61,53 @@ struct ArchiveDragOutTests {
         #expect(result.name == "readme.txt")
         #expect(result.error == nil)
         #expect(try String(contentsOf: target, encoding: .utf8) == "dragged\n")
+        #expect(!Quarantine.isMarked(target), "an archive of the user's own adds no mark")
+    }
+
+    /// The staged copy of a cloud archive may carry no mark of its own, and
+    /// a script dragged out of it used to arrive unmarked.
+    @Test("An entry dragged out of a cloud archive is marked as downloaded")
+    func cloudArchiveDragIsMarked() async throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FileFlussDragOut-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let root = base.resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("Sample"), withIntermediateDirectories: true
+        )
+        try "#!/bin/sh\n".write(
+            to: root.appendingPathComponent("Sample/run.command"), atomically: true, encoding: .utf8
+        )
+        let archive = try await ArchiveService.createZip(
+            names: ["Sample"], in: root, archiveName: "Sample.zip"
+        )
+        #expect(!Quarantine.isMarked(archive))
+        let tree = try await ArchiveService.list(archive, format: .zip)
+
+        let delegate = ArchiveFilePromiseDelegate()
+        delegate.plan = ArchiveDragPlan(
+            archiveURL: archive, format: .zip, tree: tree, innerPath: "Sample", markQuarantined: true
+        )
+        nonisolated(unsafe) let provider = NSFilePromiseProvider(fileType: "public.plain-text", delegate: delegate)
+        provider.userInfo = ArchiveEntryPromise(entryPath: "Sample/run.command", name: "run.command")
+
+        let drop = root.appendingPathComponent("Drop", isDirectory: true)
+        try FileManager.default.createDirectory(at: drop, withIntermediateDirectories: true)
+        let target = drop.appendingPathComponent("run.command")
+
+        nonisolated(unsafe) let object: NSObject = delegate
+        let error: String? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let queue = ObjC.queue(object, provider)
+                queue.addOperation {
+                    ObjC.write(object, provider, target) { error in
+                        continuation.resume(returning: error?.localizedDescription)
+                    }
+                }
+            }
+        }
+        #expect(error == nil)
+        #expect(Quarantine.isMarked(target))
     }
 }
 

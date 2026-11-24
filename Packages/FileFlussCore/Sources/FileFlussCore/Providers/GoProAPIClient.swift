@@ -108,7 +108,7 @@ public actor GoProAPIClient {
 
     public func listDirectory(at path: String) async throws -> [CloudFileItem] {
         let list = try await mediaList()
-        return list.items(at: path)
+        return try list.items(at: path)
     }
 
     public func getFileInfo(at path: String) async throws -> CloudFileItem {

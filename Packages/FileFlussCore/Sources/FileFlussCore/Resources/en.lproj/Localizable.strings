@@ -12,3 +12,6 @@
 "Invalid email or password." = "Invalid email or password.";
 "File is too large to upload (%@). This provider's limit is %@." = "File is too large to upload (%@). This provider's limit is %@.";
 "File is too large to upload (%@). The provider rejected it. Try splitting the file or using a different cloud." = "File is too large to upload (%@). The provider rejected it. Try splitting the file or using a different cloud.";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "The downloaded file is corrupted: its MEGA integrity check (MAC) does not match.";

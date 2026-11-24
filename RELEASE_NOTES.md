@@ -31,6 +31,33 @@ When FileFluss can no longer sign in to an account (a locked Keychain or a crede
 
 pCloud stopped letting third-party apps sign in with a password. **Add Account now opens pCloud's sign-in page in your browser**, as it does for Box, and an existing account can be re-authorized from its settings. Accounts added the old way keep working.
 
+## Fixed on Mac and Windows
+
+- **Google Drive copes with files changed in the Drive web app.** A file that was deleted, trashed or moved there no longer keeps receiving uploads it can't take, or receives them in the trash; a folder deleted on the web is looked up again instead of listing as empty.
+- **Google Docs, Sheets, Slides and Drawings show under the name they download as** (`Report.docx`), so syncs and copies agree on the name. Forms, Sites, maps and shortcuts, which can't be downloaded, are no longer listed.
+- **MEGA shows changes made on the web or your phone** without restarting FileFluss, opens files in folders shared with you, and refuses a download whose key or checksum doesn't match instead of saving unreadable data.
+- **GitHub and GoPro:** a folder that no longer exists is reported as missing instead of empty, so a Mirror from it can't delete your copy. A large GitHub folder that can't be listed completely says so.
+- **WordPress lists every year and month of a large media library,** keeps uploads under their real name, and only ever deletes the exact item you chose.
+- **Filen:** a folder with an item FileFluss can't decrypt reports an error instead of leaving the item out, which a Mirror would have taken as deleted.
+- **Internxt:** when the folder can't be listed during a replace, nothing is replaced.
+
+## Fixed on the Mac
+
+- **Mirror deletes again in folders whose path contains a space or an umlaut.** In a folder such as "Backup Übersicht", the files Mirror reported as deleted were left in place, and replacing a file there left a `.filefluss-part` file behind.
+- **Names that differ only in capitals or accents no longer overwrite each other.** A cloud folder holding `README.md` and `Readme.md` (or two forms of "Café") kept only one of them on the Mac, and after a cut the other was gone from the cloud too. Now the second arrives as `Readme (2).md`. A Mirror between `readme.md` and `README.md` replaces the file in place instead of writing it and then deleting it.
+- **A folder can't be copied or moved into itself.** Copying a folder into one of its own subfolders kept copying until the path was too long.
+- **Replacing a folder from a cloud no longer deletes an unrelated file** such as `Report.pdf` next to it. Only an earlier download of the same Google document is replaced, and it goes to the Trash.
+- **Tags survive a tags file that can't be read.** FileFluss now keeps a backup, falls back to it, and never writes over a file it couldn't read; before, all tags of that account were lost.
+- **Files opened from a cloud get macOS's security check,** like any download: double-clicking, Open With, Quick Look and files taken out of a cloud archive.
+- **Accounts shown in Finder are only reachable by Finder.** The local server behind them now requires a secret address and refuses requests from web pages. A copy to such a folder that is cut off no longer replaces the cloud file with the part that arrived.
+- **Synology Drive and QNAP:** "Keep both" no longer overwrites the file you chose to keep; a failed download is reported instead of saving the NAS's error message as the file; a copy that is still running on the NAS isn't taken as finished; names containing `+` reach the right file. QNAP lists folders with more than 1,000 items completely.
+- **Internxt replaces a file safely.** The old file is removed only once the new one is in place.
+- **Koofr, Seafile and pCloud reach the right file when its name contains `&`, `=` or `+`.** Deleting `Q&A` could delete `Q`, and uploading `a&b.txt` to pCloud wrote a file called `a`. Seafile passwords containing these characters work too.
+- **Dropbox keeps emoji in file names.** A name such as "🎉 Party.jpg" was uploaded under a garbled name and couldn't be downloaded.
+- **Jottacloud** no longer signs you out when two requests renew the sign-in at once, and no longer hides a file while a newer upload of it is unfinished.
+- **Mirror** replaces a file that stands where the source has a folder (it used to fail on every run), compares files with a resource fork by their content size, and works in folders under `/private`.
+- **FileFluss stays responsive** while it indexes a drive, compares large folders, uploads a large folder, or when a network drive has gone offline. The Compare window builds its results in the background, and "Compare Date" no longer closes every open folder.
+
 ## Fixed on Windows
 
 - **Thumbnails are the right way up.** List rows and gallery tiles showed every image upside down.
@@ -44,10 +71,10 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **A new SFTP account shows the server's key fingerprint and asks before trusting it.** No password is sent until you confirm.
 - **A network drive or share that has gone offline no longer freezes FileFluss.** Showing a mapped drive's name in the path bar or title, or typing a path to an offline server, could block the window for up to a minute.
 - **A local path typed into a cloud panel's path bar opens on this PC.** `C:\…`, `\\server\share` and `%USERPROFILE%` used to be looked up inside the cloud account.
-- **The Compare window stays responsive with thousands of selected items,** also after copying them.
+- **The Compare window stays responsive with thousands of selected items,** also after copying them, and when "Compare dates" is switched on or off.
 - **Quick Look is smoother.** Large photos are prepared in the background, and arrowing past cloud files stops their downloads instead of fetching every one.
 - **Opening the same cloud file twice** (a second double-click, or Enter after Quick Look) waits for the download already running instead of failing with "file in use".
-- **Tags are safe when their file can't be read** at launch (for example while a virus scanner holds it). They used to be replaced with an empty set.
+- **Tags are safe when their file can't be read** at launch (for example while a virus scanner holds it). They used to be replaced with an empty set. A save that fails is now tried again instead of being dropped.
 - **Google Drive:** uploading a file that was deleted in the Drive web app works again; it failed until FileFluss was restarted.
 - **Synology Drive** reports a rename that fails after copying or moving, instead of reporting success.
 - **Internxt:** when the old file can't be removed during a replace, FileFluss now says so and leaves the old file as it was.

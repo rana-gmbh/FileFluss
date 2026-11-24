@@ -149,12 +149,22 @@ struct SidebarView: View {
 
     /// Mirrors the cloud-account tooltip for local drives: shows free / total
     /// space when the drive is mounted, falling back to just the name.
+    /// Reads only `DriveCapacityCache`: this runs on every body evaluation,
+    /// and asking the volume itself is a server round trip per network drive.
     private func driveTooltip(for drive: Drive) -> String {
-        guard let mount = appState.driveMonitor.mountURL(for: drive.id),
-              let cap = SpaceCheck.localVolumeCapacity(at: mount) else {
+        guard appState.driveMonitor.mountURL(for: drive.id) != nil,
+              let cap = DriveCapacityCache.shared.capacity(for: drive.id) else {
             return drive.displayName
         }
         return L10n.format("%@: %@", drive.displayName, LocalVolumeFormatter.summary(free: cap.free, total: cap.total))
+    }
+
+    /// Transfers that have finished, in either panel. When it goes up the
+    /// drives' free space has likely changed, so the cached capacities are
+    /// read again.
+    private var finishedTransferCount: Int {
+        appState.leftTransfers.lazy.filter(\.isComplete).count
+            + appState.rightTransfers.lazy.filter(\.isComplete).count
     }
 
     /// "Change Icon" submenu shown in the favorite's context menu. Lists
@@ -638,6 +648,9 @@ struct SidebarView: View {
         // the sidebar is collapsed (narrow). `.help(...)` on each row
         // surfaces the full name as a hover tooltip in that mode.
         .labelStyle(CollapsibleSidebarLabelStyle(collapsed: collapsed))
+        .onChange(of: finishedTransferCount) { old, new in
+            if new > old { DriveCapacityCache.shared.refreshAll() }
+        }
         .onChange(of: appState.sidebarSelection(for: panelSide)) { _, newValue in
             // Any selection change consumes a pending target: one that
             // nobody acted on is stale, and a click has to behave like a

@@ -158,11 +158,18 @@ public sealed class WordPressProviderTests : IDisposable
 
     // MARK: - Virtual folders
 
+    /// <summary>
+    /// The oldest and newest item bound the years; one probe per year in between finds the rest.
+    /// Sampling pages (the first nine and the last) left out the years between, and a Mirror from
+    /// the library deleted them.
+    /// </summary>
     [Fact]
-    public async Task RootListsYearsFromFirstAndLastPage()
+    public async Task RootListsEveryYearBetweenTheOldestAndNewest()
     {
-        _http.On(HttpMethod.Get, "&page=1&orderby=date", (_, _) => Paged("""[ { "id": 1, "date": "2019-03-01T10:00:00" }, { "id": 2, "date": "2021-07-04T10:00:00" } ]""", 2))
-             .On(HttpMethod.Get, "&page=2&orderby=date", (_, _) => Paged("""[ { "id": 3, "date": "2026-01-02T10:00:00" } ]""", 2));
+        _http.On(HttpMethod.Get, "order=asc", (_, _) => Paged("""[ { "id": 1, "date": "2019-03-01T10:00:00" } ]""", 900))
+             .On(HttpMethod.Get, "order=desc", (_, _) => Paged("""[ { "id": 3, "date": "2026-01-02T10:00:00" } ]""", 900))
+             .On(HttpMethod.Get, "after=2021-01-01", (_, _) => Paged("""[ { "id": 2, "date": "2021-07-04T10:00:00" } ]""", 1))
+             .On(HttpMethod.Get, "after=20", (_, _) => Paged("[]", 1));
         var provider = SignedIn();
 
         var years = await provider.ListDirectoryAsync("/");
@@ -171,6 +178,29 @@ public sealed class WordPressProviderTests : IDisposable
         Assert.All(years, y => Assert.True(y.IsDirectory));
         Assert.Equal("/2026", years[0].Path);
         Assert.Equal(ExpectedBasic("robert", "abcd efgh"), _http.Requests.First().Headers["Authorization"]);
+    }
+
+    [Fact]
+    public async Task AnEmptyLibraryListsNoYears()
+    {
+        _http.On(HttpMethod.Get, "/wp/v2/media", (_, _) => Paged("[]", 1));
+        Assert.Empty(await SignedIn().ListDirectoryAsync("/"));
+    }
+
+    [Fact]
+    public async Task AFailedYearProbeFailsTheRootListing()
+    {
+        _http.On(HttpMethod.Get, "order=asc", (_, _) => Paged("""[ { "id": 1, "date": "2019-03-01T10:00:00" } ]""", 1))
+             .On(HttpMethod.Get, "order=desc", (_, _) => Paged("""[ { "id": 3, "date": "2026-01-02T10:00:00" } ]""", 1))
+             .On(HttpMethod.Get, "after=20", (_, _) => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        await Assert.ThrowsAsync<CloudProviderException>(() => SignedIn().ListDirectoryAsync("/"));
+    }
+
+    [Fact]
+    public async Task APathThatIsNoYearOrMonthIsNotFound()
+    {
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => SignedIn().ListDirectoryAsync("/uploads"));
+        Assert.Equal(CloudErrorKind.NotFound, error.Kind);
     }
 
     [Fact]
@@ -267,6 +297,23 @@ public sealed class WordPressProviderTests : IDisposable
 
         var error = await Assert.ThrowsAsync<CloudProviderException>(() => provider.DeleteItemAsync("/2026/04/ghost.png"));
         Assert.Equal(CloudErrorKind.NotFound, error.Kind);
+    }
+
+    /// <summary>Deleting is permanent: logo.png from 2019/02 must never be taken for a logo.png in 2026/04.</summary>
+    [Fact]
+    public async Task DeleteNeverResolvesToASameNamedFileInAnotherMonth()
+    {
+        const string other = """[ { "id": 9, "date": "2019-02-10T09:00:00", "title": { "rendered": "logo" }, "source_url": "https://example.com/logo.png", "media_details": { "file": "2019/02/logo.png" } } ]""";
+        _http.On(HttpMethod.Get, "after=2026-04-01", (_, _) => Paged(AprilMedia, 1))
+             .OnJson(HttpMethod.Get, "search=logo", other)
+             .OnJson(HttpMethod.Delete, "/wp/v2/media/9", """{ "deleted": true }""");
+        var provider = SignedIn();
+
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.DeleteItemAsync("/2026/04/logo.png"));
+        Assert.DoesNotContain(_http.Requests, r => r.Method == HttpMethod.Delete);
+
+        // A non-destructive lookup doesn't take the other month's file either.
+        await Assert.ThrowsAsync<CloudProviderException>(() => provider.GetFileMetadataAsync("/2026/04/logo.png"));
     }
 
     [Fact]

@@ -28,6 +28,11 @@ public actor SynologyDriveAPIClient {
     /// Name DSM lists under "Trusted devices" for the token requested at OTP login.
     private static let deviceName = "FileFluss"
 
+    /// How long a server-side copy or move may run before it's given up on,
+    /// and the pause between status polls. Tests shorten both.
+    private let copyMoveTimeout: Duration
+    private let pollInterval: Duration
+
     public init(credentials: SynologyDriveCredentials) {
         self.credentials = credentials
         let config = URLSessionConfiguration.fileTransfer()
@@ -40,6 +45,24 @@ public actor SynologyDriveAPIClient {
         } else {
             self.session = URLSession(configuration: config)
         }
+        self.copyMoveTimeout = .seconds(30 * 60)
+        self.pollInterval = .milliseconds(500)
+    }
+
+    /// Tests hand in a session whose requests they answer themselves, and a
+    /// session id so no login is needed.
+    init(
+        credentials: SynologyDriveCredentials,
+        session: URLSession,
+        sid: String?,
+        copyMoveTimeout: Duration = .seconds(30 * 60),
+        pollInterval: Duration = .milliseconds(500)
+    ) {
+        self.credentials = credentials
+        self.session = session
+        self.sid = sid
+        self.copyMoveTimeout = copyMoveTimeout
+        self.pollInterval = pollInterval
     }
 
     public func userDisplayName() -> String { credentials.displayName }
@@ -216,23 +239,63 @@ public actor SynologyDriveAPIClient {
     // MARK: - File operations
 
     public func downloadFile(remotePath: String, to localURL: URL, onBytes: ByteProgressHandler?) async throws {
-        let sid = try await ensureSession()
-        let url = try buildURL(
-            path: "/webapi/entry.cgi",
-            queryItems: [
-                URLQueryItem(name: "api", value: "SYNO.FileStation.Download"),
-                URLQueryItem(name: "version", value: "2"),
-                URLQueryItem(name: "method", value: "download"),
-                URLQueryItem(name: "path", value: remotePath),
-                URLQueryItem(name: "mode", value: "download"),
-                URLQueryItem(name: "_sid", value: sid)
-            ]
-        )
+        var attempt = 0
+        while true {
+            let sid = try await ensureSession()
+            let url = try buildURL(
+                path: "/webapi/entry.cgi",
+                queryItems: [
+                    URLQueryItem(name: "api", value: "SYNO.FileStation.Download"),
+                    URLQueryItem(name: "version", value: "2"),
+                    URLQueryItem(name: "method", value: "download"),
+                    URLQueryItem(name: "path", value: remotePath),
+                    URLQueryItem(name: "mode", value: "download"),
+                    URLQueryItem(name: "_sid", value: sid)
+                ]
+            )
 
-        let (tmp, response) = try await session.downloadReportingProgress(for: URLRequest(url: url), onBytes: onBytes)
-        try validateHTTP(response)
+            let (tmp, response) = try await session.downloadReportingProgress(for: URLRequest(url: url), onBytes: onBytes)
+            // DSM reports a failed download (missing file, expired session)
+            // as a small JSON envelope with HTTP 200. Saved as it was, that
+            // envelope became the file's contents and the download a success.
+            let failure: Int?
+            do {
+                try validateHTTP(response)
+                failure = Self.errorCodeInSmallJSON(at: tmp, response: response)
+            } catch {
+                try? FileManager.default.removeItem(at: tmp)
+                throw error
+            }
+            if let code = failure {
+                try? FileManager.default.removeItem(at: tmp)
+                if code == 119 && attempt == 0 {
+                    self.sid = nil
+                    attempt += 1
+                    continue
+                }
+                synologyLog.error("[Synology] Download failed with code \(code)")
+                throw code == 408 ? CloudProviderError.notFound(remotePath) : mapAPIError(code: code)
+            }
 
-        try FileSystemService.placeDownload(from: tmp, at: localURL)
+            try FileSystemService.placeDownload(from: tmp, at: localURL)
+            return
+        }
+    }
+
+    /// The DSM error code in a downloaded body that is really an error
+    /// envelope. Only a small JSON-ish reply carrying an explicit
+    /// `"success": false` counts: any other JSON is the file itself.
+    static func errorCodeInSmallJSON(at url: URL, response: URLResponse) -> Int? {
+        let jsonTypes: Set<String> = ["application/json", "text/json", "text/plain"]
+        guard let mime = response.mimeType?.lowercased(), jsonTypes.contains(mime),
+              let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber,
+              size.intValue <= 4096,
+              let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let success = object["success"] as? Bool, !success
+        else { return nil }
+        let error = object["error"] as? [String: Any]
+        return (error?["code"] as? NSNumber)?.intValue ?? -1
     }
 
     // MARK: - Thumbnails
@@ -321,20 +384,10 @@ public actor SynologyDriveAPIClient {
     }
 
     public func uploadFile(from localURL: URL, to remotePath: String, onBytes: ByteProgressHandler?) async throws {
-        let sid = try await ensureSession()
         let parentPath = (remotePath as NSString).deletingLastPathComponent
         let fileName = (remotePath as NSString).lastPathComponent
 
         let boundary = "----FileFlussSynology\(UUID().uuidString)"
-        let url = try buildURL(
-            path: "/webapi/entry.cgi",
-            queryItems: [
-                URLQueryItem(name: "api", value: "SYNO.FileStation.Upload"),
-                URLQueryItem(name: "version", value: "2"),
-                URLQueryItem(name: "method", value: "upload"),
-                URLQueryItem(name: "_sid", value: sid)
-            ]
-        )
 
         // Build the multipart body in a temp file so big uploads don't sit
         // in RAM. URLSession.upload(fromFile:) streams it.
@@ -372,16 +425,37 @@ public actor SynologyDriveAPIClient {
         try handle.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
         try handle.close()
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var attempt = 0
+        while true {
+            let sid = try await ensureSession()
+            let url = try buildURL(
+                path: "/webapi/entry.cgi",
+                queryItems: [
+                    URLQueryItem(name: "api", value: "SYNO.FileStation.Upload"),
+                    URLQueryItem(name: "version", value: "2"),
+                    URLQueryItem(name: "method", value: "upload"),
+                    URLQueryItem(name: "_sid", value: sid)
+                ]
+            )
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        let progressDelegate = onBytes.map { ByteProgressDelegate(onBytes: $0) }
-        let (data, response) = try await session.upload(for: request, fromFile: bodyFile, delegate: progressDelegate)
-        try validateHTTP(response)
-        let envelope = try JSONDecoder().decode(SynologyEnvelope<SynologyEmptyData>.self, from: data)
-        if !envelope.success {
-            throw mapAPIError(code: envelope.error?.code ?? -1)
+            let progressDelegate = onBytes.map { ByteProgressDelegate(onBytes: $0) }
+            let (data, response) = try await session.upload(for: request, fromFile: bodyFile, delegate: progressDelegate)
+            try validateHTTP(response)
+            let envelope = try JSONDecoder().decode(SynologyEnvelope<SynologyEmptyData>.self, from: data)
+            if envelope.success { return }
+            let code = envelope.error?.code ?? -1
+            if code == 119 && attempt == 0 {
+                // A session that expired while idle, as `call` handles it:
+                // log in again and send the body once more, rather than
+                // failing the upload and keeping the dead session id.
+                self.sid = nil
+                attempt += 1
+                continue
+            }
+            throw mapAPIError(code: code)
         }
     }
 
@@ -443,16 +517,33 @@ public actor SynologyDriveAPIClient {
         )
         guard let taskid = start.taskid else { return }
 
-        // Poll up to 60 seconds in 0.5s steps.
-        for _ in 0..<120 {
+        // A big folder takes the NAS minutes. Returning while the task still
+        // runs (as after a minute before) reported a move as done — and the
+        // caller went on to rename, or to delete the set-aside original —
+        // before it had happened. So keep asking, slower after the first
+        // minute, read the task's own error, and fail when it never ends.
+        let clock = ContinuousClock()
+        let deadline = clock.now + copyMoveTimeout
+        var poll = 0
+        while true {
             let status: SynologyTaskStatusData = try await call(
                 api: "SYNO.FileStation.CopyMove",
                 version: "3",
                 method: "status",
                 extra: [URLQueryItem(name: "taskid", value: taskid)]
             )
+            if let code = status.errorCode, code != 0 {
+                synologyLog.error("[Synology] CopyMove of \(path) failed with code \(code)")
+                throw mapAPIError(code: code)
+            }
             if status.finished == true { return }
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            if clock.now >= deadline {
+                synologyLog.error("[Synology] CopyMove of \(path) didn't finish in time")
+                throw CloudProviderError.networkError(URLError(.timedOut))
+            }
+            let interval = poll < 120 ? pollInterval : max(pollInterval, .seconds(5))
+            try await Task.sleep(for: interval)
+            poll += 1
         }
     }
 
@@ -464,14 +555,20 @@ public actor SynologyDriveAPIClient {
             extra: [
                 URLQueryItem(name: "path", value: "[\"\(path.replacingOccurrences(of: "\"", with: "\\\""))\"]"),
                 URLQueryItem(name: "additional", value: "[\"size\",\"time\",\"type\"]")
-            ]
+            ],
+            notFoundPath: path
         )
-        guard let first = result.files.first else { throw CloudProviderError.notFound(path) }
+        // A path that isn't there comes back as an entry carrying its own
+        // error code (408) and little else. It has to read as "not found":
+        // copy and move ask exactly that before landing a file.
+        guard let first = result.files.first, (first.code ?? 0) == 0,
+              let firstPath = first.path, let isdir = first.isdir
+        else { throw CloudProviderError.notFound(path) }
         return CloudFileItem(
-            id: first.path,
-            name: first.name,
-            path: first.path,
-            isDirectory: first.isdir,
+            id: firstPath,
+            name: first.name ?? (firstPath as NSString).lastPathComponent,
+            path: firstPath,
+            isDirectory: isdir,
             size: first.additional?.size ?? 0,
             modificationDate: first.additional?.timeDate ?? .distantPast,
             checksum: nil
@@ -821,8 +918,15 @@ public actor SynologyDriveAPIClient {
 
     /// Issues a `webapi/entry.cgi` call with the provided API/version/method
     /// and decodes the JSON envelope into `T`. Re-logins once on SID
-    /// expiry (error 119) before giving up.
-    private func call<T: Decodable>(api: String, version: String, method: String, extra: [URLQueryItem]) async throws -> T {
+    /// expiry (error 119) before giving up. With `notFoundPath`, DSM's 408
+    /// ("no such file or directory") becomes `.notFound` for that path.
+    private func call<T: Decodable>(
+        api: String,
+        version: String,
+        method: String,
+        extra: [URLQueryItem],
+        notFoundPath: String? = nil
+    ) async throws -> T {
         var attempt = 0
         while true {
             let sid = try await ensureSession()
@@ -853,6 +957,9 @@ public actor SynologyDriveAPIClient {
                 attempt += 1
                 continue
             }
+            if code == 408, let notFoundPath {
+                throw CloudProviderError.notFound(notFoundPath)
+            }
             throw mapAPIError(code: code)
         }
     }
@@ -862,9 +969,17 @@ public actor SynologyDriveAPIClient {
             throw CloudProviderError.invalidResponse
         }
         components.path = path
-        components.queryItems = queryItems
+        components.percentEncodedQuery = Self.encodeQuery(queryItems)
         guard let url = components.url else { throw CloudProviderError.invalidResponse }
         return url
+    }
+
+    /// Strict percent-encoding of every name and value: only the unreserved
+    /// characters stay as they are. `URLComponents.queryItems` leaves `+`
+    /// raw, and DSM's CGI reads a bare `+` as a space — deleting "a+b.txt"
+    /// deleted "a b.txt". This covers every call, the login included.
+    static func encodeQuery(_ items: [URLQueryItem]) -> String {
+        StrictQueryEncoding.query(items.map { ($0.name, $0.value ?? "") })
     }
 
     private func validateHTTP(_ response: URLResponse) throws {
@@ -1027,7 +1142,16 @@ private struct SynologyListData: Decodable {
 }
 
 private struct SynologyGetInfoData: Decodable {
-    let files: [SynologyListData.Entry]
+    let files: [Entry]
+    /// Like a listing entry, but everything is optional: an entry for a
+    /// missing path has only `code` and the path that was asked for.
+    struct Entry: Decodable {
+        let name: String?
+        let path: String?
+        let isdir: Bool?
+        let code: Int?
+        let additional: SynologyListData.Additional?
+    }
 }
 
 private struct SynologyCreateFolderData: Decodable {
@@ -1040,6 +1164,24 @@ private struct SynologyTaskStartData: Decodable {
 
 private struct SynologyTaskStatusData: Decodable {
     let finished: Bool?
+    /// The task's own failure, which DSM reports beside `finished` as
+    /// `{"code": …}` (or a bare number) while the envelope says success.
+    let errorCode: Int?
+
+    enum CodingKeys: String, CodingKey { case finished, error }
+    private struct ErrorObject: Decodable { let code: Int? }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        finished = try container.decodeIfPresent(Bool.self, forKey: .finished)
+        if let number = try? container.decodeIfPresent(Int.self, forKey: .error) {
+            errorCode = number
+        } else if let object = try? container.decodeIfPresent(ErrorObject.self, forKey: .error) {
+            errorCode = object.code
+        } else {
+            errorCode = nil
+        }
+    }
 }
 
 /// `additional.time` returns POSIX timestamps for atime/ctime/mtime.

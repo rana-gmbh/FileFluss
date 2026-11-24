@@ -140,6 +140,9 @@ internal sealed class FilenTestServer
 
     public string? RequiredCode { get; set; }
 
+    /// <summary>What <c>/v3/dir/content</c> answers for the root instead of the normal listing.</summary>
+    public string? RootContentOverride { get; set; }
+
     public ConcurrentQueue<(string Path, JsonObject Body)> Calls { get; } = new();
 
     public FilenCredentials Credentials() => new(Email, ApiKey, [Derivation.MasterKeyHex, OlderMasterKey], Root);
@@ -185,7 +188,7 @@ internal sealed class FilenTestServer
             case "/v3/dir/content":
                 return (string?)body["uuid"] switch
                 {
-                    Root => Envelope(RootContent()),
+                    Root => Envelope(RootContentOverride ?? RootContent()),
                     "photos-uuid" => Envelope("{\"uploads\":[],\"folders\":[]}"),
                     _ => Status(HttpStatusCode.NotFound),
                 };
@@ -208,8 +211,7 @@ internal sealed class FilenTestServer
             {
               "folders": [
                 {"uuid":"photos-uuid","name":"{{photos}}","parent":"{{Root}}","color":null,"timestamp":1600000000,"favorited":0},
-                {"uuid":"old-uuid","name":"{{old}}","parent":"{{Root}}","timestamp":1600000001},
-                {"uuid":"broken-uuid","name":"002notreallyencrypted","parent":"{{Root}}","timestamp":1600000002}
+                {"uuid":"old-uuid","name":"{{old}}","parent":"{{Root}}","timestamp":1600000001}
               ],
               "uploads": [
                 {"uuid":"report-uuid","metadata":"{{report}}","rm":"x","timestamp":1600000003,"chunks":3,"size":0,"bucket":"filen-1","region":"de-1","parent":"{{Root}}","version":2},
@@ -349,7 +351,7 @@ public class FilenProviderTests
     }
 
     [Fact]
-    public async Task ListingDecryptsWithEveryMasterKeyAndSkipsUnreadableItems()
+    public async Task ListingDecryptsWithEveryMasterKey()
     {
         using var h = new FilenHarness();
 
@@ -372,6 +374,50 @@ public class FilenProviderTests
         var request = h.Capture.Matching(HttpMethod.Post, "/v3/dir/content").First();
         Assert.Equal("Bearer " + FilenTestServer.ApiKey, request.Headers["Authorization"]);
         Assert.Equal("{\"uuid\":\"root-uuid\"}", Encoding.UTF8.GetString(request.Body));
+    }
+
+    /// <summary>
+    /// A listing that leaves out what it can't decrypt looks emptier than the folder is, and
+    /// Mirror would delete those files on the other side, so it has to be an error.
+    /// </summary>
+    [Theory]
+    [InlineData("folder")]
+    [InlineData("file")]
+    [InlineData("foreign-key")]
+    [InlineData("no-uuid")]
+    public async Task AnEntryThatCannotBeReadMakesTheListingUnreadable(string broken)
+    {
+        using var h = new FilenHarness();
+        var good = FilenCrypto.EncryptMetadata("{\"name\":\"a.txt\",\"size\":1,\"mime\":\"text/plain\",\"key\":\"abcdefghijklmnopqrstuvwxyzABCDEF\",\"lastModified\":1700000500}", h.Server.DerivedKey);
+        var foreign = FilenCrypto.EncryptMetadata("{\"name\":\"b.txt\",\"size\":1,\"mime\":\"text/plain\",\"key\":\"abcdefghijklmnopqrstuvwxyzABCDEF\",\"lastModified\":1700000500}", FilenCrypto.AesKeyFromV2MasterKey(new string('f', 64)));
+        var folders = broken == "folder" ? "{\"uuid\":\"x\",\"name\":\"002notreallyencrypted\",\"timestamp\":1}" : string.Empty;
+        var uploads = broken switch
+        {
+            "file" => $"{{\"uuid\":\"a\",\"metadata\":\"{good}\"}},{{\"uuid\":\"b\",\"metadata\":\"002notreallyencrypted\"}}",
+            "foreign-key" => $"{{\"uuid\":\"a\",\"metadata\":\"{good}\"}},{{\"uuid\":\"b\",\"metadata\":\"{foreign}\"}}",
+            "no-uuid" => $"{{\"metadata\":\"{good}\"}}",
+            _ => $"{{\"uuid\":\"a\",\"metadata\":\"{good}\"}}",
+        };
+        h.Server.RootContentOverride = $"{{\"folders\":[{folders}],\"uploads\":[{uploads}]}}";
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.ListDirectoryAsync("/"));
+
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
+    }
+
+    [Theory]
+    [InlineData("{\"folders\":[]}")]
+    [InlineData("{\"uploads\":[]}")]
+    [InlineData("{}")]
+    [InlineData("{\"folders\":null,\"uploads\":[]}")]
+    public async Task AnAnswerWithoutFoldersOrUploadsIsUnreadableNotEmpty(string content)
+    {
+        using var h = new FilenHarness();
+        h.Server.RootContentOverride = content;
+
+        var error = await Assert.ThrowsAsync<CloudProviderException>(() => h.Provider.ListDirectoryAsync("/"));
+
+        Assert.Equal(CloudErrorKind.CommandFailed, error.Kind);
     }
 
     [Fact]

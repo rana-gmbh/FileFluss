@@ -59,10 +59,18 @@ public actor InternxtAPIClient {
         let type: String?     // extension (files only)
     }
 
+    /// The pause unit between retries (0.6 s, 1.2 s, …). Tests shorten it.
+    private let retryDelayNanos: UInt64
+
     public init(credentials: InternxtCredentials) {
+        self.init(credentials: credentials, session: URLSession(configuration: .fileTransfer()))
+    }
+
+    /// Tests hand in a session whose requests they answer themselves.
+    init(credentials: InternxtCredentials, session: URLSession, retryDelayNanos: UInt64 = 600_000_000) {
         self.credentials = credentials
-        let config = URLSessionConfiguration.fileTransfer()
-        self.session = URLSession(configuration: config)
+        self.session = session
+        self.retryDelayNanos = retryDelayNanos
         self.nodeCache = ["/": Node(uuid: credentials.rootFolderUuid, isFolder: true, fileId: nil, bucket: nil, size: 0, type: nil)]
     }
 
@@ -270,7 +278,15 @@ public actor InternxtAPIClient {
         let bucket = credentials.bucket
 
         // A pre-existing file at this path is replaced once the new one lands.
-        let existing = try? await resolve(remotePath)
+        // Only "not there" means no file: a listing that failed must not
+        // pass for an empty folder, or the replacement would skip the safe
+        // path below and end in the 409 branch, which deletes first.
+        let existing: Node?
+        do {
+            existing = try await resolve(remotePath)
+        } catch CloudProviderError.notFound {
+            existing = nil
+        }
 
         // 1. Per-file key material.
         var index = Data(count: 32)
@@ -308,22 +324,19 @@ public actor InternxtAPIClient {
         }
         let finish = try JSONDecoder().decode(FinishResp.self, from: finishData)
 
-        // 5. Drop the previous version *before* registering the new one.
-        // Internxt's Drive API rejects creating a file whose plainName+type
-        // already exists in the folder with HTTP 409, so a replace must
-        // remove the old entry first. The new ciphertext is already safely
-        // uploaded (steps 2-4), so the old data isn't the only copy when we
-        // delete its Drive entry here.
-        if let existing, !existing.isFolder {
-            _ = try? await driveSend("/files/\(existing.uuid)", method: "DELETE", body: nil)
-            nodeCache.removeValue(forKey: remotePath)
-        }
-
-        // 6. Register the file in Drive.
+        // 5. Register the file in Drive. Drive rejects a plainName+type that
+        // already exists in the folder (409), so a replacement is registered
+        // under a temporary name first; only once it exists does the old
+        // entry go, and the new one takes the name. Deleting first (as
+        // before) lost the old file whenever the registration then failed.
         let base = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
+        let replacing = existing.map { !$0.isFolder } ?? false
+        let registeredBase = replacing ? "\(base).fileflusspart-\(Self.temporaryToken())" : base
+        let registeredName = ext.isEmpty ? registeredBase : "\(registeredBase).\(ext)"
+        let registeredPath = Self.childPath(registeredName, in: parentPath)
         var entry: [String: Any] = [
-            "plainName": base, "type": ext, "size": plaintext.count,
+            "plainName": registeredBase, "type": ext, "size": plaintext.count,
             "folderUuid": parent.uuid, "fileId": finish.id, "bucket": bucket,
             "encryptVersion": "03-aes",
         ]
@@ -340,14 +353,91 @@ public actor InternxtAPIClient {
         // below, which resolves it against the live listing.
         let createData: Data = try await retryingTransient {
             try await self.registerDriveEntry(
-                body: entryBody, remotePath: remotePath, parentPath: parentPath
+                body: entryBody, remotePath: registeredPath, parentPath: parentPath
             )
         }
 
         struct Created: Decodable { let uuid: String }
-        if let created = try? JSONDecoder().decode(Created.self, from: createData) {
-            nodeCache[remotePath] = Node(uuid: created.uuid, isFolder: false, fileId: finish.id, bucket: bucket, size: Int64(plaintext.count), type: ext)
+        let createdUuid = (try? JSONDecoder().decode(Created.self, from: createData))?.uuid
+
+        if replacing, let existing {
+            // Without the new entry's uuid it can't take the name; the old
+            // file stays as it was.
+            guard let newUuid = createdUuid else { throw CloudProviderError.invalidResponse }
+            do {
+                try await deleteRetryingTransient("/files/\(existing.uuid)")
+            } catch CloudProviderError.notFound {
+                // Already gone (deleted elsewhere, or a stale cached node):
+                // the name is free.
+            } catch {
+                // The old file can't be removed (no permission, a lasting
+                // server error). Going on would spin on 409 for the taken
+                // name, with the old file and a ".fileflusspart-…" copy side
+                // by side. Put the folder back as it was — the old file
+                // stays — and report why. Detached, so a cancelled upload
+                // still cleans up after itself.
+                let cleanup = Task.detached { [self] in
+                    try await self.driveSend("/files/\(newUuid)", method: "DELETE", body: nil)
+                }
+                do {
+                    _ = try await cleanup.value
+                } catch let cleanupError {
+                    internxtLog.error("[Internxt] Removing the replacement left as \(registeredName, privacy: .public) failed: \(cleanupError.localizedDescription, privacy: .public)")
+                }
+                throw error
+            }
+            nodeCache.removeValue(forKey: remotePath)
+            try await takeName(uuid: newUuid, plainName: base)
         }
+
+        if let createdUuid {
+            nodeCache[remotePath] = Node(uuid: createdUuid, isFolder: false, fileId: finish.id, bucket: bucket, size: Int64(plaintext.count), type: ext)
+        }
+    }
+
+    /// Renames the freshly registered replacement to its real name. Drive is
+    /// only eventually consistent, both ways round: the old entry's delete
+    /// can take a moment to propagate (409 meanwhile), and the entry created
+    /// a second ago can still be unknown to the rename endpoint (404). Both
+    /// settle within seconds, so both are retried with a growing pause
+    /// (about 9 s in all); if it never works the file is still there under
+    /// its temporary name and the error says the upload didn't finish.
+    private func takeName(uuid: String, plainName: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["plainName": plainName])
+        var attempt = 1
+        while true {
+            do {
+                try await driveSend("/files/\(uuid)/meta", method: "PUT", body: body)
+                return
+            } catch where attempt < 6 && Self.isSettling(error) {
+                try await Task.sleep(nanoseconds: retryDelayNanos * UInt64(attempt))
+                attempt += 1
+            }
+        }
+    }
+
+    /// The failures `takeName` waits out: server errors (409 included),
+    /// rate limits, a dropped connection, and the 404 of an entry Drive
+    /// doesn't know yet.
+    private static func isSettling(_ error: Error) -> Bool {
+        switch error {
+        case CloudProviderError.serverError, CloudProviderError.rateLimited,
+             CloudProviderError.notFound, CloudProviderError.networkError:
+            return true
+        case let urlError as URLError:
+            return urlError.code != .cancelled
+        default:
+            return false
+        }
+    }
+
+    /// Eight hex digits for a replacement's temporary name.
+    private static func temporaryToken() -> String {
+        String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(8)).lowercased()
+    }
+
+    private static func childPath(_ name: String, in parentPath: String) -> String {
+        parentPath.isEmpty || parentPath == "/" ? "/\(name)" : "\(parentPath)/\(name)"
     }
 
     /// Registers the uploaded file in Drive, resolving the one conflict the
@@ -360,9 +450,20 @@ public actor InternxtAPIClient {
         do {
             return try await driveSend("/files", method: "POST", body: body)
         } catch CloudProviderError.serverError(409) {
-            _ = try? await listFolder(path: parentPath.isEmpty ? "/" : parentPath)
+            // Neither step is fatal on its own — the create below answers
+            // 409 again if the name is still taken — but a failure here is
+            // why, so it goes to the log rather than nowhere.
+            do {
+                _ = try await listFolder(path: parentPath.isEmpty ? "/" : parentPath)
+            } catch {
+                internxtLog.error("[Internxt] Re-listing after a 409 failed: \(error.localizedDescription, privacy: .public)")
+            }
             if let conflict = nodeCache[remotePath], !conflict.isFolder {
-                _ = try? await driveSend("/files/\(conflict.uuid)", method: "DELETE", body: nil)
+                do {
+                    try await driveSend("/files/\(conflict.uuid)", method: "DELETE", body: nil)
+                } catch {
+                    internxtLog.error("[Internxt] Removing the entry in the way after a 409 failed: \(error.localizedDescription, privacy: .public)")
+                }
                 nodeCache.removeValue(forKey: remotePath)
             }
             return try await driveSend("/files", method: "POST", body: body)
@@ -380,7 +481,7 @@ public actor InternxtAPIClient {
             } catch let error as CloudProviderError where Self.isTransient(error) {
                 lastError = error
                 if attempt < attempts - 1 {
-                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 600_000_000) // 0.6s, 1.2s
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * retryDelayNanos) // 0.6s, 1.2s
                 }
             }
         }
@@ -406,7 +507,7 @@ public actor InternxtAPIClient {
                 sawTransient = true
                 lastError = error
                 if attempt < attempts - 1 {
-                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 600_000_000)
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * retryDelayNanos)
                 }
             }
         }

@@ -103,7 +103,8 @@ public sealed class GoogleDrivePickerProviderTests : IDisposable
         var nested = await provider.ListDirectoryAsync("/Photos/2024");
         await provider.ListDirectoryAsync("/Photos/2024");
 
-        Assert.Equal(new[] { "/Photos/2024", "/Photos/a.jpg", "/Photos/Notes" }, first.Select(i => i.Path));
+        // The Doc lists under the name its export lands as.
+        Assert.Equal(new[] { "/Photos/2024", "/Photos/a.jpg", "/Photos/Notes.pdf" }, first.Select(i => i.Path));
         Assert.Equal("dy2024", first[0].Id);
         Assert.Equal("fa1", first[1].Id);
         Assert.Equal(2048, first[1].Size);
@@ -205,12 +206,15 @@ public sealed class GoogleDrivePickerProviderTests : IDisposable
         var provider = Provider();
         Listings();
         _http.OnBytes(HttpMethod.Get, "/files/doc7/export", "%PDF"u8.ToArray());
-        var local = Path.Combine(_temp, "Notes");
+        var local = Path.Combine(_temp, "Notes.pdf");
         long bytes = 0;
 
-        await provider.DownloadFileAsync("/Photos/Notes", local, delta => bytes += delta);
+        // Listed as Notes.pdf, the export lands exactly where it was asked to: a sync's
+        // listing, download and destination agree.
+        await provider.DownloadFileAsync("/Photos/Notes.pdf", local, delta => bytes += delta);
 
-        Assert.Equal("%PDF", await File.ReadAllTextAsync(local + ".pdf"));
+        Assert.Equal("%PDF", await File.ReadAllTextAsync(local));
+        Assert.False(File.Exists(local + ".pdf"));
         Assert.Equal(4, bytes);
         var export = Query(_http.Single(HttpMethod.Get, "/export").Uri);
         Assert.Equal("application/pdf", export["mimeType"]);
@@ -247,8 +251,8 @@ public sealed class GoogleDrivePickerProviderTests : IDisposable
         Assert.Equal(5, bytes);
         var find = Query(_http.Single(HttpMethod.Get, "/files?").Uri);
         Assert.Equal("'r1' in parents and name = 'x.txt' and trashed = false", find["q"]);
-        Assert.Equal("files(id)", find["fields"]);
-        Assert.Equal("1", find["pageSize"]);
+        Assert.Equal("files(id,name,mimeType)", find["fields"]);
+        Assert.Equal("10", find["pageSize"]);
         Assert.Equal("true", find["supportsAllDrives"]);
         Assert.Null(find["includeItemsFromAllDrives"]);
 

@@ -12,6 +12,12 @@ import Foundation
 /// The `drives` array merges both: a drive that's currently mounted appears
 /// with a fresh mount path; a drive that's known-but-offline appears with
 /// `lastMountPath` preserved and `isOnline = false` derived at read time.
+///
+/// Mounted volumes are enumerated and classified on a background thread and
+/// the result is published to the main actor. Asking a volume for its
+/// resource values can wait on the server behind it, and a dead SMB/NFS/AFP
+/// share or an orphaned WebDAV mount used to hang the app's launch, or the
+/// plugging-in of a USB stick, for as long as the server took to time out.
 @MainActor
 @Observable
 final class DriveMonitor {
@@ -32,7 +38,7 @@ final class DriveMonitor {
     /// `/System/Volumes/` covers the parts of the startup disk macOS mounts
     /// for itself — the Data volume, Preboot, Recovery, VM — which is what
     /// keeps internal volumes safe to show now that they are shown at all.
-    private static let excludedPrefixes: [String] = [
+    nonisolated private static let excludedPrefixes: [String] = [
         "/System/Volumes/",
         "/private/var/folders/"
     ]
@@ -40,18 +46,20 @@ final class DriveMonitor {
     /// Mounts that are internal volumes by every API measure but aren't a
     /// place to put files: Time Machine's local snapshots, which macOS
     /// mounts under /Volumes with a generated name.
-    private static let excludedNamePrefixes: [String] = [
+    nonisolated private static let excludedNamePrefixes: [String] = [
         "com.apple.TimeMachine",
         ".timemachine"
     ]
 
     private init() {
         loadFromDefaults()
-        refreshMountedVolumes()
         // On a fresh launch, drop any persisted entry that was never
-        // indexed AND isn't currently mounted. Avoids carrying yesterday's
-        // one-off DMG into today's sidebar.
+        // indexed. Avoids carrying yesterday's one-off DMG into today's
+        // sidebar. Nothing is known to be mounted yet, so this drops every
+        // unindexed entry; the ones that are mounted come straight back
+        // when the first scan, started below, is published.
         pruneUnindexedOfflineDrives()
+        refreshMountedVolumes()
 
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(
@@ -151,30 +159,71 @@ final class DriveMonitor {
     /// re-mounted drive can come back online.
     private var suppressedURLPaths: Set<String> = []
 
+    /// Bumped by every scan that starts. A scan's result is published only
+    /// if it is newer than the last one published, so a scan that was held
+    /// up by a slow volume can never overwrite what a later one found.
+    @ObservationIgnored private var scanGeneration = 0
+    @ObservationIgnored private var publishedGeneration = 0
+
+    /// Starts a background scan of the mounted volumes; the result is
+    /// merged into `drives` and `liveMountURLs` on the main actor when it
+    /// arrives. Returns at once, so nothing here waits on a volume.
     private func refreshMountedVolumes() {
-        let keys: [URLResourceKey] = [
-            .volumeIsRemovableKey,
-            .volumeIsLocalKey,
-            .volumeIsInternalKey,
-            .volumeIsBrowsableKey,
-            .volumeIsRootFileSystemKey,
-            .volumeNameKey,
-            .volumeUUIDStringKey,
-            .volumeURLKey
-        ]
+        scanGeneration += 1
+        let generation = scanGeneration
+        // The monitor is a process-wide singleton, so a strong capture
+        // costs nothing and keeps a weak reference out of a sendable closure.
+        let monitor = self
+        Task.detached(priority: .userInitiated) {
+            let volumes = Self.scanMountedVolumes()
+            await monitor.publish(volumes, generation: generation)
+        }
+    }
+
+    /// A volume the scan decided to show, with the URL it is mounted at.
+    struct MountedVolume: Sendable {
+        let url: URL
+        let drive: Drive
+    }
+
+    nonisolated private static let volumeKeys: [URLResourceKey] = [
+        .volumeIsRemovableKey,
+        .volumeIsLocalKey,
+        .volumeIsInternalKey,
+        .volumeIsBrowsableKey,
+        .volumeIsRootFileSystemKey,
+        .volumeNameKey,
+        .volumeUUIDStringKey,
+        .volumeURLKey
+    ]
+
+    /// Enumerates and classifies the mounted volumes. Blocking file-system
+    /// work, so it must never run on the main thread.
+    nonisolated static func scanMountedVolumes() -> [MountedVolume] {
+        let keys = volumeKeys
         let mounted = FileManager.default.mountedVolumeURLs(
             includingResourceValuesForKeys: keys,
             options: [.skipHiddenVolumes]
         ) ?? []
+        return mounted.compactMap { url in
+            classify(url, keys: keys).map { MountedVolume(url: url, drive: $0) }
+        }
+    }
+
+    /// Merges a finished scan into the published state.
+    private func publish(_ volumes: [MountedVolume], generation: Int) {
+        guard generation > publishedGeneration else { return }
+        publishedGeneration = generation
 
         var nextLive: [String: URL] = [:]
-        for url in mounted {
+        for volume in volumes {
+            let url = volume.url
             if suppressedURLPaths.contains(url.path) {
                 // The kernel still reports this URL even though we just
                 // saw the unmount notification. Don't treat it as online.
                 continue
             }
-            guard let drive = classify(url, keys: keys) else { continue }
+            let drive = volume.drive
             nextLive[drive.id] = url
 
             // Merge into persisted list: keep lastIndexed etc. if present.
@@ -192,6 +241,7 @@ final class DriveMonitor {
         // volume just unmounted. Prune those so the sidebar stays tight.
         pruneUnindexedOfflineDrives()
         saveToDefaults()
+        DriveCapacityCache.shared.refresh(mounts: liveMountURLs)
     }
 
     /// Drop every drive that (a) isn't currently mounted and (b) has
@@ -215,7 +265,7 @@ final class DriveMonitor {
     /// Pure and `static` so it can be tested: this is the rule that decided
     /// a user's second internal partition didn't exist, and it was
     /// previously reachable only by plugging real disks into a real Mac.
-    static func kind(
+    nonisolated static func kind(
         mountPath: String,
         name: String,
         isBrowsable: Bool,
@@ -246,7 +296,7 @@ final class DriveMonitor {
         return isInternal ? .internalVolume : .external
     }
 
-    private func classify(_ url: URL, keys: [URLResourceKey]) -> Drive? {
+    nonisolated private static func classify(_ url: URL, keys: [URLResourceKey]) -> Drive? {
         guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return nil }
 
         let name = values.volumeName ?? url.lastPathComponent

@@ -58,6 +58,8 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
         ["application/vnd.google-apps.drawing"] = ("application/pdf", "pdf"),
     };
 
+    private static readonly Dictionary<string, string> ExportExtensions = ExportFormats.ToDictionary(e => e.Key, e => e.Value.Extension, StringComparer.Ordinal);
+
     private readonly HttpClient _http;
     private readonly Lock _rootsGate = new();
     private volatile GoogleTokenSession? _session;
@@ -269,7 +271,10 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
                 }
 
                 var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, parentPath, cancellationToken).ConfigureAwait(false);
-                files.AddRange(page.Files ?? []);
+
+                // Google documents under their exported names; the Google types that can't be
+                // downloaded are left out (see GoogleWorkspaceNaming).
+                files.AddRange((page.Files ?? []).Select(f => f.Listed(ExportExtensions)).OfType<GoogleDriveFile>());
                 pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
                 if (pageToken is not null)
                 {
@@ -401,7 +406,18 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
         RequireSession();
         path = GoogleDriveApi.Trim(path);
         var item = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
-        await ApiAsync<GoogleDriveFile>(HttpMethod.Patch, $"/files/{CloudHttp.Escape(item.Id)}", [], new { name = newName }, path, cancellationToken).ConfigureAwait(false);
+
+        // A Google document lists under its exported name ("Report.pdf"); renaming it to
+        // "Notes.pdf" means the document is called "Notes".
+        var driveName = newName;
+        if (ExportExtensions.TryGetValue(item.MimeType, out var extension) &&
+            !GoogleWorkspaceNaming.NeedsExtensionAppended(newName, extension) &&
+            newName.Length > extension.Length + 1)
+        {
+            driveName = newName[..^(extension.Length + 1)];
+        }
+
+        await ApiAsync<GoogleDriveFile>(HttpMethod.Patch, $"/files/{CloudHttp.Escape(item.Id)}", [], new { name = driveName }, path, cancellationToken).ConfigureAwait(false);
 
         if (item.Root is { } root)
         {
@@ -455,7 +471,8 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
         var file = await FetchFileAsync(item.Id, cancellationToken).ConfigureAwait(false) ?? throw CloudProviderException.NotFound(path);
 
         // A root keeps its stored name, the one its path is built from.
-        return item.Root is { } root ? RootItem(root, file.ModificationDate) : file.ToItem(GetParentPath(path));
+        // Under the name its listing gives it, so the path round-trips.
+        return item.Root is { } root ? RootItem(root, file.ModificationDate) : (file.Listed(ExportExtensions) ?? file).ToItem(GetParentPath(path));
     }
 
     private void UpdateRoots(Func<IReadOnlyList<GoogleDrivePickedRoot>, IReadOnlyList<GoogleDrivePickedRoot>> change)
@@ -485,8 +502,11 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
             return null;
         }
 
+        // A document listed under its exported name downloads under exactly that name.
         var resolved = await ResolveAsync(GoogleDriveApi.Trim(item.Path), cancellationToken).ConfigureAwait(false);
-        return ExportFormats.TryGetValue(resolved.MimeType, out var export) ? export.Extension : null;
+        return ExportFormats.TryGetValue(resolved.MimeType, out var export) && GoogleWorkspaceNaming.NeedsExtensionAppended(item.Path, export.Extension)
+            ? export.Extension
+            : null;
     }
 
     public override async Task DownloadFileAsync(string remotePath, string localPath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
@@ -499,7 +519,12 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
         if (ExportFormats.TryGetValue(item.MimeType, out var export))
         {
             url = $"{GoogleDriveApi.ApiBase}/files/{CloudHttp.Escape(item.Id)}/export?mimeType={CloudHttp.Escape(export.MimeType)}";
-            target = localPath + "." + export.Extension;
+
+            // Written exactly where asked when the path already carries the export extension.
+            if (GoogleWorkspaceNaming.NeedsExtensionAppended(remotePath, export.Extension))
+            {
+                target = localPath + "." + export.Extension;
+            }
         }
         else
         {
@@ -560,14 +585,16 @@ public sealed class GoogleDrivePickerProvider : CloudProvider
             "/files",
             [
                 ("q", $"'{parentId}' in parents and name = '{GoogleDriveApi.QueryLiteral(name)}' and trashed = false"),
-                ("fields", "files(id)"),
-                ("pageSize", "1"),
+                ("fields", "files(id,name,mimeType)"),
+                ("pageSize", "10"),
                 ("supportsAllDrives", "true"),
             ],
             null,
             null,
             cancellationToken).ConfigureAwait(false);
-        return page.Files?.FirstOrDefault()?.Id;
+
+        // A Google document's content can't be replaced by an upload.
+        return page.Files?.FirstOrDefault(f => !GoogleWorkspaceNaming.IsGoogleNative(f.MimeType))?.Id;
     }
 
     /// <summary>Metadata-only PATCH of the dates. Best effort: any refusal or transport failure is ignored, as on macOS.</summary>

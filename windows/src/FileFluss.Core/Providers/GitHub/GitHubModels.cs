@@ -84,6 +84,21 @@ internal sealed record GitHubTree(IReadOnlyList<GitHubTreeEntry> Entries, bool I
         }).ToList();
     }
 
+    /// <summary>
+    /// Entries directly inside <paramref name="directory"/>, or NotFound when the tree has no such
+    /// directory. A folder renamed or removed upstream must not list as empty: a sync reading
+    /// from it would then delete the local copy.
+    /// </summary>
+    public IReadOnlyList<GitHubTreeEntry> Listing(string directory)
+    {
+        if (directory.Length > 0 && !Entries.Any(e => e.IsDirectory && e.Path == directory))
+        {
+            throw CloudProviderException.NotFound(directory);
+        }
+
+        return Children(directory);
+    }
+
     /// <summary>Total bytes of every blob at or below <paramref name="directory"/> — exact, the tree carries every blob's size.</summary>
     public long RecursiveSize(string directory)
     {

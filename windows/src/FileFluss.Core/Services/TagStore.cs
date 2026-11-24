@@ -585,6 +585,13 @@ public sealed class TagStore : IDisposable
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
+                // Kept pending, so the next save (the one on quitting at the latest) tries again
+                // rather than the change being lost.
+                lock (_gate)
+                {
+                    _dirty.Add(key);
+                }
+
                 Diagnostics.SupportLogger.Shared.Log($"Tags for {key} could not be saved: {e.Message}", "Tags", Diagnostics.LogLevel.Error);
             }
         }

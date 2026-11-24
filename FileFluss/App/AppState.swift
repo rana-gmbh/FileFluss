@@ -1735,6 +1735,10 @@ final class AppState {
 
     // MARK: - Go to Folder
 
+    /// Counts "Go to Folder" requests, so a slow answer for an older one is
+    /// dropped.
+    @ObservationIgnored private var goToFolderAttempt = 0
+
     /// Resolves a user-typed path and navigates the active panel there.
     /// Cloud panels stay in the cloud (path is interpreted as a remote path
     /// rooted at "/"). Local panels — including external drives, which are
@@ -1773,12 +1777,27 @@ final class AppState {
             resolved = (base as NSString).appendingPathComponent(resolved)
         }
         let url = URL(fileURLWithPath: resolved)
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
-            return
+        // The check runs off the main thread: on a share whose server is
+        // gone, `fileExists` waits for the network to time out, and on main
+        // that froze the whole app. The panel is the one that was active
+        // when the path was entered.
+        let panel = activePanel
+        goToFolderAttempt += 1
+        let attempt = goToFolderAttempt
+        let from = fileManager(for: panel).currentDirectory
+        Task {
+            let isFolder = await Task.detached(priority: .userInitiated) {
+                var isDir: ObjCBool = false
+                return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
+            }.value
+            // Another path was entered, or the panel moved on, while the
+            // disk was answering: this answer is no longer wanted.
+            guard isFolder,
+                  attempt == goToFolderAttempt,
+                  fileManager(for: panel).currentDirectory == from else { return }
+            setSidebarSelection(.location(url), for: panel)
+            await fileManager(for: panel).navigateTo(url)
         }
-        setSidebarSelection(.location(url), for: activePanel)
-        Task { await fileManager(for: activePanel).navigateTo(url) }
     }
 
     // MARK: - Startup locations (issue #49)

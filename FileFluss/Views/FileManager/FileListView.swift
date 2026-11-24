@@ -404,7 +404,8 @@ struct FileListView: View {
             archiveURL: session.archiveURL,
             format: session.format,
             tree: session.tree,
-            innerPath: session.innerPath
+            innerPath: session.innerPath,
+            markQuarantined: session.isUntrusted
         )
     }
 

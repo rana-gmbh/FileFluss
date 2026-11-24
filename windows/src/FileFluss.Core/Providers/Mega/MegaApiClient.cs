@@ -36,6 +36,22 @@ internal sealed class MegaApiClient
     private Dictionary<string, uint[]> _nodeKeys = new(StringComparer.Ordinal);
     private string? _rootHandle;
 
+    // When the tree was last fetched (guarded by _gate). It used to be fetched once per session
+    // and never again, so whatever changed on the web or a phone stayed invisible until the app
+    // restarted, and a sync planned — and deleted — from that stale picture.
+    private DateTimeOffset? _fetchedAt;
+
+    // Bumped by every command that changes the tree. A fetch that overlaps one may predate it,
+    // and is repeated rather than allowed to roll the change back in the cache.
+    private long _mutationGeneration;
+
+    /// <summary>
+    /// How old the tree may be before a listing or an operation fetches it again: long enough
+    /// that one sync run's walk through every folder, or a quick series of clicks, reuses one
+    /// fetch; short enough that a change made elsewhere is seen almost at once. Tests change it.
+    /// </summary>
+    internal TimeSpan NodeTreeMaxAge { get; set; } = TimeSpan.FromSeconds(10);
+
     public MegaApiClient(HttpClient http, MegaCredentials credentials)
     {
         _http = http;
@@ -162,7 +178,19 @@ internal sealed class MegaApiClient
 
     public async Task FetchNodesAsync(CancellationToken cancellationToken)
     {
-        var result = await CallAsync(new JsonObject { ["a"] = "f", ["c"] = 1 }, cancellationToken, FetchTimeout).ConfigureAwait(false);
+        // A fetch that overlapped a change of our own may not contain it; taking it would roll
+        // the change back in the cache (and make an idempotent create create a second folder).
+        JsonElement result;
+        for (var attempt = 1; ; attempt++)
+        {
+            var generation = Interlocked.Read(ref _mutationGeneration);
+            result = await CallAsync(new JsonObject { ["a"] = "f", ["c"] = 1 }, cancellationToken, FetchTimeout).ConfigureAwait(false);
+            if (generation == Interlocked.Read(ref _mutationGeneration) || attempt >= 3)
+            {
+                break;
+            }
+        }
+
         var payload = First(result);
         if (payload.ValueKind != JsonValueKind.Object || !payload.TryGetProperty("f", out var files) || files.ValueKind != JsonValueKind.Array)
         {
@@ -172,7 +200,14 @@ internal sealed class MegaApiClient
         var nodes = new Dictionary<string, MegaNode>(StringComparer.Ordinal);
         var keys = new Dictionary<string, uint[]>(StringComparer.Ordinal);
         string? root = null;
+        var undecryptable = 0;
         using var masterAes = MegaCrypto.CreateAes(_masterKey);
+
+        // The account's own handle (the owner of its Cloud Drive root) picks the right part of a
+        // node key; the share keys open nodes others put into folders this account shares.
+        var ownHandle = files.EnumerateArray().FirstOrDefault(n => n.GetInt64("t") == 2).GetString("u");
+        var shareKeys = ShareKeys(masterAes, payload, files);
+
         foreach (var nodeData in files.EnumerateArray())
         {
             if (nodeData.GetString("h") is not { } handle || nodeData.GetInt64("t") is not { } typeValue)
@@ -197,10 +232,20 @@ internal sealed class MegaApiClient
                     break;
                 default:
                     var decrypted = nodeData.GetString("a") is { } attributes && nodeData.GetString("k") is { } keyField
-                        ? DecryptNodeAttributes(masterAes, attributes, keyField, handle, keys)
+                        ? DecryptNodeAttributes(masterAes, attributes, keyField, ownHandle, shareKeys)
                         : null;
-                    name = decrypted?.Name ?? "Unknown";
-                    attributeJson = decrypted?.Json;
+                    if (decrypted is null)
+                    {
+                        // No key this account holds opens the node. It used to be listed as
+                        // "Unknown" — siblings then collided under one name — and downloaded as
+                        // garbage. Left out instead (and with it anything inside it).
+                        undecryptable++;
+                        continue;
+                    }
+
+                    name = decrypted.Value.Name;
+                    attributeJson = decrypted.Value.Json;
+                    keys[handle] = decrypted.Value.Key;
                     break;
             }
 
@@ -219,9 +264,46 @@ internal sealed class MegaApiClient
             _nodes = nodes;
             _nodeKeys = keys;
             _rootHandle = root;
+            _fetchedAt = DateTimeOffset.UtcNow;
         }
 
         SupportLogger.Shared.Log($"[Mega] Loaded {nodes.Count} nodes", "Mega");
+        if (undecryptable > 0)
+        {
+            SupportLogger.Shared.Log($"[Mega] {undecryptable} node(s) have no key this account can open; left out", "Mega", LogLevel.Notice);
+        }
+    }
+
+    /// <summary>
+    /// Share keys by share handle: those of folders this account shares (<c>ok</c>, wrapped with
+    /// the master key) and of incoming shares wrapped the same way (<c>sk</c> of 16 bytes;
+    /// RSA-wrapped ones can't be opened without the private key, which isn't kept).
+    /// </summary>
+    private static Dictionary<string, byte[]> ShareKeys(Aes masterAes, JsonElement payload, JsonElement files)
+    {
+        var keys = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        void Add(string? handle, string? wrapped)
+        {
+            if (handle is not null && MegaCrypto.Base64UrlDecode(wrapped) is { Length: 16 } data)
+            {
+                keys[handle] = masterAes.DecryptEcb(data, PaddingMode.None);
+            }
+        }
+
+        if (payload.TryGetProperty("ok", out var shares) && shares.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var share in shares.EnumerateArray())
+            {
+                Add(share.GetString("h"), share.GetString("k"));
+            }
+        }
+
+        foreach (var node in files.EnumerateArray())
+        {
+            Add(node.GetString("h"), node.GetString("sk"));
+        }
+
+        return keys;
     }
 
     public async Task<IReadOnlyList<CloudFileItem>> ListFolderAsync(string path, CancellationToken cancellationToken)
@@ -654,6 +736,13 @@ internal sealed class MegaApiClient
     private async Task<JsonElement> CallAsync(JsonObject command, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         var body = Batch(command);
+
+        // Put, delete, move, attribute writes: anything that changes the tree.
+        if (command["a"]?.GetValue<string>() is "p" or "d" or "m" or "a")
+        {
+            Interlocked.Increment(ref _mutationGeneration);
+        }
+
         for (var attempt = 0; ; attempt++)
         {
             try
@@ -841,9 +930,10 @@ internal sealed class MegaApiClient
 
     // MARK: - Cache
 
+    /// <summary>Fetches the node tree unless the one in memory is younger than <see cref="NodeTreeMaxAge"/>.</summary>
     private async Task EnsureNodesAsync(CancellationToken cancellationToken)
     {
-        if (HasNodes)
+        if (HasFreshNodes)
         {
             return;
         }
@@ -851,7 +941,8 @@ internal sealed class MegaApiClient
         await _fetchGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!HasNodes)
+            // Whoever waited behind a fetch uses its result.
+            if (!HasFreshNodes)
             {
                 await FetchNodesAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -875,13 +966,13 @@ internal sealed class MegaApiClient
         }
     }
 
-    private bool HasNodes
+    private bool HasFreshNodes
     {
         get
         {
             lock (_gate)
             {
-                return _nodes.Count > 0;
+                return _nodes.Count > 0 && _fetchedAt is { } fetchedAt && DateTimeOffset.UtcNow - fetchedAt < NodeTreeMaxAge;
             }
         }
     }
@@ -1001,30 +1092,68 @@ internal sealed class MegaApiClient
     /// Decrypts a node's key with the master key (4 words for a folder, 8 for a file), caches it
     /// and decrypts the name with it. Null when the key or the attributes don't fit.
     /// </summary>
-    private static (string Name, string Json)? DecryptNodeAttributes(Aes masterAes, string attributes, string keyField, string handle, Dictionary<string, uint[]> keys)
+    /// <summary>
+    /// A node's name, attributes and key. A node key reads <c>owner:key</c> or, for a node in a
+    /// shared folder, <c>id:key/id:key…</c> — one part per party able to open it, each wrapped with
+    /// that party's key. The part for this account (its own handle, master key) is tried first,
+    /// then parts for shares it holds the key of, then any other part with the master key. Taking
+    /// the first part blindly decrypted shared nodes with the wrong key. A key only counts once
+    /// the attributes it opens begin with "MEGA"; before that it isn't returned, so a wrong key
+    /// can't be cached and used for a download.
+    /// </summary>
+    internal static (string Name, string Json, uint[] Key)? DecryptNodeAttributes(
+        Aes masterAes,
+        string attributes,
+        string keyField,
+        string? ownHandle,
+        IReadOnlyDictionary<string, byte[]> shareKeys)
     {
-        var encryptedKey = MegaCrypto.FirstKeyPart(keyField);
-        if (encryptedKey is null)
+        var parts = new List<(string Id, byte[] Key)>();
+        foreach (var part in keyField.Split('/'))
         {
-            return null;
+            var colon = part.IndexOf(':', StringComparison.Ordinal);
+            if (colon > 0 && MegaCrypto.Base64UrlDecode(part[(colon + 1)..]) is { } data)
+            {
+                parts.Add((part[..colon], data));
+            }
         }
 
-        uint[] nodeKey;
-        if (encryptedKey.Length / 4 == 4)
+        var candidates = new List<(byte[] Wrapped, byte[]? With)>();
+        candidates.AddRange(parts.Where(p => p.Id == ownHandle).Select(p => (p.Key, (byte[]?)null)));
+        candidates.AddRange(parts.Where(p => shareKeys.ContainsKey(p.Id)).Select(p => (p.Key, (byte[]?)shareKeys[p.Id])));
+        candidates.AddRange(parts.Where(p => p.Id != ownHandle).Select(p => (p.Key, (byte[]?)null)));
+
+        foreach (var (wrapped, with) in candidates)
         {
-            nodeKey = MegaCrypto.ToWords(masterAes.DecryptEcb(encryptedKey, PaddingMode.None));
-        }
-        else if (encryptedKey.Length / 4 >= 8)
-        {
-            nodeKey = MegaCrypto.ToWords(masterAes.DecryptEcb(encryptedKey.AsSpan(0, 32), PaddingMode.None));
-        }
-        else
-        {
-            return null;
+            if (Unwrap(wrapped, with) is not { } nodeKey)
+            {
+                continue;
+            }
+
+            if (MegaCrypto.DecryptAttributes(attributes, MegaCrypto.AttributeKey(nodeKey)) is { } decrypted)
+            {
+                return (decrypted.Name, decrypted.Json, nodeKey);
+            }
         }
 
-        keys[handle] = nodeKey;
-        return MegaCrypto.DecryptAttributes(attributes, MegaCrypto.AttributeKey(nodeKey));
+        return null;
+
+        uint[]? Unwrap(byte[] wrapped, byte[]? shareKey)
+        {
+            var length = wrapped.Length / 4 >= 8 ? 32 : wrapped.Length / 4 == 4 ? 16 : 0;
+            if (length == 0)
+            {
+                return null;
+            }
+
+            if (shareKey is null)
+            {
+                return MegaCrypto.ToWords(masterAes.DecryptEcb(wrapped.AsSpan(0, length), PaddingMode.None));
+            }
+
+            using var aes = MegaCrypto.CreateAes(shareKey);
+            return MegaCrypto.ToWords(aes.DecryptEcb(wrapped.AsSpan(0, length), PaddingMode.None));
+        }
     }
 }
 

@@ -48,6 +48,8 @@ public sealed class GoogleDriveProvider : CloudProvider
         ["application/vnd.google-apps.drawing"] = ("application/pdf", "pdf"),
     };
 
+    private static readonly Dictionary<string, string> ExportExtensions = ExportFormats.ToDictionary(e => e.Key, e => e.Value.Extension, StringComparer.Ordinal);
+
     private static readonly CachedFile RootEntry = new("root", GoogleDriveApi.FolderMimeType);
 
     private readonly HttpClient _http;
@@ -59,6 +61,9 @@ public sealed class GoogleDriveProvider : CloudProvider
     /// replace POST a duplicate instead of PATCHing it.
     /// </summary>
     private readonly ConcurrentDictionary<string, CachedFile> _pathCache = new(StringComparer.Ordinal);
+
+    /// <summary>Folder ids CreateDirectoryAsync created or confirmed live this session, so a cached folder is checked against Drive once, not per upload.</summary>
+    private readonly ConcurrentDictionary<string, byte> _confirmedFolderIds = new(StringComparer.Ordinal);
 
     /// <summary>The user's shared drives. Rarely change: the root listing reuses this, the "Shared drives" listing refreshes it.</summary>
     private volatile IReadOnlyList<SharedDrive>? _sharedDrives;
@@ -181,34 +186,20 @@ public sealed class GoogleDriveProvider : CloudProvider
             return await ListSharedDrivesAsFoldersAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        var wasCached = path != "/" && _pathCache.ContainsKey(path);
         var folder = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
-        var files = new List<GoogleDriveFile>();
-        string? pageToken = null;
-        var guard = new PageGuard("Google Drive listing");
-        do
-        {
-            var query = new List<(string, string)>
-            {
-                ("q", $"'{folder.Id}' in parents and trashed = false"),
-                ("fields", "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)"),
-                ("pageSize", "1000"),
-                ("orderBy", "folder,name"),
-            };
-            query.AddRange(DriveQuery(folder.DriveId));
-            if (pageToken is not null)
-            {
-                query.Add(("pageToken", pageToken));
-            }
+        var files = await ListChildrenAsync(folder, cancellationToken).ConfigureAwait(false);
 
-            var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, cancellationToken).ConfigureAwait(false);
-            files.AddRange(page.Files ?? []);
-            pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
-            if (pageToken is not null)
-            {
-                guard.Follow(pageToken);
-            }
+        // "'<id>' in parents" for a folder that no longer exists, or sits in the trash, isn't an
+        // error — it is an empty result. A stale cached id (the folder was deleted or recreated
+        // on the web) would make the folder look empty and a Mirror from it delete the
+        // destination, so an empty listing of a cached folder is confirmed before it counts.
+        if (files.Count == 0 && wasCached && await LiveFileAsync(folder.Id, cancellationToken).ConfigureAwait(false) is not { Trashed: not true })
+        {
+            _pathCache.RemovePathSubtree(path);
+            folder = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
+            files = await ListChildrenAsync(folder, cancellationToken).ConfigureAwait(false);
         }
-        while (pageToken is not null);
 
         // Children inherit the folder's drive scope so their own listings stay corpus-scoped.
         foreach (var file in files)
@@ -235,6 +226,57 @@ public sealed class GoogleDriveProvider : CloudProvider
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Every listed child of a folder: Google documents under their exported names, the Google
+    /// types that can't be downloaded left out (see <see cref="GoogleWorkspaceNaming"/>).
+    /// </summary>
+    private async Task<List<GoogleDriveFile>> ListChildrenAsync(CachedFile folder, CancellationToken cancellationToken)
+    {
+        var files = new List<GoogleDriveFile>();
+        string? pageToken = null;
+        var guard = new PageGuard("Google Drive listing");
+        do
+        {
+            var query = new List<(string, string)>
+            {
+                ("q", $"'{folder.Id}' in parents and trashed = false"),
+                ("fields", "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum)"),
+                ("pageSize", "1000"),
+                ("orderBy", "folder,name"),
+            };
+            query.AddRange(DriveQuery(folder.DriveId));
+            if (pageToken is not null)
+            {
+                query.Add(("pageToken", pageToken));
+            }
+
+            var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, cancellationToken).ConfigureAwait(false);
+            files.AddRange((page.Files ?? []).Select(f => f.Listed(ExportExtensions)).OfType<GoogleDriveFile>());
+            pageToken = string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken;
+            if (pageToken is not null)
+            {
+                guard.Follow(pageToken);
+            }
+        }
+        while (pageToken is not null);
+
+        return files;
+    }
+
+    /// <summary>The file's current state, or null when Drive no longer knows the id.</summary>
+    private async Task<GoogleDriveFile?> LiveFileAsync(string id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ApiAsync<GoogleDriveFile>(HttpMethod.Get, $"/files/{CloudHttp.Escape(id)}", [("fields", "id,name,mimeType,trashed,parents")], null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (CloudProviderException e) when (e.Kind == CloudErrorKind.NotFound)
+        {
+            return null;
+        }
     }
 
     /// <summary>The shared drives as folders under "/Shared drives", priming the path cache so descending is one hop.</summary>
@@ -398,7 +440,26 @@ public sealed class GoogleDriveProvider : CloudProvider
             };
             query.AddRange(DriveQuery(current.DriveId));
             var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, cancellationToken).ConfigureAwait(false);
-            var file = page.Files?.FirstOrDefault() ?? throw CloudProviderException.NotFound(currentPath);
+            var file = page.Files?.FirstOrDefault();
+            if (file is null && GoogleWorkspaceNaming.ExportedOrigin(name, ExportExtensions) is { } origin)
+            {
+                // A Google document lists under its exported name ("Report.docx" for the Doc
+                // "Report"); look it up by its Drive name and type.
+                var types = string.Join(" or ", origin.MimeTypes.Select(t => $"mimeType = '{t}'"));
+                var docQuery = new List<(string, string)>
+                {
+                    ("q", $"'{current.Id}' in parents and name = '{GoogleDriveApi.QueryLiteral(origin.Name)}' and ({types}) and trashed = false"),
+                    ("fields", "files(id,name,mimeType)"),
+                    ("pageSize", "1"),
+                };
+                docQuery.AddRange(DriveQuery(current.DriveId));
+                file = (await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", docQuery, null, cancellationToken).ConfigureAwait(false)).Files?.FirstOrDefault();
+            }
+
+            if (file is null)
+            {
+                throw CloudProviderException.NotFound(currentPath);
+            }
             current = new CachedFile(file.Id, file.MimeType, current.DriveId);
             _pathCache[currentPath] = current;
         }
@@ -416,8 +477,12 @@ public sealed class GoogleDriveProvider : CloudProvider
             return null;
         }
 
+        // A document listed under its exported name ("Report.docx") downloads under exactly that
+        // name; only a bare document name gets the extension.
         var file = await ResolveAsync(item.Path, cancellationToken).ConfigureAwait(false);
-        return ExportFormats.TryGetValue(file.MimeType, out var export) ? export.Extension : null;
+        return ExportFormats.TryGetValue(file.MimeType, out var export) && GoogleWorkspaceNaming.NeedsExtensionAppended(item.Path, export.Extension)
+            ? export.Extension
+            : null;
     }
 
     public override async Task DownloadFileAsync(string remotePath, string localPath, ByteProgress? onBytes = null, CancellationToken cancellationToken = default)
@@ -430,7 +495,13 @@ public sealed class GoogleDriveProvider : CloudProvider
         if (ExportFormats.TryGetValue(file.MimeType, out var export))
         {
             url = $"{GoogleDriveApi.ApiBase}/files/{CloudHttp.Escape(file.Id)}/export?mimeType={CloudHttp.Escape(export.MimeType)}&supportsAllDrives=true";
-            target = localPath + "." + export.Extension;
+
+            // A path that already carries the export extension (the name a listing gives the
+            // document) is written exactly where asked; only a bare document name gets it appended.
+            if (GoogleWorkspaceNaming.NeedsExtensionAppended(remotePath, export.Extension))
+            {
+                target = localPath + "." + export.Extension;
+            }
         }
         else
         {
@@ -466,18 +537,33 @@ public sealed class GoogleDriveProvider : CloudProvider
             throw CloudProviderException.NotImplemented();
         }
 
+        var parentWasCached = _pathCache.ContainsKey(parentPath);
         var parent = await ResolveAsync(parentPath, cancellationToken).ConfigureAwait(false);
 
         // Prefer the cached id (from a listing or an earlier upload): a Drive query for a
         // just-uploaded file can miss through index lag, and then the next replace would POST
-        // a duplicate. Query only when the file isn't cached at all.
-        string? existingId;
-        var fromCache = _pathCache.TryGetValue(remotePath, out var cached);
-        if (fromCache)
+        // a duplicate. But check it first. Listings only ever add to the cache, so the id may be
+        // of a file since trashed on the web (the PATCH would succeed *into the trash* and the
+        // sync never converge) or moved to another folder (the PATCH would overwrite it there).
+        // A Google document is never overwritten with bytes either. Query when nothing usable is
+        // cached.
+        string? existingId = null;
+        var fromCache = false;
+        if (_pathCache.TryGetValue(remotePath, out var cached) && !GoogleWorkspaceNaming.IsGoogleNative(cached.MimeType))
         {
-            existingId = cached.Id;
+            if (await LiveFileAsync(cached.Id, cancellationToken).ConfigureAwait(false) is { Trashed: not true } live &&
+                (parent.Id == RootEntry.Id || live.Parents is null || live.Parents.Contains(parent.Id)))
+            {
+                existingId = cached.Id;
+                fromCache = true;
+            }
+            else
+            {
+                _pathCache.RemovePathSubtree(remotePath);
+            }
         }
-        else
+
+        if (!fromCache)
         {
             existingId = await FindExistingIdAsync(parent, fileName, cancellationToken).ConfigureAwait(false);
         }
@@ -495,13 +581,20 @@ public sealed class GoogleDriveProvider : CloudProvider
         {
             uploaded = await uploader.UploadAsync(localPath, fileName, parent.Id, existingId, modified, created, onBytes, cancellationToken).ConfigureAwait(false);
         }
-        catch (CloudProviderException e) when (fromCache && existingId is not null && e.Kind == CloudErrorKind.NotFound)
+        catch (CloudProviderException e) when (((fromCache && existingId is not null) || parentWasCached) && e.Kind == CloudErrorKind.NotFound)
         {
-            // The cached id is of a file deleted outside FileFluss (in the Drive web app, say):
-            // every replace PATCHed that id and failed until the app restarted. Forget it, ask
-            // Drive what is there now, and upload once more — as a new file if nothing is.
+            // The cached id of the file or of its folder is of something deleted outside
+            // FileFluss (in the Drive web app, say): every replace PATCHed that id and failed until
+            // the app restarted. Forget it, ask Drive what is there now, and upload once more — as
+            // a new file if nothing is.
             SupportLogger.Shared.Log($"Cached file id for {remotePath} is gone; looking the file up again", LogCategory, LogLevel.Notice);
-            _pathCache.TryRemove(remotePath, out _);
+            _pathCache.RemovePathSubtree(remotePath);
+            if (parentWasCached)
+            {
+                _pathCache.RemovePathSubtree(parentPath);
+                parent = await ResolveAsync(parentPath, cancellationToken).ConfigureAwait(false);
+            }
+
             existingId = await FindExistingIdAsync(parent, fileName, cancellationToken).ConfigureAwait(false);
             uploaded = await uploader.UploadAsync(localPath, fileName, parent.Id, existingId, modified, created, onBytes, cancellationToken).ConfigureAwait(false);
         }
@@ -537,18 +630,21 @@ public sealed class GoogleDriveProvider : CloudProvider
         }
     }
 
-    /// <summary>A file's id by name within a parent, without populating the folder cache; null when absent.</summary>
+    /// <summary>
+    /// A file's id by name within a parent, without populating the folder cache; null when absent.
+    /// A Google document of that name doesn't count: its content can't be replaced by an upload.
+    /// </summary>
     private async Task<string?> FindFileIdAsync(CachedFile parent, string name, CancellationToken cancellationToken)
     {
         var query = new List<(string, string)>
         {
             ("q", $"'{parent.Id}' in parents and name = '{GoogleDriveApi.QueryLiteral(name)}' and trashed = false"),
-            ("fields", "files(id)"),
-            ("pageSize", "1"),
+            ("fields", "files(id,name,mimeType)"),
+            ("pageSize", "10"),
         };
         query.AddRange(DriveQuery(parent.DriveId));
         var page = await ApiAsync<GoogleFileList>(HttpMethod.Get, "/files", query, null, cancellationToken).ConfigureAwait(false);
-        return page.Files?.FirstOrDefault()?.Id;
+        return page.Files?.FirstOrDefault(f => !GoogleWorkspaceNaming.IsGoogleNative(f.MimeType))?.Id;
     }
 
     /// <summary>Path-keyed timestamp stamping, so a cross-account copy keeps the source's mtime.</summary>
@@ -609,6 +705,23 @@ public sealed class GoogleDriveProvider : CloudProvider
 
         // Idempotent: Drive allows duplicate folder names, so a naive create would multiply
         // folders on every retry. Done when something already resolves at this path.
+        //
+        // A cached id may be stale, though (the folder was deleted or trashed on the web):
+        // trusting it created nothing, and every upload into the folder then failed. A cached hit
+        // is confirmed once per session — this runs before every file a sync uploads, so it must
+        // stay cheap.
+        if (_pathCache.TryGetValue(path, out var cachedFolder) && !_confirmedFolderIds.ContainsKey(cachedFolder.Id))
+        {
+            if (await LiveFileAsync(cachedFolder.Id, cancellationToken).ConfigureAwait(false) is { Trashed: not true })
+            {
+                _confirmedFolderIds.TryAdd(cachedFolder.Id, 0);
+            }
+            else
+            {
+                _pathCache.RemovePathSubtree(path);
+            }
+        }
+
         try
         {
             await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
@@ -629,6 +742,7 @@ public sealed class GoogleDriveProvider : CloudProvider
         // Inherit the parent's drive scope (macOS dropped it here, so a folder created in a
         // shared drive listed empty until the cache was rebuilt).
         _pathCache[path] = new CachedFile(created.Id, created.MimeType, parent.DriveId);
+        _confirmedFolderIds.TryAdd(created.Id, 0);
 
         // Drive occasionally hands back a folder id that isn't usable as an upload parent yet
         // (the upload then answers 404 "File not found: <id>"). Poll until it is queryable,
@@ -661,12 +775,24 @@ public sealed class GoogleDriveProvider : CloudProvider
         }
 
         var file = await ResolveAsync(path, cancellationToken).ConfigureAwait(false);
-        await ApiAsync<GoogleDriveFile>(HttpMethod.Patch, $"/files/{CloudHttp.Escape(file.Id)}", [], new { name = newName }, cancellationToken, itemPath: path).ConfigureAwait(false);
+
+        // A Google document lists under its exported name ("Report.docx"); renaming it to
+        // "Notes.docx" means the document is called "Notes".
+        var driveName = newName;
+        if (ExportExtensions.TryGetValue(file.MimeType, out var extension) &&
+            !GoogleWorkspaceNaming.NeedsExtensionAppended(newName, extension) &&
+            newName.Length > extension.Length + 1)
+        {
+            driveName = newName[..^(extension.Length + 1)];
+        }
+
+        await ApiAsync<GoogleDriveFile>(HttpMethod.Patch, $"/files/{CloudHttp.Escape(file.Id)}", [], new { name = driveName }, cancellationToken, itemPath: path).ConfigureAwait(false);
 
         // Every descendant's path changed with a folder rename, so the old subtree goes. The
         // item keeps its id: re-key just that entry; descendants re-resolve lazily.
         _pathCache.RemovePathSubtree(path);
-        _pathCache[GoogleDriveApi.Child(GetParentPath(path), newName)] = file;
+        var listedName = GoogleWorkspaceNaming.ListedName(driveName, file.MimeType, ExportExtensions) ?? newName;
+        _pathCache[GoogleDriveApi.Child(GetParentPath(path), listedName)] = file;
     }
 
     public override async Task<CloudFileItem> GetFileMetadataAsync(string path, CancellationToken cancellationToken = default)
@@ -688,7 +814,9 @@ public sealed class GoogleDriveProvider : CloudProvider
             null,
             cancellationToken,
             itemPath: path).ConfigureAwait(false);
-        return metadata.ToItem(GetParentPath(path));
+
+        // Under the name its listing gives it, so the path round-trips.
+        return (metadata.Listed(ExportExtensions) ?? metadata).ToItem(GetParentPath(path));
     }
 
     // MARK: - Search
@@ -747,7 +875,11 @@ public sealed class GoogleDriveProvider : CloudProvider
         // A scoped search only matches direct children, so their folder is the scope. A
         // global hit's folder is taken from the path cache when known; macOS placed every
         // hit at "/".
-        return files.Select(f => f.ToItem(scope != "/" ? scope : CachedPathOf(f.Parents?.FirstOrDefault()) ?? "/")).ToList();
+        return files
+            .Select(f => f.Listed(ExportExtensions))
+            .OfType<GoogleDriveFile>()
+            .Select(f => f.ToItem(scope != "/" ? scope : CachedPathOf(f.Parents?.FirstOrDefault()) ?? "/"))
+            .ToList();
     }
 
     private string? CachedPathOf(string? id)

@@ -22,6 +22,11 @@ final class ArchiveBrowseSession {
     let archiveURL: URL
     let format: ArchiveFormat
     let tree: ArchiveTree
+    /// Set for an archive that came from a cloud account. Everything
+    /// unpacked from it — to open, preview, copy or drag out — is marked as
+    /// downloaded, so Gatekeeper checks an app or script inside it the way
+    /// it would one unpacked from a browser download.
+    let isUntrusted: Bool
 
     /// Where inside the archive the panel currently is; `""` is its root.
     private(set) var innerPath: String = ""
@@ -44,10 +49,11 @@ final class ArchiveBrowseSession {
     /// entries would otherwise pay for 40,000 of them to draw one screen.
     private var contentTypeByExtension: [String: UTType?] = [:]
 
-    init(archiveURL: URL, format: ArchiveFormat, tree: ArchiveTree) {
+    init(archiveURL: URL, format: ArchiveFormat, tree: ArchiveTree, isUntrusted: Bool = false) {
         self.archiveURL = archiveURL
         self.format = format
         self.tree = tree
+        self.isUntrusted = isUntrusted
     }
 
     deinit {
@@ -189,6 +195,7 @@ final class ArchiveBrowseSession {
             format: format,
             strippingPrefix: prefix,
             into: staging,
+            markQuarantined: isUntrusted,
             onBytes: onBytes
         )
         // Mapped from the request rather than taken from the extractor's

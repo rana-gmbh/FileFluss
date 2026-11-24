@@ -67,8 +67,13 @@ public sealed class GoogleDriveProviderTests : IDisposable
 
     // MARK: - Export names
 
+    /// <summary>
+    /// A Doc lists under the name its export lands as ("Report.docx"), so nothing more is
+    /// appended to it — listed as "Report" it could never match what a download wrote, and a
+    /// sync re-downloaded it every run and deleted Report.docx as extra every other run.
+    /// </summary>
     [Fact]
-    public async Task ExportExtensionComesFromTheListedMimeTypeWithoutAnotherRequest()
+    public async Task WorkspaceDocumentsListUnderTheirExportedNames()
     {
         var provider = Provider();
         _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files?", RootListing);
@@ -76,10 +81,127 @@ public sealed class GoogleDriveProviderTests : IDisposable
         var items = await provider.ListDirectoryAsync("/");
         var before = _http.Requests.Count;
 
-        Assert.Equal("docx", await provider.ExportExtensionAsync(items.Single(i => i.Name == "Report")));
+        var report = items.Single(i => i.Name == "Report.docx");
+        Assert.Equal("/Report.docx", report.Path);
+        Assert.Null(await provider.ExportExtensionAsync(report));
         Assert.Null(await provider.ExportExtensionAsync(items.Single(i => i.Name == "a.txt")));
         Assert.Null(await provider.ExportExtensionAsync(items.Single(i => i.Name == "Docs")));
         Assert.Equal(before, _http.Requests.Count);
+    }
+
+    [Fact]
+    public async Task UnexportableGoogleTypesAreLeftOutOfListings()
+    {
+        var provider = Provider();
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files?", """
+            {"files":[
+              {"id":"form1","name":"Survey","mimeType":"application/vnd.google-apps.form"},
+              {"id":"short1","name":"Link","mimeType":"application/vnd.google-apps.shortcut"},
+              {"id":"sheet1","name":"Budget","mimeType":"application/vnd.google-apps.spreadsheet"},
+              {"id":"file1","name":"a.txt","mimeType":"text/plain","size":"1"}
+            ]}
+            """);
+        NoSharedDrives();
+
+        var names = (await provider.ListDirectoryAsync("/")).Select(i => i.Name);
+
+        Assert.Equal(["Budget.xlsx", "a.txt"], names);
+    }
+
+    [Fact]
+    public async Task AnExportedDocumentDownloadsToExactlyThePathAskedFor()
+    {
+        var provider = Provider();
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files?", RootListing);
+        _http.OnBytes(HttpMethod.Get, "/files/doc1/export", "docx-bytes"u8.ToArray());
+        NoSharedDrives();
+        await provider.ListDirectoryAsync("/");
+        var local = Path.Combine(_temp, "Report.docx");
+
+        await provider.DownloadFileAsync("/Report.docx", local);
+
+        Assert.Equal("docx-bytes", await File.ReadAllTextAsync(local));
+        Assert.False(File.Exists(local + ".docx"));
+    }
+
+    [Fact]
+    public async Task AnUncachedExportedNameResolvesToTheDocument()
+    {
+        var provider = Provider();
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files?", (request, _) => Q(request) switch
+        {
+            "'root' in parents and name = 'Report.docx' and trashed = false" => FakeHttpHandler.Json("""{"files":[]}"""),
+            "'root' in parents and name = 'Report' and (mimeType = 'application/vnd.google-apps.document') and trashed = false"
+                => FakeHttpHandler.Json(Walk("doc1", "Report", "application/vnd.google-apps.document")),
+            _ => Status(HttpStatusCode.BadRequest),
+        });
+        _http.OnBytes(HttpMethod.Get, "/files/doc1/export", "x"u8.ToArray());
+        var local = Path.Combine(_temp, "Report.docx");
+
+        await provider.DownloadFileAsync("/Report.docx", local);
+
+        Assert.True(File.Exists(local));
+    }
+
+    /// <summary>A folder deleted and recreated on the web: its old id lists as empty, and a Mirror from it would delete the destination.</summary>
+    [Fact]
+    public async Task AFolderWhoseCachedIdWentStaleIsLookedUpAgain()
+    {
+        var provider = Provider();
+        NoSharedDrives();
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files/oldF", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found"}}"""));
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files?", (request, _) => Q(request) switch
+        {
+            "'root' in parents and trashed = false" => FakeHttpHandler.Json(Walk("oldF", "Photos", Folder)),
+            "'root' in parents and name = 'Photos' and trashed = false" => FakeHttpHandler.Json(Walk("newF", "Photos", Folder)),
+            "'oldF' in parents and trashed = false" => FakeHttpHandler.Json("""{"files":[]}"""),
+            "'newF' in parents and trashed = false" => FakeHttpHandler.Json(Walk("p1", "x.jpg")),
+            _ => Status(HttpStatusCode.BadRequest),
+        });
+        await provider.ListDirectoryAsync("/");
+
+        var items = await provider.ListDirectoryAsync("/Photos");
+
+        Assert.Equal(["x.jpg"], items.Select(i => i.Name));
+    }
+
+    [Fact]
+    public async Task CreateDirectoryDoesNotTrustTheCachedIdOfAFolderDeletedOnTheWeb()
+    {
+        var provider = Provider();
+        NoSharedDrives();
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files/deadF", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found"}}"""));
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/newF", """{"id":"newF","name":"Docs","mimeType":"application/vnd.google-apps.folder"}""");
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files?", (request, _) => Q(request)!.Contains("name =", StringComparison.Ordinal)
+            ? FakeHttpHandler.Json("""{"files":[]}""")
+            : FakeHttpHandler.Json(Walk("deadF", "Docs", Folder)));
+        _http.OnJson(HttpMethod.Post, "googleapis.com/drive/v3/files", """{"id":"newF","name":"Docs","mimeType":"application/vnd.google-apps.folder"}""");
+        await provider.ListDirectoryAsync("/");
+
+        await provider.CreateDirectoryAsync("/Docs");
+
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Post);
+    }
+
+    /// <summary>Trashed on the web: the PATCH would succeed into the trash and the sync never converge.</summary>
+    [Fact]
+    public async Task AnUploadNeverGoesIntoATrashedFile()
+    {
+        var provider = Provider();
+        var local = Path.Combine(_temp, "a.txt");
+        await File.WriteAllTextAsync(local, "hello");
+        NoSharedDrives();
+        _http.On(HttpMethod.Get, "googleapis.com/drive/v3/files?", (request, _) => Q(request)!.Contains("name =", StringComparison.Ordinal)
+            ? FakeHttpHandler.Json("""{"files":[]}""")
+            : FakeHttpHandler.Json(Walk("old", "a.txt")));
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/old", """{"id":"old","name":"a.txt","mimeType":"text/plain","trashed":true,"parents":["x"]}""");
+        _http.OnJson(HttpMethod.Post, "googleapis.com/upload/drive/v3/files?", """{"id":"new1","name":"a.txt","mimeType":"text/plain"}""");
+        await provider.ListDirectoryAsync("/");
+
+        await provider.UploadFileAsync(local, "/a.txt");
+
+        Assert.DoesNotContain(_http.Requests, r => r.Method == HttpMethod.Patch && r.Uri.ToString().Contains("/files/old", StringComparison.Ordinal));
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Post);
     }
 
     // MARK: - Listing
@@ -207,6 +329,9 @@ public sealed class GoogleDriveProviderTests : IDisposable
             "'p1' in parents and trashed = false" => FakeHttpHandler.Json("""{"files":[]}"""),
             _ => Status(HttpStatusCode.BadRequest),
         });
+
+        // An empty listing of a cached folder is confirmed against the folder itself.
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/p1?", """{"id":"p1","name":"Plans","mimeType":"application/vnd.google-apps.folder","trashed":false}""");
 
         var drives = await provider.ListDirectoryAsync("/Shared drives");
         var inside = await provider.ListDirectoryAsync("/Shared drives/Team");
@@ -350,6 +475,7 @@ public sealed class GoogleDriveProviderTests : IDisposable
         _http.OnJson(HttpMethod.Post, "googleapis.com/upload/drive/v3/files?", """{"id":"new1","name":"up.txt","mimeType":"text/plain"}""");
         _http.OnJson(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/new1?", """{"id":"new1","name":"up.txt","mimeType":"text/plain"}""");
         _http.OnJson(HttpMethod.Patch, "googleapis.com/drive/v3/files/new1?", "{}");
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/new1?", """{"id":"new1","name":"up.txt","mimeType":"text/plain","trashed":false,"parents":["0AROOT"]}""");
         long bytes = 0;
 
         await provider.UploadFileAsync(local, "/up.txt", delta => bytes += delta);
@@ -357,7 +483,7 @@ public sealed class GoogleDriveProviderTests : IDisposable
         Assert.Equal(11, bytes);
         var find = Query(_http.Single(HttpMethod.Get, "/files?").Uri);
         Assert.Equal("'root' in parents and name = 'up.txt' and trashed = false", find["q"]);
-        Assert.Equal("files(id)", find["fields"]);
+        Assert.Equal("files(id,name,mimeType)", find["fields"]);
 
         var create = _http.Single(HttpMethod.Post, "upload/drive/v3/files?");
         var query = Query(create.Uri);
@@ -373,11 +499,13 @@ public sealed class GoogleDriveProviderTests : IDisposable
         Assert.Contains("\r\n\r\nhello world\r\n--", create.Body);
         Assert.DoesNotContain(_http.Requests, r => r.Method == HttpMethod.Patch);
 
-        // The id is cached: replacing needs no lookup, PATCHes the content with empty
-        // metadata, then stamps the dates in a separate metadata PATCH.
+        // The id is cached: replacing needs no lookup by name (only a check that the cached file
+        // is still live and not in the trash), PATCHes the content with empty metadata, then
+        // stamps the dates in a separate metadata PATCH.
         await provider.UploadFileAsync(local, "/up.txt");
 
-        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Get);
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Get && r.Uri.ToString().Contains("/files?", StringComparison.Ordinal));
+        Assert.Single(_http.Requests, r => r.Method == HttpMethod.Get && r.Uri.ToString().Contains("/files/new1?", StringComparison.Ordinal));
         var replace = _http.Single(HttpMethod.Patch, "upload/drive/v3/files/new1?");
         Assert.Equal("multipart", Query(replace.Uri)["uploadType"]);
         Assert.Contains("\r\n\r\n{}\r\n--", replace.Body);
@@ -405,6 +533,10 @@ public sealed class GoogleDriveProviderTests : IDisposable
         _http.On(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/old1?", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found: old1."}}"""));
         _http.OnJson(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/new2?", """{"id":"new2","name":"up.txt","mimeType":"text/plain"}""");
         _http.OnJson(HttpMethod.Patch, "googleapis.com/drive/v3/files/new2?", "{}");
+
+        // The liveness check still finds old1 (it goes in the moment between check and PATCH).
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/old1?", """{"id":"old1","name":"up.txt","mimeType":"text/plain","trashed":false}""");
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/new2?", """{"id":"new2","name":"up.txt","mimeType":"text/plain","trashed":false}""");
         await provider.UploadFileAsync(local, "/up.txt");
 
         await provider.UploadFileAsync(local, "/up.txt");
@@ -431,6 +563,7 @@ public sealed class GoogleDriveProviderTests : IDisposable
         _http.On(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/old1?", (_, _) => Status(HttpStatusCode.NotFound, """{"error":{"message":"File not found: old1."}}"""));
         _http.OnJson(HttpMethod.Patch, "googleapis.com/upload/drive/v3/files/other3?", """{"id":"other3","name":"up.txt","mimeType":"text/plain"}""");
         _http.OnJson(HttpMethod.Patch, "googleapis.com/drive/v3/files/other3?", "{}");
+        _http.OnJson(HttpMethod.Get, "googleapis.com/drive/v3/files/old1?", """{"id":"old1","name":"up.txt","mimeType":"text/plain","trashed":false}""");
         await provider.UploadFileAsync(local, "/up.txt");
 
         await provider.UploadFileAsync(local, "/up.txt");

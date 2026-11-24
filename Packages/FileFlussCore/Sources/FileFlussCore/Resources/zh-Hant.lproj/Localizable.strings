@@ -12,3 +12,6 @@
 "Invalid email or password." = "電子郵件或密碼無效。";
 "File is too large to upload (%@). This provider's limit is %@." = "檔案過大，無法上傳（%@）。此服務商的上限為 %@。";
 "File is too large to upload (%@). The provider rejected it. Try splitting the file or using a different cloud." = "檔案過大，無法上傳（%@）。服務商已拒絕。請嘗試拆分檔案或改用其他雲端服務。";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "下載的檔案已損毀：其 MEGA 完整性檢查（MAC）不相符。";

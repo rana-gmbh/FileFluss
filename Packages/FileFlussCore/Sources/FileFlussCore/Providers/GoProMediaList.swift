@@ -95,7 +95,12 @@ extension GoProMediaList {
     ///
     /// Paths are always `"/<dir>"` for folders and `"/<dir>/<file>"` for files
     /// so they round-trip through download/delete (which strip the leading `/`).
-    func items(at path: String) -> [CloudFileItem] {
+    ///
+    /// A directory the card doesn't have throws `.notFound` rather than
+    /// listing as empty: after a card swap or format `100GOPRO` is simply
+    /// gone, and an empty listing would tell a Mirror from it to delete the
+    /// footage already copied off the camera.
+    func items(at path: String) throws -> [CloudFileItem] {
         let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
         if trimmed.isEmpty {
@@ -123,7 +128,9 @@ extension GoProMediaList {
         }
 
         // Inside a directory: its files.
-        guard let dir = media.first(where: { $0.directory == trimmed }) else { return [] }
+        guard let dir = media.first(where: { $0.directory == trimmed }) else {
+            throw CloudProviderError.notFound(path)
+        }
         var files: [CloudFileItem] = []
         for file in dir.files {
             files.append(makeItem(directory: dir.directory, file: file))

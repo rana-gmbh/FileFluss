@@ -991,6 +991,7 @@
 "The source is empty, so Mirror would delete everything at the destination. Check that the right folder is open." = "Die Quelle ist leer, daher würde „Spiegeln“ alles am Ziel löschen. Prüfe, ob der richtige Ordner geöffnet ist.";
 "Yes, delete %d of the %d items at the destination." = "Ja, %d von %d Objekten am Ziel löschen.";
 "“%@” can't replace a folder it's inside." = "„%@“ kann keinen Ordner ersetzen, in dem es selbst liegt.";
+"A folder can't be copied or moved into itself." = "Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.";
 "The new copy of “%@” was uploaded, but it couldn't be renamed and is still called “%@”." = "Die neue Kopie von „%@“ wurde hochgeladen, konnte aber nicht umbenannt werden und heißt noch „%@“.";
 "Couldn't check the destination for items with the same name: %@" = "Das Ziel konnte nicht auf gleichnamige Objekte geprüft werden: %@";
 
@@ -1280,3 +1281,6 @@
 "Remove All Tags" = "Alle Tags entfernen";
 "Tags couldn't be changed" = "Tags konnten nicht geändert werden";
 "The tags of “%@” couldn't be changed: %@" = "Die Tags von „%@“ konnten nicht geändert werden: %@";
+
+/* MEGA download that fails its integrity check */
+"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.";

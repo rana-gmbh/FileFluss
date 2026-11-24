@@ -89,6 +89,71 @@ struct JottacloudXMLParserTests {
         #expect(items.first { $0.name == "Documents" }?.path == "/Pictures/Documents")
     }
 
+    /// A file whose re-upload is pending or was abandoned carries both its
+    /// finished `<currentRevision>` and an INCOMPLETE `<latestRevision>`.
+    /// The latest one used to win, hiding a good file — and Mirror then
+    /// deleted it on the other side.
+    private func revisionsXML(currentFirst: Bool) -> String {
+        let current = """
+            <currentRevision>
+              <number>1</number>
+              <state>COMPLETED</state>
+              <modified>2024-01-15-T10:30:00Z</modified>
+              <size>20480</size>
+              <md5>0123456789abcdef0123456789abcdef</md5>
+            </currentRevision>
+        """
+        let latest = """
+            <latestRevision>
+              <number>2</number>
+              <state>INCOMPLETE</state>
+              <modified>2024-06-01-T08:00:00Z</modified>
+              <size>99999</size>
+              <md5>ffffffffffffffffffffffffffffffff</md5>
+            </latestRevision>
+        """
+        return """
+        <folder name="Archive">
+          <files>
+            <file name="report.pdf" uuid="aaaa">
+        \(currentFirst ? current + latest : latest + current)
+            </file>
+          </files>
+        </folder>
+        """
+    }
+
+    @Test("A pending re-upload doesn't hide the completed file", arguments: [true, false])
+    func currentRevisionWins(currentFirst: Bool) throws {
+        let items = try JottacloudXMLParser.parseListing(data: Data(revisionsXML(currentFirst: currentFirst).utf8), basePath: "/")
+        let file = try #require(items.first { $0.name == "report.pdf" })
+        // Size, md5 and date all come from the current revision, never mixed.
+        #expect(file.size == 20480)
+        #expect(file.checksum == "0123456789abcdef0123456789abcdef")
+        let comps = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: file.modificationDate)
+        #expect(comps.year == 2024)
+        #expect(comps.month == 1)
+    }
+
+    @Test("A file with only a completed latest revision is listed from it")
+    func latestRevisionFallback() throws {
+        let xml = """
+        <folder name="Archive">
+          <files>
+            <file name="new.txt" uuid="cccc">
+              <latestRevision>
+                <state>COMPLETED</state>
+                <size>12</size>
+                <md5>00000000000000000000000000000012</md5>
+              </latestRevision>
+            </file>
+          </files>
+        </folder>
+        """
+        let items = try JottacloudXMLParser.parseListing(data: Data(xml.utf8), basePath: "/")
+        #expect(items.first { $0.name == "new.txt" }?.size == 12)
+    }
+
     @Test("Account usage with a finite capacity")
     func parsesFiniteQuota() {
         let xml = """

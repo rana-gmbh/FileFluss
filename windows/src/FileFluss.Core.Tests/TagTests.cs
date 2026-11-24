@@ -319,6 +319,24 @@ public sealed class TagStoreTests : IDisposable
     }
 
     [Fact]
+    public void AFailedSaveIsKeptPendingAndWrittenByTheNextOne()
+    {
+        // A file where the tags folder should be: nothing can be saved.
+        var folder = Path.Combine(_root, "Tags");
+        File.WriteAllText(folder, "x");
+        using (var store = new TagStore(folder))
+        {
+            store.SetTags(Account, "/a", [Red]);
+            store.Flush();
+
+            File.Delete(folder);
+            store.Flush();
+        }
+
+        Assert.Equal([Red], new TagStore(folder).Tags(Account, "/a"));
+    }
+
+    [Fact]
     public async Task ChangesAreWrittenWithoutBeingAskedAMomentLater()
     {
         var first = new TagStore(_root);

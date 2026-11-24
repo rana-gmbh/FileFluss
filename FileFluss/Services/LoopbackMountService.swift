@@ -85,9 +85,15 @@ public final class LoopbackMountService {
         let cacheBudget = Int64(cacheBudgetMB == 0 ? Self.defaultCacheBudgetMB : cacheBudgetMB) * 1024 * 1024
         let readCache = WebDAVReadCache(root: cacheRoot, maxBytes: cacheBudget)
 
+        // The server answers only below a random secret path segment, which
+        // reaches NetFS in the URL alone. The label after it is the name the
+        // volume always had, `<name>.localhost`: NetFS names a WebDAV mount
+        // after the URL's last path component (after the host when there is
+        // none), so either way the volume is still called that.
         let server = WebDAVServer(
             provider: provider, mountRoot: providerRoot,
-            sidecar: sidecar, readCache: readCache
+            sidecar: sidecar, readCache: readCache,
+            volumeLabel: "\(safeName).localhost"
         )
         let port = try await server.start()
 
@@ -95,7 +101,7 @@ public final class LoopbackMountService {
         // what we proposed, so unmount targets the right thing.
         let actualMountPoint: URL
         do {
-            actualMountPoint = try await runMountWebDAV(port: port, requestedMountPoint: requestedMountPoint)
+            actualMountPoint = try await runMountWebDAV(port: port, server: server, requestedMountPoint: requestedMountPoint)
         } catch {
             await server.stop()
             throw error
@@ -187,8 +193,8 @@ public final class LoopbackMountService {
                     String(cString: $0)
                 }
             }
-            // Sources look like `http://<name>.localhost:<port>` for our
-            // mounts. Tolerate trailing-path variants too.
+            // Sources look like `http://<name>.localhost:<port>/FileFluss-…/`
+            // for our mounts (without the path before the mount secret).
             guard source.contains(".localhost") else { continue }
             let mountPoint = withUnsafePointer(to: &entry.f_mntonname) {
                 $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
@@ -202,7 +208,7 @@ public final class LoopbackMountService {
 
     // MARK: - Process plumbing
 
-    private func runMountWebDAV(port: UInt16, requestedMountPoint: URL) async throws -> URL {
+    private func runMountWebDAV(port: UInt16, server: WebDAVServer, requestedMountPoint: URL) async throws -> URL {
         // If a directory from a previously failed attempt is still sitting
         // at the requested path it can poison NetFS's mount step with
         // errno 2. Clear it (best-effort; leaves real mounts untouched
@@ -214,16 +220,16 @@ public final class LoopbackMountService {
         // Self-probe: confirm our own server responds before handing the URL
         // to NetFS. If this fails the bug is on our side and the diagnostic
         // is much clearer than NetFS's status code would be.
-        try await probeServer(port: port)
+        try await probeServer(port: port, basePath: server.basePath)
 
         // Modern macOS shipped /sbin/mount_webdav without its setuid bit, so
         // a regular app process can't call it directly — the mount(2) call
         // inside fails with EPERM. NetFS does the same job via a launchd-
         // launched privileged helper, which is the supported path.
-        return try await mountViaNetFS(port: port, mountPoint: requestedMountPoint)
+        return try await mountViaNetFS(port: port, server: server, mountPoint: requestedMountPoint)
     }
 
-    private func mountViaNetFS(port: UInt16, mountPoint: URL) async throws -> URL {
+    private func mountViaNetFS(port: UInt16, server: WebDAVServer, mountPoint: URL) async throws -> URL {
         // Use a `<name>.localhost` hostname instead of bare `localhost`.
         // RFC 6761 mandates that any `*.localhost` resolves to loopback, so
         // the resolver still sends NetFS to 127.0.0.1 — but the *hostname*
@@ -232,8 +238,7 @@ public final class LoopbackMountService {
         // `kNetFSMountAtMountDirKey` is broken on Tahoe for WebDAV, so this
         // URL-host trick is the only way to influence the mount's name.
         let host = mountPoint.lastPathComponent
-        let urlString = "http://\(host).localhost:\(port)/"
-        guard let url = URL(string: urlString) else {
+        guard let url = server.mountURL(host: "\(host).localhost", port: port) else {
             throw NSError(domain: "FileFluss.Mount", code: -1,
                           userInfo: [NSLocalizedDescriptionKey: L10n.text("Couldn't build the loopback URL.")])
         }
@@ -347,8 +352,9 @@ public final class LoopbackMountService {
     /// with a message the user can act on — almost always "the listener
     /// didn't actually bind", which mount_webdav would have reported as an
     /// opaque exit code.
-    private func probeServer(port: UInt16) async throws {
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/")!)
+    private func probeServer(port: UInt16, basePath: String) async throws {
+        // Sent to the URL NetFS is about to be given, secret included.
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(basePath)/")!)
         request.httpMethod = "OPTIONS"
         request.timeoutInterval = 3
         do {

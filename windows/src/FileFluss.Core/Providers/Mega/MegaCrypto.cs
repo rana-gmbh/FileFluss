@@ -219,24 +219,6 @@ internal static class MegaCrypto
         return ToBytes(nodeKey[..Math.Min(4, nodeKey.Length)]);
     }
 
-    /// <summary>
-    /// The base64url key material of a node's <c>k</c> field (<c>"owner:key"</c> or several
-    /// <c>"handle:key"</c> parts separated by '/'); the first part wins, as on macOS.
-    /// </summary>
-    public static byte[]? FirstKeyPart(string keyField)
-    {
-        foreach (var part in keyField.Split('/'))
-        {
-            var segments = part.Split(':');
-            if (segments.Length >= 2)
-            {
-                return Base64UrlDecode(segments[^1]);
-            }
-        }
-
-        return null;
-    }
-
     /// <summary><c>"MEGA" + {"n":"name"}</c>, zero-padded to the block size, AES-CBC with a zero IV.</summary>
     public static string EncryptAttributes(string name, ReadOnlySpan<byte> key)
         => EncryptAttributeJson("{\"n\":" + JsonSerializer.Serialize(name, AttributeJson) + "}", key);

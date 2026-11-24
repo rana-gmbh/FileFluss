@@ -86,10 +86,33 @@ private final class ListingDelegate: NSObject, XMLParserDelegate {
     // file being built
     private var fileName: String?
     private var fileDeleted = false
-    private var size: Int64 = 0
-    private var md5: String?
-    private var modified = ""
-    private var state = ""
+
+    /// One revision's fields. A file carries a `<currentRevision>` (the
+    /// finished upload) and, while a re-upload is pending or was abandoned,
+    /// a `<latestRevision>` too, usually INCOMPLETE. Reading both into one
+    /// set of fields let whichever came last win: a good file vanished from
+    /// the listing (and Mirror deleted it on the other side), and size, md5
+    /// and date could mix between the two. As on Windows and in rclone,
+    /// currentRevision wins; latestRevision is only the fallback for a file
+    /// that has nothing else.
+    private struct Revision {
+        var size: Int64 = 0
+        var md5: String?
+        var modified = ""
+        var state: String?
+    }
+
+    private enum RevisionKind { case current, latest }
+
+    private var current = Revision()
+    private var latest = Revision()
+    /// The revision element we're inside, if any.
+    private var revisionKind: RevisionKind?
+
+    /// Fields outside either revision element count as the current one's.
+    private func updateRevision(_ change: (inout Revision) -> Void) {
+        if revisionKind == .latest { change(&latest) } else { change(&current) }
+    }
 
     init(basePath: String) {
         self.basePath = basePath
@@ -122,10 +145,13 @@ private final class ListingDelegate: NSObject, XMLParserDelegate {
         case "file" where inFiles:
             fileName = attributeDict["name"]
             fileDeleted = attributeDict["deleted"] != nil
-            size = 0
-            md5 = nil
-            modified = ""
-            state = ""
+            current = Revision()
+            latest = Revision()
+            revisionKind = nil
+        case "currentRevision" where inFiles:
+            revisionKind = .current
+        case "latestRevision" where inFiles:
+            revisionKind = .latest
         default:
             break
         }
@@ -142,26 +168,29 @@ private final class ListingDelegate: NSObject, XMLParserDelegate {
             inFolders = false
         case "files":
             inFiles = false
+        case "currentRevision" where inFiles, "latestRevision" where inFiles:
+            revisionKind = nil
         case "size" where inFiles:
-            size = Int64(value) ?? 0
+            updateRevision { $0.size = Int64(value) ?? 0 }
         case "md5" where inFiles:
-            if !value.isEmpty { md5 = value }
+            if !value.isEmpty { updateRevision { $0.md5 = value } }
         case "modified" where inFiles:
-            if !value.isEmpty { modified = value }
+            if !value.isEmpty { updateRevision { $0.modified = value } }
         case "state" where inFiles:
-            state = value
+            updateRevision { $0.state = value }
         case "file" where inFiles:
+            let chosen = current.state != nil ? current : latest
             // Only surface completed, non-trashed revisions. Incomplete or
             // corrupt uploads (state != COMPLETED) are hidden.
-            if let name = fileName, !name.isEmpty, !fileDeleted, state.uppercased() == "COMPLETED" {
+            if let name = fileName, !name.isEmpty, !fileDeleted, chosen.state?.uppercased() == "COMPLETED" {
                 items.append(CloudFileItem(
                     id: "f:\(childPath(name))",
                     name: name,
                     path: childPath(name),
                     isDirectory: false,
-                    size: size,
-                    modificationDate: JottacloudXMLParser.parseDate(modified),
-                    checksum: md5
+                    size: chosen.size,
+                    modificationDate: JottacloudXMLParser.parseDate(chosen.modified),
+                    checksum: chosen.md5
                 ))
             }
             fileName = nil

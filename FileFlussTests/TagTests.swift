@@ -298,6 +298,69 @@ struct TagStoreTests {
         #expect(await second.tags(account: account, path: "/Docs/a.pdf") == [project, red])
     }
 
+    @Test("A damaged tags file falls back to the backup and isn't lost")
+    func damagedFileUsesBackup() async throws {
+        let scratch = Scratch()
+        let file = scratch.url.appendingPathComponent("\(account.uuidString).json")
+        let first = TagStore(directory: scratch.url)
+        await first.setTags([red], account: account, path: "/a.txt")
+        await first.flush()
+        await first.setTags([blue], account: account, path: "/b.txt")
+        await first.flush()
+        // A power cut leaves the file cut short.
+        try Data("{\"entr".utf8).write(to: file)
+
+        let second = TagStore(directory: scratch.url)
+        #expect(await second.tags(account: account, path: "/a.txt") == [red])
+        await second.setTags([green], account: account, path: "/c.txt")
+        await second.flush()
+
+        let third = TagStore(directory: scratch.url)
+        #expect(await third.tags(account: account, path: "/a.txt") == [red])
+        #expect(await third.tags(account: account, path: "/c.txt") == [green])
+    }
+
+    @Test("A tags file that can't be read at all is set aside, never overwritten")
+    func unreadableFileIsKept() async throws {
+        let scratch = Scratch()
+        let file = scratch.url.appendingPathComponent("\(account.uuidString).json")
+        let first = TagStore(directory: scratch.url)
+        await first.setTags([red], account: account, path: "/a.txt")
+        await first.setTags([blue], account: account, path: "/b.txt")
+        await first.flush()
+        let original = try Data(contentsOf: file)
+        try Data("{\"entr".utf8).write(to: file)
+
+        let second = TagStore(directory: scratch.url)
+        #expect(await second.tags(account: account, path: "/a.txt").isEmpty)
+        await second.setTags([green], account: account, path: "/c.txt")
+        await second.flush()
+
+        // Nothing new was written over it, and the damaged bytes are kept.
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        let names = try FileManager.default.contentsOfDirectory(atPath: scratch.url.path)
+        let aside = try #require(names.first { $0.hasPrefix("\(account.uuidString).json.unreadable-") })
+        #expect(try Data(contentsOf: scratch.url.appendingPathComponent(aside)) == Data("{\"entr".utf8))
+        #expect(original != Data("{\"entr".utf8))
+    }
+
+    @Test("A failed save is kept pending and written by the next one")
+    func failedSaveRetries() async throws {
+        let scratch = Scratch()
+        let folder = scratch.url.appendingPathComponent("Tags", isDirectory: true)
+        // A file where the folder should be: nothing can be saved.
+        try Data("x".utf8).write(to: folder)
+        let store = TagStore(directory: folder)
+        await store.setTags([red], account: account, path: "/a.txt")
+        await store.flush()
+
+        try FileManager.default.removeItem(at: folder)
+        await store.flush()
+
+        let reread = TagStore(directory: folder)
+        #expect(await reread.tags(account: account, path: "/a.txt") == [red])
+    }
+
     @Test("Changes are written without being asked, a moment later")
     func savesByItself() async throws {
         let scratch = Scratch()

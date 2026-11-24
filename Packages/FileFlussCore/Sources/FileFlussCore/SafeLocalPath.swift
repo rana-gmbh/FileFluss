@@ -55,10 +55,7 @@ public enum SafeLocalPath {
     /// than rewriting it.
     public static func destination(forRelativePath path: String, in root: URL) throws -> URL {
         let candidate = root.appendingPathComponent(path)
-        let base = root.standardizedFileURL.path
-        let resolved = candidate.standardizedFileURL.path
-        let baseWithSlash = base.hasSuffix("/") ? base : base + "/"
-        guard !hasTraversal(path), resolved.hasPrefix(baseWithSlash) else {
+        guard !hasTraversal(path), isContained(path, in: root) else {
             throw CloudProviderError.commandFailed(
                 L10n.format(
                     "The server returned an unsafe file name (\"%@\"), so the download was stopped.",
@@ -69,6 +66,21 @@ public enum SafeLocalPath {
         return candidate
     }
 
+    /// Whether `path`, appended to `root`, still lies below it once both are
+    /// standardized.
+    ///
+    /// The candidate is built from the root as standardized, not from the
+    /// root as given. Standardizing drops "/private" from a path that exists
+    /// (the folder) but not from one that doesn't exist yet (the file about
+    /// to be written), so comparing the two refused everything synced or
+    /// extracted into /private/tmp or /private/var.
+    private static func isContained(_ path: String, in root: URL) -> Bool {
+        let base = root.standardizedFileURL
+        let basePath = base.path
+        let resolved = base.appendingPathComponent(path).standardizedFileURL.path
+        return resolved.hasPrefix(basePath.hasSuffix("/") ? basePath : basePath + "/")
+    }
+
     /// Destination for `remoteName` inside `directory`, guaranteed to stay
     /// inside it. Throws rather than writing anywhere unexpected.
     public static func destination(for remoteName: String, in directory: URL) throws -> URL {
@@ -77,10 +89,7 @@ public enum SafeLocalPath {
 
         // Belt and braces: even with the name sanitised, resolve both sides
         // and confirm containment before handing the URL to a writer.
-        let root = directory.standardizedFileURL.path
-        let resolved = candidate.standardizedFileURL.path
-        let rootWithSlash = root.hasSuffix("/") ? root : root + "/"
-        guard resolved.hasPrefix(rootWithSlash) else {
+        guard isContained(safeName, in: directory) else {
             throw CloudProviderError.commandFailed(
                 L10n.format(
                     "The server returned an unsafe file name (\"%@\"), so the download was stopped.",

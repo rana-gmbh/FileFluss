@@ -32,6 +32,11 @@ public actor TagStore {
     private var accounts: [UUID: [String: Entry]] = [:]
     private var dirty: Set<UUID> = []
     private var saveTask: Task<Void, Never>?
+    /// Accounts whose tags file and backup both exist but couldn't be read.
+    /// Never written this session (see `entries(for:)`).
+    private var unreadable: Set<UUID> = []
+    /// Accounts loaded from the backup because the file itself was damaged.
+    private var damagedFile: Set<UUID> = []
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -176,6 +181,8 @@ public actor TagStore {
 
     /// Forgets an account that has been removed from FileFluss.
     public func removeAccount(_ account: UUID) {
+        // Removing the account removes its tags file, readable or not.
+        unreadable.remove(account)
         accounts[account] = [:]
         markDirty(account)
     }
@@ -229,20 +236,66 @@ public actor TagStore {
         directory.appendingPathComponent("\(account.uuidString).json")
     }
 
+    /// The previous good version, kept beside the file by every save.
+    private func backupURL(for account: UUID) -> URL {
+        directory.appendingPathComponent("\(account.uuidString).json.bak")
+    }
+
     private func entries(for account: UUID) -> [String: Entry] {
         if let loaded = accounts[account] { return loaded }
+        let url = fileURL(for: account)
+        let backup = backupURL(for: account)
+        let fm = FileManager.default
         var entries: [String: Entry] = [:]
-        if let data = try? Data(contentsOf: fileURL(for: account)),
-           let file = try? JSONDecoder().decode(AccountFile.self, from: data) {
-            entries = file.entries
+        // The file, or else the previous good one. A damaged file used to
+        // read as "no tags", and the next tag change wrote that over it,
+        // losing every tag of the account.
+        if fm.fileExists(atPath: url.path) || fm.fileExists(atPath: backup.path) {
+            if let stored = Self.read(url, account: account) {
+                entries = stored
+            } else if let stored = Self.read(backup, account: account) {
+                entries = stored
+                // The damaged file mustn't become the backup on the next save.
+                damagedFile.insert(account)
+            } else {
+                // Neither can be read. Both are set aside for whoever wants
+                // to recover them, and nothing is written for this account
+                // until the next launch, so the empty set it loaded as can't
+                // replace anything.
+                unreadable.insert(account)
+                for damaged in [url, backup] where fm.fileExists(atPath: damaged.path) {
+                    let aside = damaged.appendingPathExtension("unreadable-\(Int(Date().timeIntervalSince1970))")
+                    do {
+                        try fm.moveItem(at: damaged, to: aside)
+                    } catch {
+                        SupportLogger.shared.log("Tags file \(damaged.lastPathComponent) couldn't be set aside: \(error.localizedDescription)", category: "tags", level: .error)
+                    }
+                }
+                SupportLogger.shared.log("Tags for account \(account.uuidString) are left untouched this session: neither the file nor its backup could be read", category: "tags", level: .error)
+            }
         }
         accounts[account] = entries
         return entries
     }
 
+    /// One tags file's entries; nil when it isn't there or can't be read or
+    /// parsed.
+    private static func read(_ url: URL, account: UUID) -> [String: Entry]? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode(AccountFile.self, from: data).entries
+        } catch {
+            SupportLogger.shared.log("Tags for account \(account.uuidString) couldn't be read from \(url.lastPathComponent): \(error.localizedDescription)", category: "tags", level: .error)
+            return nil
+        }
+    }
+
     /// Writes are gathered for a moment: an upload of a few thousand tagged
     /// files would otherwise rewrite the file once per file.
     private func markDirty(_ account: UUID) {
+        // An unreadable account's changes live for this session only.
+        guard !unreadable.contains(account) else { return }
         dirty.insert(account)
         guard saveTask == nil else { return }
         saveTask = Task {
@@ -262,13 +315,31 @@ public actor TagStore {
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        for account in pending {
+        for account in pending where !unreadable.contains(account) {
             let url = fileURL(for: account)
+            let backup = backupURL(for: account)
             let entries = accounts[account] ?? [:]
-            if entries.isEmpty {
-                try? fm.removeItem(at: url)
-            } else if let data = try? encoder.encode(AccountFile(entries: entries)) {
-                try? data.write(to: url, options: .atomic)
+            do {
+                if entries.isEmpty {
+                    for file in [url, backup] where fm.fileExists(atPath: file.path) {
+                        try fm.removeItem(at: file)
+                    }
+                } else {
+                    let data = try encoder.encode(AccountFile(entries: entries))
+                    // What's there becomes the backup, unless it's the
+                    // damaged file the backup had to stand in for.
+                    if fm.fileExists(atPath: url.path), !damagedFile.contains(account) {
+                        if fm.fileExists(atPath: backup.path) { try fm.removeItem(at: backup) }
+                        try fm.copyItem(at: url, to: backup)
+                    }
+                    try data.write(to: url, options: .atomic)
+                    damagedFile.remove(account)
+                }
+            } catch {
+                // Kept pending, so the next save tries again rather than the
+                // change being lost without a word.
+                dirty.insert(account)
+                SupportLogger.shared.log("Tags for account \(account.uuidString) couldn't be saved: \(error.localizedDescription)", category: "tags", level: .error)
             }
         }
     }

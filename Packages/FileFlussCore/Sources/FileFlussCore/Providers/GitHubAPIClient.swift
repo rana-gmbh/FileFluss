@@ -99,6 +99,16 @@ public struct GitHubTree: Sendable {
         }
     }
 
+    /// Entries directly inside `directory`, or `.notFound` when the tree has
+    /// no such directory. A folder renamed or removed upstream must not list
+    /// as empty: a sync reading from it would then delete the local copy.
+    public func listing(of directory: String) throws -> [GitHubTreeEntry] {
+        if !directory.isEmpty, !entries.contains(where: { $0.isDirectory && $0.path == directory }) {
+            throw CloudProviderError.notFound(directory)
+        }
+        return children(of: directory)
+    }
+
     /// Total bytes of every blob at or below `directory`. Exact, because the
     /// recursive tree already carries every blob's size — no extra requests.
     public func recursiveSize(of directory: String) -> Int64 {
@@ -222,8 +232,12 @@ actor GitHubAPIClient {
     /// The repository's whole tree at its default branch.
     ///
     /// An empty repository (created but never pushed to) has no tree at all
-    /// and GitHub answers 404 — reported here as an empty tree, because an
-    /// empty repository is a legitimate thing to browse into, not an error.
+    /// and GitHub answers 409 "Git Repository is empty" — reported here as an
+    /// empty tree, because an empty repository is a legitimate thing to
+    /// browse into, not an error. A 404 is something else (the branch or the
+    /// repository is gone, or the token lost access) and stays an error:
+    /// passed off as an empty repository, it would make a Mirror delete
+    /// everything copied from it.
     func tree(for repository: GitHubRepository) async throws -> GitHubTree {
         let key = "\(repository.fullName)@\(repository.pushedAt.timeIntervalSince1970)"
         if let cached = cachedTrees[key] { return cached }
@@ -234,7 +248,7 @@ actor GitHubAPIClient {
                 path: "/repos/\(repository.fullName)/git/trees/\(repository.defaultBranch)",
                 query: [URLQueryItem(name: "recursive", value: "1")]
             )
-        } catch CloudProviderError.notFound {
+        } catch CloudProviderError.serverError(409) {
             let empty = GitHubTree(entries: [], isTruncated: false)
             cachedTrees[key] = empty
             return empty
@@ -252,9 +266,13 @@ actor GitHubAPIClient {
     /// the Contents API when the recursive tree came back truncated.
     func listing(for repository: GitHubRepository, directory: String) async throws -> [GitHubTreeEntry] {
         let tree = try await tree(for: repository)
-        guard tree.isTruncated else { return tree.children(of: directory) }
+        guard tree.isTruncated else { return try tree.listing(of: directory) }
         return try await contentsListing(for: repository, directory: directory)
     }
+
+    /// The Contents API serves at most this many entries of one directory
+    /// and silently drops the rest.
+    static let contentsListingLimit = 1000
 
     /// One directory straight from the Contents API. Used only for
     /// repositories too large for a recursive tree: one request per folder
@@ -275,6 +293,11 @@ actor GitHubAPIClient {
             // A single file answers with an object rather than an array; that
             // means the caller asked for a blob as if it were a folder.
             throw CloudProviderError.notFound(directory)
+        }
+        // A directory at the cap may well hold more; a listing that quietly
+        // stops part way would read to a sync as files deleted upstream.
+        guard entries.count < Self.contentsListingLimit else {
+            throw CloudProviderError.unreadableListing
         }
         return entries.map {
             GitHubTreeEntry(

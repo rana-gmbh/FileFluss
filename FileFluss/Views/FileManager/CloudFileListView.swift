@@ -909,7 +909,8 @@ struct CloudFileListView: View {
             archiveURL: session.archiveURL,
             format: session.format,
             tree: session.tree,
-            innerPath: session.innerPath
+            innerPath: session.innerPath,
+            markQuarantined: session.isUntrusted
         )
     }
 
@@ -989,7 +990,10 @@ struct CloudFileListView: View {
         if !vm.isBrowsingArchive, let mount = appState.mountService.mount(for: accountId) {
             let mounted = items.map { mount.url(forRemotePath: $0.path) }
             if mounted.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
-                NSWorkspace.shared.open(mounted, withApplication: app)
+                Task {
+                    await Self.markAsDownloaded(mounted)
+                    NSWorkspace.shared.open(mounted, withApplication: app)
+                }
                 return
             }
         }
@@ -1018,6 +1022,23 @@ struct CloudFileListView: View {
         }
     }
 
+    /// Marks files about to be opened through the Finder mount as
+    /// downloaded, as a copy fetched by `downloadToTemp` is. The volume has
+    /// no extended attributes of its own: macOS keeps them in a `._` file
+    /// beside the original, which the mount's server stores locally, so the
+    /// mark costs no request to the account and outlasts the open. Off the
+    /// main thread all the same, since each write is a round trip through
+    /// the WebDAV file system. A file opened from Finder directly never
+    /// passes through FileFluss and goes unmarked: the server sees only
+    /// byte reads, with nothing to tell an open from Finder drawing a
+    /// preview, and marking every file up front would put a `._` file
+    /// beside each one.
+    private static func markAsDownloaded(_ urls: [URL]) async {
+        await Task.detached(priority: .userInitiated) {
+            for url in urls { Quarantine.mark(url) }
+        }.value
+    }
+
     private func openCloudFile(_ item: CloudFileItem) {
         // When the account is mounted, open the file where it really is.
         // The copy below is just that — a copy — and anything the user
@@ -1027,7 +1048,10 @@ struct CloudFileListView: View {
         if let mount = appState.mountService.mount(for: accountId) {
             let mounted = mount.url(forRemotePath: item.path)
             if FileManager.default.fileExists(atPath: mounted.path) {
-                NSWorkspace.shared.open(mounted)
+                Task {
+                    await Self.markAsDownloaded([mounted])
+                    NSWorkspace.shared.open(mounted)
+                }
                 return
             }
             // The path didn't resolve inside the volume — a mount rooted
@@ -1488,7 +1512,10 @@ struct CloudFileListView: View {
         // Only what downloaded in full goes on. A folder that failed part way
         // still has a partial copy in staging, and uploading that as if it
         // were the folder is how a move came to delete the original.
-        let downloaded = await sourceVM.downloadItems(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
+        // Where each item landed, as the download reports it: on a disk that
+        // ignores case the path rebuilt from `Readme.md` would also find a
+        // staged `README.md`, and upload that in its place.
+        let staged = await sourceVM.downloadItemsLocating(itemsToTransfer, to: tempDir, progress: progress, skipConflictCheck: true)
 
         if let progress {
             progress.downloadEndTime = Date()
@@ -1509,21 +1536,11 @@ struct CloudFileListView: View {
         // Build local URLs for upload, renaming "keepBoth" items
         let existingNames = Set(conflictPool.map(\.name))
         let localURLs: [URL] = itemsToTransfer.compactMap { item -> URL? in
-            guard downloaded.contains(item.name),
-                  let expected = try? SafeLocalPath.destination(for: item.name, in: tempDir) else { return nil }
-            var localURL: URL?
-            if FileManager.default.fileExists(atPath: expected.path) {
-                localURL = expected
-            } else {
-                for ext in ["docx", "xlsx", "pptx", "pdf"] {
-                    let converted = expected.appendingPathExtension(ext)
-                    if FileManager.default.fileExists(atPath: converted.path) {
-                        localURL = converted
-                        break
-                    }
-                }
-            }
-            guard let url = localURL else { return nil }
+            guard let landed = staged[item.id] else { return nil }
+            let url = landed.url
+            // Staged as "name (2)" next to a sibling of the same name: it
+            // goes up under that name, and replaces nothing.
+            if landed.renamedForClash { return url }
 
             if resolutionByName[item.name] == .replace,
                let existing = conflictPool.first(where: { $0.name == item.name }) {

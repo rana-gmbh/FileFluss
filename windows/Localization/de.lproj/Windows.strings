@@ -110,7 +110,6 @@
 "\"%@\" couldn't be moved to the Recycle Bin." = "„%@“ konnte nicht in den Papierkorb verschoben werden.";
 "%@ can't be moved to the Recycle Bin because its drive doesn't have one. Delete permanently? This can't be undone." = "%@ kann nicht in den Papierkorb verschoben werden, weil das Laufwerk keinen Papierkorb hat. Endgültig löschen? Dies kann nicht rückgängig gemacht werden.";
 "\"%@\" can't be moved." = "„%@“ kann nicht verschoben werden.";
-"A folder can't be copied or moved into itself." = "Ein Ordner kann nicht in sich selbst kopiert oder verschoben werden.";
 "An item named “%@” already exists at the destination." = "Am Ziel ist bereits ein Objekt namens „%@“ vorhanden.";
 "The items need %@, but only %@ is available at the destination." = "Die Objekte benötigen %@, am Ziel sind aber nur %@ verfügbar.";
 "Copy Anyway" = "Trotzdem kopieren";
@@ -358,7 +357,6 @@
 "S3 error (HTTP %@): %@" = "S3-Fehler (HTTP %@): %@";
 "S3 endpoint URL is invalid (host: \"%@\"). Double-check the Endpoint URL field." = "Die S3-Endpunkt-URL ist ungültig (Host: „%@“). Prüfe das Feld „Endpunkt-URL“.";
 "This key isn't allowed to list the account's buckets (s3:ListAllMyBuckets). Enter the bucket name in the Path field — FileFluss then works with that bucket alone and won't ask for account-wide permissions." = "Dieser Schlüssel darf die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). Gib den Bucket-Namen im Feld „Pfad“ ein – FileFluss arbeitet dann nur mit diesem Bucket und benötigt keine kontoweiten Berechtigungen.";
-"The downloaded file is corrupted: its MEGA integrity check (MAC) does not match." = "Die heruntergeladene Datei ist beschädigt: Ihre MEGA-Integritätsprüfung (MAC) stimmt nicht überein.";
 
 /* FTP and SFTP */
 "FTP command failed." = "FTP-Befehl fehlgeschlagen.";
