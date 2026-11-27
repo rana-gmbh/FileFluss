@@ -130,25 +130,12 @@ signature isn't valid), the workflow signs the installers, and `-Stage Checksums
 `SHA256SUMS.txt` over the signed files. The workflow logs in to Azure with GitHub's OIDC
 token, so no Azure secret is stored: it needs the repository variables `AZURE_CLIENT_ID` and
 `AZURE_TENANT_ID`, and runs in the `windows-release` environment, whose federated credential
-the Azure app registration trusts; restrict that environment to the release tags (`v*`, and
-`win-v*` while the bridge below exists). Without the variables, releases are built unsigned.
+the Azure app registration trusts; restrict that environment to the release tags (`v*`). Without the variables, releases are
+built unsigned.
 
 The in-app updater reads the joint `v*` releases by their Windows files — a `v*` release
 without them is an older Mac-only one and is skipped — and still reads the older Windows-only
-`win-v*` releases.
-
-**The bridge.** The betas installed before the joint releases look at `win-v*` releases
-only, so they would never see a `v*` one. One last Windows-only beta, cut with the old
-`.github/workflows/windows-release.yml`, carries the new updater to them:
-
-```
-git tag win-v1.7.0-beta.1 && git push origin win-v1.7.0-beta.1
-```
-
-That workflow creates its release with `--latest=false` — the macOS app's Sparkle feed is
-`releases/latest/download/appcast.xml`, so a Windows release marked "latest" would cut every
-Mac off from updates — and moves "latest" back if it finds it on a Windows one. Once that
-beta is out, delete `windows-release.yml` and the `win-v*` rule on the environment.
+`win-v*` releases of the betas.
 
 ## Projects
 

@@ -63,7 +63,7 @@ Before tagging, the final Windows build is tested on a Windows PC — nothing on
 
 The publish job then computes the DMG's SHA-256 and pushes a cask bump to the **separate tap repo** `rana-gmbh/homebrew-filefluss` (this is the repo Homebrew actually reads when users run `brew tap rana-gmbh/filefluss`). The cask file does **not** live in this repo.
 
-The Windows job signs through the `windows-release` environment, whose tag rules must allow `v*` (and `win-v*` while `windows-release.yml` is still around).
+The Windows job signs through the `windows-release` environment, whose tag rules must allow `v*`.
 
 The workflow's tap-update step needs a secret named `HOMEBREW_TAP_TOKEN` — a fine-grained PAT scoped to `rana-gmbh/homebrew-filefluss` with `contents: write`. Without it the step fails; with it, every tagged release lands a matching cask commit automatically.
 
@@ -109,7 +109,5 @@ powershell -File windows/Packaging/build-release.ps1 -Version 1.0.0     # instal
 ```
 
 **Windows is released together with the Mac, under the same `vX.Y.Z` tag** — see Releases above. The Windows in-app updater (`UpdateLookup` / `UpdateService`) offers `v*` releases that carry Windows files (older `v*` releases are the Mac's alone and are skipped) as well as the older Windows-only `win-v*` ones, and installs nothing it cannot match against the release's `SHA256SUMS.txt`.
-
-`windows-release.yml` (`win-v*` tags) is kept for one thing only: a last Windows-only beta that carries the updater which understands `v*` releases to the betas installed before the joint releases, which look at `win-v*` releases alone. A `win-v*` release must be created with `--latest=false` — the macOS Sparkle feed is `releases/latest/download/appcast.xml` — and that workflow does so. Delete it, and the `win-v*` rule on the `windows-release` environment, once that beta has shipped.
 
 Commits to the Windows port follow the same rule as everywhere else: never mention Claude or AI in commit messages or Co-Authored-By lines. All commits are authored by Robert Rudolph from Rana GmbH.

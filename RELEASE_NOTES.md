@@ -1,36 +1,42 @@
-# FileFluss 1.7 Beta 3
+# FileFluss 1.7
 
-The Mac and Windows apps are **feature-identical again**: the gallery view, reconnecting an account from its panel, and pCloud's browser sign-in, new on the Mac in 1.7 Beta 2, now come to Windows too. Both apps also gain **colour tags** for files and folders, and the gallery now shows **cloud photos as thumbnails**. From now on every feature arrives on both platforms in the same release.
+**FileFluss for Windows is out of beta.** From this release on, FileFluss is a native app on both macOS and Windows — feature-identical, released together, from one download page. Everything that's new arrives on both platforms at once.
 
-This is a **beta**. Please keep backups of anything important, and tell me what you run into: [open an issue](https://github.com/rana-gmbh/FileFluss/issues/new) and say whether it's the Mac or the Windows app.
+1.7 also brings a **gallery view** for browsing seamlessly through your photos, wherever they are; **colour tags** for files and folders, stored on the cloud service itself wherever it can hold them; and a set of **improvements to SFTP** that make it safer and more robust.
 
-- **On a Mac:** download `FileFluss-v1.7.0-beta.3.dmg` below. The in-app updater and Homebrew only offer final releases, so they stay on 1.6 until 1.7 is final.
-- **On Windows:** Help → Check for Updates… offers this beta. Otherwise download the installer below.
+- **On a Mac:** FileFluss offers the update by itself. Or run `brew upgrade --cask filefluss`, or download `FileFluss-v1.7.0.dmg` below.
+- **On Windows:** Help → Check for Updates… offers 1.7, also if you've been running a beta. Or download the installer or the portable version below.
 
-## New in 1.7, on Mac and Windows
+## Gallery view: browse through your photos
 
-### Gallery view
+![Gallery view in FileFluss](https://github.com/rana-gmbh/FileFluss/raw/v1.7.0/Screenshots/FileFluss%20Gallery%20mode.webp)
 
-Each panel can now show its folder as a **gallery of thumbnails** instead of a list. Images, videos, PDFs and documents show a real preview, in local folders and in cloud accounts alike.
+Each panel can now show its folder as a **gallery of thumbnails** instead of a list. Images, videos, PDFs and documents show a real preview, in local folders and in your cloud accounts alike, so you can look through a photo folder on Dropbox, Google Drive or your NAS just as easily as one on your own disk.
 
-- Switch with the **List / Gallery switch at the right end of each panel's path bar**, or with **View → as List** and **View → as Gallery**: ⌃⌘1 / ⌃⌘2 on the Mac, Ctrl+Shift+1 / Ctrl+Shift+2 on Windows, changeable in Settings → Keyboard Map. Each panel remembers its own choice, so a photo folder can be a gallery on one side while the other side stays a list. The list stays the default.
-- **⌘+ and ⌘-** on the Mac, **Ctrl+Plus and Ctrl+Minus** on Windows, make the thumbnails bigger and smaller, as they do with the rows of the list.
-- Everything works in the gallery as it does in the list: selecting several items, double-clicking, the right-click menu, drag and drop, Quick Look with the arrow keys, and cut, copy and paste. On the Mac, double-clicking a folder in the gallery opens it again; in 1.7 Beta 2 it did nothing.
-- **Cloud photos get thumbnails too.** Dropbox, Box, pCloud, Google Drive, OneDrive, kDrive, Nextcloud, Seafile, Synology Drive and GoPro supply their own small preview, which is also how videos get one. On every other account, images and PDFs up to 20 MB are downloaded once and drawn on your computer. iCloud Drive files that iCloud has moved off your computer are never downloaded just for a preview.
-- Previews are kept on disk (up to 300 MB), so a folder you've seen once shows them at once. Only the tiles you can see are fetched, four at a time.
+- **Cloud photos get real thumbnails.** Dropbox, Box, pCloud, Google Drive, OneDrive, kDrive, Nextcloud, Seafile, Synology Drive and GoPro supply their own small preview, which is also how videos get one. On every other account, images and PDFs up to 20 MB are downloaded once and drawn on your computer. iCloud Drive files that iCloud has moved off your computer are never downloaded just for a preview.
+- **Browse without waiting.** Previews are kept on disk (up to 300 MB), so a folder you've seen once shows them at once. Only the tiles you can see are fetched, four at a time.
+- **Flip through with Quick Look.** Press Space and use the arrow keys to go from photo to photo; everything else works as in the list, too: selecting several items, double-clicking, the right-click menu, drag and drop, and cut, copy and paste.
+- **⌘+ and ⌘-** on the Mac, **Ctrl+Plus and Ctrl+Minus** on Windows, make the thumbnails bigger and smaller.
+- Switch with the **List / Gallery switch at the right end of each panel's path bar**, or with **View → as List** and **View → as Gallery**: ⌃⌘1 / ⌃⌘2 on the Mac, Ctrl+Shift+1 / Ctrl+Shift+2 on Windows, changeable in Settings → Keyboard Map. Each panel remembers its own choice, so a photo folder can be a gallery on one side while the other side stays a list.
 
-### Colour tags
+## Colour tags, native wherever the cloud supports them
 
 Files and folders can now carry **Finder's seven colour tags**, in local folders and in every cloud account.
 
 - **Right-click → Tags** offers the seven colours, shows which ones the selection already has, lists any other tags it carries, and offers Remove All Tags.
 - Tagged items show **up to three colour dots**, after the name in the list and before it in the gallery. A tagged folder is drawn in the colour of its last tag, as Finder does on macOS 26.
-- **On the Mac, local files and iCloud Drive use Finder's own tags,** so Finder and FileFluss show the same thing. A tag given in Finder shows in its own colour, also when it was given on a Mac set to another language.
-- **MEGA and kDrive** have labels of their own; a tag is written there too, and a label set in their apps shows up in FileFluss.
+- **Stored natively where possible.** On the Mac, local files and iCloud Drive use Finder's own tags, so Finder and FileFluss show the same thing — also for tags given in Finder on a Mac set to another language. **MEGA and kDrive** have labels of their own: a tag is written to the service, and a label set in their apps shows up in FileFluss.
 - On **every other account**, and for **local files on Windows**, FileFluss keeps the tags itself, so they show only in FileFluss on that computer.
-- **Tags travel with the file** when FileFluss renames, moves, copies, uploads, downloads, transfers between accounts or syncs it. A sync only adds tags, so it never takes off a tag given on the other side.
+- **Tags travel with the file** when FileFluss renames, moves, copies, uploads, downloads, transfers between accounts or syncs it. A sync only adds tags, so it never takes off a tag given on the other side. A tags file that can't be read is never written over: FileFluss keeps a backup and falls back to it.
 
-### Reconnect an account right where it stopped working
+## SFTP: safer and more robust
+
+- **A new SFTP account shows the server's key fingerprint and asks before trusting it,** on the Mac and on Windows. No password or key is sent until you confirm. If the key changes later, FileFluss refuses to connect and, when you edit the account, shows the old and new fingerprints and asks before trusting the new one. Existing accounts keep the key they have been trusting.
+- **Passwords and private keys stay off the disk** on the Mac. They used to reach OpenSSH through files in the temporary folder. Now the password or passphrase is handed over through a private connection, and the key is loaded into a short-lived agent. FileFluss also no longer adds SFTP servers to your own `~/.ssh/known_hosts`.
+- **Names containing `$` or a backtick work** on the Mac. `Price $5.txt` was uploaded as `Price \$5.txt`, and such files couldn't be downloaded. A name containing a line break, which a server can list, is refused instead of being passed on.
+- **More servers can be listed.** Listings that leave out a field, such as a missing group column, and Windows-style listings are read on SFTP and FTP alike, which also fixes FTP servers like OpenHASP on small display boards ([#70](https://github.com/rana-gmbh/FileFluss/issues/70)).
+
+## Reconnect an account right where it stopped working
 
 When FileFluss can no longer sign in to an account (a locked Keychain or a credential Windows can no longer read at launch, an access prompt dismissed after an update, credentials that are gone), the panel used to say "Cloud account not connected" and offer only Try Again.
 
@@ -40,7 +46,7 @@ When FileFluss can no longer sign in to an account (a locked Keychain or a crede
 - GitHub, Jottacloud and Drime take a **new token**, and TeraBox a fresh QR code, without removing and re-adding the account.
 - After a new sign-in, every panel showing the account lists its folder again, not only the one you signed in from.
 
-### pCloud signs in through pCloud's own page
+## pCloud signs in through pCloud's own page
 
 pCloud stopped letting third-party apps sign in with a password. **Add Account now opens pCloud's sign-in page in your browser**, as it does for Box, and an existing account can be re-authorized from its settings. Accounts added the old way keep working.
 
@@ -53,19 +59,14 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **WordPress lists every year and month of a large media library,** keeps uploads under their real name, and only ever deletes the exact item you chose.
 - **Filen:** a folder with an item FileFluss can't decrypt reports an error instead of leaving the item out, which a Mirror would have taken as deleted.
 - **Internxt:** when the folder can't be listed during a replace, nothing is replaced.
-- **A new SFTP account shows the server's key fingerprint and asks before trusting it.** No password or key is sent until you confirm. If the key changes later, FileFluss refuses to connect and, when you edit the account, shows the old and new fingerprints and asks before trusting the new one. On the Mac, existing accounts keep the key they have been trusting.
 
 ## Fixed on the Mac
 
 - **Moving a file to the Trash from a Desktop or Documents folder synced with iCloud is no longer refused without explanation.** Such files go to iCloud Drive's Trash, which macOS may keep FileFluss from using. FileFluss now opens iCloud Drive so macOS can ask for access, then tries again. If the Trash is still refused, it says where to allow access instead of pointing only at Full Disk Access.
-- **SFTP keeps passwords and private keys off the disk.** They used to reach OpenSSH through files in the temporary folder. Now the password or passphrase is handed over through a private connection, and the key is loaded into a short-lived agent. FileFluss also no longer adds SFTP servers to your own `~/.ssh/known_hosts`.
-- **SFTP handles names containing `$` or a backtick.** `Price $5.txt` was uploaded as `Price \$5.txt`, and such files couldn't be downloaded. A name containing a line break, which a server can list, is refused instead of being passed on.
-- **FTP servers whose listings leave out a field now open** ([#70](https://github.com/rana-gmbh/FileFluss/issues/70)). A server that lists files without a group column, such as OpenHASP on small display boards, was refused as unreadable. FTP also reads Windows-style listings (`10-28-26  09:30PM  <DIR>  Photos`), and SFTP benefits from the same change. Windows already read both.
 - **Mirror deletes again in folders whose path contains a space or an umlaut.** In a folder such as "Backup Übersicht", the files Mirror reported as deleted were left in place, and replacing a file there left a `.filefluss-part` file behind.
 - **Names that differ only in capitals or accents no longer overwrite each other.** A cloud folder holding `README.md` and `Readme.md` (or two forms of "Café") kept only one of them on the Mac, and after a cut the other was gone from the cloud too. Now the second arrives as `Readme (2).md`. A Mirror between `readme.md` and `README.md` replaces the file in place instead of writing it and then deleting it.
 - **A folder can't be copied or moved into itself.** Copying a folder into one of its own subfolders kept copying until the path was too long.
 - **Replacing a folder from a cloud no longer deletes an unrelated file** such as `Report.pdf` next to it. Only an earlier download of the same Google document is replaced, and it goes to the Trash.
-- **Tags survive a tags file that can't be read.** FileFluss now keeps a backup, falls back to it, and never writes over a file it couldn't read; before, all tags of that account were lost.
 - **Files opened from a cloud get macOS's security check,** like any download: double-clicking, Open With, Quick Look and files taken out of a cloud archive.
 - **Accounts shown in Finder are only reachable by Finder.** The local server behind them now requires a secret address and refuses requests from web pages. A copy to such a folder that is cut off no longer replaces the cloud file with the part that arrived.
 - **Synology Drive and QNAP:** "Keep both" no longer overwrites the file you chose to keep; a failed download is reported instead of saving the NAS's error message as the file; a copy that is still running on the NAS isn't taken as finished; names containing `+` reach the right file. QNAP lists folders with more than 1,000 items completely.
@@ -76,7 +77,7 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 - **Mirror** replaces a file that stands where the source has a folder (it used to fail on every run), compares files with a resource fork by their content size, and works in folders under `/private`.
 - **FileFluss stays responsive** while it indexes a drive, compares large folders, uploads a large folder, or when a network drive has gone offline. The Compare window builds its results in the background, and "Compare Date" no longer closes every open folder.
 
-## Fixed on Windows
+## Fixed on Windows since the betas
 
 - **Thumbnails are the right way up.** List rows and gallery tiles showed every image upside down.
 - **pCloud keeps umlauts and other non-ASCII characters in file names.** "Brückenstr.docx" was stored as `=?utf-8?B?…?=`.
@@ -108,10 +109,12 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 
 | | File |
 |---|---|
-| **Mac**: Apple silicon and Intel, macOS 14 or later | `FileFluss-v1.7.0-beta.3.dmg` |
-| **Windows**: Intel or AMD (x64) | `FileFluss-Setup-1.7.0-beta.3-x64.exe`, or portable: `FileFluss-1.7.0-beta.3-x64-portable.zip` |
-| **Windows**: ARM (Snapdragon, ARM64) | `FileFluss-Setup-1.7.0-beta.3-arm64.exe`, or portable: `FileFluss-1.7.0-beta.3-arm64-portable.zip` |
+| **Mac**: Apple silicon and Intel, macOS 14 or later | `FileFluss-v1.7.0.dmg` |
+| **Windows**: Intel or AMD (x64) | `FileFluss-Setup-1.7.0-x64.exe`, or portable: `FileFluss-1.7.0-x64-portable.zip` |
+| **Windows**: ARM (Snapdragon, ARM64) | `FileFluss-Setup-1.7.0-arm64.exe`, or portable: `FileFluss-1.7.0-arm64-portable.zip` |
 
-- The Mac app is signed by Rana GmbH and notarized by Apple. Open the DMG and drag FileFluss into Applications.
+- The Mac app is signed by Rana GmbH and notarized by Apple. Open the DMG and drag FileFluss into Applications, or install it with Homebrew: `brew install --cask rana-gmbh/filefluss/filefluss`.
 - The Windows installer needs no administrator rights and keeps FileFluss up to date by itself; the portable version runs from any folder and doesn't update itself. Both are signed by Rana GmbH. Windows 10 (version 2004) or Windows 11.
 - `SHA256SUMS.txt` lists the checksum of every file in this release.
+
+Something not working? [Open an issue](https://github.com/rana-gmbh/FileFluss/issues/new) and say whether it's the Mac or the Windows app.
