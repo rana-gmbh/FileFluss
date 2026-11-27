@@ -79,6 +79,7 @@ pCloud stopped letting third-party apps sign in with a password. **Add Account n
 
 ## Fixed on Windows since the betas
 
+- **The app icon fills its space** in the taskbar, the Start menu and Explorer, like other Windows icons. It used to show as a small white square.
 - **Thumbnails are the right way up.** List rows and gallery tiles showed every image upside down.
 - **pCloud keeps umlauts and other non-ASCII characters in file names.** "Brückenstr.docx" was stored as `=?utf-8?B?…?=`.
 - **Replacing a file on Internxt no longer fails now and then.** Internxt can take a moment to recognise a file it has just created; the replacement used to give up and stay under a temporary `.fileflusspart` name.
