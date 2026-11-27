@@ -16,9 +16,6 @@ name: Release
 # The Mac's Sparkle feed is releases/latest/download/appcast.xml, so a stable release must be
 # "latest", which a joint release always is. The Windows updater reads these releases too
 # (UpdateLookup), recognising them by their Windows files.
-#
-# Windows-only releases (win-v*) are made by windows-release.yml, which remains only to get
-# one last beta out to the Windows betas installed today: they look for win-v* releases alone.
 
 on:
   push:
@@ -358,7 +355,7 @@ jobs:
     timeout-minutes: 45
     # The Azure app registration trusts this environment, not individual tags, so its
     # federated credential never has to change. The environment is restricted to the release
-    # tags (Settings → Environments → windows-release: v* and win-v*), so no branch can sign.
+    # tags (Settings → Environments → windows-release: v*), so no branch can sign.
     environment: windows-release
     env:
       VERSION: ${{ needs.version.outputs.version }}

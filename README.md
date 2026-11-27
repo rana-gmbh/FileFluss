@@ -1,14 +1,14 @@
 # FileFluss
 
-A dual-panel file manager for macOS that lets you conveniently handle files across cloud storage providers.
+A dual-panel file manager for **macOS and Windows** that lets you conveniently handle files across cloud storage providers.
 
-> **New: FileFluss for Windows — public beta.** A native Windows 10 and 11 app with the feature set of FileFluss 1.6 for Mac, for Intel/AMD (x64) and ARM PCs, as an installer or a portable version. **[Download FileFluss 1.6 Beta 2 for Windows](https://github.com/rana-gmbh/FileFluss/releases/tag/win-v1.6.0-beta.2)** — code-signed by Rana GmbH; the installer needs no administrator rights and keeps itself up to date. Feedback is very welcome: [open an issue](https://github.com/rana-gmbh/FileFluss/issues/new) and mention Windows.
+> **Native on macOS and Windows.** FileFluss is a native app on the Mac (Apple silicon and Intel) and on Windows 10 and 11 (Intel/AMD and ARM). Both apps have the same features and are released together. **[Download the latest version](https://github.com/rana-gmbh/FileFluss/releases/latest)** for Mac or Windows.
 
 ![FileFluss main window](Screenshots/FileFluss%20main.webp)
 
 ## What FileFluss does
 
-FileFluss puts a left and a right panel side by side. Each panel can show a local folder or a connected cloud account, and the two are independent — even when you have the same cloud account loaded in both panels you can browse to different folders on each side. Drag and drop, copy, move, sync, compare, search — all between the two panels with native macOS performance.
+FileFluss puts a left and a right panel side by side. Each panel can show a local folder or a connected cloud account, and the two are independent — even when you have the same cloud account loaded in both panels you can browse to different folders on each side. Drag and drop, copy, move, sync, compare, search — all between the two panels, with native performance on the Mac and on Windows.
 
 ## Features
 
@@ -58,6 +58,25 @@ Cloud-to-cloud transfers, Google Workspace files auto-converted to DOCX/XLSX/PPT
 - **Used / free storage** at a glance — most accounts surface their quota in the status bar and as a sidebar tooltip.
 - **Edit credentials in place** from Settings → Cloud Accounts; no need to remove and re-add an account when a password changes.
 - **Remove from FileFluss** as an opt-in context-menu entry on each cloud account in the sidebar.
+
+### Gallery view
+
+![Gallery view](Screenshots/FileFluss%20Gallery%20mode.webp)
+
+Switch any panel from the list to a **gallery of thumbnails** and browse through your photos, wherever they are. Images, videos, PDFs and documents show a real preview, in local folders and in cloud accounts alike: Dropbox, Box, pCloud, Google Drive, OneDrive, kDrive, Nextcloud, Seafile, Synology Drive and GoPro supply their own previews, and on every other account images and PDFs are fetched once and drawn locally.
+
+- Flip from photo to photo with Quick Look and the arrow keys.
+- Make the thumbnails bigger or smaller with ⌘+ / ⌘- (Ctrl+Plus / Ctrl+Minus on Windows).
+- Each panel remembers its own choice, so one side can be a gallery while the other stays a list.
+- Previews are cached, so a folder you've seen once shows them at once.
+
+### Colour tags
+
+Give files and folders **Finder's seven colour tags**, in local folders and in every cloud account, from the right-click menu. Tagged items show colour dots, and a tagged folder takes the colour of its tag.
+
+- On the Mac, local files and iCloud Drive use **Finder's own tags**, so Finder and FileFluss always agree.
+- **MEGA and kDrive** keep the tags as their own labels, so they show up in those services' apps too.
+- Every other account keeps the tags in FileFluss, and they travel with a file when you copy, move or sync it.
 
 ### Archives, right in the panel
 
@@ -243,17 +262,18 @@ Search the active local folder and every connected cloud account at once.
 
 ## Privacy
 
-FileFluss has no servers: no account, no analytics, no telemetry, no crash reporting. Your files stay on your Mac and on the services you connect. The only request FileFluss makes on its own is the update check against GitHub, which you can switch off.
+FileFluss has no servers: no account, no analytics, no telemetry, no crash reporting. Your files stay on your computer and on the services you connect. The only request FileFluss makes on its own is the update check against GitHub, which you can switch off.
 
-See [PRIVACY.md](PRIVACY.md) for what is stored where, and what leaves your Mac.
+See [PRIVACY.md](PRIVACY.md) for what is stored where, and what leaves your computer.
 
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
+- **Mac:** macOS 14.0 (Sonoma) or later, Apple silicon or Intel
+- **Windows:** Windows 10 (version 2004) or Windows 11, Intel/AMD (x64) or ARM (ARM64)
 
 ## Installation
 
-### Homebrew (recommended)
+### Mac: Homebrew (recommended)
 
 ```bash
 brew trust rana-gmbh/filefluss && brew install --cask rana-gmbh/filefluss/filefluss
@@ -269,13 +289,17 @@ brew install --cask rana-gmbh/filefluss/filefluss
 
 That form also works on newer Homebrew, because naming the cask in full counts as permission for that one command — but `brew upgrade --cask filefluss` later uses the short name and can be refused, so trusting the tap once is worth it.
 
-### Manual
+### Mac: Manual
 
-Download the latest DMG from the [Releases](https://github.com/rana-gmbh/filefluss/releases) page and drag FileFluss.app into your Applications folder.
+Download the latest DMG from the [Releases](https://github.com/rana-gmbh/filefluss/releases/latest) page and drag FileFluss.app into your Applications folder.
+
+### Windows
+
+Download the installer for your PC from the [Releases](https://github.com/rana-gmbh/filefluss/releases/latest) page: `FileFluss-Setup-<version>-x64.exe` for Intel or AMD processors, `…-arm64.exe` for ARM (Snapdragon). The installer needs no administrator rights. If you'd rather not install anything, the portable zip runs from any folder. Both are signed by Rana GmbH.
 
 ### Updates
 
-FileFluss updates itself. It checks for new versions on launch and installs them with your confirmation; every update is signed and verified before it is applied. Turn it off in Settings → General.
+FileFluss updates itself, on the Mac and on Windows. It checks for new versions on launch and installs them with your confirmation; every update is signed and verified before it is applied. Turn it off in Settings → General. On Windows, Help → Check for Updates… looks for one right away. The portable Windows version doesn't update itself.
 
 ## Building from source
 
@@ -286,6 +310,8 @@ brew install xcodegen
 xcodegen generate
 xcodebuild build -project FileFluss.xcodeproj -scheme FileFluss -destination 'platform=macOS'
 ```
+
+The Windows app (C#, .NET, WPF) lives in [`windows/`](windows/); see [windows/README.md](windows/README.md) for how to build and test it.
 
 ## Credits
 
