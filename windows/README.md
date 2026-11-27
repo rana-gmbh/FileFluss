@@ -146,6 +146,6 @@ without them is an older Mac-only one and is skipped — and still reads the old
 | `FileFluss.App` | `net10.0-windows10.0.19041.0` | WPF shell (assembly `FileFluss.exe`) — panels, sidebar, dialogs, settings, feature windows, in-app updates. |
 | `FileFluss.Core.Tests` | `net10.0` | xUnit for Core. |
 | `tools/StringsToResx` | | Generates the `.resx` files from the macOS string catalogues. |
-| `Packaging` | | `build-release.ps1` and the Inno Setup script `FileFluss.iss`. |
+| `Packaging` | | `build-release.ps1`, the Inno Setup script `FileFluss.iss`, and `make-icon.ps1`, which builds the app icon from the macOS one (the logo without its tile, filling the icon as Windows icons do). |
 
 Porting a provider: [docs/PROVIDER-PORTING.md](docs/PROVIDER-PORTING.md).
